@@ -105,7 +105,7 @@ import {
   ThreadSearchPullRequestNumber,
 } from "../ThreadStatusIndicators";
 import { pickSnoozePreset, resolveSnoozePresets, type SnoozePreset } from "../Sidebar.snooze";
-import { useThreadShell } from "../../state/entities";
+import { useQuietThreadShell, useThreadShell } from "../../state/entities";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
 import { ThreadSearchMatchExcerpt } from "../ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "../chat/workspaceFileDrop";
@@ -811,6 +811,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     : thread.modelSelection.model;
 
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
+  // Only pinned subagents have rows; they name the parent they report to.
+  const subagentParentId =
+    thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null;
+  const subagentParent = useQuietThreadShell(
+    subagentParentId === null ? null : scopeThreadRef(thread.environmentId, subagentParentId),
+  );
+  const subagentParentTitle =
+    subagentParentId === null ? null : (subagentParent?.title ?? "parent thread");
   const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
 
   const detailsTooltip = (
@@ -1144,6 +1152,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
+    subagentParentTitle === null &&
     !thread.branch &&
     !showsScratchMachine &&
     prBadge === null &&
@@ -1151,7 +1160,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-      {thread.branch ? (
+      {subagentParentTitle !== null ? (
+        <span className="min-w-0 flex-1 truncate">Subagent of {subagentParentTitle}</span>
+      ) : thread.branch ? (
         <>
           <ThreadWorktreeIndicator thread={thread} />
           <span className="flex min-w-0 flex-1">
