@@ -214,6 +214,33 @@ export const make = (port: AutoreviewPort) => {
       autoreviewers,
     });
 
+  /**
+   * Findings queue only when a steer is refused, e.g. before the provider turn has started.
+   * Every later flush tries again to steer the waiting findings into the live turn.
+   */
+  const steerQueuedFindings = Effect.fnUntraced(function* (threadId: ThreadId) {
+    const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+    const waiting = queuedFindingsRun(runs);
+    const delivery = planFindingsDelivery(runs);
+    if (waiting === undefined || delivery.type !== "steer") return;
+    const stamp = DateTime.toEpochMillis(yield* DateTime.now);
+    yield* engine
+      .dispatch({
+        type: "queued-message.promote-to-steer",
+        commandId: CommandId.make(
+          `server:autoreview-steer:${waiting.id}:${stamp}:${++cursorSequence}`,
+        ),
+        threadId,
+        queuedRunId: waiting.id,
+        targetRunId: delivery.targetRunId,
+      })
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.logDebug("autoreview findings still cannot steer", { threadId, cause }),
+        ),
+      );
+  });
+
   /** Sends each idle reviewer its buffer; must run under `lock`. */
   const flushUnlocked = Effect.fnUntraced(function* (threadId: ThreadId) {
     const thread = yield* projections.getThread(threadId);
@@ -272,6 +299,7 @@ export const make = (port: AutoreviewPort) => {
       };
       changed = true;
     }
+    yield* steerQueuedFindings(threadId);
     if (!changed) return;
     const cursor = next
       .map((reviewer) => `${reviewer.threadId}@${reviewer.throughOrdinal}`)

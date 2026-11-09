@@ -708,6 +708,54 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect(
+    "findings queued because a steer was refused are steered in once the turn can take them",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const promoted: Array<DispatchCommand> = [];
+        // The orchestrator refuses the steer (no live session); promotion is recorded instead.
+        const port: AutoreviewService.AutoreviewPort = {
+          ...steeringPort(orchestrator, []),
+          dispatch: (command) =>
+            command.type === "queued-message.promote-to-steer"
+              ? Effect.sync(() => {
+                  promoted.push(command);
+                  return { sequence: 0, storedEvents: [] };
+                })
+              : orchestrator.dispatch(command),
+        };
+        const service = AutoreviewService.make(port);
+        const { threadId, runId, now } = yield* seedReviewedThread("promote");
+        const { reviewerThreadId } = yield* attachReviewer(service, threadId, "promote");
+        const review = yield* finishReview(reviewerThreadId, "promote: a real finding", "promote");
+        yield* service.handle(review.ended);
+        const queued = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (run) =>
+            run.status === "queued" &&
+            run.userMessageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX),
+        );
+        assert.isDefined(queued);
+
+        const next = assistantItem({
+          threadId,
+          runId,
+          id: "promote:next",
+          ordinal: 30,
+          now,
+          text: "Working.",
+        });
+        yield* eventSink.write({ events: [itemEvent(next)] });
+        yield* service.handle(itemEvent(next));
+        const last = promoted.at(-1);
+        assert.equal(last?.type, "queued-message.promote-to-steer");
+        if (last?.type !== "queued-message.promote-to-steer") return;
+        assert.equal(last.queuedRunId, queued!.id);
+        assert.equal(last.targetRunId, runId);
+      }),
+  );
+
   it.effect("findings that cannot steer share one queued message, and removal drops its part", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
