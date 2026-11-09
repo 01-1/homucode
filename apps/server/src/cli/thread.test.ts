@@ -348,3 +348,55 @@ it.effect("send passes --mode to t3_thread_send and keeps queue as the default",
     ),
   ),
 );
+
+it.effect("configure sets the permission mode, then prints the thread's modes", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-thread-configure-" });
+    yield* persistServerRuntimeState({
+      path: path.join(baseDir, "userdata", "server-runtime.json"),
+      state: yield* makePersistedServerRuntimeState({
+        config: { host: "127.0.0.1", devUrl: undefined },
+        port: 3_773,
+      }),
+    });
+    const calls: Array<unknown> = [];
+    let runtimeMode = "auto";
+    using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
+      Effect.succeed({
+        call: (tool, args) => {
+          if (tool !== "t3_thread_configure") return Effect.die(`unexpected ${tool} call`);
+          calls.push(args);
+          if (typeof args.runtimeMode === "string") {
+            runtimeMode = args.runtimeMode;
+            return Effect.succeed({ structuredContent: { sequence: 3 } });
+          }
+          return Effect.succeed({
+            structuredContent: { threadId, runtimeMode, interactionMode: "default" },
+          });
+        },
+      }),
+    );
+    yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+      "configure",
+      threadId,
+      "--runtime-mode",
+      "full-access",
+      "--base-dir",
+      baseDir,
+    ]);
+    assert.deepStrictEqual(calls, [{ threadId, runtimeMode: "full-access" }, { threadId }]);
+    assert.strictEqual((yield* TestConsole.logLines).at(-1), "full-access default");
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        NodeCrypto.layer,
+        NetService.layer,
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+      ),
+    ),
+  ),
+);

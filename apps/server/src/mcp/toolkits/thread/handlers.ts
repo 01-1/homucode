@@ -13,6 +13,10 @@ import { modelSelectionCommandType } from "@t3tools/shared/model";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
+  DispatchModeLimit,
+  exceededDispatchModeLimit,
+} from "../../../orchestration-v2/DispatchModeLimit.ts";
+import {
   dispatchFailure,
   newCommandId,
   readCaller,
@@ -197,7 +201,10 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
   ),
   t3_thread_configure: McpToolAccess.either(
-    (input) => input.modelSelection === undefined,
+    (input) =>
+      input.modelSelection === undefined &&
+      input.runtimeMode === undefined &&
+      input.interactionMode === undefined,
     McpToolAccess.reads((input) =>
       Effect.gen(function* () {
         const {
@@ -213,16 +220,65 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
     writesThread((input) =>
       Effect.gen(function* () {
-        const modelSelection = yield* required(input.modelSelection, "modelSelection");
         const {
           threads,
           projection: { thread },
         } = yield* readThread(input.threadId);
-        const type = modelSelectionCommandType(thread.providerInstanceId, modelSelection);
-        const result = yield* threads
-          .dispatch({ type, threadId: thread.id, commandId: yield* newCommandId(), modelSelection })
-          .pipe(Effect.mapError(dispatchFailure));
-        return { sequence: result.sequence };
+        // A caller may set modes up to its own, never above them.
+        const limit = yield* DispatchModeLimit;
+        const exceeded =
+          limit === undefined
+            ? undefined
+            : exceededDispatchModeLimit(limit, {
+                runtimeMode: input.runtimeMode ?? thread.runtimeMode,
+                interactionMode: input.interactionMode ?? thread.interactionMode,
+              });
+        if (exceeded !== undefined) {
+          return yield* new OrchestratorMcpFailure({
+            code:
+              exceeded === "runtime"
+                ? "runtime_mode_escalation_denied"
+                : "interaction_mode_escalation_denied",
+            message: `Thread ${thread.id} cannot be given a ${exceeded} mode broader than yours.`,
+          });
+        }
+        let sequence = 0;
+        if (input.modelSelection !== undefined) {
+          const modelSelection = input.modelSelection;
+          const type = modelSelectionCommandType(thread.providerInstanceId, modelSelection);
+          sequence = (yield* threads
+            .dispatch({
+              type,
+              threadId: thread.id,
+              commandId: yield* newCommandId(),
+              modelSelection,
+            })
+            .pipe(Effect.mapError(dispatchFailure))).sequence;
+        }
+        if (input.runtimeMode !== undefined && input.runtimeMode !== thread.runtimeMode) {
+          sequence = (yield* threads
+            .dispatch({
+              type: "thread.runtime-mode.set",
+              threadId: thread.id,
+              commandId: yield* newCommandId(),
+              runtimeMode: input.runtimeMode,
+            })
+            .pipe(Effect.mapError(dispatchFailure))).sequence;
+        }
+        if (
+          input.interactionMode !== undefined &&
+          input.interactionMode !== thread.interactionMode
+        ) {
+          sequence = (yield* threads
+            .dispatch({
+              type: "thread.interaction-mode.set",
+              threadId: thread.id,
+              commandId: yield* newCommandId(),
+              interactionMode: input.interactionMode,
+            })
+            .pipe(Effect.mapError(dispatchFailure))).sequence;
+        }
+        return { sequence };
       }),
     ),
   ),

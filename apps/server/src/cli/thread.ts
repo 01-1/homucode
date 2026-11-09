@@ -781,6 +781,59 @@ const threadShowCommand = Command.make("show", {
   ),
 );
 
+const ThreadModes = Schema.Struct({
+  threadId: ThreadId,
+  runtimeMode: Schema.String,
+  interactionMode: Schema.String,
+});
+
+const threadConfigureCommand = Command.make("configure", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  runtimeMode: Flag.Literals("runtime-mode", [
+    "approval-required",
+    "auto-accept-edits",
+    "auto",
+    "full-access",
+  ]).pipe(Flag.withDescription("Set the thread's permission mode."), Flag.optional),
+  interactionMode: Flag.Literals("interaction-mode", ["default", "plan"]).pipe(
+    Flag.withDescription("Set the thread's interaction mode."),
+    Flag.optional,
+  ),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription(
+    "Show a thread's permission and interaction modes, or set them with --runtime-mode and --interaction-mode.",
+  ),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.configure")(function* (tools) {
+          const changes = {
+            ...(Option.isSome(flags.runtimeMode) ? { runtimeMode: flags.runtimeMode.value } : {}),
+            ...(Option.isSome(flags.interactionMode)
+              ? { interactionMode: flags.interactionMode.value }
+              : {}),
+          };
+          if (Object.keys(changes).length > 0) {
+            yield* tools.call(
+              "t3_thread_configure",
+              { threadId, ...changes },
+              Schema.Struct({ sequence: Schema.Number }),
+            );
+          }
+          const modes = yield* tools.call("t3_thread_configure", { threadId }, ThreadModes);
+          yield* flags.json
+            ? printJson(modes)
+            : Console.log(`${modes.runtimeMode} ${modes.interactionMode}`);
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 export const threadCommand = Command.make("thread").pipe(
   Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
@@ -788,5 +841,6 @@ export const threadCommand = Command.make("thread").pipe(
     threadStartCommand,
     threadSendCommand,
     threadShowCommand,
+    threadConfigureCommand,
   ]),
 );

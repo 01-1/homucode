@@ -1153,3 +1153,61 @@ it.effect(
     );
   },
 );
+
+it.effect("t3_thread_configure sets modes up to the caller's own and refuses broader ones", () => {
+  const commands: Array<{ readonly type: string; readonly runtimeMode?: string }> = [];
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const call = (args: Record<string, unknown>, access: "auto" | "full-access") =>
+      server
+        .callTool({ name: "t3_thread_configure", arguments: args })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, clientScope(access)),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+
+    const refused = yield* call({ threadId: "auto-thread", runtimeMode: "full-access" }, "auto");
+    expect(declaredFailure(refused)).toMatchObject({ code: "runtime_mode_escalation_denied" });
+    expect(commands).toEqual([]);
+
+    const raised = yield* call(
+      { threadId: "auto-thread", runtimeMode: "full-access" },
+      "full-access",
+    );
+    expect(raised.isError).toBe(false);
+    expect(commands).toEqual([{ type: "thread.runtime-mode.set", runtimeMode: "full-access" }]);
+  }).pipe(
+    Effect.provide(
+      layerThreadToolkit.pipe(
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: (id) =>
+              Effect.succeed(McpToolAccessTestkit.liveThreadShell(id, { runtimeMode: "auto" })),
+            getProjectThreadRecords: () =>
+              Effect.succeed({
+                thread: {
+                  id: ThreadId.make("auto-thread"),
+                  projectId: "project",
+                  providerInstanceId: "codex",
+                  modelSelection: { instanceId: "codex", model: "gpt-5" },
+                  runtimeMode: "auto",
+                  interactionMode: "default",
+                  deletedAt: null,
+                },
+              } as never),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                commands.push({
+                  type: command.type,
+                  ...("runtimeMode" in command ? { runtimeMode: command.runtimeMode } : {}),
+                });
+                return { sequence: 9, storedEvents: [] };
+              }),
+          }),
+        ),
+      ),
+    ),
+  );
+});
