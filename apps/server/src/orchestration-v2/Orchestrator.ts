@@ -2404,7 +2404,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         : "Provider or model selection changed.";
       yield* writeSystemEvents(
         [
-          ...(selectionChanged
+          ...(selectionChanged && queuedRun.turnOnlyModelSelection !== true
             ? [
                 {
                   type:
@@ -6217,8 +6217,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       dispatchMode = { type: "queue_after_active" };
     }
     const freshContext = command.freshContext === true;
+    // A fresh session, or a one-turn model, cannot join a turn that is already running.
     if (
-      freshContext &&
+      (freshContext || command.turnOnlyModelSelection === true) &&
       (dispatchMode.type === "steer_active" || dispatchMode.type === "restart_active")
     ) {
       dispatchMode = { type: "queue_after_active" };
@@ -6607,6 +6608,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...(command.turnOnlyModelSelection === true ? { turnOnlyModelSelection: true } : {}),
         providerThreadId: queuedProviderThread.id,
         userMessageId: command.messageId,
         rootNodeId,
@@ -6806,8 +6808,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
     const now = yield* DateTime.now;
     if (
-      !modelSelectionsEqual(projection.thread.modelSelection, modelSelection) ||
-      projection.thread.providerInstanceId !== modelSelection.instanceId
+      command.turnOnlyModelSelection !== true &&
+      (!modelSelectionsEqual(projection.thread.modelSelection, modelSelection) ||
+        projection.thread.providerInstanceId !== modelSelection.instanceId)
     ) {
       yield* emit(
         events,
@@ -7002,6 +7005,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...(command.turnOnlyModelSelection === true ? { turnOnlyModelSelection: true } : {}),
         providerThreadId,
         userMessageId: command.messageId,
         rootNodeId,
@@ -7786,6 +7790,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ordinal,
       providerInstanceId: modelSelection.instanceId,
       modelSelection,
+      ...(command.turnOnlyModelSelection === true ? { turnOnlyModelSelection: true } : {}),
       providerThreadId: providerThread.id,
       userMessageId: command.messageId,
       rootNodeId,

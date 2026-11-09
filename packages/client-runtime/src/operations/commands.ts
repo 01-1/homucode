@@ -182,6 +182,8 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
     readonly idleCompaction?: import("@t3tools/contracts").OrchestrationV2IdleCompaction;
   };
   readonly modelSelection?: ModelSelection;
+  /** Run this turn on `modelSelection` without saving it as the thread's model. */
+  readonly turnOnlyModelSelection?: boolean;
   readonly titleSeed?: string;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
@@ -767,6 +769,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         : { idleCompaction: input.message.idleCompaction }),
       attachments,
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+      ...(input.turnOnlyModelSelection === true ? { turnOnlyModelSelection: true } : {}),
       ...(input.sourceProposedPlan === undefined
         ? {}
         : { sourcePlanRef: input.sourceProposedPlan }),
@@ -794,6 +797,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
     attachments,
     ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
     ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+    ...(input.turnOnlyModelSelection === true ? { turnOnlyModelSelection: true } : {}),
     ...(input.sourceProposedPlan === undefined ? {} : { sourcePlanRef: input.sourceProposedPlan }),
     ...(input.freshContext ? { freshContext: true } : {}),
     ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),

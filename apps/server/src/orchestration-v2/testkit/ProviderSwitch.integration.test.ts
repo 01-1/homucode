@@ -1226,9 +1226,9 @@ describe("orchestration v2 provider switching", () => {
       ),
   );
 
-  it.live(
-    "runs one turn on another model of the same provider, then returns without a handoff",
-    () =>
+  it.live.each(["completed", "failed", "interrupted"] as const)(
+    "runs one %s turn on another model of the same provider, then returns without a handoff",
+    (outcome) =>
       Effect.scoped(
         Effect.gen(function* () {
           const cwd = yield* checkpointWorkspace("quick-model-turn");
@@ -1246,12 +1246,15 @@ describe("orchestration v2 provider switching", () => {
               modelSelection: CODEX_MODEL_SELECTION,
               responseByRunOrdinal: { 1: "Normal answer", 2: "Quick answer", 3: "Normal again" },
               capturedTurns,
+              failedRunOrdinals: new Set(outcome === "failed" ? [2] : []),
+              interruptedRunOrdinals: new Set(outcome === "interrupted" ? [2] : []),
             }),
           ]);
           yield* Effect.gen(function* () {
             const orchestrator = yield* Orchestrator.OrchestratorV2;
             const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
-            const dispatch = (ordinal: number, text: string, selection: ModelSelection) =>
+            // The quick turn names its model for this turn only; the others name none.
+            const dispatch = (ordinal: number, text: string, quickTurn?: ModelSelection) =>
               orchestrator.dispatch({
                 type: "message.dispatch",
                 commandId: CommandId.make(`quick:${ordinal}`),
@@ -1261,7 +1264,9 @@ describe("orchestration v2 provider switching", () => {
                 creationSource: "web",
                 text,
                 attachments: [],
-                modelSelection: selection,
+                ...(quickTurn === undefined
+                  ? {}
+                  : { modelSelection: quickTurn, turnOnlyModelSelection: true }),
                 dispatchMode: { type: "start_immediately" },
               });
             const wait = (ordinal: number) =>
@@ -1270,7 +1275,9 @@ describe("orchestration v2 provider switching", () => {
                   ({ event }) =>
                     event.type === "run.updated" &&
                     event.payload.ordinal === ordinal &&
-                    (event.payload.status === "completed" || event.payload.status === "failed"),
+                    (event.payload.status === "completed" ||
+                      event.payload.status === "failed" ||
+                      event.payload.status === "interrupted"),
                 ),
                 Stream.runHead,
                 Effect.andThen(worker.drain()),
@@ -1289,11 +1296,15 @@ describe("orchestration v2 provider switching", () => {
               branch: null,
               worktreePath: null,
             });
-            yield* dispatch(1, "First question", CODEX_MODEL_SELECTION);
+            yield* dispatch(1, "First question");
             yield* wait(1);
             yield* dispatch(2, "Quick question", quick);
             yield* wait(2);
-            yield* dispatch(3, "Back to work", CODEX_MODEL_SELECTION);
+            assert.deepEqual(
+              (yield* orchestrator.getThreadProjection(threadId)).thread.modelSelection,
+              CODEX_MODEL_SELECTION,
+            );
+            yield* dispatch(3, "Back to work");
             yield* wait(3);
 
             const turns = yield* Ref.get(capturedTurns);
@@ -1314,7 +1325,7 @@ describe("orchestration v2 provider switching", () => {
               projection.runs.map((run) => [run.status, run.modelSelection.model]),
               [
                 ["completed", CODEX_MODEL_SELECTION.model],
-                ["completed", quick.model],
+                [outcome, quick.model],
                 ["completed", CODEX_MODEL_SELECTION.model],
               ],
             );
@@ -1365,7 +1376,7 @@ describe("orchestration v2 provider switching", () => {
           yield* Effect.gen(function* () {
             const orchestrator = yield* Orchestrator.OrchestratorV2;
             const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
-            const dispatch = (ordinal: number, text: string, selection: ModelSelection) =>
+            const dispatch = (ordinal: number, text: string, quickTurn?: ModelSelection) =>
               orchestrator.dispatch({
                 type: "message.dispatch",
                 commandId: CommandId.make(`quick-provider:${ordinal}`),
@@ -1375,7 +1386,9 @@ describe("orchestration v2 provider switching", () => {
                 creationSource: "web",
                 text,
                 attachments: [],
-                modelSelection: selection,
+                ...(quickTurn === undefined
+                  ? {}
+                  : { modelSelection: quickTurn, turnOnlyModelSelection: true }),
                 dispatchMode: { type: "start_immediately" },
               });
             const wait = (ordinal: number) =>
@@ -1403,12 +1416,12 @@ describe("orchestration v2 provider switching", () => {
               branch: null,
               worktreePath: null,
             });
-            yield* dispatch(1, "Main work", CODEX_MODEL_SELECTION);
+            yield* dispatch(1, "Main work");
             yield* wait(1);
             // A `/q` on a quick model from another provider: this message only.
             yield* dispatch(2, "Quick question", CLAUDE_MODEL_SELECTION);
             yield* wait(2);
-            yield* dispatch(3, "Continue the main work", CODEX_MODEL_SELECTION);
+            yield* dispatch(3, "Continue the main work");
             yield* wait(3);
 
             const turns = yield* Ref.get(capturedTurns);

@@ -1264,6 +1264,7 @@ export function useComposerSend(input: ComposerSendInput) {
             }),
           },
           modelSelection: sendModelSelection,
+          ...(quickSend.kind === "send" ? { turnOnlyModelSelection: true } : {}),
           titleSeed: title,
           runtimeMode,
           interactionMode: DEFAULT_INTERACTION_MODE,

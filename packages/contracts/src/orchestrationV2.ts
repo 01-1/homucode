@@ -686,6 +686,8 @@ export const OrchestrationV2Run = Schema.Struct({
   ordinal: PositiveInt,
   providerInstanceId: ProviderInstanceId,
   modelSelection: ModelSelection,
+  /** The run's model applies to this run only; the thread keeps its saved model (`/q`). */
+  turnOnlyModelSelection: Schema.optional(Schema.Boolean),
   providerThreadId: Schema.NullOr(ProviderThreadId),
   userMessageId: MessageId,
   rootNodeId: Schema.NullOr(NodeId),
@@ -3201,6 +3203,11 @@ export const OrchestrationV2Command = Schema.Union([
     attachments: Schema.Array(ChatAttachment),
     titleSeed: Schema.optional(TrimmedNonEmptyString),
     modelSelection: Schema.optional(ModelSelection),
+    /**
+     * Run this message's turn on `modelSelection` without saving it as the thread's model, so
+     * the next message uses the thread's model again. It never steers a running turn.
+     */
+    turnOnlyModelSelection: Schema.optional(Schema.Boolean),
     sourcePlanRef: Schema.optional(Schema.Struct({ threadId: ThreadId, planId: PlanId })),
     restartContinuationOfRunId: Schema.optional(RunId),
     usageLimitContinuationOfRunId: Schema.optional(RunId),
