@@ -4688,11 +4688,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     if (currentParentId !== null) {
       const parent = yield* records(currentParentId);
+      // A finished task still owes its parent until the completion is delivered to it.
       const owed = parent?.subagents.some(
         (task) =>
           task.origin === "app_owned" &&
           task.childThreadId === thread.id &&
-          (task.status === "idle" || isOrchestrationV2WorkActive(task.status)),
+          (task.status === "idle" ||
+            isOrchestrationV2WorkActive(task.status) ||
+            task.completionDelivery?.state === "pending" ||
+            task.completionDelivery?.state === "claimed"),
       );
       if (owed === true) {
         return yield* reject(

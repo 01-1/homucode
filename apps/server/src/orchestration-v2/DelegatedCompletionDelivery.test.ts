@@ -4011,6 +4011,84 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))("thread mov
     }),
   );
 
+  it.effect.each(["pending", "claimed", "delivered"] as const)(
+    "moves a child whose finished task's completion is %s only once it reached the parent",
+    (state) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const now = yield* DateTime.now;
+        const projectId = ProjectId.make(`project:move-delivery-${state}`);
+        const parent = ThreadId.make(`thread:move-delivery-parent-${state}`);
+        const child = ThreadId.make(`thread:move-delivery-child-${state}`);
+        const runId = RunId.make(`run:move-delivery-${state}`);
+        const rootNodeId = NodeId.make(`node:move-delivery-${state}`);
+        const taskId = NodeId.make(`node:${child}`);
+        yield* seedParentWithTerminalTask({
+          threadId: parent,
+          projectId,
+          runId,
+          rootNodeId,
+          taskId: NodeId.make(`node:move-delivery-seed-${state}`),
+          deliveryState: "acknowledged",
+          now,
+        });
+        yield* seedChildThread({
+          threadId: child,
+          parentThreadId: parent,
+          rootThreadId: parent,
+          projectId,
+          now,
+        });
+        // The task finished with a result, but the parent's agent may not have it yet.
+        yield* eventSink.write({
+          commandId: CommandId.make(`command:move-delivery-task-${state}`),
+          events: [
+            {
+              id: EventId.make(`event:move-delivery-task-${state}`),
+              type: "subagent.updated",
+              threadId: parent,
+              runId,
+              nodeId: taskId,
+              driver,
+              providerInstanceId: modelSelection.instanceId,
+              occurredAt: now,
+              payload: {
+                id: taskId,
+                threadId: parent,
+                runId,
+                parentNodeId: rootNodeId,
+                origin: "app_owned",
+                createdBy: "agent",
+                driver,
+                providerInstanceId: modelSelection.instanceId,
+                providerThreadId: null,
+                childThreadId: child,
+                nativeTaskRef: null,
+                prompt: "Do it.",
+                title: null,
+                model: null,
+                completionDelivery: { state, observedByRunId: null },
+                status: "completed",
+                result: "done",
+                startedAt: now,
+                completedAt: now,
+                updatedAt: now,
+              },
+            },
+          ],
+        });
+        if (state === "delivered") {
+          yield* move(`delivery-${state}`, child, null);
+          assert.isNull(
+            (yield* orchestrator.getThreadProjection(child)).thread.lineage.parentThreadId,
+          );
+        } else {
+          assert.include(yield* refusal(`delivery-${state}`, child, null), "still owes");
+        }
+      }),
+  );
+
   it.effect("moves a subtree to root and under a new parent, which then gets its results", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
