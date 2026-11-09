@@ -264,6 +264,12 @@ it.each(["Success", "Failure"] as const)(
     await screen.rerender(harness(threadB));
     await expect.element(page.getByRole("button", { name: "Stopping..." })).toBeDisabled();
     expect(state.switchRef).toHaveBeenCalledTimes(2);
+    // Stopping background work also stops the thread's subagents.
+    expect(state.switchRef).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { threadId: threadA.activeThreadId, includeSubagents: true },
+      }),
+    );
     completions[1]!({ _tag: "Success", value: undefined });
   },
 );

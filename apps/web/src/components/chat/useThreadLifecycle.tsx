@@ -432,9 +432,10 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       retryAt: null,
     };
     setBackgroundWorkStops((current) => ({ ...current, [request.threadKey]: request }));
+    // This Stop is for the background work itself, so it takes the thread's subagents with it.
     const result = await interruptThreadTurn({
       environmentId,
-      input: { threadId: activeThread.id },
+      input: { threadId: activeThread.id, includeSubagents: true },
     });
     setBackgroundWorkStops((current) =>
       current[request.threadKey] !== request

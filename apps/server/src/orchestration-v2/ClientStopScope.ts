@@ -7,6 +7,19 @@ import type { OrchestrationV2Command } from "@t3tools/contracts";
  * own Stops (tree walks, MCP tools) never pass through here.
  */
 export function withClientStopScope(command: OrchestrationV2Command): OrchestrationV2Command {
+  // `/stopall` sent as a message, from any app, stops the thread and its subagents.
+  if (
+    command.type === "message.dispatch" &&
+    command.attachments.length === 0 &&
+    command.text.trim().toLowerCase() === "/stopall"
+  ) {
+    return {
+      type: "thread.stop",
+      commandId: command.commandId,
+      threadId: command.threadId,
+      stopDelegatedTasks: true,
+    };
+  }
   if (
     command.type === "thread.stop" &&
     command.stopDelegatedTasks === undefined &&

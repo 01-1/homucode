@@ -47,7 +47,7 @@ interface ComposerPrimaryActionsProps {
   onSubmitMessage?: MouseEventHandler<HTMLButtonElement>;
   onResume?: () => void;
   onPreviousPendingQuestion: () => void;
-  onInterrupt: () => void;
+  onInterrupt: (options?: { readonly includeSubagents?: boolean }) => void;
   compactBeforeSendTokens?: number | null;
   keepFullHistory?: boolean;
   onToggleKeepFullHistory?: () => void;
@@ -134,8 +134,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
             )}
             {...pointerFocusProps}
             disabled={!canOperateThread}
-            onClick={() => {
-              if (canOperateThread) onInterrupt();
+            onClick={(event) => {
+              // Shift-click also stops the thread's subagents.
+              if (canOperateThread) onInterrupt({ includeSubagents: event.shiftKey });
             }}
             aria-label="Stop generation"
           />
@@ -145,7 +146,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           <rect x="2" y="2" width="8" height="8" rx="1.5" />
         </svg>
       </TooltipTrigger>
-      <TooltipPopup>Interrupt</TooltipPopup>
+      <TooltipPopup>Interrupt (Shift-click: with subagents)</TooltipPopup>
     </Tooltip>
   );
 

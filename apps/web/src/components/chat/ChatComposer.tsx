@@ -448,7 +448,7 @@ export interface ChatComposerProps {
     submissionIntent?: ComposerSubmissionIntent,
   ) => void;
   onResume: () => void;
-  onInterrupt: () => void;
+  onInterrupt: (options?: { readonly includeSubagents?: boolean }) => void;
   onSelectActivePendingUserInputOption: (questionId: string, optionValue: string) => void;
   onAdvanceActivePendingUserInput: () => void;
   onDismissActivePendingUserInput: (requestId: RuntimeRequestId) => void;
@@ -2796,8 +2796,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     window.addEventListener("dragend", onWindowDragEnd);
     return () => window.removeEventListener("dragend", onWindowDragEnd);
   }, [isDragOverComposer]);
-  const handleInterruptPrimaryAction = () => {
-    void onInterrupt();
+  const handleInterruptPrimaryAction = (options?: { readonly includeSubagents?: boolean }) => {
+    void onInterrupt(options);
   };
   const handleInterruptPrimaryActionStable = useStableCallback(handleInterruptPrimaryAction);
   const scheduleComposerCollapseCheck = () => {

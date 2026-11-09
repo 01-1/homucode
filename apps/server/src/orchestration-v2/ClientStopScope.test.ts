@@ -1,4 +1,4 @@
-import { CommandId, RunId, ThreadId } from "@t3tools/contracts";
+import { CommandId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { withClientStopScope } from "./ClientStopScope.ts";
@@ -25,6 +25,29 @@ describe("withClientStopScope", () => {
       holdQueue: true,
       leaveSubagentsRunning: true,
     });
+  });
+
+  it("turns a /stopall message into a Stop that takes the subagents too", () => {
+    const message = (text: string, attachments: ReadonlyArray<never> = []) =>
+      ({
+        type: "message.dispatch",
+        commandId,
+        threadId,
+        messageId: MessageId.make("message"),
+        text,
+        attachments,
+        createdBy: "user",
+        creationSource: "mobile",
+        dispatchMode: { type: "start_immediately" },
+      }) as const;
+    expect(withClientStopScope(message("  /StopAll "))).toEqual({
+      type: "thread.stop",
+      commandId,
+      threadId,
+      stopDelegatedTasks: true,
+    });
+    const other = message("/stopall please");
+    expect(withClientStopScope(other)).toBe(other);
   });
 
   it("keeps an explicit choice and leaves plain interrupts alone", () => {
