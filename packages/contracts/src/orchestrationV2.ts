@@ -451,12 +451,19 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   /** The reviewed thread's task record for the reviewer; its result is never handed back. */
   taskId: NodeId,
   brief: Schema.optional(Schema.String),
+  /** Replaces the standard role text the reviewer is sent (e.g. a reviewer allowed to write). */
+  preamble: Schema.optional(Schema.String),
   /** Every reviewable item at or below this ordinal was sent or skipped. -1 before the first batch. */
   throughOrdinal: Schema.Int,
   /** Items above `throughOrdinal` that finished early and were already sent. */
   sentItemIds: Schema.Array(TurnItemId),
   /** The reviewer's last review that was delivered, or needed no delivery. */
   lastReviewedRunId: Schema.optional(RunId),
+  /**
+   * Hold batches until the buffer renders to at least this many characters, unless the
+   * reviewed thread has no running or queued turn. Absent: send at every idle point.
+   */
+  minBatchChars: Schema.optional(NonNegativeInt),
   /** Repeat the instructions with the next batch, after the brief or model changed. */
   resendInstructions: Schema.optional(Schema.Boolean),
   addedAt: IsoDateTime,

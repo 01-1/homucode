@@ -347,8 +347,10 @@ const attachReviewer = (
   threadId: ThreadId,
   name: string,
   brief?: string,
+  minBatchChars?: number,
 ) =>
   service.attach({
+    ...(minBatchChars === undefined ? {} : { minBatchChars }),
     commandId: CommandId.make(`command:autoreview-attach:${name}`),
     threadId,
     modelSelection: reviewerModel,
@@ -838,6 +840,83 @@ it.layer(layerTest)("autoreview", (it) => {
       const sent = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers![0]!;
       assert.isUndefined(sent.resendInstructions);
     }),
+  );
+
+  it.effect(
+    "a reviewer with a minimum batch size waits for a large buffer or the end of the turn",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make(orchestrator);
+        const { threadId, runId, now } = yield* seedReviewedThread("slow");
+        const { reviewerThreadId } = yield* attachReviewer(
+          service,
+          threadId,
+          "slow",
+          undefined,
+          6_000,
+        );
+        const done = yield* finishReview(reviewerThreadId, "LGTM", "slow");
+        yield* service.handle(done.ended);
+        const batches = () => messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+
+        const small = assistantItem({
+          threadId,
+          runId,
+          id: "slow:small",
+          ordinal: 20,
+          now,
+          text: "Small step.",
+        });
+        yield* eventSink.write({ events: [itemEvent(small)] });
+        yield* service.handle(itemEvent(small));
+        assert.lengthOf(yield* batches(), 0);
+
+        const large = assistantItem({
+          threadId,
+          runId,
+          id: "slow:large",
+          ordinal: 21,
+          now,
+          text: "x".repeat(6_000),
+        });
+        yield* eventSink.write({ events: [itemEvent(large)] });
+        yield* service.handle(itemEvent(large));
+        assert.lengthOf(yield* batches(), 1);
+        assert.include((yield* batches())[0]!.text, "Small step.");
+
+        // A small remainder still goes out once the reviewed turn ends.
+        const second = yield* finishReview(reviewerThreadId, "LGTM", "slow-2");
+        yield* service.handle(second.ended);
+        const tail = assistantItem({
+          threadId,
+          runId,
+          id: "slow:tail",
+          ordinal: 22,
+          now,
+          text: "Last words.",
+        });
+        yield* eventSink.write({ events: [itemEvent(tail)] });
+        yield* service.handle(itemEvent(tail));
+        assert.lengthOf(yield* batches(), 1);
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (r) => r.id === runId,
+        )!;
+        const ended: OrchestrationV2DomainEvent = {
+          id: EventId.make("event:slow:ended"),
+          type: "run.updated",
+          threadId,
+          runId,
+          providerInstanceId: modelSelection.instanceId,
+          occurredAt: now,
+          payload: { ...run, status: "completed", completedAt: now },
+        };
+        yield* eventSink.write({ events: [ended] });
+        yield* service.handle(ended);
+        assert.lengthOf(yield* batches(), 2);
+        assert.include((yield* batches())[1]!.text, "Last words.");
+      }),
   );
 
   it.effect("refuses to attach to a thread that is not working", () =>

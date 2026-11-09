@@ -64,6 +64,8 @@ const handlers = {
               ...prepared.add,
               threadId: prepared.threadId,
               brief: input.brief,
+              minBatchChars: input.minBatchChars,
+              preamble: input.preamble,
               title: input.title,
               createdBy: "agent",
               creationSource: "mcp",
@@ -77,6 +79,8 @@ const handlers = {
               reviewerThreadId: input.reviewerThreadId,
               modelSelection: prepared.add?.modelSelection,
               brief: input.brief,
+              minBatchChars: input.minBatchChars,
+              preamble: input.preamble,
             })
             .pipe(Effect.mapError(toFailure));
           updated = input.reviewerThreadId;

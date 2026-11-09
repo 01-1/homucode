@@ -290,6 +290,22 @@ describe("findings shared between reviewers", () => {
   });
 });
 
+describe("custom preamble", () => {
+  it("replaces the standard role text and keeps the delivery rule and brief", () => {
+    const text = renderAutoreviewBatch({
+      reviewedThread: { id: threadId, title: "Reviewed" },
+      items: [assistant("p", 1, "Did a thing")],
+      first: true,
+      brief: "Record new rules",
+      preamble: "You are a hook agent. You may edit AGENTS.md and TODO.md.",
+    });
+    assert.include(text, "You may edit AGENTS.md");
+    assert.notInclude(text, "do not edit files");
+    assert.include(text, "reply with exactly LGTM");
+    assert.include(text, "Review brief: Record new rules");
+  });
+});
+
 describe("isLgtmReview", () => {
   it("treats a reply that opens with LGTM as nothing to deliver", () => {
     assert.isTrue(isLgtmReview("LGTM"));

@@ -207,15 +207,29 @@ function renderReviewItem(
   }
 }
 
+const LGTM_RULE =
+  "Your reply is delivered to the reviewed agent. If nothing in the batch needs the agent's attention, reply with exactly LGTM and nothing is delivered.";
+
 function autoreviewInstructions(input: {
   readonly reviewedThread: Pick<OrchestrationV2AppThread, "id" | "title">;
   readonly brief?: string | undefined;
+  readonly preamble?: string | undefined;
 }): string {
+  const brief = input.brief?.trim() ? [`Review brief: ${input.brief.trim()}`] : [];
+  // A custom preamble replaces the standard role text; the delivery rule always applies.
+  if (input.preamble?.trim()) {
+    return [
+      `Activity of the T3 thread "${input.reviewedThread.title}" (${input.reviewedThread.id}) reaches you automatically in batches; each later message holds only what happened since the previous one.`,
+      input.preamble.trim(),
+      LGTM_RULE,
+      ...brief,
+    ].join("\n\n");
+  }
   return [
     `You are an autoreviewer for the T3 thread "${input.reviewedThread.title}" (${input.reviewedThread.id}). Its activity reaches you automatically in batches while it works: user requests, its messages, commands with output, and file diffs. Each later message holds only what happened since the previous batch.`,
     "Review each batch for real problems: bugs, wrong or risky actions, claims the evidence does not support, missed requirements, and departures from what the user asked. Read files in the shared checkout when you need more context, but do not edit files, run commands that change state, or message other threads.",
     "Your reply is delivered to the reviewed agent, so make it short, specific, and actionable, with file:line references where you can. If nothing in the batch needs the agent's attention, reply with exactly LGTM and nothing is delivered.",
-    ...(input.brief?.trim() ? [`Review brief: ${input.brief.trim()}`] : []),
+    ...brief,
   ].join("\n\n");
 }
 
@@ -225,6 +239,8 @@ export function renderAutoreviewBatch(input: {
   readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
   readonly first: boolean;
   readonly brief?: string | undefined;
+  /** Replaces the standard role text of the instructions. */
+  readonly preamble?: string | undefined;
   /** The reviewer the batch is for, so its own findings are left out. */
   readonly reviewerThreadId?: string | undefined;
   /** Repeat the instructions on a later batch, after the brief or model changed. */

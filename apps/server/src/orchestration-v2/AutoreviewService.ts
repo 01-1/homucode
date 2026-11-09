@@ -63,6 +63,9 @@ export interface AutoreviewAttachInput {
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly brief?: string | undefined;
+  /** See `OrchestrationV2Autoreviewer.minBatchChars`; 0 or absent sends at every idle point. */
+  readonly minBatchChars?: number | undefined;
+  readonly preamble?: string | undefined;
   readonly title?: string | undefined;
   readonly createdBy: "user" | "agent" | "system";
   readonly creationSource: "web" | "mobile" | "mcp" | "provider" | "server";
@@ -102,6 +105,10 @@ export class AutoreviewService extends Context.Service<
       readonly modelSelection?: ModelSelection | undefined;
       /** An empty brief clears it. */
       readonly brief?: string | undefined;
+      /** 0 clears it. */
+      readonly minBatchChars?: number | undefined;
+      /** An empty preamble restores the standard one. */
+      readonly preamble?: string | undefined;
     }) => Effect.Effect<void, AutoreviewError>;
     readonly list: (
       threadId: ThreadId,
@@ -231,6 +238,17 @@ export const make = (port: AutoreviewPort) => {
       }
       const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
       if (!batchHasAgentActivity(plan)) continue;
+      const text = renderAutoreviewBatch({
+        reviewedThread: thread,
+        items: plan.items,
+        first: false,
+        brief: reviewer.brief,
+        preamble: reviewer.preamble,
+        reviewerThreadId: reviewer.threadId,
+        instructions: reviewer.resendInstructions === true,
+      });
+      // A slow reviewer waits for a large buffer, but always sees how the work ended.
+      if ((reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) continue;
       const last = plan.items.at(-1)!;
       const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
       yield* engine.dispatch({
@@ -238,14 +256,7 @@ export const make = (port: AutoreviewPort) => {
         commandId: CommandId.make(`server:autoreview-batch:${key}`),
         threadId: reviewer.threadId,
         messageId: MessageId.make(`${AUTOREVIEW_BATCH_MESSAGE_PREFIX}${key}`),
-        text: renderAutoreviewBatch({
-          reviewedThread: thread,
-          items: plan.items,
-          first: false,
-          brief: reviewer.brief,
-          reviewerThreadId: reviewer.threadId,
-          instructions: reviewer.resendInstructions === true,
-        }),
+        text,
         attachments: [],
         // No sender thread and no notification: a batch never becomes a task result for the
         // reviewed thread; the reviewer's reply is delivered by this service instead.
@@ -475,6 +486,7 @@ export const make = (port: AutoreviewPort) => {
               items: plan.items,
               first: true,
               brief: input.brief,
+              preamble: input.preamble,
             }),
             title: input.title?.trim() || `Autoreview: ${reviewed.thread.title}`.slice(0, 120),
             modelSelection: input.modelSelection,
@@ -519,6 +531,8 @@ export const make = (port: AutoreviewPort) => {
               threadId: reviewerThreadId,
               taskId,
               ...(input.brief?.trim() ? { brief: input.brief.trim() } : {}),
+              ...(input.minBatchChars ? { minBatchChars: input.minBatchChars } : {}),
+              ...(input.preamble?.trim() ? { preamble: input.preamble.trim() } : {}),
               throughOrdinal: plan.throughOrdinal,
               sentItemIds: plan.sentItemIds,
               addedAt: DateTime.formatIso(now),
@@ -583,10 +597,15 @@ export const make = (port: AutoreviewPort) => {
             detail: `Thread ${input.reviewerThreadId} is not an autoreviewer of thread ${input.threadId}.`,
           });
         }
-        if (input.modelSelection === undefined && input.brief === undefined) {
+        if (
+          input.modelSelection === undefined &&
+          input.brief === undefined &&
+          input.minBatchChars === undefined &&
+          input.preamble === undefined
+        ) {
           return yield* new AutoreviewError({
             reason: "invalid",
-            detail: "Pass a new target, a new brief, or both.",
+            detail: "Pass a new target, brief, preamble or minBatchChars.",
           });
         }
         if (input.modelSelection !== undefined) {
@@ -600,13 +619,29 @@ export const make = (port: AutoreviewPort) => {
             })
             .pipe(Effect.mapError(failed("Unable to change the reviewer's model")));
         }
-        const { brief: _brief, ...reviewer } = current[index]!;
+        const {
+          brief: _brief,
+          minBatchChars: _min,
+          preamble: _preamble,
+          ...reviewer
+        } = current[index]!;
+        const preamble =
+          input.preamble === undefined ? _preamble : input.preamble.trim() || undefined;
         const brief = input.brief === undefined ? _brief : input.brief.trim() || undefined;
+        const minBatchChars =
+          input.minBatchChars === undefined ? _min : input.minBatchChars || undefined;
+        const resend =
+          input.modelSelection !== undefined ||
+          input.brief !== undefined ||
+          input.preamble !== undefined ||
+          reviewer.resendInstructions;
         const next = [...current];
         next[index] = {
           ...reviewer,
           ...(brief === undefined ? {} : { brief }),
-          resendInstructions: true,
+          ...(minBatchChars === undefined ? {} : { minBatchChars }),
+          ...(preamble === undefined ? {} : { preamble }),
+          ...(resend ? { resendInstructions: true } : {}),
         };
         yield* setReviewers(`${input.commandId}:autoreview-update`, input.threadId, next).pipe(
           Effect.mapError(failed("Unable to record the reviewer")),

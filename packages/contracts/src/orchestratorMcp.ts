@@ -283,6 +283,18 @@ export const OrchestratorMcpAutoreviewInput = Schema.Struct({
         '`add`/`update`. What this reviewer should focus on. `update` with "" clears it.',
     }),
   ),
+  minBatchChars: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 48_000 })).annotate({
+      description:
+        "`add`/`update`. For reviewers that need not be prompt: wait until the new activity is at least this many characters (or the thread stops). 0 or omitted: every idle point.",
+    }),
+  ),
+  preamble: Schema.optional(
+    Schema.String.check(Schema.isMaxLength(8_000)).annotate({
+      description:
+        '`add`/`update`. Replaces the standard reviewer role text (which forbids edits), e.g. for an agent allowed to write. `update` with "" restores it.',
+    }),
+  ),
   title: Schema.optional(OrchestratorMcpTitle),
   clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
 });
