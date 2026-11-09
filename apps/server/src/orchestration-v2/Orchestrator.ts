@@ -571,6 +571,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.auto-settle.set":
     case "thread.pin":
     case "thread.unpin":
+    case "thread.move":
     case "thread.pin.reorder":
     case "thread.active.reorder":
     case "thread.tag.set":
@@ -1355,6 +1356,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       Effect.catchTags({ ProjectionStoreThreadNotFoundError: () => Effect.succeed(null) }),
       Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })),
     );
+
+  /** Whether `threadId` is `ancestorId` or has it in its parent chain. */
+  const isAtOrBelow = Effect.fn("Orchestrator.isAtOrBelow")(function* (
+    threadId: ThreadId,
+    ancestorId: ThreadId,
+  ) {
+    const visited = new Set<ThreadId>();
+    let current: ThreadId | null = threadId;
+    while (current !== null && !visited.has(current)) {
+      if (current === ancestorId) return true;
+      visited.add(current);
+      current = (yield* findThread(current))?.lineage.parentThreadId ?? null;
+    }
+    return false;
+  });
 
   /** Side chats live inside their parent, so deleting the parent deletes them too. */
   const liveSideChatIds = Effect.fn("Orchestrator.liveSideChatIds")(
@@ -4618,6 +4634,243 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       occurredAt: now,
       payload: { ...thread, projectId: command.projectId, worktreePath: null, updatedAt: now },
     });
+  });
+
+  /**
+   * Re-parenting is refused while the thread has work its current parent is still owed, so no
+   * result is lost and no wait is left on the old parent; see `thread.move` in the contracts.
+   */
+  const dispatchThreadMove = Effect.fn("orchestrationV2.dispatch.threadMove")(function* (
+    command: Extract<OrchestrationV2ServerCommand, { readonly type: "thread.move" }>,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+  ) {
+    const reject = (cause: string) =>
+      new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Thread ${command.threadId} ${cause}`,
+      });
+    const records = (threadId: ThreadId) =>
+      projectionStore
+        .getThreadRecords(
+          threadId,
+          ["runs", "runtimeRequests", "subagents", "providerThreads", "providerTurns", "attempts"],
+          { turnItemTypes: [] },
+        )
+        .pipe(
+          Effect.catchTags({ ProjectionStoreThreadNotFoundError: () => Effect.succeed(null) }),
+          Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })),
+        );
+    const moved = yield* records(command.threadId);
+    if (moved === null || moved.thread.deletedAt !== null) return yield* reject("does not exist.");
+    const thread = moved.thread;
+    if (thread.archivedAt !== null) return yield* reject("is archived.");
+    if (thread.lineage.sideChat === true) {
+      return yield* reject("is a side chat; side chats stay with their parent.");
+    }
+    if (thread.delegatedFrom != null) {
+      return yield* reject("reports to a linked environment and cannot be moved.");
+    }
+    if (isProviderNativeSubagentThread(thread)) {
+      return yield* reject("is a provider's own subagent and cannot be moved.");
+    }
+    const currentParentId =
+      thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null;
+    if (command.parentThreadId === null && currentParentId === null) {
+      return yield* reject("is already a top-level thread.");
+    }
+    if (command.parentThreadId !== null && command.parentThreadId === currentParentId) {
+      return yield* reject(`is already under thread ${command.parentThreadId}.`);
+    }
+    if (threadHasUnfinishedWork(moved)) {
+      return yield* reject("still has work in progress. Finish or stop it first.");
+    }
+    if (currentParentId !== null) {
+      const parent = yield* records(currentParentId);
+      const owed = parent?.subagents.some(
+        (task) =>
+          task.origin === "app_owned" &&
+          task.childThreadId === thread.id &&
+          (task.status === "idle" || isOrchestrationV2WorkActive(task.status)),
+      );
+      if (owed === true) {
+        return yield* reject(
+          `still owes thread ${currentParentId} a result. Wait for it to be delivered first.`,
+        );
+      }
+    }
+
+    const now = yield* DateTime.now;
+    const emitEvent = emit(events, command);
+    let lineage: OrchestrationV2AppThread["lineage"];
+    let forkedFrom: OrchestrationV2AppThread["forkedFrom"];
+    if (command.parentThreadId === null) {
+      lineage = { parentThreadId: null, relationshipToParent: null, rootThreadId: thread.id };
+      forkedFrom = null;
+    } else {
+      const target = yield* records(command.parentThreadId);
+      if (target === null || target.thread.deletedAt !== null) {
+        return yield* reject(`cannot move under missing thread ${command.parentThreadId}.`);
+      }
+      if (target.thread.id === thread.id) return yield* reject("cannot move under itself.");
+      if (target.thread.archivedAt !== null) {
+        return yield* reject(`cannot move under archived thread ${target.thread.id}.`);
+      }
+      if (target.thread.projectId !== thread.projectId) {
+        return yield* reject(`cannot move under thread ${target.thread.id} in another project.`);
+      }
+      if (
+        target.thread.lineage.sideChat === true ||
+        isProviderNativeSubagentThread(target.thread)
+      ) {
+        return yield* reject(
+          `cannot move under thread ${target.thread.id}, which cannot delegate.`,
+        );
+      }
+      if (yield* isAtOrBelow(target.thread.id, thread.id)) {
+        return yield* reject(`cannot move under its own descendant ${target.thread.id}.`);
+      }
+      // Follow-ups record their task on one of the parent's runs, so the parent must have one.
+      const owner =
+        target.runs.filter(isActiveRun).toSorted((a, b) => b.ordinal - a.ordinal)[0] ??
+        latestExecutedRun(target.runs);
+      if (owner === null || owner === undefined || owner.rootNodeId === null) {
+        return yield* reject(
+          `cannot move under thread ${target.thread.id} before it has run a turn.`,
+        );
+      }
+      const adapter = yield* providerAdapters.get(thread.providerInstanceId).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorProviderAdapterError({
+              commandId: command.commandId,
+              providerInstanceId: thread.providerInstanceId,
+              cause,
+            }),
+        ),
+      );
+      // The task the moved thread now answers to. Follow-ups from the new parent build on it,
+      // exactly as they build on the task that spawned a delegated child.
+      const taskId = idAllocator.derive.delegatedTaskNode({ commandId: command.commandId });
+      const task: OrchestrationV2Subagent = {
+        id: taskId,
+        threadId: target.thread.id,
+        runId: owner.id,
+        parentNodeId: owner.rootNodeId,
+        origin: "app_owned",
+        createdBy: "user",
+        driver: adapter.driver,
+        providerInstanceId: thread.providerInstanceId,
+        providerThreadId: thread.activeProviderThreadId,
+        childThreadId: thread.id,
+        nativeTaskRef: null,
+        prompt: "Moved under this thread.",
+        title: thread.title,
+        model: thread.modelSelection.model,
+        modelSelection: thread.modelSelection,
+        completionWake: "always",
+        completionDelivery: { state: "disposed", observedByRunId: null },
+        status: "completed",
+        result: "",
+        startedAt: now,
+        completedAt: now,
+        updatedAt: now,
+      };
+      yield* emitEvent({
+        type: "subagent.updated",
+        threadId: target.thread.id,
+        runId: owner.id,
+        nodeId: taskId,
+        driver: adapter.driver,
+        providerInstanceId: thread.providerInstanceId,
+        occurredAt: now,
+        payload: task,
+      });
+      // Work finished before the move belongs to the old parent; mark it delivered here so
+      // recovery never hands it to the new parent.
+      const latest = latestExecutedRun(moved.runs);
+      if (latest !== null && latest !== undefined) {
+        const transferId = yield* idAllocator.allocate
+          .contextTransfer({
+            sourceThreadId: thread.id,
+            targetThreadId: target.thread.id,
+            type: "subagent_result",
+          })
+          .pipe(mapDispatchError(command));
+        yield* emitEvent({
+          type: "context-transfer.created",
+          threadId: target.thread.id,
+          providerInstanceId: thread.providerInstanceId,
+          occurredAt: now,
+          payload: {
+            id: transferId,
+            type: "subagent_result",
+            sourceThreadId: thread.id,
+            targetThreadId: target.thread.id,
+            sourcePoint: contextSourcePointForRun(moved, latest),
+            basePoint: null,
+            sourceProviderInstanceId: latest.providerInstanceId,
+            targetProviderInstanceId: target.thread.providerInstanceId,
+            targetRunId: null,
+            status: "consumed",
+            resolution: null,
+            createdBy: "system",
+            error: null,
+            createdAt: now,
+            updatedAt: now,
+            consumedAt: now,
+          },
+        });
+      }
+      lineage = {
+        parentThreadId: target.thread.id,
+        relationshipToParent: "subagent",
+        rootThreadId: target.thread.lineage.rootThreadId,
+      };
+      forkedFrom = { type: "node", nodeId: taskId };
+    }
+    yield* emitEvent({
+      type: "thread.metadata-updated",
+      threadId: thread.id,
+      providerInstanceId: thread.providerInstanceId,
+      occurredAt: now,
+      payload: { ...thread, lineage, forkedFrom, updatedAt: now },
+    });
+
+    // Descendants keep their parents; only the root they share changes.
+    const family = yield* Effect.forEach(["active", "archive"] as const, (location) =>
+      projectionStore.getShellSnapshot({ location, familyOf: thread.id }),
+    ).pipe(mapDispatchError(command));
+    const childrenOf = new Map<ThreadId, Array<ThreadId>>();
+    for (const shell of family.flatMap((snapshot) => [
+      ...snapshot.threads,
+      ...snapshot.archivedThreads,
+    ])) {
+      const parentId = shell.lineage.parentThreadId;
+      if (parentId === null || shell.id === thread.id) continue;
+      childrenOf.set(parentId, [...(childrenOf.get(parentId) ?? []), shell.id]);
+    }
+    const seen = new Set<ThreadId>([thread.id]);
+    const pending = [...(childrenOf.get(thread.id) ?? [])];
+    while (pending.length > 0) {
+      const descendantId = pending.shift()!;
+      if (seen.has(descendantId)) continue;
+      seen.add(descendantId);
+      pending.push(...(childrenOf.get(descendantId) ?? []));
+      const descendant = yield* findThread(descendantId);
+      if (descendant === null || descendant.lineage.rootThreadId === lineage.rootThreadId) continue;
+      yield* emitEvent({
+        type: "thread.metadata-updated",
+        threadId: descendant.id,
+        providerInstanceId: descendant.providerInstanceId,
+        occurredAt: now,
+        payload: {
+          ...descendant,
+          lineage: { ...descendant.lineage, rootThreadId: lineage.rootThreadId },
+          updatedAt: now,
+        },
+      });
+    }
   });
 
   const refuseAboveDispatchModeLimit = Effect.fn("orchestrationV2.dispatch.refuseAboveModeLimit")(
@@ -13575,6 +13828,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);
         break;
+      case "thread.move":
+        yield* dispatchThreadMove(command, events);
+        break;
       case "message.dispatch": {
         // Providers own native subagent conversations; messages cannot target them, and adapters ask questions on the parent.
         const thread = yield* projectionStore
@@ -14134,6 +14390,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ),
         ),
       );
+    // A moved thread becomes the new parent's child: lock that parent first, as delegation does.
+    // A target at or below the thread is refused, and locking it first would invert that order.
+    if (
+      command.type === "thread.move" &&
+      command.parentThreadId !== null &&
+      !(yield* isAtOrBelow(command.parentThreadId, command.threadId))
+    )
+      return yield* threadDispatch.withLock(command.parentThreadId, dispatch);
     // Answering a message-mode question can also start a follow-up.
     if (
       command.type !== "runtime-request.respond" &&

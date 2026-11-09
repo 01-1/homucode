@@ -3037,6 +3037,16 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
   }),
+  /**
+   * Re-parents a thread: under `parentThreadId` it becomes that thread's subagent and reports its
+   * results there; with `null` it becomes a top-level thread. Its descendants move with it.
+   */
+  Schema.Struct({
+    type: Schema.Literal("thread.move"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    parentThreadId: Schema.NullOr(ThreadId),
+  }),
   Schema.Struct({
     type: Schema.Literal("thread.tag.set"),
     commandId: CommandId,

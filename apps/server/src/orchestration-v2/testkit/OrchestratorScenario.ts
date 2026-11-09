@@ -149,6 +149,7 @@ function commandThreadIds(command: OrchestrationV2Command): ReadonlyArray<Thread
     case "thread.auto-settle.set":
     case "thread.pin":
     case "thread.unpin":
+    case "thread.move":
     case "thread.pin.reorder":
     case "thread.active.reorder":
     case "thread.tag.set":

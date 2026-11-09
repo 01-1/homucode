@@ -3788,3 +3788,376 @@ it.layer(layerTest)("delegated tasks across a server restart", (it) => {
       }),
   );
 });
+
+/** A thread in an existing project with one finished run, so it can take subagents. */
+const seedThreadWithRun = (input: {
+  readonly threadId: ThreadId;
+  readonly projectId: ProjectId;
+  readonly now: DateTime.Utc;
+}) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const eventSink = yield* EventSink.EventSinkV2;
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      createdBy: "user",
+      creationSource: "web",
+      commandId: CommandId.make(`command:seed-create:${input.threadId}`),
+      threadId: input.threadId,
+      projectId: input.projectId,
+      title: String(input.threadId),
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+    });
+    const run = runEvent({
+      threadId: input.threadId,
+      runId: RunId.make(`run:${input.threadId}`),
+      ordinal: 1,
+      status: "completed",
+      now: input.now,
+    });
+    yield* eventSink.write({
+      commandId: CommandId.make(`command:seed-run:${input.threadId}`),
+      events: [
+        {
+          ...run,
+          payload: { ...run.payload, rootNodeId: NodeId.make(`node:root:${input.threadId}`) },
+        },
+      ],
+    });
+  });
+
+/** A child thread record under `parentThreadId`, written directly. */
+const seedChildThread = (input: {
+  readonly threadId: ThreadId;
+  readonly parentThreadId: ThreadId;
+  readonly rootThreadId: ThreadId;
+  readonly projectId: ProjectId;
+  readonly sideChat?: boolean;
+  readonly now: DateTime.Utc;
+}) =>
+  Effect.gen(function* () {
+    const eventSink = yield* EventSink.EventSinkV2;
+    yield* eventSink.write({
+      commandId: CommandId.make(`command:seed-child-thread:${input.threadId}`),
+      events: [
+        {
+          id: EventId.make(`event:seed-child-thread:${input.threadId}`),
+          type: "thread.created",
+          threadId: input.threadId,
+          occurredAt: input.now,
+          payload: {
+            createdBy: "agent",
+            creationSource: "server",
+            id: input.threadId,
+            projectId: input.projectId,
+            title: String(input.threadId),
+            providerInstanceId: modelSelection.instanceId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            activeProviderThreadId: null,
+            lineage: {
+              parentThreadId: input.parentThreadId,
+              relationshipToParent: input.sideChat === true ? "fork" : "subagent",
+              rootThreadId: input.rootThreadId,
+              ...(input.sideChat === true ? { sideChat: true } : {}),
+            },
+            forkedFrom:
+              input.sideChat === true
+                ? null
+                : { type: "node", nodeId: NodeId.make(`node:${input.threadId}`) },
+            createdAt: input.now,
+            updatedAt: input.now,
+            archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            lastVisitedAt: null,
+            deletedAt: null,
+          },
+        },
+      ],
+    });
+  });
+
+it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))("thread moves", (it) => {
+  const move = (name: string, threadId: ThreadId, parentThreadId: ThreadId | null) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      return yield* orchestrator.dispatch({
+        type: "thread.move",
+        commandId: CommandId.make(`command:move:${name}`),
+        threadId,
+        parentThreadId,
+      });
+    });
+  const refusal = (name: string, threadId: ThreadId, parentThreadId: ThreadId | null) =>
+    move(name, threadId, parentThreadId).pipe(
+      Effect.flip,
+      Effect.map((error) => String("cause" in error ? error.cause : error)),
+    );
+
+  it.effect("refuses cycles, other projects, side chats and moves that change nothing", () =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const projectId = ProjectId.make("project:move-rules");
+      const parent = ThreadId.make("thread:move-rules-parent");
+      const child = ThreadId.make("thread:move-rules-child");
+      const grandchild = ThreadId.make("thread:move-rules-grandchild");
+      const sideChat = ThreadId.make("thread:move-rules-side-chat");
+      const elsewhere = ThreadId.make("thread:move-rules-elsewhere");
+      yield* seedParentWithTerminalTask({
+        threadId: parent,
+        projectId,
+        runId: RunId.make("run:move-rules-parent"),
+        rootNodeId: NodeId.make("node:move-rules-parent"),
+        taskId: NodeId.make("node:move-rules-seed"),
+        deliveryState: "acknowledged",
+        parentRunStatus: "completed",
+        now,
+      });
+      yield* seedChildThread({
+        threadId: child,
+        parentThreadId: parent,
+        rootThreadId: parent,
+        projectId,
+        now,
+      });
+      yield* seedChildThread({
+        threadId: grandchild,
+        parentThreadId: child,
+        rootThreadId: parent,
+        projectId,
+        now,
+      });
+      yield* seedChildThread({
+        threadId: sideChat,
+        parentThreadId: parent,
+        rootThreadId: parent,
+        projectId,
+        sideChat: true,
+        now,
+      });
+      yield* seedParentWithTerminalTask({
+        threadId: elsewhere,
+        projectId: ProjectId.make("project:move-rules-elsewhere"),
+        runId: RunId.make("run:move-rules-elsewhere"),
+        rootNodeId: NodeId.make("node:move-rules-elsewhere"),
+        taskId: NodeId.make("node:move-rules-elsewhere-seed"),
+        deliveryState: "acknowledged",
+        parentRunStatus: "completed",
+        now,
+      });
+
+      assert.include(yield* refusal("self", parent, parent), "cannot move under itself");
+      assert.include(yield* refusal("cycle", child, grandchild), "its own descendant");
+      assert.include(yield* refusal("cycle-root", parent, grandchild), "its own descendant");
+      assert.include(yield* refusal("other-project", child, elsewhere), "another project");
+      assert.include(yield* refusal("side-chat", sideChat, null), "side chat");
+      assert.include(yield* refusal("under-side-chat", child, sideChat), "cannot delegate");
+      assert.include(yield* refusal("same-parent", child, parent), "already under");
+      assert.include(yield* refusal("root-to-root", parent, null), "already a top-level");
+    }),
+  );
+
+  it.effect("refuses while the child still owes its parent a result", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const now = yield* DateTime.now;
+      const projectId = ProjectId.make("project:move-owed");
+      const parentThreadId = ThreadId.make("thread:move-owed-parent");
+      const parentRunId = RunId.make("run:move-owed-parent");
+      const rootNodeId = NodeId.make("node:move-owed-parent");
+      yield* seedParentWithTerminalTask({
+        threadId: parentThreadId,
+        projectId,
+        runId: parentRunId,
+        rootNodeId,
+        taskId: NodeId.make("node:move-owed-seed"),
+        deliveryState: "acknowledged",
+        now,
+      });
+      const child = yield* seedRestartCancelledChild({
+        parentThreadId,
+        projectId,
+        parentRunId,
+        rootNodeId,
+        name: "move-owed-child",
+        completionWake: "always",
+        continuationPending: false,
+        runStatus: "completed",
+        now,
+      });
+      // The task still runs until its result reaches the parent.
+      assert.include(yield* refusal("owed", child.childThreadId, null), "still owes");
+      yield* orchestrator.recoverDelegatedTasks;
+      const delivered = yield* orchestrator.getThreadProjection(parentThreadId);
+      assert.equal(
+        delivered.subagents.find((task) => task.id === child.taskId)?.status,
+        "completed",
+      );
+      yield* move("owed-delivered", child.childThreadId, null);
+      const moved = yield* orchestrator.getThreadProjection(child.childThreadId);
+      assert.deepEqual(moved.thread.lineage, {
+        parentThreadId: null,
+        relationshipToParent: null,
+        rootThreadId: child.childThreadId,
+      });
+    }),
+  );
+
+  it.effect("moves a subtree to root and under a new parent, which then gets its results", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const now = yield* DateTime.now;
+      const projectId = ProjectId.make("project:move-trip");
+      const parentThreadId = ThreadId.make("thread:move-trip-parent");
+      const parentRunId = RunId.make("run:move-trip-parent");
+      const rootNodeId = NodeId.make("node:move-trip-parent");
+      const newParentId = ThreadId.make("thread:move-trip-new-parent");
+      const grandchild = ThreadId.make("thread:move-trip-grandchild");
+      yield* seedParentWithTerminalTask({
+        threadId: parentThreadId,
+        projectId,
+        runId: parentRunId,
+        rootNodeId,
+        taskId: NodeId.make("node:move-trip-seed"),
+        deliveryState: "acknowledged",
+        now,
+      });
+      const child = yield* seedRestartCancelledChild({
+        parentThreadId,
+        projectId,
+        parentRunId,
+        rootNodeId,
+        name: "move-trip-child",
+        completionWake: "always",
+        continuationPending: false,
+        runStatus: "completed",
+        now,
+      });
+      yield* seedChildThread({
+        threadId: grandchild,
+        parentThreadId: child.childThreadId,
+        rootThreadId: parentThreadId,
+        projectId,
+        now,
+      });
+      yield* seedThreadWithRun({ threadId: newParentId, projectId, now });
+      yield* orchestrator.recoverDelegatedTasks;
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("command:move-trip:pin"),
+        threadId: child.childThreadId,
+      });
+      const oldParentTasks = (yield* orchestrator.getThreadProjection(parentThreadId)).subagents
+        .length;
+
+      // To root: a top-level thread that keeps its pin; its child follows.
+      yield* move("trip-root", child.childThreadId, null);
+      const atRoot = yield* orchestrator.getThreadProjection(child.childThreadId);
+      assert.deepEqual(atRoot.thread.lineage, {
+        parentThreadId: null,
+        relationshipToParent: null,
+        rootThreadId: child.childThreadId,
+      });
+      assert.isNotNull(atRoot.thread.pinnedAt ?? null);
+      const grandchildAtRoot = yield* orchestrator.getThreadProjection(grandchild);
+      assert.equal(grandchildAtRoot.thread.lineage.parentThreadId, child.childThreadId);
+      assert.equal(grandchildAtRoot.thread.lineage.rootThreadId, child.childThreadId);
+
+      // Under the new parent: a subagent again, answering to it.
+      yield* move("trip-under", child.childThreadId, newParentId);
+      const under = yield* orchestrator.getThreadProjection(child.childThreadId);
+      assert.equal(under.thread.lineage.parentThreadId, newParentId);
+      assert.equal(under.thread.lineage.relationshipToParent, "subagent");
+      assert.equal(under.thread.lineage.rootThreadId, newParentId);
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(grandchild)).thread.lineage.rootThreadId,
+        newParentId,
+      );
+      // Work from before the move is not handed to the new parent, even by recovery.
+      yield* orchestrator.recoverDelegatedTasks;
+      const adopted = yield* orchestrator.getThreadProjection(newParentId);
+      const adoptedTask = adopted.subagents.find(
+        (task) => task.childThreadId === child.childThreadId,
+      );
+      assert.equal(adoptedTask?.result, "");
+      assert.lengthOf(
+        adopted.contextTransfers.filter(
+          (transfer) =>
+            transfer.type === "subagent_result" && transfer.sourceThreadId === child.childThreadId,
+        ),
+        1,
+      );
+
+      // A follow-up from the new parent reports back to it, not to the old parent.
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "agent",
+        creationSource: "mcp",
+        commandId: CommandId.make("command:move-trip:followup"),
+        threadId: child.childThreadId,
+        senderThreadId: newParentId,
+        messageId: MessageId.make("message:move-trip:followup"),
+        text: "One more thing",
+        attachments: [],
+        dispatchMode: { type: "queue_after_active" },
+      });
+      const followupRun = (yield* orchestrator.getThreadProjection(child.childThreadId)).runs.find(
+        (run) => run.userMessageId === MessageId.make("message:move-trip:followup"),
+      )!;
+      const followupTaskId = followupRun.delegatedTaskId;
+      assert.isDefined(followupTaskId);
+      const endedSequence = yield* eventSink.latestSequence();
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("event:move-trip-followup-ended"),
+            type: "run.updated",
+            threadId: child.childThreadId,
+            runId: followupRun.id,
+            occurredAt: now,
+            payload: { ...followupRun, status: "completed", startedAt: now, completedAt: now },
+          },
+        ],
+      });
+      yield* eventSink.stream({ afterSequence: endedSequence, eventType: "subagent.updated" }).pipe(
+        Stream.filter(
+          (stored) =>
+            stored.event.type === "subagent.updated" &&
+            stored.event.payload.id === followupTaskId &&
+            stored.event.payload.status === "completed",
+        ),
+        Stream.take(1),
+        Stream.runHead,
+      );
+      const reported = yield* orchestrator.getThreadProjection(newParentId);
+      assert.equal(
+        reported.subagents.find((task) => task.id === followupTaskId)?.status,
+        "completed",
+      );
+      assert.isTrue(
+        reported.contextTransfers.some(
+          (transfer) =>
+            transfer.type === "subagent_result" &&
+            transfer.sourceThreadId === child.childThreadId &&
+            transfer.sourcePoint.runId === followupRun.id,
+        ),
+      );
+      const oldParent = yield* orchestrator.getThreadProjection(parentThreadId);
+      assert.lengthOf(oldParent.subagents, oldParentTasks);
+      assert.isFalse(
+        oldParent.contextTransfers.some(
+          (transfer) => transfer.sourcePoint.runId === followupRun.id,
+        ),
+      );
+    }),
+  );
+});
