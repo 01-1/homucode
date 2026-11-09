@@ -224,6 +224,13 @@ export function useComposerMenuItems({
           label: "/model",
           description: "Switch response model for this thread",
         },
+        {
+          id: "slash:q",
+          type: "slash-command",
+          command: "q",
+          label: "/q",
+          description: "Ask one question on the quick model; the thread keeps its model",
+        },
         ...(sideChatAvailable
           ? ([
               {

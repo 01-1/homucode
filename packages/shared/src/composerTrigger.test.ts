@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   detectComposerTrigger,
+  parseQuickCommand,
   parseSideChatCommand,
   serializeComposerFileLink,
 } from "./composerTrigger.ts";
@@ -109,5 +110,19 @@ describe("parseSideChatCommand", () => {
     expect(parseSideChatCommand("/sidebar")).toBeNull();
     expect(parseSideChatCommand("/btwx")).toBeNull();
     expect(parseSideChatCommand("ask /side later")).toBeNull();
+  });
+});
+
+describe("parseQuickCommand", () => {
+  it("reads the question after /q, which may be empty", () => {
+    expect(parseQuickCommand("/q")).toEqual({ question: "" });
+    expect(parseQuickCommand("  /Q  what does @src/a.ts export?\nand why ")).toEqual({
+      question: "what does @src/a.ts export?\nand why",
+    });
+  });
+
+  it("ignores other commands and inline mentions", () => {
+    expect(parseQuickCommand("/quit")).toBeNull();
+    expect(parseQuickCommand("ask /q later")).toBeNull();
   });
 });

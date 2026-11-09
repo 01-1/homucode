@@ -87,7 +87,8 @@ import {
 import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { runMobileComposerTransition } from "./draftHeroTransition";
-import { useClientSettingsHydrated } from "../../hooks/useSettings";
+import { useClientSettingsHydrated, useEnvironmentSettings } from "../../hooks/useSettings";
+import { resolveQuickCommandSend } from "./composerQuickCommand";
 import { environmentPresentations } from "../../state/presentation";
 import {
   approvalRedirectNotice,
@@ -329,6 +330,10 @@ export function useComposerSend(input: ComposerSendInput) {
   const handleNewThread = useNewThreadHandler();
   const navigate = useNavigate();
   const clientSettingsHydrated = useClientSettingsHydrated();
+  const quickModelSelection = useEnvironmentSettings(
+    environmentId,
+    (settings) => settings.quickModelSelection,
+  );
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -558,13 +563,37 @@ export function useComposerSend(input: ComposerSendInput) {
         previewAnnotations: sendContextPreviewAnnotations,
         direct: directAnnotation,
       });
+    // `/q` sends just its question, on the quick model, for this one turn.
+    const quickSend =
+      directAnnotation || queuedRunEdit.isEditing || multipleModelSelections !== null
+        ? ({ kind: "none" } as const)
+        : resolveQuickCommandSend({
+            prompt: promptRef.current,
+            quickModelSelection,
+            threadStarted: isServerThread,
+          });
+    if (quickSend.kind === "blocked") {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: quickSend.title,
+          description: quickSend.description,
+        }),
+      );
+      return;
+    }
+    const sendModelSelection =
+      quickSend.kind === "send" ? quickSend.modelSelection : ctxSelectedModelSelection;
     // A direct "send annotation" writes the draft and sends in the same tick; the reference
     // must be in the text now, not after the next render.
-    const promptForSend = directAnnotation
-      ? ensureInlineContextReferences(promptRef.current, [
-          previewAnnotationContextReference(directAnnotation.annotation),
-        ])
-      : promptRef.current;
+    const promptForSend =
+      quickSend.kind === "send"
+        ? quickSend.question
+        : directAnnotation
+          ? ensureInlineContextReferences(promptRef.current, [
+              previewAnnotationContextReference(directAnnotation.annotation),
+            ])
+          : promptRef.current;
     const strandedThread = threadContextsOutsideEnvironment({
       text: promptForSend,
       records: composerThreadContexts,
@@ -1234,7 +1263,7 @@ export function useComposerSend(input: ComposerSendInput) {
               ),
             }),
           },
-          modelSelection: ctxSelectedModelSelection,
+          modelSelection: sendModelSelection,
           titleSeed: title,
           runtimeMode,
           interactionMode: DEFAULT_INTERACTION_MODE,
