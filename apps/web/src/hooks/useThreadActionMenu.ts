@@ -35,6 +35,7 @@ import {
   readEnvironmentSupportsAutoSettleOptOut,
   readQuietThreadShells,
   readThreadShell,
+  readThreadShells,
   useProjects,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -158,9 +159,7 @@ export function useThreadActionMenu(input: {
         move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
         hasRunningSubagents: hasRunningSubagents(
           thread.id,
-          readQuietThreadShells().filter(
-            (shell) => shell.environmentId === threadRef.environmentId,
-          ),
+          readThreadShells().filter((shell) => shell.environmentId === threadRef.environmentId),
           (shell) => !threadRuntimeCanArchive(shell.runtime),
         ),
       });

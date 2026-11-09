@@ -63,6 +63,7 @@ vi.mock("../state/entities", () => ({
     source: { creationSource: "web" },
   }),
   readQuietThreadShells: () => [],
+  readThreadShells: () => [],
   useProjects: () => [{ id: "project", environmentId: "secondary" }],
 }));
 vi.mock("../state/environments", () => ({ usePrimaryEnvironmentId: () => "primary" }));

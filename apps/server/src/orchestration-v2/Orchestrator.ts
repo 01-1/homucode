@@ -12561,6 +12561,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // Queued after the interrupt, since a thread's effects run in order.
     const stopDelegatedTasks =
       command.stopDelegatedTasks === false ||
+      command.leaveSubagentsRunning === true ||
       !projection.subagents.some(
         (task) => task.origin === "app_owned" && task.childThreadId !== null,
       )
@@ -12596,7 +12597,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           },
           interruptEvents,
           interruptEffects,
-          { keepRunningSubagents: command.stopDelegatedTasks === false },
+          { keepRunningSubagents: command.leaveSubagentsRunning === true },
         ),
       );
       // A failed interrupt may have written part of its events, so they are kept apart.
@@ -12631,7 +12632,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       projection,
       cohortRunIds: [],
       now,
-      keepRunningSubagents: command.stopDelegatedTasks === false,
+      keepRunningSubagents: command.leaveSubagentsRunning === true,
     });
     yield* cancelIdleOrphans({ command, events, projection });
     yield* stopDelegatedTasks;

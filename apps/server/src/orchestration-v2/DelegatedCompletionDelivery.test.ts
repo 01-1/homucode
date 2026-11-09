@@ -1542,7 +1542,7 @@ it.layer(layerContinuationWorkerTest)("interrupted completion wakes", (it) => {
               type: "thread.stop",
               commandId: CommandId.make(`${key}-interrupt`),
               threadId,
-              stopDelegatedTasks: false,
+              leaveSubagentsRunning: true,
             }
           : {
               type: "run.interrupt",
@@ -2345,7 +2345,7 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
               threadId: parentThreadId,
               commandId: CommandId.make(`command:followup-stop-${outcome}`),
               // Stop that leaves the delegated child running; it then finishes on its own.
-              ...(parentOnlyStop ? { stopDelegatedTasks: false } : {}),
+              ...(parentOnlyStop ? { leaveSubagentsRunning: true } : {}),
             });
           }
           yield* eventSink.write({

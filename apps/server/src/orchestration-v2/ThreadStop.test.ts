@@ -592,6 +592,10 @@ it.effect.each(["run.interrupt", "thread.stop"] as const)(
         watched: [],
       });
       assert.deepEqual((yield* threadState(grandchildThreadId)).runs, ["interrupted"]);
+      // The walk cancels the grandchild, so the child's pending result for it is disposed.
+      yield* orchestrator.recoverDelegatedTasks;
+      const stoppedChild = yield* orchestrator.getThreadProjection(childThreadId);
+      assert.equal(stoppedChild.subagents[0]?.completionDelivery?.state, "disposed");
 
       yield* threads.stopDelegatedTasks({ threadId: parentThreadId, commandId: stopCommandId });
       assert.deepEqual((yield* threadState(childThreadId)).runs, ["interrupted", "queued:held"]);

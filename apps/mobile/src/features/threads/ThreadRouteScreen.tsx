@@ -653,10 +653,8 @@ function ThreadRouteContent(
     }
     return interruptThreadTurn({
       environmentId: selectedThread.environmentId,
-      input: {
-        threadId: selectedThread.id,
-        runId: composer.interruptibleRunId,
-      },
+      // No run id: thread.stop ends the thread's work and leaves its subagents running.
+      input: { threadId: selectedThread.id },
     });
   };
 

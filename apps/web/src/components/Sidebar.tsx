@@ -146,6 +146,7 @@ import {
 import {
   readQuietThreadShells,
   readThreadShell,
+  readThreadShells,
   useAllEnvironmentProjectSnapshotsReady,
   useDelegatedUnderParent,
   useProjects,
@@ -2655,7 +2656,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
               hasRunningSubagents: hasRunningSubagents(
                 thread.id,
-                readQuietThreadShells().filter(
+                readThreadShells().filter(
                   (shell) => shell.environmentId === threadRef.environmentId,
                 ),
                 (shell) => !threadRuntimeCanArchive(shell.runtime),

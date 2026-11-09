@@ -2933,6 +2933,11 @@ export const OrchestrationV2Command = Schema.Union([
      * do under their caller's dispatch limit. Otherwise Stop also stops every task under the thread.
      */
     stopDelegatedTasks: Schema.optional(Schema.Boolean),
+    /**
+     * True when Stop ends only this thread: its delegated tasks keep running, and their results
+     * still reach the thread when they finish.
+     */
+    leaveSubagentsRunning: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.create"),
