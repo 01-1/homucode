@@ -2918,6 +2918,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // An interrupted wake disposes only the results it carried. The cohort stays open, and its
     // delivery stays the wake's, so the wake's terminal reserves any sibling's result.
     readonly interruptedWakeTaskIds?: ReadonlyArray<NodeId>;
+    // A Stop that leaves subagents running keeps their results deliverable to the parent.
+    readonly keepActiveTasks?: boolean;
   }) {
     const parentRun = input.projection.runs.find((candidate) => candidate.id === input.parentRunId);
     if (parentRun === undefined) {
@@ -2932,18 +2934,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     const emitEvent = emit(input.events, input.command);
     const wakeTaskIds = input.interruptedWakeTaskIds;
+    const undelivered = (task: OrchestrationV2Subagent) =>
+      task.completionDelivery?.state !== "acknowledged" &&
+      task.completionDelivery?.state !== "delivered" &&
+      task.completionDelivery?.state !== "disposed";
     const keptTaskIds = new Set(
       wakeTaskIds !== undefined && cohort?.disposition === "open"
         ? tasks
-            .filter(
-              (task) =>
-                !wakeTaskIds.includes(task.id) &&
-                task.completionDelivery?.state !== "acknowledged" &&
-                task.completionDelivery?.state !== "delivered" &&
-                task.completionDelivery?.state !== "disposed",
-            )
+            .filter((task) => !wakeTaskIds.includes(task.id) && undelivered(task))
             .map((task) => task.id)
-        : [],
+        : input.keepActiveTasks === true && (cohort === undefined || cohort.disposition === "open")
+          ? tasks
+              .filter((task) => isOrchestrationV2WorkActive(task.status) && undelivered(task))
+              .map((task) => task.id)
+          : [],
     );
     const nextCohort =
       keptTaskIds.size > 0
@@ -11465,6 +11469,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     readonly projection: Pick<OrchestrationV2ThreadProjection, "thread" | "runs" | "subagents">;
     readonly cohortRunIds: ReadonlyArray<RunId>;
     readonly now: DateTime.Utc;
+    readonly keepRunningSubagents?: boolean;
   }) {
     const emitEvent = emit(input.events, input.command);
     const { runs, subagents } = input.projection;
@@ -11597,6 +11602,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         parentRunId,
         disposition: "stopped",
         now: input.now,
+        ...(input.keepRunningSubagents === true ? { keepActiveTasks: true } : {}),
       });
     }
     yield* closePendingLinkRequests({ ...input, threadId: thread.id });
@@ -11917,6 +11923,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     command: Extract<OrchestrationV2Command, { readonly type: "run.interrupt" }>,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+    options?: { readonly keepRunningSubagents?: boolean },
   ) {
     const projection = yield* loadProjectionForCommand(
       command,
@@ -11995,6 +12002,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             projection,
             cohortRunIds: [completionCohortRunId],
             now,
+            ...(options?.keepRunningSubagents === true ? { keepRunningSubagents: true } : {}),
           })
         : Effect.gen(function* () {
             for (const parentRunId of new Set([completionCohortRunId, run.id])) {
@@ -12588,6 +12596,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           },
           interruptEvents,
           interruptEffects,
+          { keepRunningSubagents: command.stopDelegatedTasks === false },
         ),
       );
       // A failed interrupt may have written part of its events, so they are kept apart.
@@ -12616,7 +12625,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     for (const run of reached.values()) {
       yield* markStoppedRun({ command, events, thread: projection.thread, run, now });
     }
-    yield* holdStoppedThread({ command, events, projection, cohortRunIds: [], now });
+    yield* holdStoppedThread({
+      command,
+      events,
+      projection,
+      cohortRunIds: [],
+      now,
+      keepRunningSubagents: command.stopDelegatedTasks === false,
+    });
     yield* cancelIdleOrphans({ command, events, projection });
     yield* stopDelegatedTasks;
     return undefined;

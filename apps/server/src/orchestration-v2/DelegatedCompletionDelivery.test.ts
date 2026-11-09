@@ -1385,16 +1385,27 @@ it.layer(layerContinuationWorkerTest)("interrupted completion wakes", (it) => {
     { name: "an interrupt keeps", holdQueue: false, siblingFinishesFirst: false },
     { name: "Stop disposes", holdQueue: true, siblingFinishesFirst: false },
     { name: "an interrupt reserves", holdQueue: false, siblingFinishesFirst: true },
-  ])("$name a completion wake's other siblings", ({ holdQueue, siblingFinishesFirst }) =>
+    // Stop that leaves subagents running keeps a still-running sibling's result for the parent.
+    {
+      name: "a parent-only Stop keeps",
+      holdQueue: true,
+      siblingFinishesFirst: false,
+      parentOnly: true,
+    },
+  ])("$name a completion wake's other siblings", (scenario) =>
     Effect.gen(function* () {
+      const { holdQueue, siblingFinishesFirst } = scenario;
+      const parentOnly = "parentOnly" in scenario && scenario.parentOnly;
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const sink = yield* EventSink.EventSinkV2;
       const now = yield* DateTime.now;
-      const key = holdQueue
-        ? "sibling-stop"
-        : siblingFinishesFirst
-          ? "sibling-finished-interrupt"
-          : "sibling-interrupt";
+      const key = parentOnly
+        ? "sibling-parent-only-stop"
+        : holdQueue
+          ? "sibling-stop"
+          : siblingFinishesFirst
+            ? "sibling-finished-interrupt"
+            : "sibling-interrupt";
       const threadId = ThreadId.make(`${key}-parent`);
       const originRunId = RunId.make(`${key}-origin`);
       const incomingTaskId = NodeId.make(`${key}-incoming`);
@@ -1525,13 +1536,22 @@ it.layer(layerContinuationWorkerTest)("interrupted completion wakes", (it) => {
         );
       }
       const beforeInterrupt = yield* sink.latestSequence();
-      const interrupted = yield* orchestrator.dispatch({
-        type: "run.interrupt",
-        commandId: CommandId.make(`${key}-interrupt`),
-        threadId,
-        runId: wake.id,
-        ...(holdQueue ? { holdQueue } : {}),
-      });
+      const interrupted = yield* orchestrator.dispatch(
+        parentOnly
+          ? {
+              type: "thread.stop",
+              commandId: CommandId.make(`${key}-interrupt`),
+              threadId,
+              stopDelegatedTasks: false,
+            }
+          : {
+              type: "run.interrupt",
+              commandId: CommandId.make(`${key}-interrupt`),
+              threadId,
+              runId: wake.id,
+              ...(holdQueue ? { holdQueue } : {}),
+            },
+      );
       // The wake's terminal may claim the sibling right after commit, so read what the interrupt
       // itself wrote rather than a later projection.
       const interruptDelivery = new Map(
@@ -1547,8 +1567,11 @@ it.layer(layerContinuationWorkerTest)("interrupted completion wakes", (it) => {
           : [],
       );
       assert.equal(interruptDelivery.get(incomingTaskId), "disposed");
-      assert.equal(interruptCohort.at(-1)?.disposition, holdQueue ? "stopped" : "open");
-      if (holdQueue) {
+      assert.equal(
+        interruptCohort.at(-1)?.disposition,
+        holdQueue && !parentOnly ? "stopped" : "open",
+      );
+      if (holdQueue && !parentOnly) {
         assert.equal(interruptDelivery.get(sibling.id), "disposed");
         return;
       }
@@ -2167,6 +2190,7 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
       "interrupted",
       "restarted",
       "stopped",
+      "parent-stopped",
       "overlapping",
     ] as const;
     it.effect.each(outcomes)(
@@ -2314,11 +2338,14 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
             assert.equal(continuation.delegatedTaskId, run.delegatedTaskId);
             run = continuation;
           }
-          if (outcome === "stopped") {
+          const parentOnlyStop = outcome === "parent-stopped";
+          if (outcome === "stopped" || parentOnlyStop) {
             yield* orchestrator.dispatch({
               type: "thread.stop",
               threadId: parentThreadId,
               commandId: CommandId.make(`command:followup-stop-${outcome}`),
+              // Stop that leaves the delegated child running; it then finishes on its own.
+              ...(parentOnlyStop ? { stopDelegatedTasks: false } : {}),
             });
           }
           yield* eventSink.write({
@@ -2335,7 +2362,7 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
                   status:
                     outcome === "stopped"
                       ? "interrupted"
-                      : outcome === "restarted" || outcome === "overlapping"
+                      : outcome === "restarted" || outcome === "overlapping" || parentOnlyStop
                         ? "completed"
                         : outcome,
                   startedAt: now,
@@ -2365,7 +2392,7 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
             followup.status,
             outcome === "stopped"
               ? "interrupted"
-              : outcome === "restarted" || outcome === "overlapping"
+              : outcome === "restarted" || outcome === "overlapping" || parentOnlyStop
                 ? "completed"
                 : outcome,
           );
