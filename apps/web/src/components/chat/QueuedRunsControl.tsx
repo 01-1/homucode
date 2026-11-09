@@ -39,6 +39,12 @@ import { GuestMessageName } from "./guestMessageStyle";
 import { TimelineRowTimestamp } from "./TimelineRowParts";
 import { FoldedMessageHeader, useScheduledTaskTitle } from "./TimelineUserMessageRow";
 
+/** Fresh sessions and one-turn models (`/q`) run as their own turn; they never steer in. */
+const startsOwnTurn = (run: {
+  readonly freshContext?: boolean | undefined;
+  readonly turnOnlyModelSelection?: boolean | undefined;
+}) => run.freshContext === true || run.turnOnlyModelSelection === true;
+
 export interface EditQueuedRunRequest {
   readonly runId: RunId;
   readonly messageId: MessageId;
@@ -133,7 +139,7 @@ export function QueuedRunsControl({
       message,
       runId: run.id,
       messageId: run.userMessageId,
-      freshContext: run.freshContext === true,
+      freshContext: startsOwnTurn(run),
       serverIndex,
       text,
       // A guest's message keeps the guest's words; the owner can cancel it, not rewrite it.
@@ -170,9 +176,7 @@ export function QueuedRunsControl({
   ];
 
   const sendQueuedMessage = async (queuedRunId: RunId) => {
-    const freshContext = queued.some(
-      ({ run }) => run.id === queuedRunId && run.freshContext === true,
-    );
+    const freshContext = queued.some(({ run }) => run.id === queuedRunId && startsOwnTurn(run));
     if (!canSendRun(freshContext) || steerInFlightRef.current) return;
     steerInFlightRef.current = true;
     setBusyRunId(queuedRunId);
@@ -194,7 +198,7 @@ export function QueuedRunsControl({
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
       const next = queued[0];
-      if (!next || !canSendRun(next.run.freshContext === true)) return false;
+      if (!next || !canSendRun(startsOwnTurn(next.run))) return false;
       if (!repeat && busyRunId === null) void sendQueuedMessage(next.run.id);
       return true;
     },

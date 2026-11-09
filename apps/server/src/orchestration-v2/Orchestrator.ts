@@ -10213,11 +10213,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
     // Skipping compaction starts the message as its own turn; steering would join the current one.
-    if (queuedRun.freshContext === true) {
+    if (queuedRun.freshContext === true || queuedRun.turnOnlyModelSelection === true) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
         commandType: command.type,
-        cause: "A message that starts a fresh session can't steer the current turn.",
+        cause:
+          queuedRun.freshContext === true
+            ? "A message that starts a fresh session can't steer the current turn."
+            : "A message for another model runs as its own turn and can't steer the current turn.",
       });
     }
     if (goalCommand !== null) {

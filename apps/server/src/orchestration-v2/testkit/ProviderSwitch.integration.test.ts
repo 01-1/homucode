@@ -2999,6 +2999,125 @@ describe("orchestration v2 provider switching", () => {
     ),
   );
 
+  it.live("refuses to steer a queued one-turn model message into the running turn", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cwd = yield* checkpointWorkspace("quick-promote");
+        const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const quick: ModelSelection = {
+          ...CODEX_MODEL_SELECTION,
+          model: `${CODEX_MODEL_SELECTION.model}-quick`,
+        };
+        const quickThreadId = ThreadId.make("thread:quick-promote");
+        const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+          makeTestAdapter({
+            instanceId: CODEX_MODEL_SELECTION.instanceId,
+            driver: CODEX_DRIVER,
+            capabilities: CodexProviderCapabilitiesV2,
+            modelSelection: CODEX_MODEL_SELECTION,
+            responseByRunOrdinal: {},
+            capturedTurns,
+            holdFirstTurn: started,
+            releaseFirstTurn: release,
+            holdRunOrdinal: 1,
+          }),
+        ]);
+        yield* Effect.gen(function* () {
+          const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+          yield* orchestrator.dispatch({
+            type: "thread.create",
+            createdBy: "user",
+            creationSource: "web",
+            commandId: CommandId.make("command:quick-promote:create"),
+            threadId: quickThreadId,
+            projectId: ProjectId.make("project:quick-promote"),
+            title: "Quick promote",
+            modelSelection: CODEX_MODEL_SELECTION,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: cwd,
+          });
+          yield* orchestrator.dispatch({
+            type: "message.dispatch",
+            createdBy: "user",
+            creationSource: "web",
+            commandId: CommandId.make("command:quick-promote:long"),
+            threadId: quickThreadId,
+            messageId: MessageId.make("message:quick-promote:long"),
+            text: "Long turn",
+            attachments: [],
+            dispatchMode: { type: "start_immediately" },
+          });
+          yield* Deferred.await(started);
+          yield* worker.drain();
+          // A `/q` sent while the long turn runs waits for its own turn.
+          yield* orchestrator.dispatch({
+            type: "message.dispatch",
+            createdBy: "user",
+            creationSource: "web",
+            commandId: CommandId.make("command:quick-promote:quick"),
+            threadId: quickThreadId,
+            messageId: MessageId.make("message:quick-promote:quick"),
+            text: "Quick question",
+            attachments: [],
+            modelSelection: quick,
+            turnOnlyModelSelection: true,
+            dispatchMode: { type: "queue_after_active" },
+          });
+          const waiting = yield* orchestrator.getThreadProjection(quickThreadId);
+          // "Send now" would steer it into the long turn on the thread's model.
+          const promoted = yield* orchestrator
+            .dispatch({
+              type: "queued-message.promote-to-steer",
+              commandId: CommandId.make("command:quick-promote:promote"),
+              threadId: quickThreadId,
+              queuedRunId: waiting.runs.find((run) => run.turnOnlyModelSelection === true)!.id,
+              targetRunId: waiting.runs.find((run) => run.status === "running")!.id,
+            })
+            .pipe(Effect.flip);
+          assert.instanceOf(promoted, Orchestrator.OrchestratorDispatchError);
+          assert.include(String(promoted.cause), "its own turn");
+          yield* Deferred.succeed(release, undefined);
+          yield* worker.drain();
+          yield* waitForIdle(quickThreadId);
+          yield* worker.drain();
+
+          assert.deepEqual(
+            (yield* Ref.get(capturedTurns)).map((turn) => [turn.text, turn.modelSelection.model]),
+            [
+              ["Long turn", CODEX_MODEL_SELECTION.model],
+              ["Quick question", quick.model],
+            ],
+          );
+          const projection = yield* orchestrator.getThreadProjection(quickThreadId);
+          assert.deepEqual(
+            projection.runs.map((run) => run.status),
+            ["completed", "completed"],
+          );
+          assert.deepEqual(projection.thread.modelSelection, CODEX_MODEL_SELECTION);
+        }).pipe(
+          Effect.provide(
+            ProviderReplayHarness.layerWithRegistry(
+              {
+                name: "quick-promote",
+                runtimePolicyOverride: {
+                  cwd,
+                  approvalPolicy: "never",
+                  sandboxPolicy: { type: "readOnly" },
+                },
+              },
+              layerRegistry,
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
   it.live.each(["immediately", "behind a running turn"] as const)(
     "starts a fresh provider session %s and never hands earlier runs to a later provider",
     (variant) =>
