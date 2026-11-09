@@ -37,6 +37,7 @@ import {
   findingsBody,
   findingsWithout,
   hasSection,
+  latestExecutedRun,
   ownSections,
   planFindingsDelivery,
   queuedFindingsRun,
@@ -443,7 +444,16 @@ export const make = (port: AutoreviewPort) => {
           });
     if (delivered.some((message) => hasSection(message.text, section))) return done;
     const sent = { type: "done" as const, section };
-    const delivery = planFindingsDelivery(parentRuns);
+    // A Stop that reached a turn as it completed leaves the run completed, with only the request.
+    const latest = latestExecutedRun(parentRuns);
+    const stopRequests =
+      latest === undefined
+        ? []
+        : (yield* projections.getThreadRecords(found.parent.id, ["turnItems"], {
+            turnItemRunId: latest.id,
+            turnItemTypes: ["run_interrupt_request"],
+          })).turnItems;
+    const delivery = planFindingsDelivery(parentRuns, stopRequests.length > 0);
     if (delivery.type === "skip") {
       yield* Effect.logInfo("autoreview findings were not delivered", {
         threadId: found.parent.id,

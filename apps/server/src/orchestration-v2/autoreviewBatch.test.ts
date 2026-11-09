@@ -404,6 +404,8 @@ describe("planFindingsDelivery", () => {
 
   it("waits for the next turn after a Stop instead of restarting the thread", () => {
     assert.equal(planFindingsDelivery([run(1, "completed"), run(2, "interrupted")]).type, "skip");
+    // A Stop that reached a turn as it completed leaves it completed.
+    assert.equal(planFindingsDelivery([run(1, "completed")], true).type, "skip");
     assert.deepStrictEqual(planFindingsDelivery([run(1, "interrupted"), run(2, "running")]), {
       type: "steer",
       targetRunId: RunId.make("run:2"),

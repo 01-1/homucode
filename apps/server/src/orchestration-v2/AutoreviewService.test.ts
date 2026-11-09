@@ -755,6 +755,65 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("findings after a Stop on an idle thread wait too", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const steered: Array<DispatchCommand> = [];
+      const service = AutoreviewService.make(steeringPort(orchestrator, steered));
+      const { threadId, runId, now } = yield* seedReviewedThread("idle-stop");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "idle-stop");
+      const first = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+        (run) => run.id === runId,
+      )!;
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("idle-stop:first-completed"),
+            type: "run.updated",
+            threadId,
+            runId,
+            occurredAt: now,
+            payload: { ...first, status: "completed", completedAt: now },
+          },
+        ],
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.stop",
+        commandId: CommandId.make("idle-stop:stop"),
+        threadId,
+        stopDelegatedTasks: true,
+      });
+
+      const review = yield* finishReview(
+        reviewerThreadId,
+        "src/parse.ts:1 misses null.",
+        "idle-stop",
+      );
+      yield* service.handle(review.ended);
+      const runs = (yield* orchestrator.getThreadProjection(threadId)).runs;
+      assert.deepStrictEqual(
+        runs.map((run) => run.status),
+        ["completed"],
+      );
+      assert.lengthOf(steered, 0);
+
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("idle-stop:resume"),
+        threadId,
+        messageId: MessageId.make("idle-stop:resume"),
+        text: "continue work",
+        attachments: [],
+        createdBy: "user",
+        creationSource: "web",
+        dispatchMode: { type: "start_immediately" },
+      });
+      yield* service.handle(review.ended);
+      assert.lengthOf(steered, 1);
+    }),
+  );
+
   it.effect("findings steer into the reviewed thread's running turn", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

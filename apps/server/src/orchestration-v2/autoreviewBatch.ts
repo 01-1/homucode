@@ -385,7 +385,17 @@ export const queuedFindingsRun = (runs: ReadonlyArray<OrchestrationV2Run>) =>
  * work (a held queue keeps them held). On an idle thread they start a turn unless the user
  * stopped its last turn or findings already started too many turns in a row.
  */
-export function planFindingsDelivery(runs: ReadonlyArray<OrchestrationV2Run>): FindingsDelivery {
+/** The thread's newest run that has left the queue, if any. */
+export const latestExecutedRun = (runs: ReadonlyArray<OrchestrationV2Run>) =>
+  runs
+    .filter((run) => run.status !== "queued")
+    .toSorted((left, right) => right.ordinal - left.ordinal)[0];
+
+export function planFindingsDelivery(
+  runs: ReadonlyArray<OrchestrationV2Run>,
+  /** Whether a Stop reached the newest executed run, even one that still completed. */
+  latestRunStopped = false,
+): FindingsDelivery {
   const active = runs
     .filter((run) => ACTIVE_RUN_STATUSES.has(run.status))
     .toSorted((left, right) => right.ordinal - left.ordinal)[0];
@@ -395,10 +405,7 @@ export function planFindingsDelivery(runs: ReadonlyArray<OrchestrationV2Run>): F
   if (runs.some((run) => run.status === "queued")) return { type: "queue" };
   // A Stop ended the last turn: findings wait for the next turn the user starts, instead of
   // restarting the thread the user just stopped.
-  const last = runs
-    .filter((run) => run.status !== "queued")
-    .toSorted((left, right) => right.ordinal - left.ordinal)[0];
-  if (last?.status === "interrupted") {
+  if (latestRunStopped || latestExecutedRun(runs)?.status === "interrupted") {
     return { type: "skip", reason: "the thread was stopped; findings wait for its next turn" };
   }
   if (consecutiveAutoreviewWakes(runs) >= MAX_CONSECUTIVE_AUTOREVIEW_WAKES) {
