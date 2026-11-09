@@ -623,6 +623,35 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("a missed review is delivered before new activity sends the next batch", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("overtaken");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "overtaken");
+      yield* finishReview(reviewerThreadId, "src/parse.ts:1 misses undefined.", "overtaken-review");
+
+      // New activity arrives before catch-up looks at the reviewer.
+      const next = assistantItem({
+        threadId,
+        runId,
+        id: "overtaken:next",
+        ordinal: 4,
+        now,
+        text: "Moving on.",
+      });
+      yield* eventSink.write({ events: [itemEvent(next)] });
+      yield* service.handle(itemEvent(next));
+      yield* service.catchUp;
+
+      const findings = yield* messagesTo(threadId, AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
+      assert.lengthOf(findings, 1);
+      assert.include(findings[0]!.text, "misses undefined");
+      assert.lengthOf(yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX), 1);
+    }),
+  );
+
   it.effect("refuses to attach to a thread that is not working", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

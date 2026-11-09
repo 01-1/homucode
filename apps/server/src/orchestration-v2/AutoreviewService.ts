@@ -205,6 +205,12 @@ export const make = (port: AutoreviewPort) => {
     for (const [index, reviewer] of reviewers.entries()) {
       const child = yield* optionalRecords(reviewer.threadId, ["runs"]);
       if (child === null || isGone(child.thread) || isBusy(child.runs)) continue;
+      // A finished review is delivered before the next batch goes out, so a review whose
+      // completion event was missed (a restart) is not overtaken and lost.
+      const latest = child.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
+      if (latest?.status === "completed") {
+        yield* deliverFindings({ parent: thread, child: child.thread }, latest.id);
+      }
       const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
       if (!batchHasAgentActivity(plan)) continue;
       const last = plan.items.at(-1)!;
@@ -540,7 +546,8 @@ export const make = (port: AutoreviewPort) => {
     },
   );
 
-  // Events are not replayed after a restart, so buffers that filled meanwhile are sent now.
+  // Events are not replayed after a restart, so reviews and buffers that finished meanwhile
+  // go out now; each flush delivers an idle reviewer's finished review first.
   const catchUp = Effect.gen(function* () {
     const subagentIds = yield* projections.listActiveSubagentThreadIds();
     const parents = new Set<ThreadId>();
@@ -549,11 +556,7 @@ export const make = (port: AutoreviewPort) => {
         .withPermits(1)(
           Effect.gen(function* () {
             const found = yield* reviewerOf(childId);
-            if (found === null) return;
-            parents.add(found.parent.id);
-            const { runs } = yield* projections.getThreadRecords(childId, ["runs"]);
-            const latest = runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
-            if (latest?.status === "completed") yield* deliverFindings(found, latest.id);
+            if (found !== null) parents.add(found.parent.id);
           }),
         )
         .pipe(
