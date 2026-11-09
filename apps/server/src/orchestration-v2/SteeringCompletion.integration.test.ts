@@ -803,6 +803,56 @@ it.effect("sends a selected held message once and preserves the remaining queue 
   ),
 );
 
+it.effect("a steered user message carries its device line", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { started, steered, layer, startFirstTurn } =
+        yield* nextTurnSelectionHarness("steered-device-line");
+      yield* Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+        const threadId = yield* startFirstTurn;
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("queue-from-phone"),
+          threadId,
+          messageId: MessageId.make("message:from-phone"),
+          text: "from the phone",
+          attachments: [],
+          context: {
+            version: 1,
+            records: [],
+            sentFrom: {
+              surface: "mobile",
+              os: "Android",
+              deviceModel: "Pixel 9",
+              connectionMethod: "relay",
+              deviceName: "my-phone",
+            },
+          },
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: "user",
+          creationSource: "mobile",
+        });
+        const queued = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (run) => run.status === "queued",
+        )!;
+        yield* orchestrator.dispatch({
+          type: "queued-message.promote-to-steer",
+          commandId: CommandId.make("promote-from-phone"),
+          threadId,
+          queuedRunId: queued.id,
+          targetRunId: started[0]!.runId,
+        });
+        yield* worker.drain();
+        assert.deepEqual(steered, [
+          "from the phone\n\n[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)",
+        ]);
+      }).pipe(Effect.provide(layer));
+    }),
+  ),
+);
+
 it.effect("force sends multiple queued messages and can force send a requeued message again", () =>
   Effect.scoped(
     Effect.gen(function* () {
