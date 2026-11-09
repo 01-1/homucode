@@ -1,4 +1,5 @@
 import { withOriginalSentFrom, withoutNonUserSentFrom } from "./MessageSentFrom.ts";
+import { isAutoreviewFindingsMessageId } from "./autoreviewBatch.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   GuestShareId,
@@ -6232,6 +6233,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     ) {
       dispatchMode = { type: "queue_after_active" };
     }
+    // Autoreview findings never restart, or steer into, a thread its user stopped: while a Stop
+    // holds the newest run (still stopping, interrupted, or completed as the Stop arrived),
+    // they wait in the held queue for the user's next send. Checked here, in the serialized
+    // dispatch, so a Stop that lands after the reviewer service looked still counts.
+    const stoppedRunHoldingFindings = yield* Effect.gen(function* () {
+      if (!isAutoreviewFindingsMessageId(command.messageId) || command.createdBy !== "agent") {
+        return undefined;
+      }
+      const latest = latestExecutedRun(projection.runs);
+      if (latest === null) return undefined;
+      return latest.status === "interrupted" ||
+        (yield* stopReachedRun(command, command.threadId, latest.id))
+        ? latest
+        : undefined;
+    });
+    if (stoppedRunHoldingFindings !== undefined) dispatchMode = { type: "queue_after_active" };
     const freshContext = command.freshContext === true;
     // A fresh session, or a one-turn model, cannot join a turn that is already running.
     if (
@@ -6476,7 +6493,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       projection.thread.worktreePath === null
         ? latestRun
         : undefined;
-    const queueBehindRun = activeRun ?? worktreeMissingRun;
+    const queueBehindRun = activeRun ?? worktreeMissingRun ?? stoppedRunHoldingFindings;
     const pendingMergeBackTransfers = pendingMergeBackTransfersForThread(projection);
     const startsOrQueuesRun =
       dispatchMode.type === "defer_start" ||
@@ -6631,6 +6648,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         activeAttemptId: attemptId,
         status: "queued",
         ...(worktreeMissingRun !== undefined ||
+        stoppedRunHoldingFindings !== undefined ||
         (heldRunsToRelease.length === 0 && queueIsHeld && !wakeSkipsHold)
           ? { queueHeld: true }
           : {}),

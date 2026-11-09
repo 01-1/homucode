@@ -414,6 +414,16 @@ describe("planFindingsDelivery", () => {
     assert.equal(planFindingsDelivery([run(1, "completed"), run(2, "interrupted")]).type, "skip");
     // A Stop that reached a turn as it completed leaves it completed.
     assert.equal(planFindingsDelivery([run(1, "completed")], true).type, "skip");
+    // Still stopping: no steer into the run being stopped.
+    assert.equal(planFindingsDelivery([run(1, "running")], true).type, "skip");
+    // A queued message cancelled before it started does not hide the stopped run.
+    assert.equal(
+      planFindingsDelivery([
+        run(1, "interrupted"),
+        run(2, "cancelled", "message:q", { startedAt: null }),
+      ]).type,
+      "skip",
+    );
     assert.deepStrictEqual(planFindingsDelivery([run(1, "interrupted"), run(2, "running")]), {
       type: "steer",
       targetRunId: RunId.make("run:2"),

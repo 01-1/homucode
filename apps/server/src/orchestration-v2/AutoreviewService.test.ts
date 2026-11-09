@@ -796,6 +796,42 @@ it.layer(layerTest)("autoreview", (it) => {
         runs.map((run) => run.status),
         ["completed"],
       );
+      // Findings sent after the service looked, as when Stop wins that race, wait held.
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("idle-stop:late-findings"),
+        threadId,
+        messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}late`),
+        text: "Autoreview:\nlate",
+        attachments: [],
+        createdBy: "agent",
+        creationSource: "server",
+        dispatchMode: { type: "queue_after_active" },
+      });
+      const late = (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1);
+      assert.equal(late?.status, "queued");
+      assert.isTrue(late?.queueHeld);
+      // A steer at the finished turn, which would otherwise start a new one, waits held too.
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("idle-stop:late-steer"),
+        threadId,
+        messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}late-steer`),
+        text: "Autoreview:\nlate",
+        attachments: [],
+        createdBy: "agent",
+        creationSource: "server",
+        dispatchMode: { type: "steer_active", targetRunId: runId },
+      });
+      const afterLate = (yield* orchestrator.getThreadProjection(threadId)).runs;
+      assert.deepStrictEqual(
+        afterLate.map((run) => [run.status, run.queueHeld === true]),
+        [
+          ["completed", false],
+          ["queued", true],
+          ["queued", true],
+        ],
+      );
       assert.lengthOf(steered, 0);
 
       yield* orchestrator.dispatch({

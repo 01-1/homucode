@@ -37,13 +37,13 @@ import {
   findingsBody,
   findingsWithout,
   hasSection,
-  latestExecutedRun,
   ownSections,
   planFindingsDelivery,
   queuedFindingsRun,
   renderFindingsMessage,
   renderAutoreviewBatch,
 } from "./autoreviewBatch.ts";
+import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { visibleConversationItems } from "./ContextHandoffService.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import type {
@@ -458,7 +458,7 @@ export const make = (port: AutoreviewPort) => {
     // A Stop that reached a turn as it completed leaves the run completed, with only the request.
     const latest = latestExecutedRun(parentRuns);
     const stopRequests =
-      latest === undefined
+      latest === null
         ? []
         : (yield* projections.getThreadRecords(found.parent.id, ["turnItems"], {
             turnItemRunId: latest.id,
