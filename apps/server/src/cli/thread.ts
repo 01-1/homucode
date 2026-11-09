@@ -677,15 +677,23 @@ const threadStartCommand = Command.make("start", {
   ),
 );
 
+const sendModeFlag = Flag.Literals("mode", ["queue", "auto", "steer", "restart"]).pipe(
+  Flag.withDescription(
+    "queue (default): a busy thread gets it as its next turn. auto: steer the running turn, or start a turn when idle. steer: steer the running turn; fails when idle. restart: interrupt the running turn and restart it with the message.",
+  ),
+  Flag.withDefault("queue"),
+);
+
 const threadSendCommand = Command.make("send", {
   ...projectLocationFlags,
   thread: threadArgument,
   message: messageArgument,
+  mode: sendModeFlag,
   wait: waitFlag,
   json: jsonFlag,
 }).pipe(
   Command.withDescription(
-    "Send a message to a thread. A busy thread gets it as its next turn; nothing is interrupted.",
+    "Send a message to a thread. By default a busy thread gets it as its next turn; --mode auto steers it into the running turn instead.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {
@@ -696,7 +704,7 @@ const threadSendCommand = Command.make("send", {
         Effect.fn("cli.thread.send")(function* (tools) {
           const sent = yield* tools.call(
             "t3_thread_send",
-            { threadId, message, mode: "queue" },
+            { threadId, message, mode: flags.mode },
             OrchestratorMcpThreadSendResult,
           );
           if (flags.wait) {
@@ -704,7 +712,15 @@ const threadSendCommand = Command.make("send", {
           }
           yield* flags.json
             ? printJson(sent)
-            : Console.log(sent.delivery === "queued" ? "Queued." : "Sent.");
+            : Console.log(
+                sent.delivery === "queued"
+                  ? "Queued."
+                  : sent.delivery === "steered"
+                    ? "Steered."
+                    : sent.delivery === "restarted"
+                      ? "Restarted."
+                      : "Sent.",
+              );
         }),
       );
     }).pipe(reportThreadErrors),

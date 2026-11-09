@@ -292,3 +292,59 @@ it("titles from a long first line without splitting an emoji", () => {
   const title = titleFromMessage(`${"a".repeat(78)}😀 and the rest of a long first line`);
   assert.strictEqual(title, `${"a".repeat(78)}…`);
 });
+
+it.effect("send passes --mode to t3_thread_send and keeps queue as the default", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-thread-send-mode-" });
+    yield* persistServerRuntimeState({
+      path: path.join(baseDir, "userdata", "server-runtime.json"),
+      state: yield* makePersistedServerRuntimeState({
+        config: { host: "127.0.0.1", devUrl: undefined },
+        port: 3_773,
+      }),
+    });
+    const modes: Array<unknown> = [];
+    using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
+      Effect.succeed({
+        call: (tool, args) => {
+          if (tool !== "t3_thread_send") return Effect.die(`unexpected ${tool} call`);
+          modes.push(args.mode);
+          return Effect.succeed({
+            structuredContent: {
+              threadId,
+              runId,
+              messageId: "message-1",
+              status: "running",
+              delivery: args.mode === "queue" ? "queued" : "steered",
+            },
+          });
+        },
+      }),
+    );
+    const send = (...flags: Array<string>) =>
+      Command.runWith(threadCommand, { version: "0.0.0" })([
+        "send",
+        threadId,
+        "Literal Discord text",
+        "--base-dir",
+        baseDir,
+        ...flags,
+      ]);
+    yield* send();
+    yield* send("--mode", "auto");
+    assert.deepStrictEqual(modes, ["queue", "auto"]);
+    assert.deepStrictEqual((yield* TestConsole.logLines).slice(-2), ["Queued.", "Steered."]);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        NodeCrypto.layer,
+        NetService.layer,
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+      ),
+    ),
+  ),
+);
