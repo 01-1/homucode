@@ -293,6 +293,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     environmentOnly: true,
   },
   {
+    id: "quick-model",
+    title: "Quick model",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["quick fast model /q one question cheap"],
+    environmentOnly: true,
+  },
+  {
     id: "default-permissions",
     title: "Permissions",
     to: "/settings/threads",

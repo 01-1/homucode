@@ -102,6 +102,15 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
     fallbackSelection?.instanceId,
     fallbackSelection?.model,
   );
+  const mixedQuick = useScopedSettingsMixed(["quickModelSelection"]);
+  const quickSelection = settings.quickModelSelection ?? selection;
+  const quickEntry = entries.find((entry) => entry.instanceId === quickSelection?.instanceId);
+  const quickModelOptions = getCustomModelOptionsByInstance(
+    settings,
+    providers,
+    quickSelection?.instanceId,
+    quickSelection?.model,
+  );
   const mixedPermissions = useScopedSettingsMixed(["defaultRuntimeMode"]);
   const PermissionIcon = runtimeModeConfig[settings.defaultRuntimeMode].icon;
   const mixedWorkspace = useScopedSettingsMixed(["defaultThreadEnvMode"]);
@@ -322,6 +331,79 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
     />
   ) : null;
 
+  const quickRow = !isProjectScope ? (
+    <SettingsRow
+      serverScoped
+      settingKeys={["quickModelSelection"]}
+      mixed={mixedQuick}
+      {...searchableSetting("quick-model")}
+      description="Answers a /q message for one turn in the same thread; the next message goes back to the thread's model."
+      resetAction={
+        mixedQuick || settings.quickModelSelection !== null ? (
+          <SettingResetButton
+            label="quick model"
+            onClick={() => updateSettings({ quickModelSelection: null })}
+          />
+        ) : null
+      }
+      control={
+        quickSelection ? (
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+            <ProviderModelPicker
+              environmentId={representative?.environmentId ?? null}
+              activeInstanceId={quickSelection.instanceId}
+              model={quickSelection.model}
+              lockedProvider={null}
+              instanceEntries={entries}
+              modelOptionsByInstance={quickModelOptions}
+              triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+              triggerAriaLabel="Quick model"
+              {...(mixedQuick
+                ? { triggerLabel: "Mixed" }
+                : settings.quickModelSelection === null
+                  ? { triggerLabel: "None" }
+                  : {})}
+              getModelDisabledReason={modelDisabledReason}
+              onInstanceModelChange={(instanceId, model) => {
+                const reason = modelDisabledReason(instanceId, model);
+                if (reason) {
+                  toastManager.add({
+                    type: "error",
+                    title: "Quick model not saved",
+                    description: reason,
+                  });
+                  return;
+                }
+                updateSettings({ quickModelSelection: createModelSelection(instanceId, model) });
+              }}
+            />
+            {settings.quickModelSelection !== null && quickEntry && !mixedQuick ? (
+              <TraitsPicker
+                provider={quickEntry.driverKind}
+                models={quickEntry.models}
+                model={quickSelection.model}
+                modelOptions={quickSelection.options ?? []}
+                allowPromptInjectedEffort={false}
+                triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+                onModelOptionsChange={(options) =>
+                  updateSettings({
+                    quickModelSelection: createModelSelection(
+                      quickSelection.instanceId,
+                      quickSelection.model,
+                      options,
+                    ),
+                  })
+                }
+              />
+            ) : null}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">No providers available</span>
+        )
+      }
+    />
+  ) : null;
+
   return (
     <SettingsSection
       id={category === "source-control" ? "source-control-defaults" : "project-defaults"}
@@ -337,6 +419,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         <>
           {modelRow}
           {fallbackRow}
+          {quickRow}
           <SettingsRow
             serverScoped
             settingKeys={["defaultRuntimeMode"]}
