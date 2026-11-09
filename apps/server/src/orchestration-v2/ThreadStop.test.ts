@@ -657,6 +657,43 @@ it.effect.each(["run.interrupt", "thread.stop"] as const)(
     }).pipe(Effect.provide(layerTest)),
 );
 
+it.effect("Stop with subagents leaves the thread's autoreviewers running", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const threads = yield* ThreadManagementService.ThreadManagementService;
+    const parentThreadId = ThreadId.make("thread:stop-keeps-reviewer");
+    yield* createWatchingThread(parentThreadId, 1);
+    yield* send(parentThreadId, "first", "start_immediately");
+    const reviewerThreadId = yield* delegate(parentThreadId, "reviewer task");
+    const workerThreadId = yield* delegate(parentThreadId, "worker task");
+    const parent = yield* orchestrator.getThreadProjection(parentThreadId);
+    const reviewerTask = parent.subagents.find((task) => task.childThreadId === reviewerThreadId)!;
+    yield* orchestrator.dispatch({
+      type: "thread.autoreviewers.set",
+      commandId: CommandId.make("attach-reviewer"),
+      threadId: parentThreadId,
+      autoreviewers: [
+        {
+          threadId: reviewerThreadId,
+          taskId: reviewerTask.id,
+          throughOrdinal: -1,
+          sentItemIds: [],
+          addedAt: DateTime.formatIso(yield* DateTime.now),
+        },
+      ],
+    });
+    const reviewerBefore = (yield* threadState(reviewerThreadId)).runs;
+
+    yield* threads.stopDelegatedTasks({
+      threadId: parentThreadId,
+      commandId: CommandId.make("stop-keeps-reviewer"),
+    });
+
+    assert.deepEqual((yield* threadState(reviewerThreadId)).runs, reviewerBefore);
+    assert.deepEqual((yield* threadState(workerThreadId)).runs, ["interrupted"]);
+  }).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("a repeated Stop that changes nothing still stops the delegated tasks", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;

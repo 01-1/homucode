@@ -863,6 +863,8 @@ const make = Effect.gen(function* () {
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.freshContext ? { freshContext: true } : {}),
       dispatchMode,
+      // Lets the orchestrator queue an auto send that reaches a run Stop just ended.
+      ...(mode === "auto" ? { deliveryIntent: "auto" as const } : {}),
       createdBy: input.createdBy,
       creationSource: input.creationSource,
     });
@@ -1468,13 +1470,19 @@ const make = Effect.gen(function* () {
   const stopDelegatedTasks: ThreadManagementServiceShape["stopDelegatedTasks"] = Effect.fn(
     "ThreadManagementService.stopDelegatedTasks",
   )(function* (input) {
-    const { subagents } = yield* orchestrator.getThreadRecords(input.threadId, ["subagents"]);
+    const { thread, subagents } = yield* orchestrator.getThreadRecords(input.threadId, [
+      "subagents",
+    ]);
+    // Autoreviewers stay attached through a Stop with subagents; `autoreview remove` ends them.
+    const reviewerTaskIds = new Set(
+      (thread.autoreviewers ?? []).map((reviewer) => reviewer.taskId),
+    );
     const failures: Array<
       Orchestrator.OrchestratorV2Error | ThreadManagementProviderInstanceDisabledError
     > = [];
     const stoppedChildThreadIds = new Set<ThreadId>();
     for (const task of subagents) {
-      if (task.origin !== "app_owned") continue;
+      if (task.origin !== "app_owned" || reviewerTaskIds.has(task.id)) continue;
       if (task.childThreadId === null) {
         // A task in a linked environment ends here; its follower then stops it there.
         // One with its result keeps it, but its thread there may run follow-up work.
