@@ -1,0 +1,252 @@
+import { assert, describe, it } from "@effect/vitest";
+import {
+  MessageId,
+  type OrchestrationV2Run,
+  type OrchestrationV2TurnItem,
+  ProviderInstanceId,
+  RunId,
+  ThreadId,
+  TurnItemId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+
+import {
+  AUTOREVIEW_FINDINGS_MESSAGE_PREFIX,
+  MAX_CONSECUTIVE_AUTOREVIEW_WAKES,
+  batchHasAgentActivity,
+  isLgtmReview,
+  planAutoreviewBatch,
+  planFindingsDelivery,
+  renderAutoreviewBatch,
+} from "./autoreviewBatch.ts";
+
+const now = DateTime.makeUnsafe("2026-11-09T00:00:00.000Z");
+const threadId = ThreadId.make("thread:reviewed");
+
+const base = (id: string, ordinal: number, status: OrchestrationV2TurnItem["status"]) => ({
+  id: TurnItemId.make(`turn-item:${id}`),
+  threadId,
+  runId: RunId.make("run:1"),
+  nodeId: null,
+  providerThreadId: null,
+  providerTurnId: null,
+  nativeItemRef: null,
+  parentItemId: null,
+  ordinal,
+  status,
+  title: null,
+  startedAt: now,
+  completedAt: status === "completed" ? now : null,
+  updatedAt: now,
+});
+
+const user = (id: string, ordinal: number, text: string, messageId?: string) =>
+  ({
+    ...base(id, ordinal, "completed"),
+    type: "user_message",
+    messageId: MessageId.make(messageId ?? `message:${id}`),
+    createdBy: "user",
+    creationSource: "web",
+    inputIntent: "turn_start",
+    text,
+    attachments: [],
+  }) satisfies OrchestrationV2TurnItem;
+
+const assistant = (id: string, ordinal: number, text: string, streaming = false) =>
+  ({
+    ...base(id, ordinal, streaming ? "running" : "completed"),
+    type: "assistant_message",
+    messageId: MessageId.make(`message:${id}`),
+    text,
+    streaming,
+  }) satisfies OrchestrationV2TurnItem;
+
+const command = (id: string, ordinal: number, status: OrchestrationV2TurnItem["status"]) =>
+  ({
+    ...base(id, ordinal, status),
+    type: "command_execution",
+    input: `run ${id}`,
+    output: `output of ${id}`,
+    exitCode: 0,
+  }) satisfies OrchestrationV2TurnItem;
+
+const fileChange = (id: string, ordinal: number) =>
+  ({
+    ...base(id, ordinal, "completed"),
+    type: "file_change",
+    fileName: "src/a.ts",
+    diffStr: "@@ -1 +1 @@\n-old\n+new",
+    additions: 1,
+    deletions: 1,
+  }) satisfies OrchestrationV2TurnItem;
+
+const ids = (items: ReadonlyArray<OrchestrationV2TurnItem>) => items.map((item) => item.id);
+
+describe("planAutoreviewBatch", () => {
+  it("sends every finished item after the cursor and moves the cursor past them", () => {
+    const items = [user("u", 1, "Fix the bug"), assistant("a", 2, "Done"), fileChange("f", 3)];
+    const plan = planAutoreviewBatch({ reviewer: { throughOrdinal: -1, sentItemIds: [] }, items });
+    assert.deepStrictEqual(ids(plan.items), ids(items));
+    assert.equal(plan.throughOrdinal, 3);
+    assert.deepStrictEqual(plan.sentItemIds, []);
+
+    const next = planAutoreviewBatch({ reviewer: plan, items });
+    assert.deepStrictEqual(next.items, []);
+  });
+
+  it("holds a running command back without resending items that finished after it", () => {
+    const running = [user("u", 1, "Build it"), command("c", 2, "running"), assistant("a", 3, "Hi")];
+    const first = planAutoreviewBatch({
+      reviewer: { throughOrdinal: -1, sentItemIds: [] },
+      items: running,
+    });
+    assert.deepStrictEqual(ids(first.items), [
+      TurnItemId.make("turn-item:u"),
+      TurnItemId.make("turn-item:a"),
+    ]);
+    assert.equal(first.throughOrdinal, 1);
+    assert.deepStrictEqual(first.sentItemIds, [TurnItemId.make("turn-item:a")]);
+
+    const finished = [
+      running[0]!,
+      command("c", 2, "completed"),
+      running[2]!,
+      assistant("b", 4, "Next"),
+    ];
+    const second = planAutoreviewBatch({ reviewer: first, items: finished });
+    assert.deepStrictEqual(ids(second.items), [
+      TurnItemId.make("turn-item:c"),
+      TurnItemId.make("turn-item:b"),
+    ]);
+    assert.equal(second.throughOrdinal, 4);
+    assert.deepStrictEqual(second.sentItemIds, []);
+  });
+
+  it("skips streaming text, monitors and findings delivered back to the thread", () => {
+    const items = [
+      user("findings", 1, "Autoreview says...", `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:9`),
+      assistant("streaming", 2, "partial", true),
+      { ...command("monitor", 3, "running"), monitor: true },
+      assistant("a", 4, "Done"),
+    ];
+    const plan = planAutoreviewBatch({ reviewer: { throughOrdinal: -1, sentItemIds: [] }, items });
+    assert.deepStrictEqual(ids(plan.items), [TurnItemId.make("turn-item:a")]);
+  });
+
+  it("waits for agent activity before waking a reviewer for a lone user message", () => {
+    const plan = planAutoreviewBatch({
+      reviewer: { throughOrdinal: -1, sentItemIds: [] },
+      items: [user("u", 1, "Please start")],
+    });
+    assert.equal(plan.items.length, 1);
+    assert.isFalse(batchHasAgentActivity(plan));
+    assert.isTrue(
+      batchHasAgentActivity(
+        planAutoreviewBatch({
+          reviewer: { throughOrdinal: -1, sentItemIds: [] },
+          items: [user("u", 1, "Please start"), command("c", 2, "completed")],
+        }),
+      ),
+    );
+  });
+});
+
+describe("renderAutoreviewBatch", () => {
+  const reviewedThread = { id: threadId, title: "Reviewed" };
+
+  it("starts with the review instructions and brief on the first batch only", () => {
+    const items = [user("u", 1, "Fix the bug"), fileChange("f", 2)];
+    const first = renderAutoreviewBatch({ reviewedThread, items, first: true, brief: "Check SQL" });
+    assert.include(first, "You are an autoreviewer");
+    assert.include(first, "Review brief: Check SQL");
+    assert.include(first, "LGTM");
+    assert.include(first, "+new");
+    const later = renderAutoreviewBatch({ reviewedThread, items, first: false });
+    assert.notInclude(later, "You are an autoreviewer");
+    assert.include(later, "since your last batch");
+  });
+
+  it("keeps the opening request and the newest items when the backlog is too long", () => {
+    const items = [
+      user("u", 1, "The original request"),
+      ...Array.from({ length: 30 }, (_, index) =>
+        assistant(`a${index}`, index + 2, `${index}:${"x".repeat(5_000)}`),
+      ),
+    ];
+    const text = renderAutoreviewBatch({ reviewedThread, items, first: true });
+    assert.isAtMost(text.length, 48_000);
+    assert.include(text, "The original request");
+    assert.include(text, "29:xxx");
+    assert.notInclude(text, "\n0:xxx");
+    assert.match(text, /\[\d+ earlier items omitted; read them with t3_thread_read/);
+  });
+});
+
+describe("isLgtmReview", () => {
+  it("treats a reply that opens with LGTM as nothing to deliver", () => {
+    assert.isTrue(isLgtmReview("LGTM"));
+    assert.isTrue(isLgtmReview("\n**LGTM.** Nothing to flag."));
+    assert.isTrue(isLgtmReview("lgtm - tests cover it"));
+    assert.isFalse(isLgtmReview("LGTMs are cheap; but src/a.ts:3 drops the error"));
+    assert.isFalse(isLgtmReview("1. src/a.ts:3 drops the error. Otherwise LGTM"));
+    assert.isFalse(isLgtmReview(""));
+  });
+});
+
+describe("planFindingsDelivery", () => {
+  const run = (
+    ordinal: number,
+    status: OrchestrationV2Run["status"],
+    userMessageId = `message:user:${ordinal}`,
+    extra: Partial<OrchestrationV2Run> = {},
+  ): OrchestrationV2Run => ({
+    id: RunId.make(`run:${ordinal}`),
+    threadId,
+    ordinal,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" },
+    providerThreadId: null,
+    userMessageId: MessageId.make(userMessageId),
+    rootNodeId: null,
+    activeAttemptId: null,
+    status,
+    requestedAt: now,
+    startedAt: now,
+    completedAt: null,
+    checkpointId: null,
+    contextHandoffId: null,
+    ...extra,
+  });
+  const findings = (ordinal: number) =>
+    run(ordinal, "completed", `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${ordinal}`);
+
+  it("steers the running turn", () => {
+    assert.deepStrictEqual(planFindingsDelivery([run(1, "completed"), run(2, "running")]), {
+      type: "steer",
+      targetRunId: RunId.make("run:2"),
+    });
+  });
+
+  it("queues behind queued work, held or not", () => {
+    assert.deepStrictEqual(
+      planFindingsDelivery([
+        run(1, "cancelled"),
+        run(2, "queued", "message:q", { queueHeld: true }),
+      ]),
+      { type: "queue" },
+    );
+  });
+
+  it("starts a turn on an idle thread until findings started too many in a row", () => {
+    assert.deepStrictEqual(planFindingsDelivery([run(1, "completed")]), { type: "start" });
+    const streak = Array.from({ length: MAX_CONSECUTIVE_AUTOREVIEW_WAKES }, (_, index) =>
+      findings(index + 2),
+    );
+    assert.equal(planFindingsDelivery([run(1, "completed"), ...streak]).type, "skip");
+    // A user message in between resets the streak.
+    assert.deepStrictEqual(
+      planFindingsDelivery([...streak, run(MAX_CONSECUTIVE_AUTOREVIEW_WAKES + 2, "completed")]),
+      { type: "start" },
+    );
+  });
+});
