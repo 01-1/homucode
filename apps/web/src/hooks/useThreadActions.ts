@@ -295,6 +295,9 @@ export function useThreadActions() {
   const unpinThreadMutation = useOrchestrationCommand(threadEnvironment.unpin, {
     reportFailure: false,
   });
+  const moveThreadMutation = useOrchestrationCommand(threadEnvironment.move, {
+    reportFailure: false,
+  });
   const setThreadAutoSettleMutation = useOrchestrationCommand(threadEnvironment.setAutoSettle, {
     reportFailure: false,
   });
@@ -965,6 +968,12 @@ export function useThreadActions() {
     reorderActiveThread,
     markThreadUnread,
     setThreadAutoSettle,
+    /** Re-parents the thread under `parentThreadId`, or makes it top-level with `null`. */
+    moveThread: (target: ScopedThreadRef, parentThreadId: ThreadId | null) =>
+      moveThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, parentThreadId },
+      }),
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({
         environmentId: target.environmentId,

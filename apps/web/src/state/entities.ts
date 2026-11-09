@@ -325,6 +325,10 @@ export function waitForProjectRemoval(ref: ScopedProjectRef, timeoutMs = 5_000):
   });
 }
 
+export function readQuietThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
+  return appAtomRegistry.get(environmentThreadShells.quietThreadShellsAtom);
+}
+
 export function readThreadShell(ref: ScopedThreadRef): EnvironmentThreadShell | null {
   return appAtomRegistry.get(environmentThreadShells.threadShellAtom(ref));
 }

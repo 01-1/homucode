@@ -31,6 +31,7 @@ import {
   forkThreadFromRun,
   markThreadUnread,
   mergeThreadBack,
+  moveThread,
   promoteQueuedRun,
   resumeThreadQueue,
   retryWorkspacePreparation,
@@ -188,6 +189,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     unpin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:unpin",
       execute: unpinThread,
+      scheduler,
+      concurrency,
+    }),
+    move: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:move",
+      execute: moveThread,
       scheduler,
       concurrency,
     }),

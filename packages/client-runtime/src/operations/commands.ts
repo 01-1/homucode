@@ -101,6 +101,11 @@ export interface PinThreadInput extends ThreadCommandInput {
 }
 export type UnpinThreadInput = ThreadCommandInput;
 
+export interface MoveThreadInput extends ThreadCommandInput {
+  /** The thread to move under, or `null` to make it top-level. */
+  readonly parentThreadId: ThreadId | null;
+}
+
 export interface ReorderPinnedThreadInput extends ThreadCommandInput {
   readonly orderKey: string;
 }
@@ -543,6 +548,17 @@ export const reorderActiveThread = Effect.fn("EnvironmentCommands.reorderActiveT
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
     orderKey: input.orderKey,
+  });
+});
+
+export const moveThread = Effect.fn("EnvironmentCommands.moveThread")(function* (
+  input: MoveThreadInput,
+) {
+  return yield* dispatch({
+    type: "thread.move",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    parentThreadId: input.parentThreadId,
   });
 });
 

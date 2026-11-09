@@ -144,6 +144,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../state/environments";
 import {
+  readQuietThreadShells,
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useDelegatedUnderParent,
@@ -175,6 +176,8 @@ import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
   buildDraftActionMenuItems,
   buildThreadActionMenuItems,
+  moveParentFromMenuId,
+  resolveThreadMoveOptions,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
 import {
@@ -930,6 +933,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     markThreadUnread,
     archiveThread,
     deleteThread,
+    moveThread,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -2646,6 +2650,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
               supports: {
                 settlement: configLoaded,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -2660,6 +2665,21 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
+        const moveParent = moveParentFromMenuId(clicked.value);
+        if (moveParent !== undefined) {
+          const result = await moveThread(threadRef, moveParent);
+          if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to move thread",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+          }
+          return;
+        }
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"

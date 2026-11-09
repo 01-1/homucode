@@ -18,6 +18,8 @@ import { useRouter } from "@tanstack/react-router";
 import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {
   buildThreadActionMenuItems,
+  moveParentFromMenuId,
+  resolveThreadMoveOptions,
   threadActionRequiresOperate,
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
@@ -30,6 +32,7 @@ import { readEnvironmentScope } from "../state/session";
 import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
+  readQuietThreadShells,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -86,6 +89,7 @@ export function useThreadActionMenu(input: {
     archiveThread,
     deleteThread,
     markThreadUnread,
+    moveThread,
     turnThreadIntoProject,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
@@ -149,6 +153,7 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -189,6 +194,11 @@ export function useThreadActionMenu(input: {
           failureToast(title, squashAtomCommandFailure(result));
         }
       };
+      const moveParent = moveParentFromMenuId(action);
+      if (moveParent !== undefined) {
+        await reportFailure("Failed to move thread", () => moveThread(threadRef, moveParent));
+        return;
+      }
       switch (action) {
         case "find":
           onFind?.(threadRef);

@@ -1,4 +1,8 @@
-import type { ContextMenuItem } from "@t3tools/contracts";
+import {
+  isProviderNativeSubagentThread,
+  type ContextMenuItem,
+  type ThreadId,
+} from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
@@ -26,6 +30,9 @@ export type ThreadActionMenuId =
   | "copy-branch"
   | "copy-thread"
   | "copy-thread-id"
+  | "move-to-root"
+  | "move-under"
+  | `move-under:${string}`
   | "archive"
   | "delete";
 
@@ -95,6 +102,97 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** Where the thread can be re-parented to, or null when it cannot move. */
+  readonly move?: ThreadMoveOptions | null;
+}
+
+export interface ThreadMoveOptions {
+  readonly canMoveToRoot: boolean;
+  readonly candidates: ReadonlyArray<{ readonly threadId: ThreadId; readonly title: string }>;
+}
+
+type MovableThread = {
+  readonly id: ThreadId;
+  readonly environmentId: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly archivedAt: string | null;
+  readonly updatedAt: string;
+  readonly lineage: {
+    readonly parentThreadId: ThreadId | null;
+    readonly relationshipToParent: "fork" | "subagent" | null;
+    readonly sideChat?: boolean | undefined;
+  };
+  readonly delegatedFrom?: unknown;
+  readonly latestRun: unknown;
+  readonly source: {
+    readonly creationSource: Parameters<typeof isProviderNativeSubagentThread>[0]["creationSource"];
+  };
+};
+
+const isNativeSubagent = (thread: MovableThread) =>
+  isProviderNativeSubagentThread({
+    lineage: { ...thread.lineage, rootThreadId: thread.id },
+    creationSource: thread.source.creationSource,
+  });
+
+/**
+ * The server's `thread.move` rules, so the menu offers only moves it accepts: side chats,
+ * provider-native subagents and tasks from linked environments stay put, and a thread moves
+ * under a thread of its own project that has run, is not its parent, and is not below it.
+ */
+export function resolveThreadMoveOptions(
+  thread: MovableThread,
+  threads: ReadonlyArray<MovableThread>,
+  limit = 15,
+): ThreadMoveOptions | null {
+  if (
+    thread.archivedAt !== null ||
+    thread.lineage.sideChat === true ||
+    thread.delegatedFrom != null ||
+    isNativeSubagent(thread)
+  ) {
+    return null;
+  }
+  const sameScope = threads.filter(
+    (candidate) =>
+      candidate.environmentId === thread.environmentId && candidate.projectId === thread.projectId,
+  );
+  const byId = new Map(sameScope.map((candidate) => [candidate.id, candidate] as const));
+  const isBelowThread = (candidate: MovableThread) => {
+    const visited = new Set<ThreadId>();
+    let current: MovableThread | undefined = candidate;
+    while (current !== undefined && current.lineage.parentThreadId !== null) {
+      if (current.lineage.parentThreadId === thread.id) return true;
+      if (visited.has(current.id)) return false;
+      visited.add(current.id);
+      current = byId.get(current.lineage.parentThreadId);
+    }
+    return false;
+  };
+  const currentParentId =
+    thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null;
+  const candidates = sameScope
+    .filter(
+      (candidate) =>
+        candidate.id !== thread.id &&
+        candidate.id !== currentParentId &&
+        candidate.archivedAt === null &&
+        candidate.latestRun != null &&
+        candidate.lineage.sideChat !== true &&
+        !isNativeSubagent(candidate) &&
+        !isBelowThread(candidate),
+    )
+    .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, limit)
+    .map((candidate) => ({ threadId: candidate.id, title: candidate.title }));
+  return { canMoveToRoot: currentParentId !== null, candidates };
+}
+
+/** The new parent a move menu id asks for: a thread, `null` for root, or undefined if not a move. */
+export function moveParentFromMenuId(id: string): ThreadId | null | undefined {
+  if (id === "move-to-root") return null;
+  return id.startsWith("move-under:") ? (id.slice("move-under:".length) as ThreadId) : undefined;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -199,6 +297,22 @@ export function buildThreadActionMenuItems(
             label: "Turn into project",
             icon: "folder-plus",
             disabled: state.isRunning,
+          },
+        ]
+      : []),
+    ...(state.move?.canMoveToRoot === true
+      ? [{ id: "move-to-root" as const, label: "Move to root" }]
+      : []),
+    ...(state.move != null && state.move.candidates.length > 0
+      ? [
+          {
+            id: "move-under" as const,
+            label: "Move under",
+            icon: "folder-tree",
+            children: state.move.candidates.map((candidate) => ({
+              id: `move-under:${candidate.threadId}` as const,
+              label: candidate.title,
+            })),
           },
         ]
       : []),
