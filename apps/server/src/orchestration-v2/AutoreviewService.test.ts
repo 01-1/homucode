@@ -348,9 +348,11 @@ const attachReviewer = (
   name: string,
   brief?: string,
   minBatchChars?: number,
+  wakeOnUserMessage?: boolean,
 ) =>
   service.attach({
     ...(minBatchChars === undefined ? {} : { minBatchChars }),
+    ...(wakeOnUserMessage === undefined ? {} : { wakeOnUserMessage }),
     commandId: CommandId.make(`command:autoreview-attach:${name}`),
     threadId,
     modelSelection: reviewerModel,
@@ -1078,6 +1080,52 @@ it.layer(layerTest)("autoreview", (it) => {
         });
         yield* service.handle(review.ended);
         assert.lengthOf(steered, 1);
+      }),
+  );
+
+  it.effect(
+    "an answerer gets a user's message at once; other reviewers wait for agent activity",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make(orchestrator);
+        const { threadId, runId, now } = yield* seedReviewedThread("answer");
+        const answerer = yield* attachReviewer(
+          service,
+          threadId,
+          "answer-1",
+          undefined,
+          undefined,
+          true,
+        );
+        const reviewer = yield* attachReviewer(service, threadId, "answer-2");
+        for (const [index, attached] of [answerer, reviewer].entries()) {
+          const done = yield* finishReview(attached.reviewerThreadId, "LGTM", `answer-${index}`);
+          yield* service.handle(done.ended);
+        }
+        const question: OrchestrationV2TurnItem = {
+          ...itemBase({ threadId, runId, id: "answer:question", ordinal: 50, now }),
+          type: "user_message",
+          messageId: MessageId.make("message:answer:question"),
+          createdBy: "user",
+          creationSource: "mobile",
+          inputIntent: "turn_start",
+          text: "Is the mock at 22:15?",
+          attachments: [],
+        };
+        yield* eventSink.write({ events: [itemEvent(question)] });
+        yield* service.handle(itemEvent(question));
+        const toAnswerer = yield* messagesTo(
+          answerer.reviewerThreadId,
+          AUTOREVIEW_BATCH_MESSAGE_PREFIX,
+        );
+        assert.lengthOf(toAnswerer, 1);
+        assert.include(toAnswerer[0]!.text, "Is the mock at 22:15?");
+        assert.lengthOf(
+          yield* messagesTo(reviewer.reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX),
+          0,
+        );
       }),
   );
 

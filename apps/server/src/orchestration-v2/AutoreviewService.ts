@@ -32,6 +32,7 @@ import {
   isTerminalItem,
   planAutoreviewBatch,
   findingsSection,
+  batchHasUserMessage,
   findingsBody,
   findingsWithout,
   planFindingsDelivery,
@@ -66,6 +67,7 @@ export interface AutoreviewAttachInput {
   readonly brief?: string | undefined;
   /** See `OrchestrationV2Autoreviewer.minBatchChars`; 0 or absent sends at every idle point. */
   readonly minBatchChars?: number | undefined;
+  readonly wakeOnUserMessage?: boolean | undefined;
   readonly preamble?: string | undefined;
   readonly title?: string | undefined;
   readonly createdBy: "user" | "agent" | "system";
@@ -108,6 +110,7 @@ export class AutoreviewService extends Context.Service<
       readonly brief?: string | undefined;
       /** 0 clears it. */
       readonly minBatchChars?: number | undefined;
+      readonly wakeOnUserMessage?: boolean | undefined;
       /** An empty preamble restores the standard one. */
       readonly preamble?: string | undefined;
     }) => Effect.Effect<void, AutoreviewError>;
@@ -279,7 +282,8 @@ export const make = (port: AutoreviewPort) => {
     }
     const reviewer = state.record;
     const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
-    if (!batchHasAgentActivity(plan)) return;
+    const immediate = reviewer.wakeOnUserMessage === true && batchHasUserMessage(plan);
+    if (!batchHasAgentActivity(plan) && !immediate) return;
     const text = renderAutoreviewBatch({
       reviewedThread: thread,
       items: plan.items,
@@ -293,7 +297,7 @@ export const make = (port: AutoreviewPort) => {
       instructions: reviewer.resendInstructions === true,
     });
     // A slow reviewer waits for a large buffer, but always sees how the work ended.
-    if ((reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) return;
+    if (!immediate && (reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) return;
     const last = plan.items.at(-1)!;
     const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
     yield* engine.dispatch({
@@ -623,6 +627,7 @@ export const make = (port: AutoreviewPort) => {
               taskId,
               ...(input.brief?.trim() ? { brief: input.brief.trim() } : {}),
               ...(input.minBatchChars ? { minBatchChars: input.minBatchChars } : {}),
+              ...(input.wakeOnUserMessage ? { wakeOnUserMessage: true } : {}),
               ...(input.preamble?.trim() ? { preamble: input.preamble.trim() } : {}),
               throughOrdinal: plan.throughOrdinal,
               sentItemIds: plan.sentItemIds,
@@ -697,11 +702,12 @@ export const make = (port: AutoreviewPort) => {
           input.modelSelection === undefined &&
           input.brief === undefined &&
           input.minBatchChars === undefined &&
+          input.wakeOnUserMessage === undefined &&
           input.preamble === undefined
         ) {
           return yield* new AutoreviewError({
             reason: "invalid",
-            detail: "Pass a new target, brief, preamble or minBatchChars.",
+            detail: "Pass a new target, brief, preamble, minBatchChars or wakeOnUserMessage.",
           });
         }
         if (input.modelSelection !== undefined) {
@@ -719,8 +725,11 @@ export const make = (port: AutoreviewPort) => {
           brief: _brief,
           minBatchChars: _min,
           preamble: _preamble,
+          wakeOnUserMessage: _wake,
           ...reviewer
         } = current[index]!;
+        const wakeOnUserMessage =
+          input.wakeOnUserMessage === undefined ? _wake : input.wakeOnUserMessage || undefined;
         const preamble =
           input.preamble === undefined ? _preamble : input.preamble.trim() || undefined;
         const brief = input.brief === undefined ? _brief : input.brief.trim() || undefined;
@@ -736,6 +745,7 @@ export const make = (port: AutoreviewPort) => {
           ...reviewer,
           ...(brief === undefined ? {} : { brief }),
           ...(minBatchChars === undefined ? {} : { minBatchChars }),
+          ...(wakeOnUserMessage === undefined ? {} : { wakeOnUserMessage }),
           ...(preamble === undefined ? {} : { preamble }),
           ...(resend ? { resendInstructions: true } : {}),
         };

@@ -65,6 +65,7 @@ const handlers = {
               threadId: prepared.threadId,
               brief: input.brief,
               minBatchChars: input.minBatchChars,
+              wakeOnUserMessage: input.wakeOnUserMessage,
               preamble: input.preamble,
               title: input.title,
               createdBy: "agent",
@@ -80,6 +81,7 @@ const handlers = {
               modelSelection: prepared.add?.modelSelection,
               brief: input.brief,
               minBatchChars: input.minBatchChars,
+              wakeOnUserMessage: input.wakeOnUserMessage,
               preamble: input.preamble,
             })
             .pipe(Effect.mapError(toFailure));

@@ -145,6 +145,18 @@ export function planAutoreviewBatch(input: {
 export const batchHasAgentActivity = (plan: AutoreviewBatchPlan): boolean =>
   plan.items.some((item) => item.type !== "user_message");
 
+/**
+ * A message from the user or sent through a tool (the Discord relay, another agent), not
+ * findings or server notices. A reviewer with wakeOnUserMessage answers these at once.
+ */
+export const batchHasUserMessage = (plan: AutoreviewBatchPlan): boolean =>
+  plan.items.some(
+    (item) =>
+      item.type === "user_message" &&
+      !isAutoreviewFindingsMessageId(item.messageId) &&
+      (item.createdBy === "user" || item.creationSource === "mcp"),
+  );
+
 function clip(text: string, max: number): string {
   if (text.length <= max) return text;
   const head = Math.floor(max * 0.6);

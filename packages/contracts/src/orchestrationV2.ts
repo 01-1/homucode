@@ -468,6 +468,8 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
    * reviewed thread has no running or queued turn. Absent: send at every idle point.
    */
   minBatchChars: Schema.optional(NonNegativeInt),
+  /** Send a message from the user, or one sent through a tool, at once, without waiting for agent activity. */
+  wakeOnUserMessage: Schema.optional(Schema.Boolean),
   /** Repeat the instructions with the next batch, after the brief or model changed. */
   resendInstructions: Schema.optional(Schema.Boolean),
   addedAt: IsoDateTime,

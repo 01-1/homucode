@@ -289,6 +289,12 @@ export const OrchestratorMcpAutoreviewInput = Schema.Struct({
         "`add`/`update`. For reviewers that need not be prompt: wait until the new activity is at least this many characters (or the thread stops). 0 or omitted: every idle point.",
     }),
   ),
+  wakeOnUserMessage: Schema.optional(
+    Schema.Boolean.annotate({
+      description:
+        "`add`/`update`. For an answerer: get each user message at once, not at the agent's next activity.",
+    }),
+  ),
   preamble: Schema.optional(
     Schema.String.check(Schema.isMaxLength(8_000)).annotate({
       description:
