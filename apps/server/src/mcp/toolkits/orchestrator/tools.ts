@@ -7,6 +7,8 @@ import {
   OrchestratorMcpEnvironmentLinksResult,
   OrchestratorMcpEnvironmentUnlinkInput,
   OrchestratorMcpEnvironmentUnlinkResult,
+  OrchestratorMcpAutoreviewInput,
+  OrchestratorMcpAutoreviewResult,
   OrchestratorMcpCreateThreadsInput,
   OrchestratorMcpCreateThreadsResult,
   OrchestratorMcpDelegateTaskInput,
@@ -42,6 +44,7 @@ import { McpSchema, Tool, Toolkit } from "effect/ai";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
+import * as AutoreviewService from "../../../orchestration-v2/AutoreviewService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../../../peer/PeerLinkRequests.ts";
@@ -121,6 +124,19 @@ const TaskCancelTool = Tool.make("task_cancel", {
 })
   .annotate(Tool.Title, "Cancel delegated task")
   .annotate(Tool.Destructive, true);
+
+const AutoreviewTool = Tool.make("autoreview", {
+  description:
+    "Reviewer subagents that review a thread while it works. `add`: it gets the history so far, then each new batch of activity when idle; findings go into the thread, `LGTM` stays put. Several allowed. Thread: yours or your subagent's.",
+  parameters: OrchestratorMcpAutoreviewInput,
+  success: OrchestratorMcpAutoreviewResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [...dependencies, AutoreviewService.AutoreviewService],
+})
+  .annotate(Tool.Title, "Manage autoreviewers")
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.OpenWorld, true);
 
 const WorkflowStopTool = Tool.make("t3_workflow_stop", {
   description:
@@ -354,6 +370,7 @@ export const OrchestratorToolkit = Toolkit.make(
   DelegateTaskTool,
   TaskStatusTool,
   TaskCancelTool,
+  AutoreviewTool,
   WorkflowStopTool,
   BackgroundWaitTool,
   ScheduleTaskTool,

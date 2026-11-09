@@ -31,7 +31,10 @@ import {
   type OrchestratorMcpScheduleTaskInput,
   type OrchestratorMcpScheduleTaskResult,
   type OrchestratorMcpTarget,
+  type OrchestratorMcpAutoreviewInput,
   type OrchestratorMcpTaskCancelInput,
+  ProviderInstanceId,
+  TrimmedNonEmptyString,
   type OrchestratorMcpTaskCancelResult,
   type OrchestratorMcpUpdateScheduledTaskInput,
   type OrchestratorMcpListScheduledTasksInput,
@@ -154,6 +157,27 @@ type TerminalTaskStatus = Extract<
   "completed" | "failed" | "cancelled" | "interrupted"
 >;
 
+/** Default autoreviewer: Codex GPT-6.1 Sol at xhigh effort. */
+const DEFAULT_AUTOREVIEW_TARGET = {
+  providerInstanceId: ProviderInstanceId.make("codex"),
+  model: TrimmedNonEmptyString.make("gpt-6.1-sol"),
+  options: [{ id: "reasoningEffort", value: "xhigh" }],
+} satisfies OrchestratorMcpTarget;
+
+export interface PreparedAutoreview {
+  readonly callerThreadId: ThreadId;
+  /** The reviewed thread: the caller's own or one of its subagents. */
+  readonly threadId: ThreadId;
+  /** Unique per call unless `clientRequestId` repeats one. */
+  readonly commandId: CommandId;
+  readonly add?: {
+    readonly commandId: CommandId;
+    readonly modelSelection: ModelSelection;
+    readonly runtimeMode: RuntimeMode;
+    readonly interactionMode: ProviderInteractionMode;
+  };
+}
+
 export interface OrchestratorMcpServiceShape {
   readonly capabilities: (
     scope: McpInvocationScope,
@@ -171,6 +195,11 @@ export interface OrchestratorMcpServiceShape {
     scope: McpInvocationScope,
     input: OrchestratorMcpTaskCancelInput,
   ) => Effect.Effect<OrchestratorMcpTaskCancelResult, OrchestratorMcpFailure>;
+  /** Checks an `autoreview` call and resolves the reviewer's model; the caller attaches it. */
+  readonly prepareAutoreview: (
+    scope: McpInvocationScope,
+    input: OrchestratorMcpAutoreviewInput,
+  ) => Effect.Effect<PreparedAutoreview, OrchestratorMcpFailure>;
   readonly createThreads: (
     scope: McpInvocationScope,
     input: OrchestratorMcpCreateThreadsInput,
@@ -2597,6 +2626,59 @@ const make = Effect.gen(function* () {
       const scope = yield* requireThreadScope(callerScope, "task_status");
       return yield* readTask(scope, taskId, false, true);
     }),
+    prepareAutoreview: Effect.fn("OrchestratorMcpService.prepareAutoreview")(
+      function* (callerScope, input) {
+        const { scope, parent } = yield* loadThreadCaller(callerScope, "autoreview");
+        const callerThreadId = scope.thread.threadId;
+        const threadId = input.threadId ?? callerThreadId;
+        const reviewed = threadId === callerThreadId ? parent : yield* loadProjection(threadId);
+        if (
+          threadId !== callerThreadId &&
+          (reviewed.thread.lineage.parentThreadId !== callerThreadId ||
+            reviewed.thread.lineage.relationshipToParent !== "subagent")
+        ) {
+          return yield* failure(
+            "invalid_request",
+            `Autoreview works on your own thread or one of your subagents; thread ${threadId} is neither.`,
+          );
+        }
+        const key = yield* requestKey(input.clientRequestId);
+        const commandId = stableCommandId({
+          scope,
+          requestKey: key,
+          operation: `autoreview-${input.action}`,
+        });
+        if (input.action !== "add") return { callerThreadId, threadId, commandId };
+        if (input.target?.environmentId !== undefined) {
+          return yield* failure(
+            "invalid_request",
+            "An autoreviewer runs in this environment. Omit target.environmentId.",
+          );
+        }
+        const providers = yield* loadProviders;
+        const target = yield* resolveTargetRechecking({
+          parent: reviewed,
+          target: input.target ?? DEFAULT_AUTOREVIEW_TARGET,
+          providers,
+        });
+        yield* assertTargetEnabledForProject(reviewed, commandId, target);
+        const runtimeMode = yield* resolveRuntimeMode(
+          reviewed.thread.runtimeMode,
+          undefined,
+          target,
+        );
+        const interactionMode = yield* resolveInteractionMode(
+          reviewed.thread.interactionMode,
+          undefined,
+        );
+        return {
+          callerThreadId,
+          threadId,
+          commandId,
+          add: { commandId, modelSelection: target.modelSelection, runtimeMode, interactionMode },
+        };
+      },
+    ),
     cancelTask: Effect.fn("OrchestratorMcpService.cancelTask")(function* (callerScope, input) {
       const scope = yield* requireThreadScope(callerScope, "task_cancel");
       const current = yield* readTask(scope, input.taskId);

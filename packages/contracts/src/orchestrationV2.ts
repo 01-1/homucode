@@ -441,6 +441,24 @@ const LenientThreadOpens = Schema.NullOr(OrchestrationV2ThreadOpens).pipe(
   Schema.catchDecoding(() => Effect.succeedSome(null)),
 );
 
+/**
+ * A reviewer subagent attached to a thread. New activity in the reviewed thread
+ * is its buffer: everything after `throughOrdinal` that is not in `sentItemIds`
+ * is sent to it as one batch whenever it is idle.
+ */
+export const OrchestrationV2Autoreviewer = Schema.Struct({
+  threadId: ThreadId,
+  /** The reviewed thread's task record for the reviewer; its result is never handed back. */
+  taskId: NodeId,
+  brief: Schema.optional(Schema.String),
+  /** Every reviewable item at or below this ordinal was sent or skipped. -1 before the first batch. */
+  throughOrdinal: Schema.Int,
+  /** Items above `throughOrdinal` that finished early and were already sent. */
+  sentItemIds: Schema.Array(TurnItemId),
+  addedAt: IsoDateTime,
+});
+export type OrchestrationV2Autoreviewer = typeof OrchestrationV2Autoreviewer.Type;
+
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -492,6 +510,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Absent on threads written before tags existed; read as empty. */
   tags: Schema.optional(StoredThreadTags),
+  /** Reviewer subagents fed this thread's new activity. Absent when none were ever attached. */
+  autoreviewers: Schema.optional(Schema.Array(OrchestrationV2Autoreviewer)),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtc).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -3451,6 +3471,13 @@ const OrchestrationV2InternalCommand = Schema.Union([
     guestMessageId: GuestMessageId,
     text: Schema.String,
     attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  }),
+  /** Replaces the thread's reviewer list; the server sends it to attach, detach and advance reviewers. */
+  Schema.Struct({
+    type: Schema.Literal("thread.autoreviewers.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    autoreviewers: Schema.Array(OrchestrationV2Autoreviewer),
   }),
   /** Moves a thread to a project rooted at the folder it already works in, so its cwd never changes. */
   Schema.Struct({

@@ -882,7 +882,7 @@ function scheduledTask(id: string, runtimeMode: "auto" | "full-access"): never {
   } as never;
 }
 
-it.effect.each(["t3_thread_interrupt", "t3_workflow_stop"])(
+it.effect.each(["t3_thread_interrupt", "t3_workflow_stop", "autoreview"])(
   "a caller cannot use %s on a thread that runs above its own modes",
   (toolName) =>
     Effect.gen(function* () {
@@ -893,6 +893,7 @@ it.effect.each(["t3_thread_interrupt", "t3_workflow_stop"])(
           arguments: {
             threadId: "full-access-thread",
             ...(toolName === "t3_workflow_stop" ? { subagentId: "workflow-coordinator" } : {}),
+            ...(toolName === "autoreview" ? { action: "add" } : {}),
           },
         })
         .pipe(

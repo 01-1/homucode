@@ -1,7 +1,8 @@
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import { type NodeId, OrchestratorMcpFailure, type ThreadId } from "@t3tools/contracts";
 import { OrchestratorToolkit } from "./tools.ts";
 import * as Effect from "effect/Effect";
 
+import * as AutoreviewService from "../../../orchestration-v2/AutoreviewService.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../../../peer/PeerLinkRequests.ts";
 import * as PeerLinks from "../../../peer/PeerLinks.ts";
@@ -39,6 +40,53 @@ const handlers = {
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
       return yield* service.cancelTask(scope, input);
     }),
+  ),
+  // The reviewed thread may be a subagent running above the caller's modes.
+  autoreview: McpToolAccess.writesThreads(
+    (input) => [input.threadId],
+    (input) =>
+      Effect.gen(function* () {
+        const scope = yield* McpInvocationContext.McpInvocationContext;
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const autoreview = yield* AutoreviewService.AutoreviewService;
+        const prepared = yield* service.prepareAutoreview(scope, input);
+        const toFailure = (error: AutoreviewService.AutoreviewError) =>
+          new OrchestratorMcpFailure({
+            code: error.reason === "failed" ? "orchestration_error" : "invalid_request",
+            message: error.message,
+          });
+        let added: { readonly reviewerThreadId: ThreadId; readonly taskId: NodeId } | undefined;
+        let removed: ReadonlyArray<ThreadId> | undefined;
+        if (input.action === "add" && prepared.add !== undefined) {
+          added = yield* autoreview
+            .attach({
+              ...prepared.add,
+              threadId: prepared.threadId,
+              brief: input.brief,
+              title: input.title,
+              createdBy: "agent",
+              creationSource: "mcp",
+            })
+            .pipe(Effect.mapError(toFailure));
+        } else if (input.action === "remove") {
+          removed = yield* autoreview
+            .detach({
+              commandId: prepared.commandId,
+              threadId: prepared.threadId,
+              reviewerThreadId: input.reviewerThreadId,
+            })
+            .pipe(Effect.mapError(toFailure));
+        }
+        const reviewers = yield* autoreview
+          .list(prepared.threadId)
+          .pipe(Effect.mapError(toFailure));
+        return {
+          threadId: prepared.threadId,
+          ...(added === undefined ? {} : { added }),
+          ...(removed === undefined ? {} : { removed }),
+          reviewers: reviewers.map(({ taskId: _taskId, ...reviewer }) => reviewer),
+        };
+      }),
   ),
   t3_workflow_stop: McpToolAccess.writesThreads(
     (input) => [input.threadId],
