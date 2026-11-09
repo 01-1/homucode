@@ -295,6 +295,8 @@ export const OrchestrationMessageSentFrom = Schema.Struct({
   deviceModel: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(80))),
   browser: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(64))),
   connectionMethod: Schema.optional(ClientConnectionMethod),
+  /** The name the server's device-names file gives this device, such as "my-phone". */
+  deviceName: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(40))),
 });
 export type OrchestrationMessageSentFrom = typeof OrchestrationMessageSentFrom.Type;
 

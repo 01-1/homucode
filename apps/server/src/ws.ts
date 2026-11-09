@@ -124,8 +124,11 @@ import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManag
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import {
   launchInitialMessage,
+  parseDeviceNameRules,
   sentFromConnection,
   withConnectionSentFrom,
+  withDeviceName,
+  type DeviceNameRule,
 } from "./orchestration-v2/MessageSentFrom.ts";
 import { withClientStopScope } from "./orchestration-v2/ClientStopScope.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
@@ -1432,8 +1435,19 @@ export const layerWsRpc = (
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
       const analytics = yield* AnalyticsService.AnalyticsService;
       const originProps = clientAnalyticsProps;
-      // The device this socket's user messages are sent from, for the agent's context.
-      const connectionSentFrom = sentFromConnection(clientAnalyticsProps);
+      // The device this socket's user messages are sent from, for the agent's context, named by
+      // the server's device-names file when an entry matches. Read once per connection.
+      const deviceNamesPath = (yield* ServerConfig.ServerConfig).stateDir + "/device-names.json";
+      const deviceNameRules = yield* (yield* FileSystem.FileSystem)
+        .readFileString(deviceNamesPath)
+        .pipe(
+          Effect.map(parseDeviceNameRules),
+          Effect.orElseSucceed((): ReadonlyArray<DeviceNameRule> => []),
+        );
+      const connectionSentFrom = withDeviceName(
+        sentFromConnection(clientAnalyticsProps),
+        deviceNameRules,
+      );
       const recordClientCommandAnalytics = (command: OrchestrationV2Command) => {
         const usage = commandFeatureUsage(command);
         return Effect.all(

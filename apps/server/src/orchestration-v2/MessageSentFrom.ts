@@ -36,6 +36,73 @@ export function sentFromConnection(
   return decoded._tag === "Some" ? decoded.value : undefined;
 }
 
+/**
+ * One entry of the server's device-names file (`<stateDir>/device-names.json`, shaped
+ * `{ "devices": [{ "name": "my-phone", "surface": "mobile", "deviceModel": "Pixel 9" }] }`).
+ * Every field given must equal the connection's; the first matching entry names the device.
+ */
+export interface DeviceNameRule {
+  readonly name: string;
+  readonly surface?: string;
+  readonly os?: string;
+  readonly deviceType?: string;
+  readonly deviceModel?: string;
+  readonly browser?: string;
+  readonly connectionMethod?: string;
+}
+
+const MATCH_FIELDS = [
+  "surface",
+  "os",
+  "deviceType",
+  "deviceModel",
+  "browser",
+  "connectionMethod",
+] as const;
+
+/** The rules in a device-names file's text; anything malformed is skipped, never fatal. */
+export function parseDeviceNameRules(text: string): ReadonlyArray<DeviceNameRule> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const devices =
+    typeof parsed === "object" && parsed !== null && "devices" in parsed
+      ? (parsed as { readonly devices: unknown }).devices
+      : undefined;
+  if (!Array.isArray(devices)) return [];
+  return devices.flatMap((entry): ReadonlyArray<DeviceNameRule> => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const record = entry as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (name === "" || name.length > 40) return [];
+    const match = Object.fromEntries(
+      MATCH_FIELDS.flatMap((field) =>
+        typeof record[field] === "string" ? [[field, record[field]]] : [],
+      ),
+    );
+    // A rule that matches every device would name all of them; require at least one field.
+    return Object.keys(match).length === 0 ? [] : [{ name, ...match }];
+  });
+}
+
+/** The connection's device with the name its first matching rule gives, if any. */
+export function withDeviceName(
+  sentFrom: OrchestrationMessageSentFrom | undefined,
+  rules: ReadonlyArray<DeviceNameRule>,
+): OrchestrationMessageSentFrom | undefined {
+  if (sentFrom === undefined) return undefined;
+  const { deviceName: _claimed, ...device } = sentFrom;
+  const rule = rules.find((candidate) =>
+    MATCH_FIELDS.every(
+      (field) => candidate[field] === undefined || candidate[field] === device[field],
+    ),
+  );
+  return rule === undefined ? device : { ...device, deviceName: rule.name };
+}
+
 /** A message context stamped with the socket's device, replacing any the client claimed. */
 function withContextSentFrom(
   context: OrchestrationMessageContext | undefined,
@@ -108,6 +175,9 @@ export function sentFromLine(message: SentMessage): string {
       : undefined,
   ].filter((part): part is string => part !== undefined);
   const label = SURFACE_LABELS[sentFrom.surface];
+  if (sentFrom.deviceName !== undefined) {
+    return `[T3] Sent from: ${sentFrom.deviceName} (${[label, ...details].join(", ")})`;
+  }
   return `[T3] Sent from: ${details.length === 0 ? label : `${label} (${details.join(", ")})`}`;
 }
 

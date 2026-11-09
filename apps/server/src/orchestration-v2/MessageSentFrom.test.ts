@@ -3,9 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   launchInitialMessage,
+  parseDeviceNameRules,
   sentFromConnection,
   sentFromLine,
   withConnectionSentFrom,
+  withDeviceName,
   withoutNonUserSentFrom,
   withSentFromLine,
 } from "./MessageSentFrom.ts";
@@ -137,5 +139,59 @@ describe("launchInitialMessage", () => {
       launchInitialMessage({ text: "Start", attachments: [], context: forged }, undefined).context
         ?.sentFrom,
     ).toBeUndefined();
+  });
+});
+
+describe("device names", () => {
+  const rules = parseDeviceNameRules(
+    JSON.stringify({
+      devices: [
+        { name: "my-phone", surface: "mobile", deviceModel: "Pixel 9" },
+        { name: "work-laptop", surface: "desktop", os: "Linux" },
+        { name: "studio-mac", os: "macOS" },
+        { name: "everything" },
+        { name: "", os: "Windows" },
+        "junk",
+      ],
+    }),
+  );
+
+  it("keeps only rules with a name and at least one field to match", () => {
+    expect(rules.map((rule) => rule.name)).toEqual(["my-phone", "work-laptop", "studio-mac"]);
+    expect(parseDeviceNameRules("not json")).toEqual([]);
+    expect(parseDeviceNameRules("{}")).toEqual([]);
+  });
+
+  it("names a device by its first matching rule and replaces a claimed name", () => {
+    const phone = sentFromConnection({
+      surface: "mobile",
+      clientOs: "Android",
+      clientDeviceType: "tablet",
+      deviceModel: "Pixel 9",
+      connectionMethod: "relay",
+    });
+    expect(withDeviceName(phone, rules)?.deviceName).toBe("my-phone");
+    const laptop = sentFromConnection({ surface: "desktop", clientOs: "Linux" });
+    expect(withDeviceName(laptop, rules)?.deviceName).toBe("work-laptop");
+    const mac = sentFromConnection({ surface: "web", clientOs: "macOS", clientBrowser: "Safari" });
+    expect(withDeviceName(mac, rules)?.deviceName).toBe("studio-mac");
+    const other = { surface: "web" as const, os: "Windows" as const, deviceName: "forged" };
+    expect(withDeviceName(other, rules)).toEqual({ surface: "web", os: "Windows" });
+    expect(withDeviceName(undefined, rules)).toBeUndefined();
+  });
+
+  it("puts the name first in the agent's line", () => {
+    const sentFrom = withDeviceName(
+      sentFromConnection({
+        surface: "mobile",
+        clientOs: "Android",
+        deviceModel: "Pixel 9",
+        connectionMethod: "relay",
+      }),
+      rules,
+    );
+    expect(
+      sentFromLine({ createdBy: "user", context: { version: 1, records: [], sentFrom } }),
+    ).toBe("[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)");
   });
 });
