@@ -563,17 +563,30 @@ export async function deleteSelectedThreadEntries<
   return { deletedThreadKeys, firstFailure };
 }
 
-export function isSidebarHiddenThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
-  return !isListedThreadLineage(thread.lineage);
+/**
+ * A pinned subagent or delegated task also gets a root row in the pinned group. It stays a
+ * subagent: lineage, results and its place under the parent are unchanged. Side chats stay
+ * inside their parent's view even when pinned.
+ */
+function isPinnedSubagentRow(
+  thread: Pick<SidebarThreadSummary, "lineage"> & Partial<Pick<SidebarThreadSummary, "pinnedAt">>,
+): boolean {
+  return thread.pinnedAt != null && thread.lineage.sideChat !== true;
 }
 
-// Subagent and side-chat threads have no sidebar row, so an open one is represented by
+export function isSidebarHiddenThread(
+  thread: Pick<SidebarThreadSummary, "lineage"> & Partial<Pick<SidebarThreadSummary, "pinnedAt">>,
+): boolean {
+  return !isListedThreadLineage(thread.lineage) && !isPinnedSubagentRow(thread);
+}
+
+// Unpinned subagent and side-chat threads have no sidebar row, so an open one is represented by
 // its nearest listed ancestor. A broken chain (missing parent, cycle,
 // other environment) resolves to the thread itself, which then matches no row.
 export function resolveSidebarRowThreadId(
   threadId: ThreadId,
   environmentId: EnvironmentId,
-  threads: readonly Pick<SidebarThreadSummary, "id" | "environmentId" | "lineage">[],
+  threads: readonly Pick<SidebarThreadSummary, "id" | "environmentId" | "lineage" | "pinnedAt">[],
 ): ThreadId {
   const findThread = (id: ThreadId) =>
     threads.find((thread) => thread.id === id && thread.environmentId === environmentId);
@@ -592,7 +605,10 @@ export function resolveSidebarRowThreadId(
  * the sidebar lists, by thread key; they show under that thread, as subagents do.
  */
 export function filterSidebarV2VisibleThreads<
-  T extends Pick<SidebarThreadSummary, "archivedAt" | "environmentId" | "id" | "lineage"> & {
+  T extends Pick<
+    SidebarThreadSummary,
+    "archivedAt" | "environmentId" | "id" | "lineage" | "pinnedAt"
+  > & {
     projectId: string;
   },
 >(
@@ -603,11 +619,12 @@ export function filterSidebarV2VisibleThreads<
   return threads.filter(
     (thread) =>
       thread.archivedAt === null &&
-      !isShownUnderParent(
-        { environmentId: thread.environmentId, threadId: thread.id },
-        thread.lineage,
-        delegatedUnderParent,
-      ) &&
+      (isPinnedSubagentRow(thread) ||
+        !isShownUnderParent(
+          { environmentId: thread.environmentId, threadId: thread.id },
+          thread.lineage,
+          delegatedUnderParent,
+        )) &&
       (scopedProjectKeys === null ||
         scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
   );
@@ -1306,7 +1323,7 @@ export function sortLogicalProjectsForSidebar<
 export function sortSidebarV2ProjectGroups<
   TProject extends LogicalSidebarProject,
   TThread extends ScopedSidebarThread &
-    Pick<SidebarThreadSummary, "environmentId" | "id" | "lineage">,
+    Pick<SidebarThreadSummary, "environmentId" | "id" | "lineage" | "pinnedAt">,
 >(
   projects: readonly TProject[],
   threads: readonly TThread[],

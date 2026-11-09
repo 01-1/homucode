@@ -11,6 +11,7 @@ import {
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
   resolveSidebarRowThreadId,
+  filterSidebarV2VisibleThreads,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveSidebarSweepKeys,
@@ -174,6 +175,63 @@ describe("sidebar thread lineage helpers", () => {
     const loopA = subagentOf("thread-loop-a", ThreadId.make("thread-loop-b"));
     const loopB = subagentOf("thread-loop-b", loopA.id);
     expect(resolveSidebarRowThreadId(loopA.id, environmentId, [loopA, loopB])).toBe(loopA.id);
+  });
+
+  it("gives a pinned subagent its own root row, but not an unpinned one or a side chat", () => {
+    const environmentId = EnvironmentId.make("environment-pinned");
+    const root = makeThreadFixture({ id: ThreadId.make("thread-root"), environmentId });
+    const child = (id: string, overrides: ThreadFixtureOverrides) =>
+      makeThreadFixture({
+        id: ThreadId.make(id),
+        environmentId,
+        lineage: {
+          rootThreadId: root.id,
+          parentThreadId: root.id,
+          relationshipToParent: "subagent",
+        },
+        ...overrides,
+      });
+    const pinnedAt = "2026-03-09T10:00:00.000Z";
+    const pinned = child("thread-pinned", { pinnedAt });
+    const unpinned = child("thread-unpinned", {});
+    const pinnedGrandchild = child("thread-pinned-grandchild", {
+      pinnedAt,
+      lineage: {
+        rootThreadId: root.id,
+        parentThreadId: unpinned.id,
+        relationshipToParent: "subagent",
+      },
+    });
+    const pinnedSideChat = child("thread-pinned-side-chat", {
+      pinnedAt,
+      lineage: {
+        rootThreadId: root.id,
+        parentThreadId: root.id,
+        relationshipToParent: "fork",
+        sideChat: true,
+      },
+    });
+    const threads = [root, pinned, unpinned, pinnedGrandchild, pinnedSideChat];
+
+    expect(
+      filterSidebarV2VisibleThreads(threads, null, new Set()).map((thread) => thread.id),
+    ).toEqual([root.id, pinned.id, pinnedGrandchild.id]);
+    // A pinned subagent stays a subagent; only its row is new.
+    expect(pinned.lineage.parentThreadId).toBe(root.id);
+    expect(resolveSidebarRowThreadId(pinned.id, environmentId, threads)).toBe(pinned.id);
+    expect(resolveSidebarRowThreadId(pinnedGrandchild.id, environmentId, threads)).toBe(
+      pinnedGrandchild.id,
+    );
+    expect(resolveSidebarRowThreadId(unpinned.id, environmentId, threads)).toBe(root.id);
+    expect(resolveSidebarRowThreadId(pinnedSideChat.id, environmentId, threads)).toBe(root.id);
+    // A delegated task pinned here gets a row as well.
+    expect(
+      filterSidebarV2VisibleThreads(
+        [{ ...root, pinnedAt }],
+        null,
+        new Set([scopedThreadKey(scopeThreadRef(environmentId, root.id))]),
+      ),
+    ).toHaveLength(1);
   });
 });
 
