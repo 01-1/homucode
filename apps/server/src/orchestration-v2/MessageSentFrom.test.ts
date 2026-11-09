@@ -2,6 +2,7 @@ import { CommandId, MessageId, ScheduledTaskId, ThreadId } from "@t3tools/contra
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  launchInitialMessage,
   sentFromConnection,
   sentFromLine,
   withConnectionSentFrom,
@@ -111,5 +112,30 @@ describe("withConnectionSentFrom", () => {
       undefined,
     );
     expect(withoutNonUserSentFrom(claimed).context.sentFrom).toEqual(claimed.context.sentFrom);
+  });
+});
+
+describe("launchInitialMessage", () => {
+  const forged = {
+    version: 1 as const,
+    records: [],
+    sentFrom: { surface: "desktop" as const, os: "Windows" as const },
+  };
+
+  it("stamps a new thread's first message with its socket's device, never the client's", () => {
+    const phone = sentFromConnection({ surface: "mobile", clientOs: "iOS" });
+    expect(
+      launchInitialMessage({ text: "Start", attachments: [], context: forged }, phone).context
+        ?.sentFrom,
+    ).toEqual({ surface: "mobile", os: "iOS" });
+    expect(launchInitialMessage({ text: "Start", attachments: [] }, phone).context).toEqual({
+      version: 1,
+      records: [],
+      sentFrom: { surface: "mobile", os: "iOS" },
+    });
+    expect(
+      launchInitialMessage({ text: "Start", attachments: [], context: forged }, undefined).context
+        ?.sentFrom,
+    ).toBeUndefined();
   });
 });

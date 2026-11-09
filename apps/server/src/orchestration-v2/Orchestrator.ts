@@ -1,4 +1,4 @@
-import { withoutNonUserSentFrom } from "./MessageSentFrom.ts";
+import { withOriginalSentFrom, withoutNonUserSentFrom } from "./MessageSentFrom.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   GuestShareId,
@@ -10574,7 +10574,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...queuedMessage,
         text: command.text,
         ...editedAttachments,
-        ...(command.context ? { context: command.context } : {}),
+        ...(command.context
+          ? { context: withOriginalSentFrom(command.context, queuedMessage.context) }
+          : {}),
         updatedAt: now,
       }),
     });
@@ -10590,7 +10592,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ...queuedTurnItem,
           text: command.text,
           ...editedAttachments,
-          ...(command.context ? { context: command.context } : {}),
+          ...(command.context
+            ? { context: withOriginalSentFrom(command.context, queuedMessage.context) }
+            : {}),
           updatedAt: now,
         }),
       });

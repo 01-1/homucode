@@ -1,5 +1,6 @@
 import {
   OrchestrationMessageSentFrom,
+  type MessageId,
   type OrchestrationMessageContext,
   type OrchestrationV2Command,
   type OrchestrationV2ConversationMessage,
@@ -35,6 +36,7 @@ export function sentFromConnection(
   return decoded._tag === "Some" ? decoded.value : undefined;
 }
 
+/** A message context stamped with the socket's device, replacing any the client claimed. */
 function withContextSentFrom(
   context: OrchestrationMessageContext | undefined,
   sentFrom: OrchestrationMessageSentFrom | undefined,
@@ -117,4 +119,37 @@ export function withSentFromLine(text: string, message: SentMessage): string {
   const line = sentFromLine(message);
   if (line === "" || text.trimStart().startsWith("/")) return text;
   return text === "" ? line : `${text}\n\n${line}`;
+}
+
+/** An edited message keeps the device it was first sent from; an edit cannot claim one. */
+export function withOriginalSentFrom(
+  context: OrchestrationMessageContext,
+  original: OrchestrationMessageContext | undefined,
+): OrchestrationMessageContext {
+  const { sentFrom: _claimed, ...rest } = context;
+  return original?.sentFrom === undefined ? rest : { ...rest, sentFrom: original.sentFrom };
+}
+
+/** A launch's first message, stamped with the socket's device like `withConnectionSentFrom`. */
+export function launchInitialMessage<Attachments>(
+  message: {
+    readonly messageId?: MessageId | undefined;
+    readonly text: string;
+    readonly attachments: Attachments;
+    readonly context?: OrchestrationMessageContext | undefined;
+  },
+  sentFrom: OrchestrationMessageSentFrom | undefined,
+): {
+  readonly messageId?: MessageId;
+  readonly text: string;
+  readonly attachments: Attachments;
+  readonly context?: OrchestrationMessageContext;
+} {
+  const context = withContextSentFrom(message.context, sentFrom);
+  return {
+    ...(message.messageId === undefined ? {} : { messageId: message.messageId }),
+    text: message.text,
+    attachments: message.attachments,
+    ...(context === undefined ? {} : { context }),
+  };
 }

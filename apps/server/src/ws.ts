@@ -122,7 +122,11 @@ import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
-import { sentFromConnection, withConnectionSentFrom } from "./orchestration-v2/MessageSentFrom.ts";
+import {
+  launchInitialMessage,
+  sentFromConnection,
+  withConnectionSentFrom,
+} from "./orchestration-v2/MessageSentFrom.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -2269,16 +2273,11 @@ export const layerWsRpc = (
                     ...(input.initialMessage === undefined
                       ? {}
                       : {
-                          initialMessage: {
-                            ...(input.initialMessage.messageId === undefined
-                              ? {}
-                              : { messageId: input.initialMessage.messageId }),
-                            text: input.initialMessage.text,
-                            attachments: input.initialMessage.attachments,
-                            ...(input.initialMessage.context === undefined
-                              ? {}
-                              : { context: input.initialMessage.context }),
-                          },
+                          // A new thread's first message carries its device like any other.
+                          initialMessage: launchInitialMessage(
+                            input.initialMessage,
+                            connectionSentFrom,
+                          ),
                         }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",

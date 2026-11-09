@@ -6756,6 +6756,8 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         threadId,
         messageId: MessageId.make("runtime-layer-queued-edit-queued-message"),
         text: "Original queued text.",
+        // As the ws handler stamps it from the sending socket.
+        context: { version: 1, records: [], sentFrom: { surface: "mobile", os: "iOS" } },
         attachments: [],
         modelSelection,
         dispatchMode: { type: "queue_after_active" },
@@ -6821,6 +6823,22 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           ?.attachments.map((attachment) => attachment.id),
         ["runtime-layer-queued-edit-attachment"],
         "an edit without attachments must leave the stored attachments untouched",
+      );
+
+      // An edit's context cannot claim another device; the message keeps where it came from.
+      yield* orchestrator.dispatch({
+        type: "queued-run.edit",
+        commandId: CommandId.make("runtime-layer-queued-edit-claimed-device"),
+        threadId,
+        runId: queuedRun.id,
+        text: "Edited elsewhere.",
+        context: { version: 1, records: [], sentFrom: { surface: "desktop", os: "Windows" } },
+      });
+      assert.deepEqual(
+        (yield* orchestrator.getThreadProjection(threadId)).messages.find(
+          (message) => message.id === queuedRun.userMessageId,
+        )?.context?.sentFrom,
+        { surface: "mobile", os: "iOS" },
       );
 
       const emptyEditError = yield* orchestrator
