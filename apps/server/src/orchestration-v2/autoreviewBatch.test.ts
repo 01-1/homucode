@@ -18,6 +18,7 @@ import {
   isLgtmReview,
   findingsBody,
   findingsWithout,
+  hasSection,
   renderFindingsMessage,
   planAutoreviewBatch,
   planFindingsDelivery,
@@ -265,6 +266,44 @@ describe("findings shared between reviewers", () => {
       ownFindings: [ownA],
     });
     assert.notInclude(onlyOwn, "already raised");
+  });
+
+  it("removes only a whole section, never part of a longer one that starts the same", () => {
+    const short = findingsSection({ reviewerTitle: "Autoreview", review: "parse.ts:1 drops zero" });
+    const long = findingsSection({
+      reviewerTitle: "Autoreview",
+      review: "parse.ts:1 drops zero and null",
+    });
+    assert.equal(findingsWithout(renderFindingsMessage([short, long]), short), long);
+    assert.equal(findingsWithout(renderFindingsMessage([long, short]), short), long);
+    assert.equal(findingsWithout(renderFindingsMessage([long]), short), long);
+    assert.isTrue(hasSection(renderFindingsMessage([long, short]), short));
+    assert.isFalse(hasSection(renderFindingsMessage([long]), short));
+  });
+
+  it("holds a queued findings message back until its turn starts, then sends its final text", () => {
+    const queuedRun = RunId.make("run:queued-findings");
+    const findingsItem = (text: string) => ({
+      ...user("qf", 5, text, `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:qf`),
+      runId: queuedRun,
+    });
+    const reviewer = { throughOrdinal: 4, sentItemIds: [] };
+    const waiting = planAutoreviewBatch({
+      reviewer,
+      items: [findingsItem(ownA), assistant("w", 6, "Working")],
+      runs: [{ id: queuedRun, status: "queued" }],
+    });
+    assert.deepStrictEqual(ids(waiting.items), [TurnItemId.make("turn-item:w")]);
+    assert.equal(waiting.throughOrdinal, 4);
+    // Another reviewer's findings join the queued message; then its turn starts.
+    const started = planAutoreviewBatch({
+      reviewer: waiting,
+      items: [findingsItem(message), assistant("w", 6, "Working")],
+      runs: [{ id: queuedRun, status: "running" }],
+    });
+    assert.deepStrictEqual(ids(started.items), [TurnItemId.make("turn-item:qf")]);
+    assert.include((started.items[0] as { text: string }).text, "b.ts:2 races");
+    assert.equal(started.throughOrdinal, 6);
   });
 
   it("repeats the instructions and the new brief when asked", () => {

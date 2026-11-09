@@ -65,15 +65,42 @@ export const renderFindingsMessage = (sections: ReadonlyArray<string>): string =
 export const findingsBody = (text: string): string =>
   text.replace(LEGACY_FINDINGS_HEADER, "").trim();
 
-/** `text` with one reviewer's section taken out. */
+/**
+ * Where `section` stands whole in `text`: at the start or after a blank line, and at the end or
+ * before one. A longer finding that merely starts with the same words is not a match.
+ */
+function sectionIndex(text: string, section: string): number {
+  if (section.length === 0) return -1;
+  for (let index = text.indexOf(section); index !== -1; index = text.indexOf(section, index + 1)) {
+    const end = index + section.length;
+    const starts = index === 0 || text.slice(index - 2, index) === "\n\n";
+    const ends = end === text.length || text.slice(end, end + 2) === "\n\n";
+    if (starts && ends) return index;
+  }
+  return -1;
+}
+
+/** Whether a findings message holds this section whole. */
+export const hasSection = (text: string, section: string): boolean =>
+  sectionIndex(text, section) !== -1;
+
+/** `text` with one whole copy of a reviewer's section taken out. */
 export function findingsWithout(text: string, section: string | undefined): string {
-  if (section === undefined || section.length === 0 || !text.includes(section)) return text;
-  return text
-    .split(section)
-    .join("")
+  const index = section === undefined ? -1 : sectionIndex(text, section);
+  if (index === -1) return text;
+  return `${text.slice(0, index)}${text.slice(index + section!.length)}`
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/** A reviewer's sections still to be recognized as its own; older records kept two fields. */
+export const ownSections = (
+  reviewer: Pick<OrchestrationV2Autoreviewer, "ownSections" | "queuedSections" | "lastSection">,
+): ReadonlyArray<string> =>
+  reviewer.ownSections ?? [
+    ...(reviewer.queuedSections ?? []),
+    ...(reviewer.lastSection === undefined ? [] : [reviewer.lastSection]),
+  ];
 
 /**
  * Items a reviewer sees once they finish. Findings sent back to the reviewed thread are
@@ -118,15 +145,30 @@ export interface AutoreviewBatchPlan {
 export function planAutoreviewBatch(input: {
   readonly reviewer: Pick<OrchestrationV2Autoreviewer, "throughOrdinal" | "sentItemIds">;
   readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
+  /** The reviewed thread's runs; findings waiting in the queue can still grow. */
+  readonly runs?: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "status">>;
 }): AutoreviewBatchPlan {
   const sent = new Set<string>(input.reviewer.sentItemIds);
+  const queued = new Set<string>(
+    (input.runs ?? []).filter((run) => run.status === "queued").map((run) => run.id),
+  );
+  // A queued findings message is edited in place as findings join it, so it is sent once its
+  // turn starts and its text is final.
+  const finished = (item: OrchestrationV2TurnItem) =>
+    isTerminalItem(item) &&
+    !(
+      item.type === "user_message" &&
+      isAutoreviewFindingsMessageId(item.messageId) &&
+      item.runId !== null &&
+      queued.has(item.runId)
+    );
   const candidates = input.items
     .filter((item) => item.ordinal > input.reviewer.throughOrdinal && isReviewableItem(item))
     .toSorted((left, right) => left.ordinal - right.ordinal);
-  const items = candidates.filter((item) => isTerminalItem(item) && !sent.has(item.id));
+  const items = candidates.filter((item) => finished(item) && !sent.has(item.id));
   let throughOrdinal = input.reviewer.throughOrdinal;
   for (const item of candidates) {
-    if (!isTerminalItem(item)) break;
+    if (!finished(item)) break;
     throughOrdinal = item.ordinal;
   }
   const sentItemIds = [

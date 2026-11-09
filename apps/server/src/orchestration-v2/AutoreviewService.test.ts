@@ -849,6 +849,144 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("a reviewer never sees any of its own steered findings as another's", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const steered: Array<DispatchCommand> = [];
+      const service = AutoreviewService.make(steeringPort(orchestrator, steered));
+      const { threadId, runId, now } = yield* seedReviewedThread("mine");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "mine");
+      const write = (item: OrchestrationV2TurnItem) =>
+        eventSink
+          .write({ events: [itemEvent(item)] })
+          .pipe(Effect.andThen(service.handle(itemEvent(item))));
+      const step = (id: string, ordinal: number) =>
+        write(assistantItem({ threadId, runId, id, ordinal, now, text: `Step ${id}.` }));
+
+      const first = yield* finishReview(reviewerThreadId, "mine: first finding", "mine-1");
+      yield* service.handle(first.ended);
+      yield* step("mine:a", 20);
+      const second = yield* finishReview(reviewerThreadId, "mine: second finding", "mine-2");
+      yield* service.handle(second.ended);
+      assert.lengthOf(steered, 2);
+
+      // Both steers land in the thread, then the agent goes on.
+      for (const [index, command] of steered.entries()) {
+        if (command.type !== "message.dispatch") continue;
+        yield* write({
+          ...itemBase({ threadId, runId, id: `mine:findings-${index}`, ordinal: 21 + index, now }),
+          type: "user_message",
+          messageId: command.messageId,
+          createdBy: "agent",
+          creationSource: "server",
+          inputIntent: "steer",
+          text: command.text,
+          attachments: [],
+        });
+      }
+      yield* step("mine:b", 30);
+      const batches = yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      const last = batches.at(-1)!;
+      assert.include(last.text, "Step mine:b.");
+      assert.notInclude(last.text, "first finding");
+      assert.notInclude(last.text, "second finding");
+      assert.notInclude(last.text, "already raised");
+    }),
+  );
+
+  it.effect("removal drops every one of a reviewer's queued findings, however many", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("many");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "many");
+      for (let index = 0; index < 21; index++) {
+        const review = yield* finishReview(
+          reviewerThreadId,
+          `many finding ${index}`,
+          `many-${index}`,
+        );
+        yield* service.handle(review.ended);
+        const item = assistantItem({
+          threadId,
+          runId,
+          id: `many:step-${index}`,
+          ordinal: 20 + index,
+          now,
+          text: `Step ${index}.`,
+        });
+        yield* eventSink.write({ events: [itemEvent(item)] });
+        yield* service.handle(itemEvent(item));
+      }
+      const queued = yield* queuedFindings(threadId);
+      assert.lengthOf(queued, 1);
+      assert.include(queued[0]!.text, "many finding 0");
+      assert.include(queued[0]!.text, "many finding 20");
+
+      yield* service.detach({
+        commandId: CommandId.make("command:many:remove"),
+        threadId,
+        reviewerThreadId,
+      });
+      assert.notEqual((yield* queuedFindings(threadId))[0]!.status, "queued");
+    }),
+  );
+
+  it.effect("a review appended to another's queued findings is not appended again", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("append-guard");
+      const first = yield* attachReviewer(service, threadId, "append-guard-1");
+      const second = yield* attachReviewer(service, threadId, "append-guard-2");
+      const a = yield* finishReview(first.reviewerThreadId, "guard finding A", "append-guard-1");
+      yield* service.handle(a.ended);
+      const b = yield* finishReview(second.reviewerThreadId, "guard finding B", "append-guard-2");
+      yield* service.handle(b.ended);
+
+      // The joint message is consumed: its turn runs and ends.
+      const eventSink = yield* EventSink.EventSinkV2;
+      const now = yield* DateTime.now;
+      const joint = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+        (run) =>
+          run.status === "queued" &&
+          run.userMessageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX),
+      )!;
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("event:append-guard:consumed"),
+            type: "run.updated",
+            threadId,
+            runId: joint.id,
+            providerInstanceId: joint.providerInstanceId,
+            occurredAt: now,
+            payload: { ...joint, status: "completed", startedAt: now, completedAt: now },
+          },
+        ],
+      });
+
+      // A rollback rewrites the second reviewer without lastReviewedRunId.
+      const records = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers!;
+      yield* orchestrator.dispatch({
+        type: "thread.autoreviewers.set",
+        commandId: CommandId.make("command:append-guard:rollback"),
+        threadId,
+        autoreviewers: records.map((record) => {
+          if (record.threadId !== second.reviewerThreadId) return record;
+          const { lastReviewedRunId: _dropped, ...rolledBack } = record;
+          return rolledBack;
+        }),
+      });
+      yield* service.handle(b.ended);
+      const all = yield* queuedFindings(threadId);
+      assert.lengthOf(all, 1);
+      assert.equal(all[0]!.text.split("guard finding B").length - 1, 1);
+    }),
+  );
+
   it.effect("update changes a reviewer's model and brief and keeps its place", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

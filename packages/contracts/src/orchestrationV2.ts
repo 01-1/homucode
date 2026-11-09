@@ -457,9 +457,14 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   throughOrdinal: Schema.Int,
   /** Items above `throughOrdinal` that finished early and were already sent. */
   sentItemIds: Schema.Array(TurnItemId),
-  /** The text this reviewer last added to the reviewed thread, as shown there. */
+  /**
+   * Sections this reviewer added to the reviewed thread that have not yet come back to it in a
+   * batch, newest last: left out of what it is shown, and dropped from the queue on removal.
+   */
+  ownSections: Schema.optional(Schema.Array(Schema.String)),
+  /** Older records: the last section added. Read as part of `ownSections` when that is absent. */
   lastSection: Schema.optional(Schema.String),
-  /** Its sections that went into a queued findings message, newest last; removal drops them. */
+  /** Older records: sections that went into a queued findings message. */
   queuedSections: Schema.optional(Schema.Array(Schema.String)),
   /** The reviewer's last review that was delivered, or needed no delivery. */
   lastReviewedRunId: Schema.optional(RunId),
