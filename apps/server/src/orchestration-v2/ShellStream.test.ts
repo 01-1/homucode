@@ -181,6 +181,8 @@ describe("omitIdleSubagentShells", () => {
       // Idle, but a woken grandchild walks through it to reach the root's badge.
       row("middle", "root"),
       row("grandchild", "middle"),
+      // Idle, but pinned children get a sidebar row.
+      row("pinned", "root", { pinnedAt: DateTime.makeUnsafe(0) }),
     ];
     expect(omitIdleSubagentShells(threads).map((thread) => thread.id)).toEqual([
       "root",
@@ -189,6 +191,7 @@ describe("omitIdleSubagentShells", () => {
       "asking",
       "background",
       "middle",
+      "pinned",
     ]);
   });
 

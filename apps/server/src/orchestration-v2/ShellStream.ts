@@ -146,6 +146,7 @@ function omitIdleSubagentShellsWith(
     (thread) =>
       thread.lineage.relationshipToParent !== "subagent" ||
       isLiveSubagentShell(thread) ||
+      thread.pinnedAt != null ||
       facts.subagentParentIds.has(thread.id),
   );
 }
@@ -184,8 +185,9 @@ function omitOlderSettledShellsWith(
 
 /**
  * Idle subagent children have no sidebar row, so clients that opt in read them from their thread
- * family instead. A child stays while it is live or the parent of another child, so the request
- * and working walks over shell rows never meet a gap in a nested chain.
+ * family instead. A child stays while it is live, pinned (pinned children get a sidebar row), or
+ * the parent of another child, so the request and working walks over shell rows never meet a gap
+ * in a nested chain.
  */
 export function omitIdleSubagentShells(
   threads: ReadonlyArray<OrchestrationV2ThreadShell>,
@@ -261,7 +263,10 @@ function shellSubscriberThreadIds(
   const subagents = index.filter(
     (entry) =>
       entry.lineage.relationshipToParent === "subagent" &&
-      (!options.omitIdleSubagents || entry.mayBeLive || facts.subagentParentIds.has(entry.id)),
+      (!options.omitIdleSubagents ||
+        entry.mayBeLive ||
+        entry.pinnedAt != null ||
+        facts.subagentParentIds.has(entry.id)),
   );
   const ancestorIds = hiddenChildAncestorIds([
     ...subagents,

@@ -667,9 +667,11 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
       parent: string | null,
       activityRunStatus: "running" | null,
       settledDaysAgo: number | null = null,
+      pinnedAt: DateTime.Utc | null = null,
     ) =>
       ({
         id: ThreadId.make(id),
+        pinnedAt,
         projectId: "project",
         archivedAt: null,
         status: activityRunStatus ?? "completed",
@@ -689,6 +691,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
       shell("parent", null, null),
       shell("idle", "parent", null),
       shell("live", "parent", "running"),
+      shell("pinned", "parent", null, null, DateTime.makeUnsafe(0)),
       ...Array.from({ length: 25 }, (_, index) => shell(`recent-${index}`, null, null, 1)),
       shell("old", null, null, 30),
     ];
@@ -704,7 +707,6 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
             Effect.succeed(
               threads.map((thread) => ({
                 ...thread,
-                pinnedAt: null,
                 snoozedUntil: null,
                 mayBeLive: thread.activityRunStatus !== null,
               })),
@@ -740,7 +742,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
         ),
       );
 
-    const recent = threads.slice(3, 28).map((thread) => thread.id);
+    const recent = threads.slice(4, 29).map((thread) => thread.id);
     const full = yield* firstSnapshot({});
     assert.deepEqual(
       full?.threads.map((thread) => thread.id),
@@ -750,12 +752,12 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
     const withoutChildren = yield* firstSnapshot({ omitIdleSubagents: true });
     assert.deepEqual(
       withoutChildren?.threads.map((thread) => thread.id),
-      ["parent", "live", ...recent, "old"],
+      ["parent", "live", "pinned", ...recent, "old"],
     );
     const withoutOld = yield* firstSnapshot({ omitIdleSubagents: true, omitOlderSettled: true });
     assert.deepEqual(
       withoutOld?.threads.map((thread) => thread.id),
-      ["parent", "live", ...recent],
+      ["parent", "live", "pinned", ...recent],
     );
     assert.deepEqual(withoutOld?.olderSettled?.counts, [
       { projectId: ProjectId.make("project"), count: 1 },
