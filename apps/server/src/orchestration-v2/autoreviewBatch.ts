@@ -37,40 +37,42 @@ const TERMINAL_ITEM_STATUSES: ReadonlySet<OrchestrationV2TurnItem["status"]> = n
 const isAutoreviewFindingsMessageId = (messageId: string): boolean =>
   messageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
 
-const FINDINGS_HEADER =
+/** Told to the reviewed agent once per thread, on its first findings message. */
+export const FINDINGS_INTRO =
+  "(Autoreview: reviewers check your work as you go. Weigh each point, act on the ones that hold up, say briefly why you skip any, and do not reply to them; they see your next activity.)";
+/** The wrapper findings messages had before; old messages in threads still carry it. */
+const LEGACY_FINDINGS_HEADER =
   "Autoreview findings from reviewers that review your work as you go. Weigh each point: act on the ones that hold up and say briefly why you skip any. Do not reply to the reviewers; they see your next activity.";
-const SECTION_PATTERN = /^--- Autoreview from .* \(thread (\S+)\) ---$/gm;
 
-export interface FindingsSection {
-  readonly reviewerThreadId: string;
-  /** The section with its header line. */
-  readonly text: string;
+/** A reviewer's short name: its title up to the first colon ("Reviewer A: ..." -> "Reviewer A"). */
+function reviewerName(title: string): string {
+  const colon = title.indexOf(":");
+  const name = (colon > 0 ? title.slice(0, colon) : title).trim();
+  return name.length > 0 ? name : "Autoreview";
 }
 
-/** One reviewer's findings, headed so other reviewers and removal can tell whose they are. */
-export function findingsSection(input: {
-  readonly reviewerThreadId: string;
+/** One reviewer's findings as the reviewed thread shows them: its name, then the text. */
+export const findingsSection = (input: {
   readonly reviewerTitle: string;
   readonly review: string;
-}): FindingsSection {
-  return {
-    reviewerThreadId: input.reviewerThreadId,
-    text: `--- Autoreview from "${input.reviewerTitle}" (thread ${input.reviewerThreadId}) ---\n${input.review.trim()}`,
-  };
-}
+}): string => `${reviewerName(input.reviewerTitle)}: ${input.review.trim()}`;
 
-/** The sections of a findings message, in order. */
-export function parseFindingsSections(text: string): ReadonlyArray<FindingsSection> {
-  const starts = [...text.matchAll(SECTION_PATTERN)];
-  return starts.map((match, index) => ({
-    reviewerThreadId: match[1]!,
-    text: text.slice(match.index, starts[index + 1]?.index ?? text.length).trim(),
-  }));
-}
+export const renderFindingsMessage = (sections: ReadonlyArray<string>, intro: boolean): string =>
+  [...(intro ? [FINDINGS_INTRO] : []), ...sections].join("\n\n");
 
-/** One message for the reviewed thread holding every pending reviewer's findings. */
-export const renderFindingsMessage = (sections: ReadonlyArray<FindingsSection>): string =>
-  [FINDINGS_HEADER, ...sections.map((section) => section.text)].join("\n\n");
+/** The findings in a findings message, without the intro or the old wrapper. */
+export const findingsBody = (text: string): string =>
+  text.replace(FINDINGS_INTRO, "").replace(LEGACY_FINDINGS_HEADER, "").trim();
+
+/** `text` with one reviewer's section taken out. */
+export function findingsWithout(text: string, section: string | undefined): string {
+  if (section === undefined || section.length === 0 || !text.includes(section)) return text;
+  return text
+    .split(section)
+    .join("")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /**
  * Items a reviewer sees once they finish. Findings sent back to the reviewed thread are
@@ -151,7 +153,7 @@ function clip(text: string, max: number): string {
 
 function renderReviewItem(
   item: OrchestrationV2TurnItem,
-  reviewerThreadId: string | undefined,
+  ownFindings: string | undefined,
 ): string | null {
   const status = item.status === "completed" ? "" : ` (${item.status})`;
   switch (item.type) {
@@ -160,15 +162,10 @@ function renderReviewItem(
         return `### User message${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
       }
       // A reviewer's own findings are left out; it wrote them.
-      const others = parseFindingsSections(item.text).filter(
-        (section) => section.reviewerThreadId !== reviewerThreadId,
-      );
+      const others = findingsBody(findingsWithout(item.text, ownFindings));
       return others.length === 0
         ? null
-        : [
-            "### Findings other reviewers already raised (do not raise them again)",
-            ...others.map((section) => clip(section.text, ITEM_MAX_CHARS)),
-          ].join("\n");
+        : `### Findings other reviewers already raised (do not raise them again)\n${clip(others, ITEM_MAX_CHARS)}`;
     }
     case "assistant_message":
       return `### Assistant${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
@@ -241,8 +238,8 @@ export function renderAutoreviewBatch(input: {
   readonly brief?: string | undefined;
   /** Replaces the standard role text of the instructions. */
   readonly preamble?: string | undefined;
-  /** The reviewer the batch is for, so its own findings are left out. */
-  readonly reviewerThreadId?: string | undefined;
+  /** The reviewer's own last findings, left out of what it is shown. */
+  readonly ownFindings?: string | undefined;
   /** Repeat the instructions on a later batch, after the brief or model changed. */
   readonly instructions?: boolean;
 }): string {
@@ -252,7 +249,7 @@ export function renderAutoreviewBatch(input: {
     ? `Activity so far in thread ${input.reviewedThread.id}:`
     : `New activity in thread ${input.reviewedThread.id} since your last batch:`;
   const rendered = input.items.flatMap((item) => {
-    const text = renderReviewItem(item, input.reviewerThreadId);
+    const text = renderReviewItem(item, input.ownFindings);
     return text === null ? [] : [text];
   });
   // On the first batch the opening request is kept even when earlier items are dropped.

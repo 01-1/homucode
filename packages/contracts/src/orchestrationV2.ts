@@ -457,6 +457,8 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   throughOrdinal: Schema.Int,
   /** Items above `throughOrdinal` that finished early and were already sent. */
   sentItemIds: Schema.Array(TurnItemId),
+  /** The text this reviewer last added to the reviewed thread, as shown there. */
+  lastSection: Schema.optional(Schema.String),
   /** The reviewer's last review that was delivered, or needed no delivery. */
   lastReviewedRunId: Schema.optional(RunId),
   /**

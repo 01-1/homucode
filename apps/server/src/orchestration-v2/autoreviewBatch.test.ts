@@ -16,7 +16,9 @@ import {
   batchHasAgentActivity,
   findingsSection,
   isLgtmReview,
-  parseFindingsSections,
+  FINDINGS_INTRO,
+  findingsBody,
+  findingsWithout,
   renderFindingsMessage,
   planAutoreviewBatch,
   planFindingsDelivery,
@@ -129,9 +131,10 @@ describe("planAutoreviewBatch", () => {
     const findings = user(
       "findings",
       1,
-      renderFindingsMessage([
-        findingsSection({ reviewerThreadId: "thread:a", reviewerTitle: "A", review: "Bug" }),
-      ]),
+      renderFindingsMessage(
+        [findingsSection({ reviewerTitle: "Reviewer A: x", review: "Bug" })],
+        true,
+      ),
       `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:9`,
     );
     const items = [
@@ -228,20 +231,20 @@ describe("renderAutoreviewBatch", () => {
 
 describe("findings shared between reviewers", () => {
   const reviewedThread = { id: threadId, title: "Reviewed" };
-  const message = renderFindingsMessage([
-    findingsSection({ reviewerThreadId: "thread:a", reviewerTitle: "A", review: "a.ts:1 leaks" }),
-    findingsSection({ reviewerThreadId: "thread:b", reviewerTitle: "B", review: "b.ts:2 races" }),
-  ]);
+  const ownA = findingsSection({
+    reviewerTitle: "Reviewer A: answers (Opus high)",
+    review: "a.ts:1 leaks",
+  });
+  const ownB = findingsSection({ reviewerTitle: "Reviewer B", review: "b.ts:2 races" });
+  const message = renderFindingsMessage([ownA, ownB], true);
 
-  it("splits a findings message back into its reviewers' sections", () => {
-    const sections = parseFindingsSections(message);
-    assert.deepStrictEqual(
-      sections.map((section) => section.reviewerThreadId),
-      ["thread:a", "thread:b"],
-    );
-    assert.include(sections[0]!.text, "a.ts:1 leaks");
-    assert.notInclude(sections[0]!.text, "b.ts:2 races");
-    assert.equal(renderFindingsMessage(sections), message);
+  it("shows the reviewed thread each reviewer's name and its text, with the instruction once", () => {
+    assert.equal(ownA, "Reviewer A: a.ts:1 leaks");
+    assert.equal(ownB, "Reviewer B: b.ts:2 races");
+    assert.notInclude(message, "thread:");
+    assert.equal(message.split(FINDINGS_INTRO).length, 2);
+    assert.notInclude(renderFindingsMessage([ownA], false), FINDINGS_INTRO);
+    assert.equal(findingsBody(findingsWithout(message, ownA)), ownB);
   });
 
   it("shows a reviewer the others' findings, attributed, and not its own", () => {
@@ -249,29 +252,24 @@ describe("findings shared between reviewers", () => {
       user("f", 1, message, `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:1`),
       assistant("x", 2, "Fixed it"),
     ];
-    const forA = renderAutoreviewBatch({
-      reviewedThread,
-      items,
-      first: false,
-      reviewerThreadId: "thread:a",
-    });
+    const forA = renderAutoreviewBatch({ reviewedThread, items, first: false, ownFindings: ownA });
     assert.include(forA, "already raised");
-    assert.include(forA, 'Autoreview from "B" (thread thread:b)');
-    assert.include(forA, "b.ts:2 races");
+    assert.include(forA, "Reviewer B: b.ts:2 races");
     assert.notInclude(forA, "a.ts:1 leaks");
+    assert.notInclude(forA, FINDINGS_INTRO);
     const onlyOwn = renderAutoreviewBatch({
       reviewedThread,
       items: [
         user(
           "g",
           1,
-          renderFindingsMessage([parseFindingsSections(message)[0]!]),
+          renderFindingsMessage([ownA], false),
           `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:2`,
         ),
         assistant("y", 2, "Next"),
       ],
       first: false,
-      reviewerThreadId: "thread:a",
+      ownFindings: ownA,
     });
     assert.notInclude(onlyOwn, "already raised");
   });

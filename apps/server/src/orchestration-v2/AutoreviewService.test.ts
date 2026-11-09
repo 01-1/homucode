@@ -702,7 +702,9 @@ it.layer(layerTest)("autoreview", (it) => {
       assert.equal(command.type, "message.dispatch");
       if (command.type !== "message.dispatch") return;
       assert.deepStrictEqual(command.dispatchMode, { type: "steer_active", targetRunId: runId });
-      assert.include(command.text, `Autoreview from "`);
+      assert.match(command.text, /^\(Autoreview: reviewers check your work as you go\./);
+      assert.include(command.text, "\n\nAutoreview: ");
+      assert.notInclude(command.text, "thread:");
       assert.include(command.text, "src/parse.ts:1 is wrong.");
       assert.lengthOf(yield* queuedFindings(threadId), 0);
     }),
@@ -777,6 +779,10 @@ it.layer(layerTest)("autoreview", (it) => {
       assert.lengthOf(queued, 1);
       assert.include(queued[0]!.text, "finding number 1");
       assert.include(queued[0]!.text, "finding number 2");
+      // Two reviewers, one message: each shown by name, the instruction once, no thread ids.
+      assert.equal(queued[0]!.text.split("(Autoreview: reviewers check").length, 2);
+      assert.include(queued[0]!.text, "Autoreview: finding number 1");
+      assert.notInclude(queued[0]!.text, "thread:");
 
       yield* service.detach({
         commandId: CommandId.make("command:pile:remove-1"),
@@ -803,7 +809,7 @@ it.layer(layerTest)("autoreview", (it) => {
       const eventSink = yield* EventSink.EventSinkV2;
       const service = AutoreviewService.make(orchestrator);
       const { threadId, runId, now } = yield* seedReviewedThread("shared");
-      const first = yield* attachReviewer(service, threadId, "shared-1");
+      const _first = yield* attachReviewer(service, threadId, "shared-1");
       const second = yield* attachReviewer(service, threadId, "shared-2");
       const done = yield* finishReview(second.reviewerThreadId, "LGTM", "shared-2");
       yield* service.handle(done.ended);
@@ -816,13 +822,10 @@ it.layer(layerTest)("autoreview", (it) => {
         createdBy: "agent",
         creationSource: "server",
         inputIntent: "turn_start",
-        text: renderFindingsMessage([
-          findingsSection({
-            reviewerThreadId: first.reviewerThreadId,
-            reviewerTitle: "First",
-            review: "parse.ts:1 drops zero",
-          }),
-        ]),
+        text: renderFindingsMessage(
+          [findingsSection({ reviewerTitle: "Reviewer C: x", review: "parse.ts:1 drops zero" })],
+          true,
+        ),
         attachments: [],
       };
       const reply = assistantItem({
@@ -839,7 +842,7 @@ it.layer(layerTest)("autoreview", (it) => {
       }
       const batches = yield* messagesTo(second.reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
       assert.lengthOf(batches, 1);
-      assert.include(batches[0]!.text, 'Autoreview from "First"');
+      assert.include(batches[0]!.text, "Reviewer C: parse.ts:1 drops zero");
       assert.include(batches[0]!.text, "parse.ts:1 drops zero");
       assert.include(batches[0]!.text, "Fixing zero.");
     }),
