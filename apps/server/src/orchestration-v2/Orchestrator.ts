@@ -13930,7 +13930,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchSubagentStop(command, events, effects);
         break;
       case "run.interrupt":
-        cancelUnsettledEffects = yield* dispatchRunInterrupt(command, events, effects);
+        cancelUnsettledEffects = yield* dispatchRunInterrupt(command, events, effects, {
+          keepRunningSubagents: command.leaveSubagentsRunning === true,
+        });
         if (command.holdQueue === true) {
           // Stop must still commit when a child can't be read, so a failed repair's
           // partial events are dropped.
@@ -13951,10 +13953,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               threadId: command.threadId,
               cause: repaired.cause,
             });
-          yield* Ref.update(effects, (existing) => [
-            ...existing,
-            delegatedTasksStopEffect(command),
-          ]);
+          if (command.leaveSubagentsRunning !== true) {
+            yield* Ref.update(effects, (existing) => [
+              ...existing,
+              delegatedTasksStopEffect(command),
+            ]);
+          }
         }
         break;
       case "thread.stop":

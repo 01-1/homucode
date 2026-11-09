@@ -611,6 +611,52 @@ it.effect.each(["run.interrupt", "thread.stop"] as const)(
     }).pipe(Effect.provide(layerTest)),
 );
 
+it.effect.each(["run.interrupt", "thread.stop"] as const)(
+  "%s Stop that leaves subagents running stops only the thread",
+  (type) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const sql = yield* SqlClient.SqlClient;
+      const parentThreadId = ThreadId.make(`thread:stop-only-${type}`);
+      yield* createWatchingThread(parentThreadId, 1);
+      yield* send(parentThreadId, "first", "start_immediately");
+      const childThreadId = yield* delegate(parentThreadId, "child task");
+      const parentRun = (yield* orchestrator.getThreadProjection(parentThreadId)).runs[0]!;
+      const childBefore = (yield* threadState(childThreadId)).runs;
+
+      const stopCommandId = CommandId.make(`stop-only-${type}`);
+      yield* orchestrator.dispatch(
+        type === "thread.stop"
+          ? {
+              type,
+              commandId: stopCommandId,
+              threadId: parentThreadId,
+              leaveSubagentsRunning: true,
+            }
+          : {
+              type,
+              commandId: stopCommandId,
+              threadId: parentThreadId,
+              runId: parentRun.id,
+              holdQueue: true,
+              leaveSubagentsRunning: true,
+            },
+      );
+
+      assert.deepEqual((yield* threadState(parentThreadId)).runs, ["interrupted"]);
+      const effects = yield* sql<{ readonly effect_type: string }>`
+      SELECT effect_type FROM orchestration_v2_effect_outbox WHERE command_id = ${stopCommandId}
+    `;
+      assert.notInclude(
+        effects.map((row) => row.effect_type),
+        "delegated-tasks.stop",
+      );
+      assert.deepEqual((yield* threadState(childThreadId)).runs, childBefore);
+      const parent = yield* orchestrator.getThreadProjection(parentThreadId);
+      assert.notEqual(parent.subagents[0]?.completionDelivery?.state, "disposed");
+    }).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("a repeated Stop that changes nothing still stops the delegated tasks", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;

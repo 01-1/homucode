@@ -3303,6 +3303,8 @@ export const OrchestrationV2Command = Schema.Union([
     runId: RunId,
     reason: Schema.optional(Schema.String),
     holdQueue: Schema.optional(Schema.Boolean),
+    /** With holdQueue: the Stop ends only this thread, as on thread.stop. */
+    leaveSubagentsRunning: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("queued-message.promote-to-steer"),

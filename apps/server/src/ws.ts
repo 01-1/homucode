@@ -127,6 +127,7 @@ import {
   sentFromConnection,
   withConnectionSentFrom,
 } from "./orchestration-v2/MessageSentFrom.ts";
+import { withClientStopScope } from "./orchestration-v2/ClientStopScope.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -2083,11 +2084,14 @@ export const layerWsRpc = (
                     ? threadLaunch.retryPreparation(command)
                     : ThreadMessageIntake.dispatchCommand(
                         withConnectionSentFrom(
-                          ThreadManagementService.withCreationProvenance(command, {
-                            createdBy: "user",
-                            creationSource:
-                              "creationSource" in command ? command.creationSource : "web",
-                          }),
+                          ThreadManagementService.withCreationProvenance(
+                            withClientStopScope(command),
+                            {
+                              createdBy: "user",
+                              creationSource:
+                                "creationSource" in command ? command.creationSource : "web",
+                            },
+                          ),
                           connectionSentFrom,
                         ),
                       )

@@ -581,7 +581,12 @@ describe("V2 environment commands", () => {
       }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
       expect(commands).toEqual([
-        { type: "thread.stop", commandId: "stop-with-subagents", threadId: v2ThreadId },
+        {
+          type: "thread.stop",
+          commandId: "stop-with-subagents",
+          threadId: v2ThreadId,
+          stopDelegatedTasks: true,
+        },
       ]);
     }).pipe(Effect.provide(layerTestRandom)),
   );
