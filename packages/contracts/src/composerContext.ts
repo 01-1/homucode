@@ -1,6 +1,10 @@
 import * as Schema from "effect/Schema";
 
 import {
+  ClientConnectionMethod,
+  ClientDeviceType,
+  ClientOs,
+  ClientSurface,
   EnvironmentId,
   ForwardCompatibleArray,
   GuestMessageId,
@@ -280,10 +284,25 @@ export const GuestMessageAttribution = Schema.Struct({
 });
 export type GuestMessageAttribution = typeof GuestMessageAttribution.Type;
 
+/**
+ * The client a user message was sent from, as its connection declared when it connected. Only
+ * the server sets it, from the sending socket, never from the message a client sends.
+ */
+export const OrchestrationMessageSentFrom = Schema.Struct({
+  surface: ClientSurface,
+  os: Schema.optional(ClientOs),
+  deviceType: Schema.optional(ClientDeviceType),
+  deviceModel: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(80))),
+  browser: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(64))),
+  connectionMethod: Schema.optional(ClientConnectionMethod),
+});
+export type OrchestrationMessageSentFrom = typeof OrchestrationMessageSentFrom.Type;
+
 /** Structured context riding on a user message. Undecodable records are dropped, not fatal. */
 export const OrchestrationMessageContext = Schema.Struct({
   version: Schema.Literal(1),
   guest: Schema.optional(GuestMessageAttribution),
+  sentFrom: Schema.optional(OrchestrationMessageSentFrom),
   records: Schema.Array(Schema.Unknown)
     .check(
       Schema.isMaxLength(COMPOSER_CONTEXT_MAX_RECORDS),

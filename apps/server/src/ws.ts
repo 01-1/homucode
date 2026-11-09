@@ -122,6 +122,7 @@ import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
+import { sentFromConnection, withConnectionSentFrom } from "./orchestration-v2/MessageSentFrom.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -1426,6 +1427,8 @@ export const layerWsRpc = (
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
       const analytics = yield* AnalyticsService.AnalyticsService;
       const originProps = clientAnalyticsProps;
+      // The device this socket's user messages are sent from, for the agent's context.
+      const connectionSentFrom = sentFromConnection(clientAnalyticsProps);
       const recordClientCommandAnalytics = (command: OrchestrationV2Command) => {
         const usage = commandFeatureUsage(command);
         return Effect.all(
@@ -2075,11 +2078,14 @@ export const layerWsRpc = (
                   (command.type === "prepared-run.retry"
                     ? threadLaunch.retryPreparation(command)
                     : ThreadMessageIntake.dispatchCommand(
-                        ThreadManagementService.withCreationProvenance(command, {
-                          createdBy: "user",
-                          creationSource:
-                            "creationSource" in command ? command.creationSource : "web",
-                        }),
+                        withConnectionSentFrom(
+                          ThreadManagementService.withCreationProvenance(command, {
+                            createdBy: "user",
+                            creationSource:
+                              "creationSource" in command ? command.creationSource : "web",
+                          }),
+                          connectionSentFrom,
+                        ),
                       )
                   ).pipe(Effect.provide(intakeContext)),
                 )

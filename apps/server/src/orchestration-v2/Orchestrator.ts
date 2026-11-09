@@ -1,3 +1,4 @@
+import { withoutNonUserSentFrom } from "./MessageSentFrom.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   GuestShareId,
@@ -13852,7 +13853,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             : yield* emitGuestMessageSent(command, command.guestMessageId, thread, events);
         const dispatched =
           guestSend === undefined
-            ? withoutGuestAttribution(command)
+            ? withoutNonUserSentFrom(withoutGuestAttribution(command))
             : {
                 ...command,
                 text: guestSend.text,
