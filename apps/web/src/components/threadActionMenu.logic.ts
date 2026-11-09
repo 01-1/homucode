@@ -30,6 +30,7 @@ export type ThreadActionMenuId =
   | "copy-branch"
   | "copy-thread"
   | "copy-thread-id"
+  | "stop-with-subagents"
   | "move-to-root"
   | "move-under"
   | `move-under:${string}`
@@ -104,6 +105,25 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
   /** Where the thread can be re-parented to, or null when it cannot move. */
   readonly move?: ThreadMoveOptions | null;
+  /** The thread has running subagents, which plain Stop leaves running. */
+  readonly hasRunningSubagents?: boolean;
+}
+
+/** Whether any subagent thread directly under `threadId` is still running. */
+export function hasRunningSubagents<
+  T extends {
+    readonly lineage: {
+      readonly parentThreadId: ThreadId | null;
+      readonly relationshipToParent: "fork" | "subagent" | null;
+    };
+  },
+>(threadId: ThreadId, threads: ReadonlyArray<T>, isRunning: (thread: T) => boolean): boolean {
+  return threads.some(
+    (candidate) =>
+      candidate.lineage.parentThreadId === threadId &&
+      candidate.lineage.relationshipToParent === "subagent" &&
+      isRunning(candidate),
+  );
 }
 
 export interface ThreadMoveOptions {
@@ -299,6 +319,9 @@ export function buildThreadActionMenuItems(
             disabled: state.isRunning,
           },
         ]
+      : []),
+    ...(state.hasRunningSubagents === true
+      ? [{ id: "stop-with-subagents" as const, label: "Stop with subagents" }]
       : []),
     ...(state.move?.canMoveToRoot === true
       ? [{ id: "move-to-root" as const, label: "Move to root" }]

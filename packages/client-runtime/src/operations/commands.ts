@@ -198,6 +198,8 @@ export interface InterruptThreadTurnInput extends ThreadCommandInput {
   readonly runId?: RunId;
   readonly subagentId?: NodeId;
   readonly turnId?: string;
+  /** Also stop the thread's delegated subagents. Stop leaves them running by default. */
+  readonly includeSubagents?: boolean;
 }
 
 export interface RespondToThreadApprovalInput extends ThreadCommandInput {
@@ -847,6 +849,7 @@ export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThrea
         type: "thread.stop",
         commandId: yield* allocateCommandId(input),
         threadId,
+        ...(input.includeSubagents === true ? {} : { stopDelegatedTasks: false }),
       });
     }
   }

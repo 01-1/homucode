@@ -176,6 +176,7 @@ import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
   buildDraftActionMenuItems,
   buildThreadActionMenuItems,
+  hasRunningSubagents,
   moveParentFromMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
@@ -934,6 +935,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     archiveThread,
     deleteThread,
     moveThread,
+    stopThreadWithSubagents,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -2651,6 +2653,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
               move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
+              hasRunningSubagents: hasRunningSubagents(
+                thread.id,
+                readQuietThreadShells().filter(
+                  (shell) => shell.environmentId === threadRef.environmentId,
+                ),
+                (shell) => !threadRuntimeCanArchive(shell.runtime),
+              ),
               supports: {
                 settlement: configLoaded,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -2666,14 +2675,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
         const moveParent = moveParentFromMenuId(clicked.value);
-        if (moveParent !== undefined) {
-          const result = await moveThread(threadRef, moveParent);
+        const stopWithSubagents = clicked.value === "stop-with-subagents";
+        if (moveParent !== undefined || stopWithSubagents) {
+          const result = stopWithSubagents
+            ? await stopThreadWithSubagents(threadRef)
+            : await moveThread(threadRef, moveParent!);
           if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
             const error = squashAtomCommandFailure(result);
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to move thread",
+                title: stopWithSubagents ? "Failed to stop thread" : "Failed to move thread",
                 description: error instanceof Error ? error.message : "An error occurred.",
               }),
             );

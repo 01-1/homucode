@@ -18,6 +18,7 @@ import { useRouter } from "@tanstack/react-router";
 import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {
   buildThreadActionMenuItems,
+  hasRunningSubagents,
   moveParentFromMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
@@ -90,6 +91,7 @@ export function useThreadActionMenu(input: {
     deleteThread,
     markThreadUnread,
     moveThread,
+    stopThreadWithSubagents,
     turnThreadIntoProject,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
@@ -154,6 +156,13 @@ export function useThreadActionMenu(input: {
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
         move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
+        hasRunningSubagents: hasRunningSubagents(
+          thread.id,
+          readQuietThreadShells().filter(
+            (shell) => shell.environmentId === threadRef.environmentId,
+          ),
+          (shell) => !threadRuntimeCanArchive(shell.runtime),
+        ),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -243,6 +252,9 @@ export function useThreadActionMenu(input: {
           return;
         case "pin":
           await reportFailure("Failed to pin thread", () => pinThread(threadRef));
+          return;
+        case "stop-with-subagents":
+          await reportFailure("Failed to stop thread", () => stopThreadWithSubagents(threadRef));
           return;
         case "unpin": {
           await reportFailure("Failed to unpin thread", () => confirmAndUnpinThread(threadRef));

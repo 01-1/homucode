@@ -526,7 +526,12 @@ describe("V2 environment commands", () => {
             runId,
             subagentId,
           },
-          { type: "thread.stop", commandId: "lineage-stop", threadId: childThreadId },
+          {
+            type: "thread.stop",
+            commandId: "lineage-stop",
+            threadId: childThreadId,
+            stopDelegatedTasks: false,
+          },
         ]);
       }).pipe(Effect.provide(layerTestRandom)),
   );
@@ -554,7 +559,29 @@ describe("V2 environment commands", () => {
           type: "thread.stop",
           commandId: "stop-outside-history-window",
           threadId: v2ThreadId,
+          stopDelegatedTasks: false,
         },
+      ]);
+    }).pipe(Effect.provide(layerTestRandom)),
+  );
+
+  it.effect("stops the thread's subagents too only when asked", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        advertiseThreadStop: true,
+      });
+
+      yield* interruptThreadTurn({
+        commandId: CommandId.make("stop-with-subagents"),
+        threadId: v2ThreadId,
+        includeSubagents: true,
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(commands).toEqual([
+        { type: "thread.stop", commandId: "stop-with-subagents", threadId: v2ThreadId },
       ]);
     }).pipe(Effect.provide(layerTestRandom)),
   );

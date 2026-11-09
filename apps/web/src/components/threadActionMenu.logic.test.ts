@@ -4,6 +4,7 @@ import { ThreadId } from "@t3tools/contracts";
 
 import {
   buildThreadActionMenuItems,
+  hasRunningSubagents,
   moveParentFromMenuId,
   resolveThreadMoveOptions,
   type ThreadActionMenuState,
@@ -154,5 +155,44 @@ describe("resolveThreadMoveOptions", () => {
         item.id.startsWith("move"),
       ),
     ).toBe(false);
+  });
+});
+
+describe("Stop with subagents", () => {
+  const parentId = ThreadId.make("parent");
+  const thread = (
+    id: string,
+    parentThreadId: ThreadId | null,
+    relationshipToParent: "fork" | "subagent" | null,
+    running: boolean,
+  ) => ({ id, running, lineage: { parentThreadId, relationshipToParent } });
+
+  it("finds running subagents directly under the thread only", () => {
+    const isRunning = (candidate: { readonly running: boolean }) => candidate.running;
+    expect(
+      hasRunningSubagents(parentId, [thread("a", parentId, "subagent", true)], isRunning),
+    ).toBe(true);
+    expect(
+      hasRunningSubagents(
+        parentId,
+        [
+          thread("idle", parentId, "subagent", false),
+          thread("fork", parentId, "fork", true),
+          thread("elsewhere", ThreadId.make("other"), "subagent", true),
+        ],
+        isRunning,
+      ),
+    ).toBe(false);
+  });
+
+  it("is offered only while subagents are running", () => {
+    expect(
+      buildThreadActionMenuItems(baseState).some((item) => item.id === "stop-with-subagents"),
+    ).toBe(false);
+    expect(
+      buildThreadActionMenuItems({ ...baseState, hasRunningSubagents: true }).find(
+        (item) => item.id === "stop-with-subagents",
+      )?.label,
+    ).toBe("Stop with subagents");
   });
 });

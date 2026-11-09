@@ -298,6 +298,9 @@ export function useThreadActions() {
   const moveThreadMutation = useOrchestrationCommand(threadEnvironment.move, {
     reportFailure: false,
   });
+  const interruptThreadMutation = useOrchestrationCommand(threadEnvironment.interruptTurn, {
+    reportFailure: false,
+  });
   const setThreadAutoSettleMutation = useOrchestrationCommand(threadEnvironment.setAutoSettle, {
     reportFailure: false,
   });
@@ -968,6 +971,12 @@ export function useThreadActions() {
     reorderActiveThread,
     markThreadUnread,
     setThreadAutoSettle,
+    /** Stops the thread and its delegated subagents; plain Stop leaves subagents running. */
+    stopThreadWithSubagents: (target: ScopedThreadRef) =>
+      interruptThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, includeSubagents: true },
+      }),
     /** Re-parents the thread under `parentThreadId`, or makes it top-level with `null`. */
     moveThread: (target: ScopedThreadRef, parentThreadId: ThreadId | null) =>
       moveThreadMutation({
