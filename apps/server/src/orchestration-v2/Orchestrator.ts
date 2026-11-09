@@ -553,6 +553,9 @@ export function threadHasUnfinishedWork(records: {
   );
 }
 
+/** Serializes `thread.move` commands; never a real thread's id. */
+const THREAD_MOVE_LOCK_KEY = "orchestrator:thread-move-topology" as ThreadId;
+
 function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
   switch (command.type) {
     case "thread.create":
@@ -14404,14 +14407,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ),
         ),
       );
-    // A moved thread becomes the new parent's child: lock that parent first, as delegation does.
-    // A target at or below the thread is refused, and locking it first would invert that order.
-    if (
-      command.type === "thread.move" &&
-      command.parentThreadId !== null &&
-      !(yield* isAtOrBelow(command.parentThreadId, command.threadId))
-    )
-      return yield* threadDispatch.withLock(command.parentThreadId, dispatch);
+    // Moves run one at a time, or reciprocal moves both pass their cycle checks and deadlock.
+    // Then the new parent locks before the moved thread, as in delegation; a target at or
+    // below the thread is refused, and locking it first would invert that order.
+    if (command.type === "thread.move") {
+      const parentThreadId = command.parentThreadId;
+      return yield* threadDispatch.withLock(
+        THREAD_MOVE_LOCK_KEY,
+        Effect.gen(function* () {
+          return parentThreadId === null || (yield* isAtOrBelow(parentThreadId, command.threadId))
+            ? yield* dispatch
+            : yield* threadDispatch.withLock(parentThreadId, dispatch);
+        }),
+      );
+    }
     // Answering a message-mode question can also start a follow-up.
     if (
       command.type !== "runtime-request.respond" &&

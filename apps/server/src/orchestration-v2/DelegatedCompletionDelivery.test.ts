@@ -4089,6 +4089,58 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))("thread mov
       }),
   );
 
+  it.effect("runs reciprocal moves one at a time, refusing the second as a cycle", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const now = yield* DateTime.now;
+      const projectId = ProjectId.make("project:move-reciprocal");
+      const first = ThreadId.make("thread:move-reciprocal-a");
+      const second = ThreadId.make("thread:move-reciprocal-b");
+      yield* seedParentWithTerminalTask({
+        threadId: first,
+        projectId,
+        runId: RunId.make("run:move-reciprocal-a"),
+        rootNodeId: NodeId.make("node:move-reciprocal-a"),
+        taskId: NodeId.make("node:move-reciprocal-seed"),
+        deliveryState: "acknowledged",
+        parentRunStatus: "completed",
+        now,
+      });
+      yield* seedThreadWithRun({ threadId: second, projectId, now });
+      // Unrelated when both start, so each cycle check alone would pass. Holding the first
+      // thread's lock lines the two moves up on each other's locks, the order that deadlocked.
+      const locks = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+      const release = yield* Deferred.make<void>();
+      const holder = yield* locks.withLock(first, Deferred.await(release)).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+      const secondUnderFirst = yield* refusal("reciprocal-b", second, first).pipe(
+        Effect.option,
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow;
+      const firstUnderSecond = yield* refusal("reciprocal-a", first, second).pipe(
+        Effect.option,
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(holder);
+      const outcomes = [yield* Fiber.join(secondUnderFirst), yield* Fiber.join(firstUnderSecond)];
+      const refused = outcomes.flatMap((outcome) =>
+        outcome._tag === "Some" ? [outcome.value] : [],
+      );
+      assert.lengthOf(refused, 1);
+      assert.include(refused[0], "its own descendant");
+      const lineages = yield* Effect.forEach([first, second], (id) =>
+        orchestrator.getThreadProjection(id).pipe(Effect.map((row) => row.thread.lineage)),
+      );
+      assert.lengthOf(
+        lineages.filter((lineage) => lineage.relationshipToParent === "subagent"),
+        1,
+      );
+    }),
+  );
+
   it.effect("moves a subtree to root and under a new parent, which then gets its results", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
