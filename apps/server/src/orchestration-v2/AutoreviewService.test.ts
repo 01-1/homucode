@@ -1393,6 +1393,29 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
+  it.effect("list reports each reviewer's title, model and settings", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("listed");
+      const { reviewerThreadId } = yield* attachReviewer(
+        service,
+        threadId,
+        "listed",
+        "a brief",
+        5_000,
+        true,
+      );
+      const [status] = yield* service.list(threadId);
+      assert.equal(status?.reviewerThreadId, reviewerThreadId);
+      assert.isString(status?.title);
+      assert.equal(status?.model, "gpt-6.1-sol reasoningEffort=xhigh");
+      assert.equal(status?.minBatchChars, 5_000);
+      assert.isTrue(status?.wakeOnUserMessage);
+      assert.equal(status?.brief, "a brief");
+    }),
+  );
+
   it.effect("refuses to attach to a thread that is not working", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

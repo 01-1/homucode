@@ -301,6 +301,9 @@ export const OrchestratorMcpAutoreviewInput = Schema.Struct({
         '`add`/`update`. Replaces the standard reviewer role text (which forbids edits), e.g. for an agent allowed to write. `update` with "" restores it.',
     }),
   ),
+  includeBriefs: Schema.optional(
+    Schema.Boolean.annotate({ description: "`list`. Also return each brief." }),
+  ),
   title: Schema.optional(OrchestratorMcpTitle),
   clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
 });
@@ -311,10 +314,15 @@ export const OrchestratorMcpAutoreviewResult = Schema.Struct({
   added: Schema.optional(Schema.Struct({ reviewerThreadId: ThreadId, taskId: NodeId })),
   updated: Schema.optional(ThreadId),
   removed: Schema.optional(Schema.Array(ThreadId)),
+  /** `list`: every reviewer. `add`/`update`: only that reviewer. `remove`: none. */
   reviewers: Schema.Array(
     Schema.Struct({
       reviewerThreadId: ThreadId,
+      title: Schema.optional(Schema.String),
+      model: Schema.optional(Schema.String),
       brief: Schema.optional(Schema.String),
+      minBatchChars: Schema.optional(Schema.Number),
+      wakeOnUserMessage: Schema.optional(Schema.Boolean),
       state: Schema.Literals(["reviewing", "idle"]),
       bufferedItems: Schema.Number,
     }),

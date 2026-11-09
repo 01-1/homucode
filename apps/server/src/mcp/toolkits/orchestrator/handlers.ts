@@ -95,15 +95,23 @@ const handlers = {
             })
             .pipe(Effect.mapError(toFailure));
         }
-        const reviewers = yield* autoreview
-          .list(prepared.threadId)
-          .pipe(Effect.mapError(toFailure));
+        // Briefs run to kilobytes each: a change returns only the changed reviewer, and `list`
+        // returns briefs only when asked.
+        const changed = added?.reviewerThreadId ?? updated;
+        const reviewers =
+          removed !== undefined
+            ? []
+            : (yield* autoreview.list(prepared.threadId).pipe(Effect.mapError(toFailure))).filter(
+                (reviewer) => changed === undefined || reviewer.reviewerThreadId === changed,
+              );
         return {
           threadId: prepared.threadId,
           ...(added === undefined ? {} : { added }),
           ...(updated === undefined ? {} : { updated }),
           ...(removed === undefined ? {} : { removed }),
-          reviewers: reviewers.map(({ taskId: _taskId, ...reviewer }) => reviewer),
+          reviewers: reviewers.map(({ taskId: _taskId, brief, ...reviewer }) =>
+            input.includeBriefs === true && brief !== undefined ? { ...reviewer, brief } : reviewer,
+          ),
         };
       }),
   ),

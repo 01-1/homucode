@@ -81,7 +81,12 @@ export interface AutoreviewAttachInput {
 export interface AutoreviewerStatus {
   readonly reviewerThreadId: ThreadId;
   readonly taskId: NodeId;
+  readonly title?: string | undefined;
+  /** The reviewer's model and its options, e.g. "gpt-6.1-sol reasoningEffort=xhigh". */
+  readonly model?: string | undefined;
   readonly brief?: string | undefined;
+  readonly minBatchChars?: number | undefined;
+  readonly wakeOnUserMessage?: boolean | undefined;
   readonly state: "reviewing" | "idle";
   /** Finished items in the reviewed thread the reviewer has not received yet. */
   readonly bufferedItems: number;
@@ -837,7 +842,24 @@ export const make = (port: AutoreviewPort) => {
         statuses.push({
           reviewerThreadId: reviewer.threadId,
           taskId: reviewer.taskId,
+          ...(child === null
+            ? {}
+            : {
+                title: child.thread.title,
+                model: [
+                  child.thread.modelSelection.model,
+                  ...(child.thread.modelSelection.options ?? []).map(
+                    (option) => `${option.id}=${String(option.value)}`,
+                  ),
+                ].join(" "),
+              }),
           ...(reviewer.brief === undefined ? {} : { brief: reviewer.brief }),
+          ...(reviewer.minBatchChars === undefined
+            ? {}
+            : { minBatchChars: reviewer.minBatchChars }),
+          ...(reviewer.wakeOnUserMessage === undefined
+            ? {}
+            : { wakeOnUserMessage: reviewer.wakeOnUserMessage }),
           state: child !== null && isBusy(child.runs) ? "reviewing" : "idle",
           bufferedItems: planAutoreviewBatch({
             reviewer,
