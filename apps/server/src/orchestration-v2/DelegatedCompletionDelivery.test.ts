@@ -4001,6 +4001,15 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))("thread mov
         delivered.subagents.find((task) => task.id === child.taskId)?.status,
         "completed",
       );
+      // The result is recorded, but the parent's agent has not taken it yet.
+      assert.include(yield* refusal("owed-pending", child.childThreadId, null), "still owes");
+      yield* orchestrator.dispatch({
+        type: "delegated_task.completion-delivery.acknowledge",
+        commandId: CommandId.make("command:move-owed-ack"),
+        parentThreadId,
+        taskId: child.taskId,
+        observedByRunId: parentRunId,
+      });
       yield* move("owed-delivered", child.childThreadId, null);
       const moved = yield* orchestrator.getThreadProjection(child.childThreadId);
       assert.deepEqual(moved.thread.lineage, {
@@ -4181,6 +4190,13 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))("thread mov
       });
       yield* seedThreadWithRun({ threadId: newParentId, projectId, now });
       yield* orchestrator.recoverDelegatedTasks;
+      yield* orchestrator.dispatch({
+        type: "delegated_task.completion-delivery.acknowledge",
+        commandId: CommandId.make("command:move-trip-ack"),
+        parentThreadId,
+        taskId: child.taskId,
+        observedByRunId: parentRunId,
+      });
       yield* orchestrator.dispatch({
         type: "thread.pin",
         commandId: CommandId.make("command:move-trip:pin"),
