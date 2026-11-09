@@ -50,12 +50,14 @@ function reviewerName(title: string): string {
 
 /**
  * One reviewer's findings as the reviewed thread shows them: a line with its name, then the
- * text. Nothing else is added.
+ * text. Nothing else is added. Blank lines inside the
+ * review are dropped, so a blank line in a findings message always separates two sections.
  */
 export const findingsSection = (input: {
   readonly reviewerTitle: string;
   readonly review: string;
-}): string => `${reviewerName(input.reviewerTitle)}:\n${input.review.trim()}`;
+}): string =>
+  `${reviewerName(input.reviewerTitle)}:\n${input.review.trim().replace(/\n[ \t]*(?:\n[ \t]*)+/g, "\n")}`;
 
 /** Several reviewers' findings in one message, one name line each. */
 export const renderFindingsMessage = (sections: ReadonlyArray<string>): string =>

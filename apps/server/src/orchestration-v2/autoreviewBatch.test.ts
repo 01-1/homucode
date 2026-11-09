@@ -279,6 +279,14 @@ describe("findings shared between reviewers", () => {
     assert.equal(findingsWithout(renderFindingsMessage([long]), short), long);
     assert.isTrue(hasSection(renderFindingsMessage([long, short]), short));
     assert.isFalse(hasSection(renderFindingsMessage([long]), short));
+    // A blank line inside a review does not make its first paragraph a section of its own.
+    const paragraphs = findingsSection({
+      reviewerTitle: "Autoreview",
+      review: "parse.ts:1 drops zero\n\n  \nAlso check null.",
+    });
+    assert.equal(paragraphs, "Autoreview:\nparse.ts:1 drops zero\nAlso check null.");
+    assert.isFalse(hasSection(paragraphs, short));
+    assert.equal(findingsWithout(renderFindingsMessage([short, paragraphs]), short), paragraphs);
   });
 
   it("holds a queued findings message back until its turn starts, then sends its final text", () => {

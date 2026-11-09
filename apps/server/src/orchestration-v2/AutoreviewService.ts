@@ -303,7 +303,7 @@ export const make = (port: AutoreviewPort) => {
       if (outcome.type === "held") return;
       state.record = withOwnSections(
         { ...state.record, lastReviewedRunId: run.id },
-        outcome.section === undefined
+        outcome.section === undefined || ownSections(state.record).includes(outcome.section)
           ? ownSections(state.record)
           : [...ownSections(state.record), outcome.section],
       );
@@ -438,16 +438,22 @@ export const make = (port: AutoreviewPort) => {
     // findings, was delivered (a guard beside lastReviewedRunId, for records that lost it).
     // Read fresh: queued messages are not among the visible items, and edits change them.
     const { runs: parentRuns } = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
-    const findingsIds = parentRuns
-      .map((candidate) => candidate.userMessageId)
-      .filter((id) => id.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX));
-    const { messages: delivered } =
-      findingsIds.length === 0
-        ? { messages: [] }
-        : yield* projections.getThreadRecords(found.parent.id, ["messages"], {
-            messageIds: findingsIds,
-          });
-    if (delivered.some((message) => hasSection(message.text, section))) return done;
+    // Its own message id covers a steer, which joins a run without becoming its first message.
+    const findingsIds = [
+      messageId,
+      ...parentRuns
+        .map((candidate) => candidate.userMessageId)
+        .filter((id) => id !== messageId && id.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX)),
+    ];
+    const { messages: delivered } = yield* projections.getThreadRecords(
+      found.parent.id,
+      ["messages"],
+      { messageIds: findingsIds },
+    );
+    // The section stays the reviewer's own, so removal and its batches still recognize it.
+    if (delivered.some((message) => hasSection(message.text, section))) {
+      return { type: "done" as const, section };
+    }
     const sent = { type: "done" as const, section };
     // A Stop that reached a turn as it completed leaves the run completed, with only the request.
     const latest = latestExecutedRun(parentRuns);

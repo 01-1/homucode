@@ -1021,6 +1021,113 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("a steered review is not delivered again when the record lost its place", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const steered: Array<DispatchCommand> = [];
+      // A steer lands as a message on the running turn, which keeps its first message.
+      const port: AutoreviewService.AutoreviewPort = {
+        ...steeringPort(orchestrator, []),
+        dispatch: (command) => {
+          if (command.type !== "message.dispatch" || command.dispatchMode.type !== "steer_active") {
+            return orchestrator.dispatch(command);
+          }
+          steered.push(command);
+          const targetRunId = command.dispatchMode.targetRunId;
+          return Effect.gen(function* () {
+            const now = yield* DateTime.now;
+            const projection = yield* orchestrator.getThreadProjection(command.threadId);
+            const run = projection.runs.find((candidate) => candidate.id === targetRunId)!;
+            yield* eventSink.write({
+              events: [
+                {
+                  id: EventId.make(`event:steer:${command.messageId}`),
+                  type: "message.updated",
+                  threadId: command.threadId,
+                  runId: run.id,
+                  providerInstanceId: run.providerInstanceId,
+                  occurredAt: now,
+                  payload: {
+                    id: command.messageId,
+                    threadId: command.threadId,
+                    runId: run.id,
+                    nodeId: null,
+                    role: "user",
+                    text: command.text,
+                    attachments: [],
+                    streaming: false,
+                    createdBy: command.createdBy,
+                    creationSource: command.creationSource,
+                    createdAt: now,
+                    updatedAt: now,
+                  },
+                },
+              ],
+            });
+            return { sequence: 0, storedEvents: [] };
+          }).pipe(Effect.orDie);
+        },
+      };
+      const service = AutoreviewService.make(port);
+      const { threadId } = yield* seedReviewedThread("steer-guard");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "steer-guard");
+      const review = yield* finishReview(reviewerThreadId, "steered only once", "steer-guard");
+      yield* service.handle(review.ended);
+      assert.lengthOf(steered, 1);
+      assert.lengthOf(yield* messagesTo(threadId, AUTOREVIEW_FINDINGS_MESSAGE_PREFIX), 1);
+      assert.lengthOf(yield* queuedFindings(threadId), 0, "after first");
+
+      const records = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers!;
+      yield* orchestrator.dispatch({
+        type: "thread.autoreviewers.set",
+        commandId: CommandId.make("command:steer-guard:rollback"),
+        threadId,
+        autoreviewers: records.map(({ lastReviewedRunId: _dropped, ...record }) => record),
+      });
+      yield* service.handle(review.ended);
+      assert.lengthOf(steered, 1);
+      assert.lengthOf(yield* queuedFindings(threadId), 0);
+    }),
+  );
+
+  it.effect("a reviewer whose record missed its appended review still owns it on removal", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("own-recover");
+      const first = yield* attachReviewer(service, threadId, "own-recover-1");
+      const second = yield* attachReviewer(service, threadId, "own-recover-2");
+      const a = yield* finishReview(first.reviewerThreadId, "recover finding A", "own-recover-1");
+      yield* service.handle(a.ended);
+      const b = yield* finishReview(second.reviewerThreadId, "recover finding B", "own-recover-2");
+      yield* service.handle(b.ended);
+
+      // The append was stored, but the second reviewer's record update was not.
+      const records = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers!;
+      yield* orchestrator.dispatch({
+        type: "thread.autoreviewers.set",
+        commandId: CommandId.make("command:own-recover:lost"),
+        threadId,
+        autoreviewers: records.map((record) => {
+          if (record.threadId !== second.reviewerThreadId) return record;
+          const { lastReviewedRunId: _run, ownSections: _own, ...lost } = record;
+          return lost;
+        }),
+      });
+      yield* service.handle(b.ended);
+      yield* service.detach({
+        commandId: CommandId.make("command:own-recover:remove"),
+        threadId,
+        reviewerThreadId: second.reviewerThreadId,
+      });
+      const queued = yield* queuedFindings(threadId);
+      assert.lengthOf(queued, 1);
+      assert.include(queued[0]!.text, "recover finding A");
+      assert.notInclude(queued[0]!.text, "recover finding B");
+    }),
+  );
+
   it.effect("removal drops every one of a reviewer's queued findings, however many", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
