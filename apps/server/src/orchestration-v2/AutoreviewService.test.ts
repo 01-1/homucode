@@ -969,6 +969,118 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
+  it.effect(
+    "a reviewer's second findings join the queued message without replacing its first",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make(orchestrator);
+        const { threadId, runId, now } = yield* seedReviewedThread("twice");
+        const { reviewerThreadId } = yield* attachReviewer(service, threadId, "twice");
+        const first = yield* finishReview(reviewerThreadId, "first finding", "twice-1");
+        yield* service.handle(first.ended);
+        const more = assistantItem({
+          threadId,
+          runId,
+          id: "twice:more",
+          ordinal: 40,
+          now,
+          text: "More work.",
+        });
+        yield* eventSink.write({ events: [itemEvent(more)] });
+        yield* service.handle(itemEvent(more));
+        const second = yield* finishReview(reviewerThreadId, "second finding", "twice-2");
+        yield* service.handle(second.ended);
+        const queued = (yield* queuedFindings(threadId)).filter((run) => run.status === "queued");
+        assert.lengthOf(queued, 1);
+        assert.include(queued[0]!.text, "first finding");
+        assert.include(queued[0]!.text, "second finding");
+
+        // Removal drops both of its sections.
+        yield* service.detach({
+          commandId: CommandId.make("command:twice:remove"),
+          threadId,
+          reviewerThreadId,
+        });
+        assert.lengthOf(
+          (yield* queuedFindings(threadId)).filter((run) => run.status === "queued"),
+          0,
+        );
+      }),
+  );
+
+  it.effect("a run typed to the reviewer does not hide the review that finished before it", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("typed");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "typed");
+      // The review finishes, but its event is missed; then someone messages the reviewer.
+      yield* finishReview(reviewerThreadId, "the real finding", "typed-review");
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("command:typed:question"),
+        threadId: reviewerThreadId,
+        messageId: MessageId.make("message:typed:question"),
+        text: "Why?",
+        attachments: [],
+        createdBy: "agent",
+        creationSource: "server",
+        dispatchMode: { type: "queue_after_active" },
+      });
+      const answered = yield* finishReview(reviewerThreadId, "Because.", "typed-answer");
+      yield* service.handle(answered.ended);
+      const queued = yield* queuedFindings(threadId);
+      assert.lengthOf(queued, 1);
+      assert.include(queued[0]!.text, "the real finding");
+      assert.notInclude(queued[0]!.text, "Because.");
+    }),
+  );
+
+  it.effect(
+    "a review already in the thread is not delivered again when the record lost its place",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const steered: Array<DispatchCommand> = [];
+        // Steers are recorded and still land in the thread, as a real steer does.
+        const port: AutoreviewService.AutoreviewPort = {
+          ...steeringPort(orchestrator, []),
+          dispatch: (command) =>
+            command.type === "message.dispatch" && command.dispatchMode.type === "steer_active"
+              ? Effect.sync(() => steered.push(command)).pipe(
+                  Effect.andThen(
+                    orchestrator.dispatch({
+                      ...command,
+                      dispatchMode: { type: "queue_after_active" },
+                    }),
+                  ),
+                )
+              : orchestrator.dispatch(command),
+        };
+        const service = AutoreviewService.make(port);
+        const { threadId } = yield* seedReviewedThread("guard");
+        const { reviewerThreadId } = yield* attachReviewer(service, threadId, "guard");
+        const review = yield* finishReview(reviewerThreadId, "only once", "guard");
+        yield* service.handle(review.ended);
+        assert.lengthOf(steered, 1);
+
+        // A rollback rewrites the reviewer without lastReviewedRunId.
+        const record = (yield* orchestrator.getThreadProjection(threadId)).thread
+          .autoreviewers![0]!;
+        const { lastReviewedRunId: _dropped, ...rolledBack } = record;
+        yield* orchestrator.dispatch({
+          type: "thread.autoreviewers.set",
+          commandId: CommandId.make("command:guard:rollback"),
+          threadId,
+          autoreviewers: [rolledBack],
+        });
+        yield* service.handle(review.ended);
+        assert.lengthOf(steered, 1);
+      }),
+  );
+
   it.effect("refuses to attach to a thread that is not working", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

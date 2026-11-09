@@ -246,7 +246,12 @@ describe("findings shared between reviewers", () => {
       user("f", 1, message, `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:1`),
       assistant("x", 2, "Fixed it"),
     ];
-    const forA = renderAutoreviewBatch({ reviewedThread, items, first: false, ownFindings: ownA });
+    const forA = renderAutoreviewBatch({
+      reviewedThread,
+      items,
+      first: false,
+      ownFindings: [ownA],
+    });
     assert.include(forA, "already raised");
     assert.include(forA, "Reviewer B:\nb.ts:2 races");
     assert.notInclude(forA, "a.ts:1 leaks");
@@ -257,7 +262,7 @@ describe("findings shared between reviewers", () => {
         assistant("y", 2, "Next"),
       ],
       first: false,
-      ownFindings: ownA,
+      ownFindings: [ownA],
     });
     assert.notInclude(onlyOwn, "already raised");
   });

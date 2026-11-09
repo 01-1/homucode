@@ -459,6 +459,8 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   sentItemIds: Schema.Array(TurnItemId),
   /** The text this reviewer last added to the reviewed thread, as shown there. */
   lastSection: Schema.optional(Schema.String),
+  /** Its sections that went into a queued findings message, newest last; removal drops them. */
+  queuedSections: Schema.optional(Schema.Array(Schema.String)),
   /** The reviewer's last review that was delivered, or needed no delivery. */
   lastReviewedRunId: Schema.optional(RunId),
   /**

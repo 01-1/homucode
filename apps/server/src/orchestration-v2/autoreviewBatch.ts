@@ -154,7 +154,7 @@ function clip(text: string, max: number): string {
 
 function renderReviewItem(
   item: OrchestrationV2TurnItem,
-  ownFindings: string | undefined,
+  ownFindings: ReadonlyArray<string>,
 ): string | null {
   const status = item.status === "completed" ? "" : ` (${item.status})`;
   switch (item.type) {
@@ -163,7 +163,9 @@ function renderReviewItem(
         return `### User message${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
       }
       // A reviewer's own findings are left out; it wrote them.
-      const others = findingsBody(findingsWithout(item.text, ownFindings));
+      const others = findingsBody(
+        ownFindings.reduce((text, own) => findingsWithout(text, own), item.text),
+      );
       return others.length === 0
         ? null
         : `### Findings other reviewers already raised (do not raise them again)\n${clip(others, ITEM_MAX_CHARS)}`;
@@ -239,8 +241,8 @@ export function renderAutoreviewBatch(input: {
   readonly brief?: string | undefined;
   /** Replaces the standard role text of the instructions. */
   readonly preamble?: string | undefined;
-  /** The reviewer's own last findings, left out of what it is shown. */
-  readonly ownFindings?: string | undefined;
+  /** The reviewer's own findings, left out of what it is shown. */
+  readonly ownFindings?: ReadonlyArray<string> | undefined;
   /** Repeat the instructions on a later batch, after the brief or model changed. */
   readonly instructions?: boolean;
 }): string {
@@ -250,7 +252,7 @@ export function renderAutoreviewBatch(input: {
     ? `Activity so far in thread ${input.reviewedThread.id}:`
     : `New activity in thread ${input.reviewedThread.id} since your last batch:`;
   const rendered = input.items.flatMap((item) => {
-    const text = renderReviewItem(item, input.ownFindings);
+    const text = renderReviewItem(item, input.ownFindings ?? []);
     return text === null ? [] : [text];
   });
   // On the first batch the opening request is kept even when earlier items are dropped.

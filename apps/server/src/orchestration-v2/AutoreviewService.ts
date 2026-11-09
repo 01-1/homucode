@@ -242,6 +242,82 @@ export const make = (port: AutoreviewPort) => {
       );
   });
 
+  /** Delivers an idle reviewer's finished reviews, then sends it its buffer. */
+  const flushReviewer = Effect.fnUntraced(function* (
+    thread: OrchestrationV2AppThread,
+    reviewed: Effect.Success<ReturnType<typeof readReviewable>>,
+    state: { record: OrchestrationV2Autoreviewer; changed: boolean },
+  ) {
+    const child = yield* optionalRecords(state.record.threadId, ["runs"]);
+    if (child === null || isGone(child.thread) || isBusy(child.runs)) return;
+    // Every review finished since the last one handled is delivered, oldest first, before the
+    // next batch goes out. A run typed to the reviewer meanwhile cannot hide an earlier review.
+    const runs = child.runs.toSorted((left, right) => left.ordinal - right.ordinal);
+    const handled = runs.find((run) => run.id === state.record.lastReviewedRunId);
+    // With no handled run yet, every finished run is considered; the findings-message guard in
+    // deliverFindings keeps a review that already reached the thread from going out twice.
+    const pending = runs.filter(
+      (run) =>
+        run.status === "completed" && (handled === undefined || run.ordinal > handled.ordinal),
+    );
+    for (const run of pending) {
+      const outcome = yield* deliverFindings(
+        { parent: thread, child: child.thread, reviewer: state.record },
+        run.id,
+      );
+      // Findings held back by the wake cap are tried again on a later flush.
+      if (outcome.type === "held") break;
+      state.record = {
+        ...state.record,
+        lastReviewedRunId: run.id,
+        ...(outcome.section === undefined ? {} : { lastSection: outcome.section }),
+        ...(outcome.queued && outcome.section !== undefined
+          ? { queuedSections: [...(state.record.queuedSections ?? []), outcome.section].slice(-20) }
+          : {}),
+      };
+      state.changed = true;
+    }
+    const reviewer = state.record;
+    const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
+    if (!batchHasAgentActivity(plan)) return;
+    const text = renderAutoreviewBatch({
+      reviewedThread: thread,
+      items: plan.items,
+      first: false,
+      brief: reviewer.brief,
+      preamble: reviewer.preamble,
+      ownFindings: [
+        ...(reviewer.queuedSections ?? []),
+        ...(reviewer.lastSection === undefined ? [] : [reviewer.lastSection]),
+      ],
+      instructions: reviewer.resendInstructions === true,
+    });
+    // A slow reviewer waits for a large buffer, but always sees how the work ended.
+    if ((reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) return;
+    const last = plan.items.at(-1)!;
+    const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
+    yield* engine.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make(`server:autoreview-batch:${key}`),
+      threadId: reviewer.threadId,
+      messageId: MessageId.make(`${AUTOREVIEW_BATCH_MESSAGE_PREFIX}${key}`),
+      text,
+      attachments: [],
+      // No sender thread and no notification: a batch never becomes a task result for the
+      // reviewed thread; the reviewer's reply is delivered by this service instead.
+      createdBy: "agent",
+      creationSource: "server",
+      dispatchMode: { type: "queue_after_active" },
+    });
+    const { resendInstructions: _resent, ...sent } = state.record;
+    state.record = {
+      ...sent,
+      throughOrdinal: plan.throughOrdinal,
+      sentItemIds: plan.sentItemIds,
+    };
+    state.changed = true;
+  });
+
   /** Sends each idle reviewer its buffer; must run under `lock`. */
   const flushUnlocked = Effect.fnUntraced(function* (threadId: ThreadId) {
     const thread = yield* projections.getThread(threadId);
@@ -251,61 +327,21 @@ export const make = (port: AutoreviewPort) => {
     const next = [...reviewers];
     let changed = false;
     for (const [index, reviewer] of reviewers.entries()) {
-      const child = yield* optionalRecords(reviewer.threadId, ["runs"]);
-      if (child === null || isGone(child.thread) || isBusy(child.runs)) continue;
-      // A finished review is delivered before the next batch goes out, so a review whose
-      // completion event was missed (a restart) is not overtaken and lost.
-      const latest = child.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
-      if (latest?.status === "completed" && latest.id !== reviewer.lastReviewedRunId) {
-        const outcome = yield* deliverFindings(
-          { parent: thread, child: child.thread, reviewer },
-          latest.id,
-        );
-        // Findings held back by the wake cap are tried again on a later flush.
-        if (outcome.type !== "held") {
-          next[index] = {
-            ...next[index]!,
-            lastReviewedRunId: latest.id,
-            ...(outcome.section === undefined ? {} : { lastSection: outcome.section }),
-          };
-          changed = true;
-        }
+      // One reviewer's failure must not stop the others or lose the progress made for it.
+      const state = { record: reviewer, changed: false };
+      yield* flushReviewer(thread, reviewed, state).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("autoreview could not serve a reviewer", {
+            threadId,
+            reviewerThreadId: reviewer.threadId,
+            cause,
+          }),
+        ),
+      );
+      if (state.changed) {
+        next[index] = state.record;
+        changed = true;
       }
-      const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
-      if (!batchHasAgentActivity(plan)) continue;
-      const text = renderAutoreviewBatch({
-        reviewedThread: thread,
-        items: plan.items,
-        first: false,
-        brief: reviewer.brief,
-        preamble: reviewer.preamble,
-        ownFindings: reviewer.lastSection,
-        instructions: reviewer.resendInstructions === true,
-      });
-      // A slow reviewer waits for a large buffer, but always sees how the work ended.
-      if ((reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) continue;
-      const last = plan.items.at(-1)!;
-      const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
-      yield* engine.dispatch({
-        type: "message.dispatch",
-        commandId: CommandId.make(`server:autoreview-batch:${key}`),
-        threadId: reviewer.threadId,
-        messageId: MessageId.make(`${AUTOREVIEW_BATCH_MESSAGE_PREFIX}${key}`),
-        text,
-        attachments: [],
-        // No sender thread and no notification: a batch never becomes a task result for the
-        // reviewed thread; the reviewer's reply is delivered by this service instead.
-        createdBy: "agent",
-        creationSource: "server",
-        dispatchMode: { type: "queue_after_active" },
-      });
-      const { resendInstructions: _resent, ...sent } = next[index]!;
-      next[index] = {
-        ...sent,
-        throughOrdinal: plan.throughOrdinal,
-        sentItemIds: plan.sentItemIds,
-      };
-      changed = true;
     }
     yield* steerQueuedFindings(threadId);
     if (!changed) return;
@@ -345,7 +381,11 @@ export const make = (port: AutoreviewPort) => {
     },
     runId: RunId,
   ) {
-    const done = { type: "done" as const, section: undefined as string | undefined };
+    const done = {
+      type: "done" as const,
+      section: undefined as string | undefined,
+      queued: false,
+    };
     const reviewerRecords = yield* projections.getThreadRecords(found.child.id, ["runs"]);
     const run = reviewerRecords.runs.find((candidate) => candidate.id === runId);
     if (run === undefined || run.status !== "completed") return done;
@@ -365,8 +405,18 @@ export const make = (port: AutoreviewPort) => {
       .at(-1);
     if (review?.type !== "assistant_message" || isLgtmReview(review.text)) return done;
     if (isGone(found.parent)) return done;
+    // A review that already has its own findings message was delivered (a second guard beside
+    // lastReviewedRunId, for records that lost it, such as after a rollback).
+    const messageId = MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`);
+    const { messages: existing } = yield* projections.getThreadRecords(
+      found.parent.id,
+      ["messages"],
+      { messageIds: [messageId] },
+    );
+    if (existing.length > 0) return done;
     const section = findingsSection({ reviewerTitle: found.child.title, review: review.text });
-    const delivered = { type: "done" as const, section };
+    const delivered = { type: "done" as const, section, queued: false };
+    const queued = { type: "done" as const, section, queued: true };
     const { runs } = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
     const delivery = planFindingsDelivery(runs);
     if (delivery.type === "skip") {
@@ -375,13 +425,13 @@ export const make = (port: AutoreviewPort) => {
         reviewerThreadId: found.child.id,
         reason: delivery.reason,
       });
-      return { type: "held" as const, section: undefined };
+      return { type: "held" as const, section: undefined, queued: false };
     }
     const message = (kind: string) => ({
       type: "message.dispatch" as const,
       commandId: CommandId.make(`server:autoreview-findings:${kind}:${run.id}`),
       threadId: found.parent.id,
-      messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`),
+      messageId,
       text: renderFindingsMessage([section]),
       // No notification: findings must be able to steer, and queued ones stay editable so
       // later findings can join them.
@@ -414,19 +464,24 @@ export const make = (port: AutoreviewPort) => {
       const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
         messageIds: [waiting.userMessageId],
       });
-      // A reviewer's newer findings replace its older ones that never went out.
-      const others = findingsWithout(messages[0]?.text ?? "", found.reviewer.lastSection);
-      yield* engine.dispatch({
-        type: "queued-run.edit",
-        commandId: CommandId.make(`server:autoreview-findings:append:${run.id}`),
-        threadId: found.parent.id,
-        runId: waiting.id,
-        text: `${others}\n\n${section}`.trim(),
-      });
-      return delivered;
+      // Appended, never replacing: every finding waiting in the queue stays there.
+      const joined = yield* engine
+        .dispatch({
+          type: "queued-run.edit",
+          commandId: CommandId.make(`server:autoreview-findings:append:${run.id}`),
+          threadId: found.parent.id,
+          runId: waiting.id,
+          text: `${messages[0]?.text ?? ""}\n\n${section}`.trim(),
+        })
+        .pipe(
+          Effect.as(true),
+          // The queued run may have started meanwhile; then the findings get their own message.
+          Effect.catchCause(() => Effect.succeed(false)),
+        );
+      if (joined) return queued;
     }
     yield* engine.dispatch({ ...message("queue"), dispatchMode: { type: "queue_after_active" } });
-    return delivered;
+    return queued;
   });
 
   const handle: AutoreviewService["Service"]["handle"] = Effect.fnUntraced(
@@ -594,10 +649,12 @@ export const make = (port: AutoreviewPort) => {
         messageIds: [run.userMessageId],
       });
       const original = messages[0]?.text ?? "";
-      const kept = removed.reduce(
-        (text, reviewer) => findingsWithout(text, reviewer.lastSection),
-        original,
-      );
+      const kept = removed
+        .flatMap((reviewer) => [
+          ...(reviewer.queuedSections ?? []),
+          ...(reviewer.lastSection === undefined ? [] : [reviewer.lastSection]),
+        ])
+        .reduce((text, section) => findingsWithout(text, section), original);
       if (kept === original) continue;
       yield* findingsBody(kept).length === 0
         ? engine.dispatch({
