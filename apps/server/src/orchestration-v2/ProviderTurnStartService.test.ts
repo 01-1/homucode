@@ -269,6 +269,10 @@ it.each([
 
 function makeLocalCommandHarness(input: {
   readonly text: string;
+  /** The provider the new provider thread runs on. */
+  readonly driver?: string;
+  /** Overrides on the user message the run starts from. */
+  readonly message?: Partial<OrchestrationV2ThreadProjection["messages"][number]>;
   readonly worktreePath?: string;
   readonly worktreesDir?: string;
   readonly workspaceRoot?: string;
@@ -337,7 +341,7 @@ function makeLocalCommandHarness(input: {
   };
   const providerThread: OrchestrationV2ThreadProjection["providerThreads"][number] = {
     id: providerThreadId,
-    driver: ProviderDriverKind.make("codex"),
+    driver: ProviderDriverKind.make(input.driver ?? "codex"),
     providerInstanceId: newInstanceId,
     providerSessionId,
     appThreadId: threadId,
@@ -365,6 +369,7 @@ function makeLocalCommandHarness(input: {
     creationSource: "web",
     createdAt: now,
     updatedAt: now,
+    ...input.message,
   };
   let projection: OrchestrationV2ThreadProjection = {
     thread: {
@@ -803,8 +808,9 @@ function makeLocalCommandHarness(input: {
     forkThread,
     startTurn,
   };
+  // Side chats and runs on a named provider open a session that takes the prompt.
   const open = vi.fn(() =>
-    input.sideChat !== undefined
+    input.sideChat !== undefined || input.driver !== undefined
       ? Effect.succeed(sideChatSession as never)
       : input.interruptOpen === true
         ? Effect.interrupt
@@ -838,7 +844,7 @@ function makeLocalCommandHarness(input: {
   const startRootRun = vi.fn<
     (input: RunExecutionService.RunExecutionServiceV2StartRootRunInput) => Effect.Effect<void>
   >((runInput) =>
-    input.sideChat !== undefined
+    input.sideChat !== undefined || input.driver !== undefined
       ? runInput.session.startTurn(runInput as never).pipe(Effect.orDie)
       : input.failReadsAfterRunning === true || input.previousTurn !== undefined
         ? Effect.suspend(() =>
@@ -1258,6 +1264,47 @@ effectIt.effect("recovers an abandoned failed turn before continuing its native 
       "existing-native-conversation",
     );
   }),
+);
+
+effectIt.effect.each([
+  {
+    driver: "codex",
+    createdBy: "user",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+  },
+  {
+    driver: "claudeAgent",
+    createdBy: "user",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+  },
+  { driver: "claudeAgent", createdBy: "agent", line: "" },
+] as const)(
+  "tells $driver which device a $createdBy message came from",
+  ({ driver, createdBy, line }) =>
+    Effect.gen(function* () {
+      const harness = makeLocalCommandHarness({
+        text: "Status?",
+        driver,
+        message: {
+          createdBy,
+          context: {
+            version: 1,
+            records: [],
+            sentFrom: { surface: "mobile", os: "iOS", deviceModel: "iPhone 16 Pro" },
+          },
+        },
+      });
+
+      yield* harness.start;
+
+      expect(harness.startTurn.mock.calls.map(([turn]) => turn.message.text)).toEqual([
+        `Status?${line}`,
+      ]);
+      // The transcript keeps what the user typed.
+      expect(harness.projection().messages.find((row) => row.role === "user")?.text).toBe(
+        "Status?",
+      );
+    }),
 );
 
 effectIt.effect.each([
