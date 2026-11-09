@@ -31,7 +31,11 @@ import {
   isReviewableItem,
   isTerminalItem,
   planAutoreviewBatch,
+  findingsSection,
+  parseFindingsSections,
   planFindingsDelivery,
+  queuedFindingsRun,
+  renderFindingsMessage,
   renderAutoreviewBatch,
 } from "./autoreviewBatch.ts";
 import { visibleConversationItems } from "./ContextHandoffService.ts";
@@ -90,6 +94,15 @@ export class AutoreviewService extends Context.Service<
       /** Omitted: every reviewer. */
       readonly reviewerThreadId?: ThreadId | undefined;
     }) => Effect.Effect<ReadonlyArray<ThreadId>, AutoreviewError>;
+    /** Changes a reviewer's model or brief in place; it keeps its conversation and cursor. */
+    readonly update: (input: {
+      readonly commandId: CommandId;
+      readonly threadId: ThreadId;
+      readonly reviewerThreadId: ThreadId;
+      readonly modelSelection?: ModelSelection | undefined;
+      /** An empty brief clears it. */
+      readonly brief?: string | undefined;
+    }) => Effect.Effect<void, AutoreviewError>;
     readonly list: (
       threadId: ThreadId,
     ) => Effect.Effect<ReadonlyArray<AutoreviewerStatus>, AutoreviewError>;
@@ -208,8 +221,13 @@ export const make = (port: AutoreviewPort) => {
       // A finished review is delivered before the next batch goes out, so a review whose
       // completion event was missed (a restart) is not overtaken and lost.
       const latest = child.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
-      if (latest?.status === "completed") {
-        yield* deliverFindings({ parent: thread, child: child.thread }, latest.id);
+      if (latest?.status === "completed" && latest.id !== reviewer.lastReviewedRunId) {
+        const outcome = yield* deliverFindings({ parent: thread, child: child.thread }, latest.id);
+        // Findings held back by the wake cap are tried again on a later flush.
+        if (outcome !== "held") {
+          next[index] = { ...next[index]!, lastReviewedRunId: latest.id };
+          changed = true;
+        }
       }
       const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems });
       if (!batchHasAgentActivity(plan)) continue;
@@ -224,6 +242,9 @@ export const make = (port: AutoreviewPort) => {
           reviewedThread: thread,
           items: plan.items,
           first: false,
+          brief: reviewer.brief,
+          reviewerThreadId: reviewer.threadId,
+          instructions: reviewer.resendInstructions === true,
         }),
         attachments: [],
         // No sender thread and no notification: a batch never becomes a task result for the
@@ -232,8 +253,9 @@ export const make = (port: AutoreviewPort) => {
         creationSource: "server",
         dispatchMode: { type: "queue_after_active" },
       });
+      const { resendInstructions: _resent, ...sent } = next[index]!;
       next[index] = {
-        ...reviewer,
+        ...sent,
         throughOrdinal: plan.throughOrdinal,
         sentItemIds: plan.sentItemIds,
       };
@@ -264,18 +286,22 @@ export const make = (port: AutoreviewPort) => {
     return reviewer === undefined ? null : { parent, child, reviewer };
   });
 
+  /**
+   * Delivers one finished review; must run under `lock`. "held" means the wake cap kept it back
+   * and a later flush tries again; "done" covers delivered, LGTM and not-ours.
+   */
   const deliverFindings = Effect.fnUntraced(function* (
     found: { readonly parent: OrchestrationV2AppThread; readonly child: OrchestrationV2AppThread },
     runId: RunId,
   ) {
     const reviewerRecords = yield* projections.getThreadRecords(found.child.id, ["runs"]);
     const run = reviewerRecords.runs.find((candidate) => candidate.id === runId);
-    if (run === undefined || run.status !== "completed") return;
+    if (run === undefined || run.status !== "completed") return "done" as const;
     const firstRun = reviewerRecords.runs.toSorted((a, b) => a.ordinal - b.ordinal)[0];
     // Only reviews this service asked for; a message someone typed to the reviewer is a normal
     // subagent follow-up and is delivered by the delegated task machinery.
     if (!run.userMessageId.startsWith(AUTOREVIEW_BATCH_MESSAGE_PREFIX) && firstRun?.id !== run.id) {
-      return;
+      return "done" as const;
     }
     const { turnItems } = yield* projections.getThreadRecords(found.child.id, ["turnItems"], {
       turnItemRunId: run.id,
@@ -285,14 +311,13 @@ export const make = (port: AutoreviewPort) => {
       .filter((item) => item.type === "assistant_message" && item.text.trim().length > 0)
       .toSorted((a, b) => a.ordinal - b.ordinal)
       .at(-1);
-    if (review?.type !== "assistant_message" || isLgtmReview(review.text)) return;
-    if (isGone(found.parent)) return;
-    const messageId = MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`);
-    const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
-      messageIds: [messageId],
+    if (review?.type !== "assistant_message" || isLgtmReview(review.text)) return "done" as const;
+    if (isGone(found.parent)) return "done" as const;
+    const section = findingsSection({
+      reviewerThreadId: found.child.id,
+      reviewerTitle: found.child.title,
+      review: review.text,
     });
-    // Catch-up replays reviews; one that was delivered stays delivered.
-    if (messages.length > 0) return;
     const { runs } = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
     const delivery = planFindingsDelivery(runs);
     if (delivery.type === "skip") {
@@ -301,38 +326,60 @@ export const make = (port: AutoreviewPort) => {
         reviewerThreadId: found.child.id,
         reason: delivery.reason,
       });
-      return;
+      return "held" as const;
     }
-    yield* engine.dispatch({
-      type: "message.dispatch",
-      commandId: CommandId.make(`server:autoreview-findings:${run.id}`),
+    const message = (kind: string) => ({
+      type: "message.dispatch" as const,
+      commandId: CommandId.make(`server:autoreview-findings:${kind}:${run.id}`),
       threadId: found.parent.id,
-      messageId,
-      text: [
-        `Autoreview from "${found.child.title}" (thread ${found.child.id}), which reviews your work as you go. Weigh each point: act on the ones that hold up and say briefly why you skip any. Do not reply to the reviewer; it sees your next activity.`,
-        "",
-        review.text.trim(),
-      ].join("\n"),
-      // Notifications only queue, so findings for a live turn go as a plain agent message.
-      ...(delivery.type === "steer"
-        ? {}
-        : {
-            notification: {
-              source: { kind: "subagent" as const, childThreadId: found.child.id },
-              outcome: "completed" as const,
-              summary: "Autoreview findings",
-            },
-          }),
+      messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`),
+      text: renderFindingsMessage([section]),
+      // No notification: findings must be able to steer, and queued ones stay editable so
+      // later findings can join them.
       senderThreadId: found.child.id,
       attachments: [],
-      createdBy: "agent",
-      creationSource: "server",
-      // "auto" steers a provider turn that is running and accepts steering, and queues in the
-      // gaps (a turn still starting, or a provider that cannot steer), so the message is never
-      // refused.
-      ...(delivery.type === "steer" ? { deliveryIntent: "auto" as const } : {}),
-      dispatchMode: { type: "queue_after_active" },
+      createdBy: "agent" as const,
+      creationSource: "server" as const,
     });
+    if (delivery.type === "steer") {
+      const steered = yield* engine
+        .dispatch({
+          ...message("steer"),
+          dispatchMode: { type: "steer_active", targetRunId: delivery.targetRunId },
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catchCause((cause) =>
+            Effect.logInfo("autoreview findings could not steer; queueing them", {
+              threadId: found.parent.id,
+              cause,
+            }).pipe(Effect.as(false)),
+          ),
+        );
+      if (steered) return "done" as const;
+    }
+    // Not steerable now: join the findings already waiting, so the queue holds one message.
+    const fresh = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
+    const waiting = queuedFindingsRun(fresh.runs);
+    if (waiting !== undefined) {
+      const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
+        messageIds: [waiting.userMessageId],
+      });
+      const sections = parseFindingsSections(messages[0]?.text ?? "").filter(
+        (existing) => existing.reviewerThreadId !== found.child.id,
+      );
+      yield* engine.dispatch({
+        type: "queued-run.edit",
+        commandId: CommandId.make(`server:autoreview-findings:append:${run.id}`),
+        threadId: found.parent.id,
+        runId: waiting.id,
+        // A reviewer's newer findings replace its older ones that never went out.
+        text: renderFindingsMessage([...sections, section]),
+      });
+      return "done" as const;
+    }
+    yield* engine.dispatch({ ...message("queue"), dispatchMode: { type: "queue_after_active" } });
+    return "done" as const;
   });
 
   const handle: AutoreviewService["Service"]["handle"] = Effect.fnUntraced(
@@ -349,14 +396,9 @@ export const make = (port: AutoreviewPort) => {
           return;
         case "run.updated": {
           if (!FINISHED_RUN_STATUSES.has(event.payload.status)) return;
-          // Under the lock, so a reviewer removed meanwhile delivers nothing.
-          const found = yield* lock.withPermits(1)(
-            Effect.gen(function* () {
-              const found = yield* reviewerOf(event.threadId);
-              if (found !== null) yield* deliverFindings(found, event.payload.id);
-              return found;
-            }),
-          );
+          // A finished review is delivered by the flush, which checks under the lock that the
+          // reviewer is still attached.
+          const found = yield* reviewerOf(event.threadId);
           if (found !== null) {
             yield* flush(found.parent.id);
             return;
@@ -487,6 +529,91 @@ export const make = (port: AutoreviewPort) => {
       }),
     );
 
+  const dropPendingFindings = Effect.fnUntraced(function* (
+    commandId: CommandId,
+    threadId: ThreadId,
+    reviewerIds: ReadonlySet<string>,
+  ) {
+    const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+    const waiting = runs.filter(
+      (run) =>
+        run.status === "queued" && run.userMessageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX),
+    );
+    for (const run of waiting) {
+      const { messages } = yield* projections.getThreadRecords(threadId, ["messages"], {
+        messageIds: [run.userMessageId],
+      });
+      const sections = parseFindingsSections(messages[0]?.text ?? "");
+      const kept = sections.filter((section) => !reviewerIds.has(section.reviewerThreadId));
+      if (kept.length === sections.length) continue;
+      yield* kept.length === 0
+        ? engine.dispatch({
+            type: "queued-run.cancel",
+            commandId: CommandId.make(`${commandId}:drop-findings:${run.id}`),
+            threadId,
+            runId: run.id,
+          })
+        : engine.dispatch({
+            type: "queued-run.edit",
+            commandId: CommandId.make(`${commandId}:drop-findings:${run.id}`),
+            threadId,
+            runId: run.id,
+            text: renderFindingsMessage(kept),
+          });
+    }
+  });
+
+  const update: AutoreviewService["Service"]["update"] = (input) =>
+    lock.withPermits(1)(
+      Effect.gen(function* () {
+        const thread = yield* projections.getThread(input.threadId).pipe(
+          Effect.mapError(
+            () =>
+              new AutoreviewError({
+                reason: "not_found",
+                detail: `Thread ${input.threadId} was not found.`,
+              }),
+          ),
+        );
+        const current = thread.autoreviewers ?? [];
+        const index = current.findIndex((reviewer) => reviewer.threadId === input.reviewerThreadId);
+        if (index === -1) {
+          return yield* new AutoreviewError({
+            reason: "not_found",
+            detail: `Thread ${input.reviewerThreadId} is not an autoreviewer of thread ${input.threadId}.`,
+          });
+        }
+        if (input.modelSelection === undefined && input.brief === undefined) {
+          return yield* new AutoreviewError({
+            reason: "invalid",
+            detail: "Pass a new target, a new brief, or both.",
+          });
+        }
+        if (input.modelSelection !== undefined) {
+          // Takes effect on the reviewer's next turn; its conversation and cursor stay.
+          yield* engine
+            .dispatch({
+              type: "thread.model-selection.set",
+              commandId: CommandId.make(`${input.commandId}:model`),
+              threadId: input.reviewerThreadId,
+              modelSelection: input.modelSelection,
+            })
+            .pipe(Effect.mapError(failed("Unable to change the reviewer's model")));
+        }
+        const { brief: _brief, ...reviewer } = current[index]!;
+        const brief = input.brief === undefined ? _brief : input.brief.trim() || undefined;
+        const next = [...current];
+        next[index] = {
+          ...reviewer,
+          ...(brief === undefined ? {} : { brief }),
+          resendInstructions: true,
+        };
+        yield* setReviewers(`${input.commandId}:autoreview-update`, input.threadId, next).pipe(
+          Effect.mapError(failed("Unable to record the reviewer")),
+        );
+      }),
+    );
+
   const detach: AutoreviewService["Service"]["detach"] = (input) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
@@ -516,6 +643,11 @@ export const make = (port: AutoreviewPort) => {
           input.threadId,
           current.filter((reviewer) => !removed.includes(reviewer)),
         ).pipe(Effect.mapError(failed("Unable to detach the reviewer")));
+        // Findings still waiting in the queue go with the reviewer.
+        const removedIds = new Set<string>(removed.map((reviewer) => reviewer.threadId));
+        yield* dropPendingFindings(input.commandId, input.threadId, removedIds).pipe(
+          Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
+        );
         return removed.map((reviewer) => reviewer.threadId);
       }),
     );
@@ -593,7 +725,15 @@ export const make = (port: AutoreviewPort) => {
           ),
         );
 
-  return { start, handle, attach, detach, list, catchUp } satisfies AutoreviewService["Service"];
+  return {
+    start,
+    handle,
+    attach,
+    detach,
+    update,
+    list,
+    catchUp,
+  } satisfies AutoreviewService["Service"];
 };
 
 /** The reactor: follows orchestration events and feeds reviewers. */

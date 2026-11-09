@@ -455,6 +455,10 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   throughOrdinal: Schema.Int,
   /** Items above `throughOrdinal` that finished early and were already sent. */
   sentItemIds: Schema.Array(TurnItemId),
+  /** The reviewer's last review that was delivered, or needed no delivery. */
+  lastReviewedRunId: Schema.optional(RunId),
+  /** Repeat the instructions with the next batch, after the brief or model changed. */
+  resendInstructions: Schema.optional(Schema.Boolean),
   addedAt: IsoDateTime,
 });
 export type OrchestrationV2Autoreviewer = typeof OrchestrationV2Autoreviewer.Type;

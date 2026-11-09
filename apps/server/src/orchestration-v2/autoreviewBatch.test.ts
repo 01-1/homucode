@@ -14,7 +14,10 @@ import {
   AUTOREVIEW_FINDINGS_MESSAGE_PREFIX,
   MAX_CONSECUTIVE_AUTOREVIEW_WAKES,
   batchHasAgentActivity,
+  findingsSection,
   isLgtmReview,
+  parseFindingsSections,
+  renderFindingsMessage,
   planAutoreviewBatch,
   planFindingsDelivery,
   renderAutoreviewBatch,
@@ -122,15 +125,34 @@ describe("planAutoreviewBatch", () => {
     assert.deepStrictEqual(second.sentItemIds, []);
   });
 
-  it("skips streaming text, monitors and findings delivered back to the thread", () => {
+  it("skips streaming text and monitors, and keeps findings without letting them wake a reviewer", () => {
+    const findings = user(
+      "findings",
+      1,
+      renderFindingsMessage([
+        findingsSection({ reviewerThreadId: "thread:a", reviewerTitle: "A", review: "Bug" }),
+      ]),
+      `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:9`,
+    );
     const items = [
-      user("findings", 1, "Autoreview says...", `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:9`),
+      findings,
       assistant("streaming", 2, "partial", true),
       { ...command("monitor", 3, "running"), monitor: true },
       assistant("a", 4, "Done"),
     ];
     const plan = planAutoreviewBatch({ reviewer: { throughOrdinal: -1, sentItemIds: [] }, items });
-    assert.deepStrictEqual(ids(plan.items), [TurnItemId.make("turn-item:a")]);
+    assert.deepStrictEqual(ids(plan.items), [
+      TurnItemId.make("turn-item:findings"),
+      TurnItemId.make("turn-item:a"),
+    ]);
+    assert.isFalse(
+      batchHasAgentActivity(
+        planAutoreviewBatch({
+          reviewer: { throughOrdinal: -1, sentItemIds: [] },
+          items: [findings],
+        }),
+      ),
+    );
   });
 
   it("sends streamed text that finishes after later activity", () => {
@@ -204,6 +226,70 @@ describe("renderAutoreviewBatch", () => {
   });
 });
 
+describe("findings shared between reviewers", () => {
+  const reviewedThread = { id: threadId, title: "Reviewed" };
+  const message = renderFindingsMessage([
+    findingsSection({ reviewerThreadId: "thread:a", reviewerTitle: "A", review: "a.ts:1 leaks" }),
+    findingsSection({ reviewerThreadId: "thread:b", reviewerTitle: "B", review: "b.ts:2 races" }),
+  ]);
+
+  it("splits a findings message back into its reviewers' sections", () => {
+    const sections = parseFindingsSections(message);
+    assert.deepStrictEqual(
+      sections.map((section) => section.reviewerThreadId),
+      ["thread:a", "thread:b"],
+    );
+    assert.include(sections[0]!.text, "a.ts:1 leaks");
+    assert.notInclude(sections[0]!.text, "b.ts:2 races");
+    assert.equal(renderFindingsMessage(sections), message);
+  });
+
+  it("shows a reviewer the others' findings, attributed, and not its own", () => {
+    const items = [
+      user("f", 1, message, `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:1`),
+      assistant("x", 2, "Fixed it"),
+    ];
+    const forA = renderAutoreviewBatch({
+      reviewedThread,
+      items,
+      first: false,
+      reviewerThreadId: "thread:a",
+    });
+    assert.include(forA, "already raised");
+    assert.include(forA, 'Autoreview from "B" (thread thread:b)');
+    assert.include(forA, "b.ts:2 races");
+    assert.notInclude(forA, "a.ts:1 leaks");
+    const onlyOwn = renderAutoreviewBatch({
+      reviewedThread,
+      items: [
+        user(
+          "g",
+          1,
+          renderFindingsMessage([parseFindingsSections(message)[0]!]),
+          `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:2`,
+        ),
+        assistant("y", 2, "Next"),
+      ],
+      first: false,
+      reviewerThreadId: "thread:a",
+    });
+    assert.notInclude(onlyOwn, "already raised");
+  });
+
+  it("repeats the instructions and the new brief when asked", () => {
+    const text = renderAutoreviewBatch({
+      reviewedThread,
+      items: [assistant("z", 1, "Next")],
+      first: false,
+      brief: "Only security",
+      instructions: true,
+    });
+    assert.include(text, "You are an autoreviewer");
+    assert.include(text, "Review brief: Only security");
+    assert.include(text, "since your last batch");
+  });
+});
+
 describe("isLgtmReview", () => {
   it("treats a reply that opens with LGTM as nothing to deliver", () => {
     assert.isTrue(isLgtmReview("LGTM"));
@@ -247,6 +333,17 @@ describe("planFindingsDelivery", () => {
       type: "steer",
       targetRunId: RunId.make("run:2"),
     });
+  });
+
+  it("joins the findings message already waiting instead of queueing another", () => {
+    assert.deepStrictEqual(
+      planFindingsDelivery([
+        run(1, "completed"),
+        run(2, "queued", `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}x`),
+        run(3, "queued"),
+      ]),
+      { type: "append", queuedRunId: RunId.make("run:2") },
+    );
   });
 
   it("queues behind queued work, held or not", () => {

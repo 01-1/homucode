@@ -41,6 +41,8 @@ import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import {
   AUTOREVIEW_BATCH_MESSAGE_PREFIX,
   AUTOREVIEW_FINDINGS_MESSAGE_PREFIX,
+  findingsSection,
+  renderFindingsMessage,
 } from "./autoreviewBatch.ts";
 import * as AutoreviewService from "./AutoreviewService.ts";
 import * as EventSink from "./EventSink.ts";
@@ -394,6 +396,36 @@ const messagesTo = (threadId: ThreadId, prefix: string) =>
     return projection.messages.filter((message) => message.id.startsWith(prefix));
   });
 
+type DispatchCommand = Parameters<Orchestrator.OrchestratorV2["Service"]["dispatch"]>[0];
+
+/** The orchestrator, except that steering always succeeds and is only recorded. */
+const steeringPort = (
+  orchestrator: Orchestrator.OrchestratorV2["Service"],
+  steered: Array<DispatchCommand>,
+): AutoreviewService.AutoreviewPort => ({
+  dispatch: (command) =>
+    command.type === "message.dispatch" && command.dispatchMode.type === "steer_active"
+      ? Effect.sync(() => {
+          steered.push(command);
+          return { sequence: 0, storedEvents: [] };
+        })
+      : orchestrator.dispatch(command),
+  getThreadRecords: orchestrator.getThreadRecords,
+  listActiveSubagentThreadIds: orchestrator.listActiveSubagentThreadIds,
+});
+
+const queuedFindings = (threadId: ThreadId) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projection = yield* orchestrator.getThreadProjection(threadId);
+    return projection.runs
+      .filter((run) => run.userMessageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX))
+      .map((run) => ({
+        status: run.status,
+        text: projection.messages.find((message) => message.id === run.userMessageId)?.text ?? "",
+      }));
+  });
+
 it.layer(layerTest)("autoreview", (it) => {
   it.effect(
     "attaching sends the backlog to a reviewer subagent whose task result is never handed back",
@@ -649,6 +681,162 @@ it.layer(layerTest)("autoreview", (it) => {
       assert.lengthOf(findings, 1);
       assert.include(findings[0]!.text, "misses undefined");
       assert.lengthOf(yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX), 1);
+    }),
+  );
+
+  it.effect("findings steer into the reviewed thread's running turn", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const steered: Array<DispatchCommand> = [];
+      const service = AutoreviewService.make(steeringPort(orchestrator, steered));
+      const { threadId, runId } = yield* seedReviewedThread("steer");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "steer");
+
+      const review = yield* finishReview(reviewerThreadId, "src/parse.ts:1 is wrong.", "steer");
+      yield* service.handle(review.ended);
+
+      assert.lengthOf(steered, 1);
+      const command = steered[0]!;
+      assert.equal(command.type, "message.dispatch");
+      if (command.type !== "message.dispatch") return;
+      assert.deepStrictEqual(command.dispatchMode, { type: "steer_active", targetRunId: runId });
+      assert.include(command.text, `Autoreview from "`);
+      assert.include(command.text, "src/parse.ts:1 is wrong.");
+      assert.lengthOf(yield* queuedFindings(threadId), 0);
+    }),
+  );
+
+  it.effect("findings that cannot steer share one queued message, and removal drops its part", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("pile");
+      const first = yield* attachReviewer(service, threadId, "pile-1");
+      const second = yield* attachReviewer(service, threadId, "pile-2");
+
+      // The test provider has no live session, so steering is refused and findings queue.
+      for (const [index, reviewer] of [first, second].entries()) {
+        const review = yield* finishReview(
+          reviewer.reviewerThreadId,
+          `finding number ${index + 1}`,
+          `pile-${index}`,
+        );
+        yield* service.handle(review.ended);
+      }
+      const queued = yield* queuedFindings(threadId);
+      assert.lengthOf(queued, 1);
+      assert.include(queued[0]!.text, "finding number 1");
+      assert.include(queued[0]!.text, "finding number 2");
+
+      yield* service.detach({
+        commandId: CommandId.make("command:pile:remove-1"),
+        threadId,
+        reviewerThreadId: first.reviewerThreadId,
+      });
+      const afterFirst = yield* queuedFindings(threadId);
+      assert.equal(afterFirst[0]!.status, "queued");
+      assert.notInclude(afterFirst[0]!.text, "finding number 1");
+      assert.include(afterFirst[0]!.text, "finding number 2");
+
+      yield* service.detach({
+        commandId: CommandId.make("command:pile:remove-2"),
+        threadId,
+        reviewerThreadId: second.reviewerThreadId,
+      });
+      assert.notEqual((yield* queuedFindings(threadId))[0]!.status, "queued");
+    }),
+  );
+
+  it.effect("a reviewer's next batch shows the other reviewers' findings", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("shared");
+      const first = yield* attachReviewer(service, threadId, "shared-1");
+      const second = yield* attachReviewer(service, threadId, "shared-2");
+      const done = yield* finishReview(second.reviewerThreadId, "LGTM", "shared-2");
+      yield* service.handle(done.ended);
+
+      // The first reviewer's findings reached the thread, then the agent kept working.
+      const findings: OrchestrationV2TurnItem = {
+        ...itemBase({ threadId, runId, id: "shared:findings", ordinal: 10, now }),
+        type: "user_message",
+        messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}shared`),
+        createdBy: "agent",
+        creationSource: "server",
+        inputIntent: "turn_start",
+        text: renderFindingsMessage([
+          findingsSection({
+            reviewerThreadId: first.reviewerThreadId,
+            reviewerTitle: "First",
+            review: "parse.ts:1 drops zero",
+          }),
+        ]),
+        attachments: [],
+      };
+      const reply = assistantItem({
+        threadId,
+        runId,
+        id: "shared:next",
+        ordinal: 11,
+        now,
+        text: "Fixing zero.",
+      });
+      for (const item of [findings, reply]) {
+        yield* eventSink.write({ events: [itemEvent(item)] });
+        yield* service.handle(itemEvent(item));
+      }
+      const batches = yield* messagesTo(second.reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      assert.lengthOf(batches, 1);
+      assert.include(batches[0]!.text, 'Autoreview from "First"');
+      assert.include(batches[0]!.text, "parse.ts:1 drops zero");
+      assert.include(batches[0]!.text, "Fixing zero.");
+    }),
+  );
+
+  it.effect("update changes a reviewer's model and brief and keeps its place", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("update");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "update", "Everything");
+      const done = yield* finishReview(reviewerThreadId, "LGTM", "update");
+      yield* service.handle(done.ended);
+      const before = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers![0]!;
+
+      yield* service.update({
+        commandId: CommandId.make("command:update"),
+        threadId,
+        reviewerThreadId,
+        modelSelection: { ...reviewerModel, model: "gpt-6.1-terra" },
+        brief: "Only security",
+      });
+      const reviewer = yield* orchestrator.getThreadProjection(reviewerThreadId);
+      assert.equal(reviewer.thread.modelSelection.model, "gpt-6.1-terra");
+      const after = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers![0]!;
+      assert.equal(after.brief, "Only security");
+      assert.equal(after.throughOrdinal, before.throughOrdinal);
+      assert.equal(after.threadId, reviewerThreadId);
+
+      const reply = assistantItem({
+        threadId,
+        runId,
+        id: "update:next",
+        ordinal: 12,
+        now,
+        text: "Next step.",
+      });
+      yield* eventSink.write({ events: [itemEvent(reply)] });
+      yield* service.handle(itemEvent(reply));
+      const batches = yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      assert.lengthOf(batches, 1);
+      assert.include(batches[0]!.text, "Review brief: Only security");
+      assert.include(batches[0]!.text, "Next step.");
+      assert.notInclude(batches[0]!.text, "Make parse() reject empty input.");
+      const sent = (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers![0]!;
+      assert.isUndefined(sent.resendInstructions);
     }),
   );
 

@@ -37,14 +37,50 @@ const TERMINAL_ITEM_STATUSES: ReadonlySet<OrchestrationV2TurnItem["status"]> = n
 const isAutoreviewFindingsMessageId = (messageId: string): boolean =>
   messageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
 
+const FINDINGS_HEADER =
+  "Autoreview findings from reviewers that review your work as you go. Weigh each point: act on the ones that hold up and say briefly why you skip any. Do not reply to the reviewers; they see your next activity.";
+const SECTION_PATTERN = /^--- Autoreview from .* \(thread (\S+)\) ---$/gm;
+
+export interface FindingsSection {
+  readonly reviewerThreadId: string;
+  /** The section with its header line. */
+  readonly text: string;
+}
+
+/** One reviewer's findings, headed so other reviewers and removal can tell whose they are. */
+export function findingsSection(input: {
+  readonly reviewerThreadId: string;
+  readonly reviewerTitle: string;
+  readonly review: string;
+}): FindingsSection {
+  return {
+    reviewerThreadId: input.reviewerThreadId,
+    text: `--- Autoreview from "${input.reviewerTitle}" (thread ${input.reviewerThreadId}) ---\n${input.review.trim()}`,
+  };
+}
+
+/** The sections of a findings message, in order. */
+export function parseFindingsSections(text: string): ReadonlyArray<FindingsSection> {
+  const starts = [...text.matchAll(SECTION_PATTERN)];
+  return starts.map((match, index) => ({
+    reviewerThreadId: match[1]!,
+    text: text.slice(match.index, starts[index + 1]?.index ?? text.length).trim(),
+  }));
+}
+
+/** One message for the reviewed thread holding every pending reviewer's findings. */
+export const renderFindingsMessage = (sections: ReadonlyArray<FindingsSection>): string =>
+  [FINDINGS_HEADER, ...sections.map((section) => section.text)].join("\n\n");
+
 /**
- * Items a reviewer sees once they finish. Findings sent back to the reviewed thread are not
- * echoed to reviewers.
+ * Items a reviewer sees once they finish. Findings sent back to the reviewed thread are
+ * included so reviewers see what the others already raised; like user messages, they never
+ * wake a reviewer on their own.
  */
 export function isReviewableItem(item: OrchestrationV2TurnItem): boolean {
   switch (item.type) {
     case "user_message":
-      return !isAutoreviewFindingsMessageId(item.messageId);
+      return true;
     case "command_execution":
       return item.monitor !== true;
     case "assistant_message":
@@ -113,11 +149,27 @@ function clip(text: string, max: number): string {
   return `${text.slice(0, head)}\n[... ${text.length - max} characters omitted ...]\n${text.slice(text.length - tail)}`;
 }
 
-function renderReviewItem(item: OrchestrationV2TurnItem): string | null {
+function renderReviewItem(
+  item: OrchestrationV2TurnItem,
+  reviewerThreadId: string | undefined,
+): string | null {
   const status = item.status === "completed" ? "" : ` (${item.status})`;
   switch (item.type) {
-    case "user_message":
-      return `### User message${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
+    case "user_message": {
+      if (!isAutoreviewFindingsMessageId(item.messageId)) {
+        return `### User message${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
+      }
+      // A reviewer's own findings are left out; it wrote them.
+      const others = parseFindingsSections(item.text).filter(
+        (section) => section.reviewerThreadId !== reviewerThreadId,
+      );
+      return others.length === 0
+        ? null
+        : [
+            "### Findings other reviewers already raised (do not raise them again)",
+            ...others.map((section) => clip(section.text, ITEM_MAX_CHARS)),
+          ].join("\n");
+    }
     case "assistant_message":
       return `### Assistant${status}\n${clip(item.text, ITEM_MAX_CHARS)}`;
     case "command_execution":
@@ -173,13 +225,18 @@ export function renderAutoreviewBatch(input: {
   readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
   readonly first: boolean;
   readonly brief?: string | undefined;
+  /** The reviewer the batch is for, so its own findings are left out. */
+  readonly reviewerThreadId?: string | undefined;
+  /** Repeat the instructions on a later batch, after the brief or model changed. */
+  readonly instructions?: boolean;
 }): string {
-  const preamble = input.first ? `${autoreviewInstructions(input)}\n\n` : "";
+  const preamble =
+    input.first || input.instructions === true ? `${autoreviewInstructions(input)}\n\n` : "";
   const header = input.first
     ? `Activity so far in thread ${input.reviewedThread.id}:`
     : `New activity in thread ${input.reviewedThread.id} since your last batch:`;
   const rendered = input.items.flatMap((item) => {
-    const text = renderReviewItem(item);
+    const text = renderReviewItem(item, input.reviewerThreadId);
     return text === null ? [] : [text];
   });
   // On the first batch the opening request is kept even when earlier items are dropped.
@@ -233,8 +290,10 @@ function consecutiveAutoreviewWakes(
 }
 
 export type FindingsDelivery =
-  /** Into the live turn when its provider can take it, otherwise right after it. */
+  /** Into the live turn when its provider can take it, otherwise into the queue. */
   | { readonly type: "steer"; readonly targetRunId: OrchestrationV2Run["id"] }
+  /** Added to the findings message already waiting in the queue. */
+  | { readonly type: "append"; readonly queuedRunId: OrchestrationV2Run["id"] }
   | { readonly type: "queue" }
   | { readonly type: "start" }
   | { readonly type: "skip"; readonly reason: string };
@@ -246,9 +305,14 @@ const ACTIVE_RUN_STATUSES: ReadonlySet<OrchestrationV2Run["status"]> = new Set([
   "waiting",
 ]);
 
+/** The queued findings message that later findings join, if one is waiting. */
+export const queuedFindingsRun = (runs: ReadonlyArray<OrchestrationV2Run>) =>
+  runs.find((run) => run.status === "queued" && isAutoreviewFindingsMessageId(run.userMessageId));
+
 /**
- * Findings steer the reviewed thread's live turn. They queue behind work that is already
- * queued (a held queue keeps them held), and start a turn on an idle thread unless findings
+ * Findings steer the reviewed thread's live turn. Otherwise they join the findings message
+ * already waiting in the queue, so the queue holds at most one, or queue behind other queued
+ * work (a held queue keeps them held). On an idle thread they start a turn unless findings
  * already started too many turns in a row.
  */
 export function planFindingsDelivery(runs: ReadonlyArray<OrchestrationV2Run>): FindingsDelivery {
@@ -256,6 +320,8 @@ export function planFindingsDelivery(runs: ReadonlyArray<OrchestrationV2Run>): F
     .filter((run) => ACTIVE_RUN_STATUSES.has(run.status))
     .toSorted((left, right) => right.ordinal - left.ordinal)[0];
   if (active !== undefined) return { type: "steer", targetRunId: active.id };
+  const waiting = queuedFindingsRun(runs);
+  if (waiting !== undefined) return { type: "append", queuedRunId: waiting.id };
   if (runs.some((run) => run.status === "queued")) return { type: "queue" };
   if (consecutiveAutoreviewWakes(runs) >= MAX_CONSECUTIVE_AUTOREVIEW_WAKES) {
     return {
