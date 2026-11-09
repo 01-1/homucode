@@ -16,7 +16,6 @@ import {
   batchHasAgentActivity,
   findingsSection,
   isLgtmReview,
-  FINDINGS_INTRO,
   findingsBody,
   findingsWithout,
   renderFindingsMessage,
@@ -131,10 +130,7 @@ describe("planAutoreviewBatch", () => {
     const findings = user(
       "findings",
       1,
-      renderFindingsMessage(
-        [findingsSection({ reviewerTitle: "Reviewer A: x", review: "Bug" })],
-        true,
-      ),
+      renderFindingsMessage([findingsSection({ reviewerTitle: "Reviewer A: x", review: "Bug" })]),
       `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:9`,
     );
     const items = [
@@ -236,14 +232,12 @@ describe("findings shared between reviewers", () => {
     review: "a.ts:1 leaks",
   });
   const ownB = findingsSection({ reviewerTitle: "Reviewer B", review: "b.ts:2 races" });
-  const message = renderFindingsMessage([ownA, ownB], true);
+  const message = renderFindingsMessage([ownA, ownB]);
 
-  it("shows the reviewed thread each reviewer's name and its text, with the instruction once", () => {
-    assert.equal(ownA, "Reviewer A: a.ts:1 leaks");
-    assert.equal(ownB, "Reviewer B: b.ts:2 races");
-    assert.notInclude(message, "thread:");
-    assert.equal(message.split(FINDINGS_INTRO).length, 2);
-    assert.notInclude(renderFindingsMessage([ownA], false), FINDINGS_INTRO);
+  it("shows the reviewed thread only each reviewer's name line and its text", () => {
+    assert.equal(ownA, "Reviewer A:\na.ts:1 leaks");
+    assert.equal(ownB, "Reviewer B:\nb.ts:2 races");
+    assert.equal(message, "Reviewer A:\na.ts:1 leaks\n\nReviewer B:\nb.ts:2 races");
     assert.equal(findingsBody(findingsWithout(message, ownA)), ownB);
   });
 
@@ -254,18 +248,12 @@ describe("findings shared between reviewers", () => {
     ];
     const forA = renderAutoreviewBatch({ reviewedThread, items, first: false, ownFindings: ownA });
     assert.include(forA, "already raised");
-    assert.include(forA, "Reviewer B: b.ts:2 races");
+    assert.include(forA, "Reviewer B:\nb.ts:2 races");
     assert.notInclude(forA, "a.ts:1 leaks");
-    assert.notInclude(forA, FINDINGS_INTRO);
     const onlyOwn = renderAutoreviewBatch({
       reviewedThread,
       items: [
-        user(
-          "g",
-          1,
-          renderFindingsMessage([ownA], false),
-          `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:2`,
-        ),
+        user("g", 1, renderFindingsMessage([ownA]), `${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}run:2`),
         assistant("y", 2, "Next"),
       ],
       first: false,

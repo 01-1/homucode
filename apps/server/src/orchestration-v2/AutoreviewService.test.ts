@@ -702,9 +702,8 @@ it.layer(layerTest)("autoreview", (it) => {
       assert.equal(command.type, "message.dispatch");
       if (command.type !== "message.dispatch") return;
       assert.deepStrictEqual(command.dispatchMode, { type: "steer_active", targetRunId: runId });
-      assert.match(command.text, /^\(Autoreview: reviewers check your work as you go\./);
-      assert.include(command.text, "\n\nAutoreview: ");
-      assert.notInclude(command.text, "thread:");
+      // Only the reviewer's name line, then its text.
+      assert.equal(command.text, "Autoreview:\nsrc/parse.ts:1 is wrong.");
       assert.include(command.text, "src/parse.ts:1 is wrong.");
       assert.lengthOf(yield* queuedFindings(threadId), 0);
     }),
@@ -779,10 +778,11 @@ it.layer(layerTest)("autoreview", (it) => {
       assert.lengthOf(queued, 1);
       assert.include(queued[0]!.text, "finding number 1");
       assert.include(queued[0]!.text, "finding number 2");
-      // Two reviewers, one message: each shown by name, the instruction once, no thread ids.
-      assert.equal(queued[0]!.text.split("(Autoreview: reviewers check").length, 2);
-      assert.include(queued[0]!.text, "Autoreview: finding number 1");
-      assert.notInclude(queued[0]!.text, "thread:");
+      // Two reviewers, one message: one name line per finding and nothing else.
+      assert.equal(
+        queued[0]!.text,
+        "Autoreview:\nfinding number 1\n\nAutoreview:\nfinding number 2",
+      );
 
       yield* service.detach({
         commandId: CommandId.make("command:pile:remove-1"),
@@ -822,10 +822,9 @@ it.layer(layerTest)("autoreview", (it) => {
         createdBy: "agent",
         creationSource: "server",
         inputIntent: "turn_start",
-        text: renderFindingsMessage(
-          [findingsSection({ reviewerTitle: "Reviewer C: x", review: "parse.ts:1 drops zero" })],
-          true,
-        ),
+        text: renderFindingsMessage([
+          findingsSection({ reviewerTitle: "Reviewer C: x", review: "parse.ts:1 drops zero" }),
+        ]),
         attachments: [],
       };
       const reply = assistantItem({
@@ -842,7 +841,7 @@ it.layer(layerTest)("autoreview", (it) => {
       }
       const batches = yield* messagesTo(second.reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
       assert.lengthOf(batches, 1);
-      assert.include(batches[0]!.text, "Reviewer C: parse.ts:1 drops zero");
+      assert.include(batches[0]!.text, "Reviewer C:\nparse.ts:1 drops zero");
       assert.include(batches[0]!.text, "parse.ts:1 drops zero");
       assert.include(batches[0]!.text, "Fixing zero.");
     }),

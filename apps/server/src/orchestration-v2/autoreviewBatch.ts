@@ -37,9 +37,6 @@ const TERMINAL_ITEM_STATUSES: ReadonlySet<OrchestrationV2TurnItem["status"]> = n
 const isAutoreviewFindingsMessageId = (messageId: string): boolean =>
   messageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
 
-/** Told to the reviewed agent once per thread, on its first findings message. */
-export const FINDINGS_INTRO =
-  "(Autoreview: reviewers check your work as you go. Weigh each point, act on the ones that hold up, say briefly why you skip any, and do not reply to them; they see your next activity.)";
 /** The wrapper findings messages had before; old messages in threads still carry it. */
 const LEGACY_FINDINGS_HEADER =
   "Autoreview findings from reviewers that review your work as you go. Weigh each point: act on the ones that hold up and say briefly why you skip any. Do not reply to the reviewers; they see your next activity.";
@@ -51,18 +48,22 @@ function reviewerName(title: string): string {
   return name.length > 0 ? name : "Autoreview";
 }
 
-/** One reviewer's findings as the reviewed thread shows them: its name, then the text. */
+/**
+ * One reviewer's findings as the reviewed thread shows them: a line with its name, then the
+ * text. Nothing else is added.
+ */
 export const findingsSection = (input: {
   readonly reviewerTitle: string;
   readonly review: string;
-}): string => `${reviewerName(input.reviewerTitle)}: ${input.review.trim()}`;
+}): string => `${reviewerName(input.reviewerTitle)}:\n${input.review.trim()}`;
 
-export const renderFindingsMessage = (sections: ReadonlyArray<string>, intro: boolean): string =>
-  [...(intro ? [FINDINGS_INTRO] : []), ...sections].join("\n\n");
+/** Several reviewers' findings in one message, one name line each. */
+export const renderFindingsMessage = (sections: ReadonlyArray<string>): string =>
+  sections.join("\n\n");
 
-/** The findings in a findings message, without the intro or the old wrapper. */
+/** The findings in a findings message, without the old wrapper. */
 export const findingsBody = (text: string): string =>
-  text.replace(FINDINGS_INTRO, "").replace(LEGACY_FINDINGS_HEADER, "").trim();
+  text.replace(LEGACY_FINDINGS_HEADER, "").trim();
 
 /** `text` with one reviewer's section taken out. */
 export function findingsWithout(text: string, section: string | undefined): string {

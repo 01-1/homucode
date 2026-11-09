@@ -377,21 +377,12 @@ export const make = (port: AutoreviewPort) => {
       });
       return { type: "held" as const, section: undefined };
     }
-    // The standing instruction goes with the thread's first findings only.
-    const { messages: userMessages } = yield* projections.getThreadRecords(
-      found.parent.id,
-      ["messages"],
-      { messageRoles: ["user"] },
-    );
-    const intro = !userMessages.some((message) =>
-      message.id.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX),
-    );
     const message = (kind: string) => ({
       type: "message.dispatch" as const,
       commandId: CommandId.make(`server:autoreview-findings:${kind}:${run.id}`),
       threadId: found.parent.id,
       messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`),
-      text: renderFindingsMessage([section], intro),
+      text: renderFindingsMessage([section]),
       // No notification: findings must be able to steer, and queued ones stay editable so
       // later findings can join them.
       senderThreadId: found.child.id,
