@@ -402,6 +402,17 @@ describe("planFindingsDelivery", () => {
     );
   });
 
+  it("waits for the next turn after a Stop instead of restarting the thread", () => {
+    assert.equal(planFindingsDelivery([run(1, "completed"), run(2, "interrupted")]).type, "skip");
+    assert.deepStrictEqual(planFindingsDelivery([run(1, "interrupted"), run(2, "running")]), {
+      type: "steer",
+      targetRunId: RunId.make("run:2"),
+    });
+    assert.deepStrictEqual(planFindingsDelivery([run(1, "interrupted"), run(2, "completed")]), {
+      type: "start",
+    });
+  });
+
   it("starts a turn on an idle thread until findings started too many in a row", () => {
     assert.deepStrictEqual(planFindingsDelivery([run(1, "completed")]), { type: "start" });
     const streak = Array.from({ length: MAX_CONSECUTIVE_AUTOREVIEW_WAKES }, (_, index) =>

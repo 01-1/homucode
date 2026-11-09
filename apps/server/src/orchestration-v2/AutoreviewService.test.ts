@@ -688,6 +688,73 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("findings after a Stop wait for the next turn instead of restarting the thread", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const steered: Array<DispatchCommand> = [];
+      const service = AutoreviewService.make(steeringPort(orchestrator, steered));
+      const { threadId, runId, now } = yield* seedReviewedThread("stopped");
+      const first = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+        (run) => run.id === runId,
+      )!;
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("stopped:first-completed"),
+            type: "run.updated",
+            threadId,
+            runId,
+            occurredAt: now,
+            payload: { ...first, status: "completed", completedAt: now },
+          },
+        ],
+      });
+      const send = (id: string) =>
+        orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`stopped:${id}`),
+          threadId,
+          messageId: MessageId.make(`stopped:${id}`),
+          text: "continue work",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "web",
+          dispatchMode: { type: "start_immediately" },
+        });
+      yield* send("before-stop");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "stopped");
+      yield* orchestrator.dispatch({
+        type: "thread.stop",
+        commandId: CommandId.make("stopped:stop"),
+        threadId,
+        stopDelegatedTasks: true,
+      });
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)?.status,
+        "interrupted",
+      );
+
+      const review = yield* finishReview(
+        reviewerThreadId,
+        "src/parse.ts:1 misses null.",
+        "stopped",
+      );
+      yield* service.handle(review.ended);
+      const runs = (yield* orchestrator.getThreadProjection(threadId)).runs;
+      assert.isFalse(
+        runs.some((run) => run.userMessageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX)),
+      );
+      assert.lengthOf(steered, 0);
+
+      // The user's next turn gets them.
+      yield* send("after-stop");
+      yield* service.handle(review.ended);
+      assert.lengthOf(steered, 1);
+      assert.include(steered[0]?.type === "message.dispatch" ? steered[0].text : "", "misses null");
+    }),
+  );
+
   it.effect("findings steer into the reviewed thread's running turn", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

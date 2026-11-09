@@ -292,8 +292,9 @@ export const make = (port: AutoreviewPort) => {
         { parent: thread, child: child.thread, reviewer: state.record },
         run.id,
       );
-      // Findings held back by the wake cap are tried again on a later flush.
-      if (outcome.type === "held") break;
+      // Findings held back (the wake cap, or a Stop) are tried again on a later flush; the
+      // reviewer gets no new batch until then, so a newer review cannot replace them.
+      if (outcome.type === "held") return;
       state.record = withOwnSections(
         { ...state.record, lastReviewedRunId: run.id },
         outcome.section === undefined
@@ -394,8 +395,8 @@ export const make = (port: AutoreviewPort) => {
   });
 
   /**
-   * Delivers one finished review; must run under `lock`. "held" means the wake cap kept it back
-   * and a later flush tries again; "done" covers delivered, LGTM and not-ours.
+   * Delivers one finished review; must run under `lock`. "held" means the wake cap or a Stop kept
+   * it back and a later flush tries again; "done" covers delivered, LGTM and not-ours.
    */
   const deliverFindings = Effect.fnUntraced(function* (
     found: {
