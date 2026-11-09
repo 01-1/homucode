@@ -127,7 +127,7 @@ const TaskCancelTool = Tool.make("task_cancel", {
 
 const AutoreviewTool = Tool.make("autoreview", {
   description:
-    "Reviewer subagents that review a thread while it works. `add`: it gets the history so far, then each new batch of activity when idle; findings go into the thread, `LGTM` stays put. Several allowed. Thread: yours or your subagent's.",
+    "Reviewer subagents that review a thread while it works. `add`: it gets the history so far, then each new batch of activity when idle; findings steer into the thread, `LGTM` stays put. `update`: new model or brief, same context. Several allowed. Thread: yours or your subagent's.",
   parameters: OrchestratorMcpAutoreviewInput,
   success: OrchestratorMcpAutoreviewResult,
   failure: OrchestratorMcpFailure,

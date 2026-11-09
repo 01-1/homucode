@@ -57,6 +57,7 @@ const handlers = {
           });
         let added: { readonly reviewerThreadId: ThreadId; readonly taskId: NodeId } | undefined;
         let removed: ReadonlyArray<ThreadId> | undefined;
+        let updated: ThreadId | undefined;
         if (input.action === "add" && prepared.add !== undefined) {
           added = yield* autoreview
             .attach({
@@ -68,6 +69,17 @@ const handlers = {
               creationSource: "mcp",
             })
             .pipe(Effect.mapError(toFailure));
+        } else if (input.action === "update" && input.reviewerThreadId !== undefined) {
+          yield* autoreview
+            .update({
+              commandId: prepared.commandId,
+              threadId: prepared.threadId,
+              reviewerThreadId: input.reviewerThreadId,
+              modelSelection: prepared.add?.modelSelection,
+              brief: input.brief,
+            })
+            .pipe(Effect.mapError(toFailure));
+          updated = input.reviewerThreadId;
         } else if (input.action === "remove") {
           removed = yield* autoreview
             .detach({
@@ -83,6 +95,7 @@ const handlers = {
         return {
           threadId: prepared.threadId,
           ...(added === undefined ? {} : { added }),
+          ...(updated === undefined ? {} : { updated }),
           ...(removed === undefined ? {} : { removed }),
           reviewers: reviewers.map(({ taskId: _taskId, ...reviewer }) => reviewer),
         };

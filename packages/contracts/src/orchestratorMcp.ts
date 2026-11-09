@@ -260,24 +260,27 @@ export const OrchestratorMcpTaskCancelResult = Schema.Struct({
 export type OrchestratorMcpTaskCancelResult = typeof OrchestratorMcpTaskCancelResult.Type;
 
 export const OrchestratorMcpAutoreviewInput = Schema.Struct({
-  action: Schema.Literals(["add", "remove", "list"]),
+  action: Schema.Literals(["add", "update", "remove", "list"]),
   threadId: Schema.optional(
     ThreadId.annotate({
       description: "Thread to review. Default: yours. `add` needs a thread that is working now.",
     }),
   ),
   reviewerThreadId: Schema.optional(
-    ThreadId.annotate({ description: "`remove` only. Omit to remove every reviewer." }),
+    ThreadId.annotate({
+      description: "`update`: required. `remove`: omit to remove every reviewer.",
+    }),
   ),
   target: Schema.optional(
     OrchestratorMcpTarget.annotate({
       description:
-        "`add` only. Reviewer model. Default: Codex gpt-6.1-sol, reasoningEffort xhigh. Local only.",
+        "`add`/`update`. Reviewer model. `add` default: Codex gpt-6.1-sol, reasoningEffort xhigh. Local only.",
     }),
   ),
   brief: Schema.optional(
     Schema.String.check(Schema.isMaxLength(4_000)).annotate({
-      description: "`add` only. What this reviewer should focus on.",
+      description:
+        '`add`/`update`. What this reviewer should focus on. `update` with "" clears it.',
     }),
   ),
   title: Schema.optional(OrchestratorMcpTitle),
@@ -288,6 +291,7 @@ export type OrchestratorMcpAutoreviewInput = typeof OrchestratorMcpAutoreviewInp
 export const OrchestratorMcpAutoreviewResult = Schema.Struct({
   threadId: ThreadId,
   added: Schema.optional(Schema.Struct({ reviewerThreadId: ThreadId, taskId: NodeId })),
+  updated: Schema.optional(ThreadId),
   removed: Schema.optional(Schema.Array(ThreadId)),
   reviewers: Schema.Array(
     Schema.Struct({

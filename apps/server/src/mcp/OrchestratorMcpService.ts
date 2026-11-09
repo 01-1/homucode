@@ -2648,7 +2648,15 @@ const make = Effect.gen(function* () {
           requestKey: key,
           operation: `autoreview-${input.action}`,
         });
-        if (input.action !== "add") return { callerThreadId, threadId, commandId };
+        if (input.action === "remove" || input.action === "list") {
+          return { callerThreadId, threadId, commandId };
+        }
+        if (input.action === "update" && input.reviewerThreadId === undefined) {
+          return yield* failure("invalid_request", "`update` needs `reviewerThreadId`.");
+        }
+        if (input.action === "update" && input.target === undefined) {
+          return { callerThreadId, threadId, commandId };
+        }
         if (input.target?.environmentId !== undefined) {
           return yield* failure(
             "invalid_request",
@@ -2659,6 +2667,7 @@ const make = Effect.gen(function* () {
         const target = yield* resolveTargetRechecking({
           parent: reviewed,
           target: input.target ?? DEFAULT_AUTOREVIEW_TARGET,
+          // An updated reviewer only changes model; it keeps the modes it was started with.
           providers,
         });
         yield* assertTargetEnabledForProject(reviewed, commandId, target);
