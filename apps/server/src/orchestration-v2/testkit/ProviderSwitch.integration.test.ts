@@ -1226,6 +1226,225 @@ describe("orchestration v2 provider switching", () => {
       ),
   );
 
+  it.live(
+    "runs one turn on another model of the same provider, then returns without a handoff",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const cwd = yield* checkpointWorkspace("quick-model-turn");
+          const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+          // What a composer `/q` sends: the thread's provider with its quick model, for one message.
+          const quick: ModelSelection = {
+            ...CODEX_MODEL_SELECTION,
+            model: `${CODEX_MODEL_SELECTION.model}-quick`,
+          };
+          const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+            makeTestAdapter({
+              instanceId: CODEX_MODEL_SELECTION.instanceId,
+              driver: CODEX_DRIVER,
+              capabilities: CodexProviderCapabilitiesV2,
+              modelSelection: CODEX_MODEL_SELECTION,
+              responseByRunOrdinal: { 1: "Normal answer", 2: "Quick answer", 3: "Normal again" },
+              capturedTurns,
+            }),
+          ]);
+          yield* Effect.gen(function* () {
+            const orchestrator = yield* Orchestrator.OrchestratorV2;
+            const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+            const dispatch = (ordinal: number, text: string, selection: ModelSelection) =>
+              orchestrator.dispatch({
+                type: "message.dispatch",
+                commandId: CommandId.make(`quick:${ordinal}`),
+                threadId,
+                messageId: MessageId.make(`quick:${ordinal}`),
+                createdBy: "user",
+                creationSource: "web",
+                text,
+                attachments: [],
+                modelSelection: selection,
+                dispatchMode: { type: "start_immediately" },
+              });
+            const wait = (ordinal: number) =>
+              orchestrator.streamStoredEvents.pipe(
+                Stream.filter(
+                  ({ event }) =>
+                    event.type === "run.updated" &&
+                    event.payload.ordinal === ordinal &&
+                    (event.payload.status === "completed" || event.payload.status === "failed"),
+                ),
+                Stream.runHead,
+                Effect.andThen(worker.drain()),
+              );
+            yield* orchestrator.dispatch({
+              type: "thread.create",
+              commandId: CommandId.make("quick:create"),
+              threadId,
+              projectId,
+              createdBy: "user",
+              creationSource: "web",
+              title: "Quick model turn",
+              modelSelection: CODEX_MODEL_SELECTION,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+            });
+            yield* dispatch(1, "First question", CODEX_MODEL_SELECTION);
+            yield* wait(1);
+            yield* dispatch(2, "Quick question", quick);
+            yield* wait(2);
+            yield* dispatch(3, "Back to work", CODEX_MODEL_SELECTION);
+            yield* wait(3);
+
+            const turns = yield* Ref.get(capturedTurns);
+            assert.deepEqual(
+              turns.map((turn) => [turn.text, turn.modelSelection.model]),
+              [
+                ["First question", CODEX_MODEL_SELECTION.model],
+                ["Quick question", quick.model],
+                ["Back to work", CODEX_MODEL_SELECTION.model],
+              ],
+            );
+            // One native conversation throughout, so nothing is summarized or handed off.
+            assert.equal(new Set(turns.map((turn) => turn.providerThreadId)).size, 1);
+            const projection = yield* orchestrator.getThreadProjection(threadId);
+            assert.lengthOf(projection.contextHandoffs, 0);
+            assert.deepEqual(projection.thread.modelSelection, CODEX_MODEL_SELECTION);
+            assert.deepEqual(
+              projection.runs.map((run) => [run.status, run.modelSelection.model]),
+              [
+                ["completed", CODEX_MODEL_SELECTION.model],
+                ["completed", quick.model],
+                ["completed", CODEX_MODEL_SELECTION.model],
+              ],
+            );
+          }).pipe(
+            Effect.provide(
+              ProviderReplayHarness.layerWithRegistry(
+                {
+                  name: "quick-model-turn",
+                  runtimePolicyOverride: {
+                    cwd,
+                    approvalPolicy: "never",
+                    sandboxPolicy: { type: "readOnly" },
+                  },
+                },
+                layerRegistry,
+              ),
+            ),
+          );
+        }),
+      ),
+  );
+
+  it.live(
+    "returns from a one-turn provider switch to its own native thread with only the missed turn",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const cwd = yield* checkpointWorkspace("quick-provider-turn");
+          const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+          const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+            makeTestAdapter({
+              instanceId: CODEX_MODEL_SELECTION.instanceId,
+              driver: CODEX_DRIVER,
+              capabilities: CodexProviderCapabilitiesV2,
+              modelSelection: CODEX_MODEL_SELECTION,
+              responseByRunOrdinal: { 1: "Long working answer", 3: "Back on Codex" },
+              capturedTurns,
+            }),
+            makeTestAdapter({
+              instanceId: CLAUDE_MODEL_SELECTION.instanceId,
+              driver: CLAUDE_DRIVER,
+              capabilities: ClaudeProviderCapabilitiesV2,
+              modelSelection: CLAUDE_MODEL_SELECTION,
+              responseByRunOrdinal: { 2: "Quick answer" },
+              capturedTurns,
+            }),
+          ]);
+          yield* Effect.gen(function* () {
+            const orchestrator = yield* Orchestrator.OrchestratorV2;
+            const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+            const dispatch = (ordinal: number, text: string, selection: ModelSelection) =>
+              orchestrator.dispatch({
+                type: "message.dispatch",
+                commandId: CommandId.make(`quick-provider:${ordinal}`),
+                threadId,
+                messageId: MessageId.make(`quick-provider:${ordinal}`),
+                createdBy: "user",
+                creationSource: "web",
+                text,
+                attachments: [],
+                modelSelection: selection,
+                dispatchMode: { type: "start_immediately" },
+              });
+            const wait = (ordinal: number) =>
+              orchestrator.streamStoredEvents.pipe(
+                Stream.filter(
+                  ({ event }) =>
+                    event.type === "run.updated" &&
+                    event.payload.ordinal === ordinal &&
+                    (event.payload.status === "completed" || event.payload.status === "failed"),
+                ),
+                Stream.runHead,
+                Effect.andThen(worker.drain()),
+              );
+            yield* orchestrator.dispatch({
+              type: "thread.create",
+              commandId: CommandId.make("quick-provider:create"),
+              threadId,
+              projectId,
+              createdBy: "user",
+              creationSource: "web",
+              title: "Quick provider turn",
+              modelSelection: CODEX_MODEL_SELECTION,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+            });
+            yield* dispatch(1, "Main work", CODEX_MODEL_SELECTION);
+            yield* wait(1);
+            // A `/q` on a quick model from another provider: this message only.
+            yield* dispatch(2, "Quick question", CLAUDE_MODEL_SELECTION);
+            yield* wait(2);
+            yield* dispatch(3, "Continue the main work", CODEX_MODEL_SELECTION);
+            yield* wait(3);
+
+            const turns = yield* Ref.get(capturedTurns);
+            assert.deepEqual(
+              turns.map((turn) => turn.driver),
+              [CODEX_DRIVER, CLAUDE_DRIVER, CODEX_DRIVER],
+            );
+            // Back on Codex, its own native conversation resumes; nothing was summarized away.
+            assert.equal(turns[2]!.providerThreadId, turns[0]!.providerThreadId);
+            const projection = yield* orchestrator.getThreadProjection(threadId);
+            assert.deepEqual(projection.thread.modelSelection, CODEX_MODEL_SELECTION);
+            const [outbound, back] = projection.contextHandoffs;
+            assert.equal(outbound?.strategy, "full_thread_summary");
+            assert.deepEqual(outbound?.coveredRunOrdinals, { from: 1, to: 1 });
+            assert.equal(back?.strategy, "delta_since_target_last_seen");
+            assert.deepEqual(back?.coveredRunOrdinals, { from: 2, to: 2 });
+            assert.equal(back?.toProviderThreadId, turns[0]!.providerThreadId);
+          }).pipe(
+            Effect.provide(
+              ProviderReplayHarness.layerWithRegistry(
+                {
+                  name: "quick-provider-turn",
+                  runtimePolicyOverride: {
+                    cwd,
+                    approvalPolicy: "never",
+                    sandboxPolicy: { type: "readOnly" },
+                  },
+                },
+                layerRegistry,
+              ),
+            ),
+          );
+        }),
+      ),
+  );
+
   it.live.each(["native", "legacy"] as const)(
     "starts a replacement native thread as new after the resume fallback with %s attempts",
     (attempts) =>
