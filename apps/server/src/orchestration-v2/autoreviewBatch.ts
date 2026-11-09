@@ -37,16 +37,18 @@ const TERMINAL_ITEM_STATUSES: ReadonlySet<OrchestrationV2TurnItem["status"]> = n
 const isAutoreviewFindingsMessageId = (messageId: string): boolean =>
   messageId.startsWith(AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
 
-/** Items a reviewer sees. Findings sent back to the reviewed thread are not echoed to reviewers. */
+/**
+ * Items a reviewer sees once they finish. Findings sent back to the reviewed thread are not
+ * echoed to reviewers.
+ */
 export function isReviewableItem(item: OrchestrationV2TurnItem): boolean {
   switch (item.type) {
     case "user_message":
       return !isAutoreviewFindingsMessageId(item.messageId);
-    case "assistant_message":
-    case "proposed_plan":
-      return !item.streaming;
     case "command_execution":
       return item.monitor !== true;
+    case "assistant_message":
+    case "proposed_plan":
     case "file_change":
     case "error":
     case "run_interrupt_result":
@@ -56,8 +58,10 @@ export function isReviewableItem(item: OrchestrationV2TurnItem): boolean {
   }
 }
 
-export const isTerminalItem = (item: Pick<OrchestrationV2TurnItem, "status">): boolean =>
-  TERMINAL_ITEM_STATUSES.has(item.status);
+/** Finished: a terminal status, and streamed text that is complete. */
+export const isTerminalItem = (item: OrchestrationV2TurnItem): boolean =>
+  TERMINAL_ITEM_STATUSES.has(item.status) &&
+  !((item.type === "assistant_message" || item.type === "proposed_plan") && item.streaming);
 
 export interface AutoreviewBatchPlan {
   /** Finished items not yet sent, oldest first. */

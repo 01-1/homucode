@@ -605,6 +605,24 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect("catch-up delivers a review whose completion event was missed, once", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId } = yield* seedReviewedThread("catchup");
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "catchup");
+      // The review finishes while nothing follows events (a restart).
+      yield* finishReview(reviewerThreadId, "src/parse.ts:1 misses null.", "catchup-review");
+      assert.lengthOf(yield* messagesTo(threadId, AUTOREVIEW_FINDINGS_MESSAGE_PREFIX), 0);
+
+      yield* service.catchUp;
+      yield* service.catchUp;
+      const findings = yield* messagesTo(threadId, AUTOREVIEW_FINDINGS_MESSAGE_PREFIX);
+      assert.lengthOf(findings, 1);
+      assert.include(findings[0]!.text, "misses null");
+    }),
+  );
+
   it.effect("refuses to attach to a thread that is not working", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

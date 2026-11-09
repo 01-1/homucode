@@ -93,6 +93,8 @@ export class AutoreviewService extends Context.Service<
     readonly list: (
       threadId: ThreadId,
     ) => Effect.Effect<ReadonlyArray<AutoreviewerStatus>, AutoreviewError>;
+    /** Run by `start`: delivers reviews and sends buffers whose events were missed. */
+    readonly catchUp: Effect.Effect<void>;
   }
 >()("t3/orchestration-v2/AutoreviewService") {}
 
@@ -279,6 +281,12 @@ export const make = (port: AutoreviewPort) => {
       .at(-1);
     if (review?.type !== "assistant_message" || isLgtmReview(review.text)) return;
     if (isGone(found.parent)) return;
+    const messageId = MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`);
+    const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
+      messageIds: [messageId],
+    });
+    // Catch-up replays reviews; one that was delivered stays delivered.
+    if (messages.length > 0) return;
     const { runs } = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
     const delivery = planFindingsDelivery(runs);
     if (delivery.type === "skip") {
@@ -293,7 +301,7 @@ export const make = (port: AutoreviewPort) => {
       type: "message.dispatch",
       commandId: CommandId.make(`server:autoreview-findings:${run.id}`),
       threadId: found.parent.id,
-      messageId: MessageId.make(`${AUTOREVIEW_FINDINGS_MESSAGE_PREFIX}${run.id}`),
+      messageId,
       text: [
         `Autoreview from "${found.child.title}" (thread ${found.child.id}), which reviews your work as you go. Weigh each point: act on the ones that hold up and say briefly why you skip any. Do not reply to the reviewer; it sees your next activity.`,
         "",
@@ -335,9 +343,15 @@ export const make = (port: AutoreviewPort) => {
           return;
         case "run.updated": {
           if (!FINISHED_RUN_STATUSES.has(event.payload.status)) return;
-          const found = yield* reviewerOf(event.threadId);
+          // Under the lock, so a reviewer removed meanwhile delivers nothing.
+          const found = yield* lock.withPermits(1)(
+            Effect.gen(function* () {
+              const found = yield* reviewerOf(event.threadId);
+              if (found !== null) yield* deliverFindings(found, event.payload.id);
+              return found;
+            }),
+          );
           if (found !== null) {
-            yield* deliverFindings(found, event.payload.id);
             yield* flush(found.parent.id);
             return;
           }
@@ -531,8 +545,22 @@ export const make = (port: AutoreviewPort) => {
     const subagentIds = yield* projections.listActiveSubagentThreadIds();
     const parents = new Set<ThreadId>();
     for (const childId of subagentIds) {
-      const found = yield* reviewerOf(childId).pipe(Effect.catchCause(() => Effect.succeed(null)));
-      if (found !== null) parents.add(found.parent.id);
+      yield* lock
+        .withPermits(1)(
+          Effect.gen(function* () {
+            const found = yield* reviewerOf(childId);
+            if (found === null) return;
+            parents.add(found.parent.id);
+            const { runs } = yield* projections.getThreadRecords(childId, ["runs"]);
+            const latest = runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
+            if (latest?.status === "completed") yield* deliverFindings(found, latest.id);
+          }),
+        )
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("autoreview catch-up failed", { threadId: childId, cause }),
+          ),
+        );
     }
     for (const parentId of parents) {
       yield* flush(parentId).pipe(
@@ -562,7 +590,7 @@ export const make = (port: AutoreviewPort) => {
           ),
         );
 
-  return { start, handle, attach, detach, list } satisfies AutoreviewService["Service"];
+  return { start, handle, attach, detach, list, catchUp } satisfies AutoreviewService["Service"];
 };
 
 /** The reactor: follows orchestration events and feeds reviewers. */

@@ -133,6 +133,28 @@ describe("planAutoreviewBatch", () => {
     assert.deepStrictEqual(ids(plan.items), [TurnItemId.make("turn-item:a")]);
   });
 
+  it("sends streamed text that finishes after later activity", () => {
+    const streaming = [
+      user("u", 1, "Explain it"),
+      assistant("long", 2, "partial", true),
+      command("c", 3, "completed"),
+    ];
+    const first = planAutoreviewBatch({
+      reviewer: { throughOrdinal: -1, sentItemIds: [] },
+      items: streaming,
+    });
+    assert.deepStrictEqual(ids(first.items), [
+      TurnItemId.make("turn-item:u"),
+      TurnItemId.make("turn-item:c"),
+    ]);
+    assert.equal(first.throughOrdinal, 1);
+
+    const done = [streaming[0]!, assistant("long", 2, "the full answer"), streaming[2]!];
+    const second = planAutoreviewBatch({ reviewer: first, items: done });
+    assert.deepStrictEqual(ids(second.items), [TurnItemId.make("turn-item:long")]);
+    assert.equal(second.throughOrdinal, 3);
+  });
+
   it("waits for agent activity before waking a reviewer for a lone user message", () => {
     const plan = planAutoreviewBatch({
       reviewer: { throughOrdinal: -1, sentItemIds: [] },
