@@ -1652,15 +1652,12 @@ it.layer(layerTest)("autoreview", (it) => {
           yield* eventSink.write({ events: [itemEvent(item)] });
           yield* service.handle(itemEvent(item));
         });
+      // The backlog sent at attach counts as the last batch.
       const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
       yield* service.handle(first.ended);
       yield* step("paced:a", 20);
-      assert.lengthOf(yield* batches(), 1);
-
-      const second = yield* finishReview(reviewerThreadId, "LGTM", "paced-2");
-      yield* service.handle(second.ended);
       yield* step("paced:b", 21);
-      assert.lengthOf(yield* batches(), 1);
+      assert.lengthOf(yield* batches(), 0);
 
       const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
         (r) => r.id === runId,
@@ -1676,8 +1673,48 @@ it.layer(layerTest)("autoreview", (it) => {
       };
       yield* eventSink.write({ events: [ended] });
       yield* service.handle(ended);
-      assert.lengthOf(yield* batches(), 2);
-      assert.include((yield* batches())[1]!.text, "Step paced:b.");
+      assert.lengthOf(yield* batches(), 1);
+      assert.include((yield* batches())[0]!.text, "Step paced:a.");
+      assert.include((yield* batches())[0]!.text, "Step paced:b.");
+    }),
+  );
+
+  it.effect("the running list does not count toward a reviewer's minimum batch size", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("min-running");
+      const { reviewerThreadId } = yield* attachReviewer(
+        service,
+        threadId,
+        "min-running",
+        undefined,
+        300,
+      );
+      const done = yield* finishReview(reviewerThreadId, "LGTM", "min-running");
+      yield* service.handle(done.ended);
+      const running: OrchestrationV2TurnItem = {
+        ...itemBase({ threadId, runId, id: "min-running:tool", ordinal: 20, now }),
+        status: "running",
+        completedAt: null,
+        type: "dynamic_tool",
+        toolName: "t3_thread_wait",
+        input: { note: "x".repeat(400) },
+      };
+      const tiny = assistantItem({
+        threadId,
+        runId,
+        id: "min-running:next",
+        ordinal: 21,
+        now,
+        text: "Next.",
+      });
+      for (const item of [running, tiny]) {
+        yield* eventSink.write({ events: [itemEvent(item)] });
+        yield* service.handle(itemEvent(item));
+      }
+      assert.lengthOf(yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX), 0);
     }),
   );
 

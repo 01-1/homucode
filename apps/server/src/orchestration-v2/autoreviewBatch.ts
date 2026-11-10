@@ -120,10 +120,16 @@ export function isReviewableItem(item: OrchestrationV2TurnItem): boolean {
       return true;
     case "command_execution":
       return item.monitor !== true;
+    // A persistent tool (a monitor) runs across turns and would hold the cursor for good.
+    case "dynamic_tool":
+      return !(
+        item.input !== null &&
+        typeof item.input === "object" &&
+        Reflect.get(item.input, "persistent") === true
+      );
     case "assistant_message":
     case "proposed_plan":
     case "file_change":
-    case "dynamic_tool":
     case "web_search":
     case "file_search":
     case "error":
@@ -229,10 +235,17 @@ function clip(text: string, max: number): string {
   return `${text.slice(0, head)}\n[... ${text.length - max} characters omitted ...]\n${text.slice(text.length - tail)}`;
 }
 
+/** Tool input or output as text; long strings (e.g. images) are cut before serializing. */
 function toText(value: unknown): string {
   if (typeof value === "string") return value;
   try {
-    return JSON.stringify(value) ?? String(value);
+    return (
+      JSON.stringify(value, (_key, field: unknown) =>
+        typeof field === "string" && field.length > 2_000
+          ? `${field.slice(0, 2_000)}[... ${field.length - 2_000} characters omitted]`
+          : field,
+      ) ?? String(value)
+    );
   } catch {
     return String(value);
   }

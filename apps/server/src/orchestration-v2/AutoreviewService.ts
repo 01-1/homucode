@@ -330,7 +330,7 @@ export const make = (port: AutoreviewPort) => {
         ? Number.POSITIVE_INFINITY
         : DateTime.toEpochMillis(now) - Date.parse(reviewer.lastBatchAt);
     if (!immediate && busy && sinceLast < intervalMs) return;
-    const text = renderAutoreviewBatch({
+    const batch = {
       reviewedThread: thread,
       items: plan.items,
       first: false,
@@ -338,12 +338,14 @@ export const make = (port: AutoreviewPort) => {
       preamble: reviewer.preamble,
       ownFindings: ownSections(reviewer),
       instructions: reviewer.resendInstructions === true,
-      running: plan.running,
-    });
+    };
+    // The minimum counts new activity only; the running list repeats from batch to batch.
+    const text = renderAutoreviewBatch({ ...batch, running: plan.running });
+    const newChars = renderAutoreviewBatch(batch).length;
     // A slow reviewer waits for a large buffer, but always sees how the work ended, and one
     // with wakeOnToolCall sees each finished tool call.
     const toolWake = reviewer.wakeOnToolCall === true && batchHasToolCall(plan);
-    if (!immediate && !toolWake && (reviewer.minBatchChars ?? 0) > text.length && busy) return;
+    if (!immediate && !toolWake && (reviewer.minBatchChars ?? 0) > newChars && busy) return;
     const last = plan.items.at(-1)!;
     const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
     yield* engine.dispatch({
@@ -703,6 +705,8 @@ export const make = (port: AutoreviewPort) => {
               throughOrdinal: plan.throughOrdinal,
               sentItemIds: plan.sentItemIds,
               addedAt: DateTime.formatIso(now),
+              // The backlog is the first batch, so pacing starts from it.
+              lastBatchAt: DateTime.formatIso(now),
             },
           ]).pipe(Effect.mapError(failed("Unable to record the reviewer")));
         }

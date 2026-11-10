@@ -195,6 +195,46 @@ describe("planAutoreviewBatch", () => {
   });
 });
 
+describe("tool calls", () => {
+  const tool = (
+    id: string,
+    ordinal: number,
+    status: OrchestrationV2TurnItem["status"],
+    input: unknown,
+  ) =>
+    ({
+      ...base(id, ordinal, status),
+      type: "dynamic_tool",
+      toolName: "watch",
+      input,
+    }) satisfies OrchestrationV2TurnItem;
+
+  it("leaves out persistent tools, which never finish, so the cursor keeps moving", () => {
+    const items = [
+      tool("monitor", 1, "running", { persistent: true }),
+      tool("send", 2, "completed", { message: "hi" }),
+      assistant("a", 3, "Done"),
+    ];
+    const plan = planAutoreviewBatch({ reviewer: { throughOrdinal: 0, sentItemIds: [] }, items });
+    assert.deepStrictEqual(ids(plan.items), [
+      TurnItemId.make("turn-item:send"),
+      TurnItemId.make("turn-item:a"),
+    ]);
+    assert.equal(plan.throughOrdinal, 3);
+    assert.deepStrictEqual(plan.sentItemIds, []);
+  });
+
+  it("cuts long strings in tool input before rendering them", () => {
+    const text = renderAutoreviewBatch({
+      reviewedThread: { id: threadId, title: "Reviewed" },
+      items: [tool("img", 1, "completed", { image: "A".repeat(100_000) })],
+      first: false,
+    });
+    assert.isBelow(text.length, 5_000);
+    assert.include(text, "characters omitted");
+  });
+});
+
 describe("renderAutoreviewBatch", () => {
   const reviewedThread = { id: threadId, title: "Reviewed" };
 
