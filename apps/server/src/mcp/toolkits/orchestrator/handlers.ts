@@ -66,6 +66,8 @@ const handlers = {
               brief: input.brief,
               minBatchChars: input.minBatchChars,
               wakeOnUserMessage: input.wakeOnUserMessage,
+              wakeOnToolCall: input.wakeOnToolCall,
+              minWakeIntervalSeconds: input.minWakeIntervalSeconds,
               preamble: input.preamble,
               title: input.title,
               createdBy: "agent",
@@ -82,6 +84,8 @@ const handlers = {
               brief: input.brief,
               minBatchChars: input.minBatchChars,
               wakeOnUserMessage: input.wakeOnUserMessage,
+              wakeOnToolCall: input.wakeOnToolCall,
+              minWakeIntervalSeconds: input.minWakeIntervalSeconds,
               preamble: input.preamble,
             })
             .pipe(Effect.mapError(toFailure));

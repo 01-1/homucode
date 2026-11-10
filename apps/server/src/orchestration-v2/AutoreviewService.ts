@@ -33,6 +33,7 @@ import {
   isTerminalItem,
   planAutoreviewBatch,
   findingsSection,
+  batchHasToolCall,
   batchHasUserMessage,
   findingsBody,
   findingsWithout,
@@ -72,6 +73,8 @@ export interface AutoreviewAttachInput {
   /** See `OrchestrationV2Autoreviewer.minBatchChars`; 0 or absent sends at every idle point. */
   readonly minBatchChars?: number | undefined;
   readonly wakeOnUserMessage?: boolean | undefined;
+  readonly wakeOnToolCall?: boolean | undefined;
+  readonly minWakeIntervalSeconds?: number | undefined;
   readonly preamble?: string | undefined;
   readonly title?: string | undefined;
   readonly createdBy: "user" | "agent" | "system";
@@ -87,6 +90,8 @@ export interface AutoreviewerStatus {
   readonly brief?: string | undefined;
   readonly minBatchChars?: number | undefined;
   readonly wakeOnUserMessage?: boolean | undefined;
+  readonly wakeOnToolCall?: boolean | undefined;
+  readonly minWakeIntervalSeconds?: number | undefined;
   readonly state: "reviewing" | "idle";
   /** Finished items in the reviewed thread the reviewer has not received yet. */
   readonly bufferedItems: number;
@@ -120,6 +125,9 @@ export class AutoreviewService extends Context.Service<
       /** 0 clears it. */
       readonly minBatchChars?: number | undefined;
       readonly wakeOnUserMessage?: boolean | undefined;
+      readonly wakeOnToolCall?: boolean | undefined;
+      /** 0 clears it. */
+      readonly minWakeIntervalSeconds?: number | undefined;
       /** An empty preamble restores the standard one. */
       readonly preamble?: string | undefined;
     }) => Effect.Effect<void, AutoreviewError>;
@@ -313,6 +321,15 @@ export const make = (port: AutoreviewPort) => {
     const plan = planAutoreviewBatch({ reviewer, items: reviewed.turnItems, runs: reviewed.runs });
     const immediate = reviewer.wakeOnUserMessage === true && batchHasUserMessage(plan);
     if (!batchHasAgentActivity(plan) && !immediate) return;
+    const busy = isBusy(reviewed.runs);
+    const now = yield* DateTime.now;
+    // Pacing applies while the thread works; its end and a user message always go out.
+    const intervalMs = (reviewer.minWakeIntervalSeconds ?? 0) * 1000;
+    const sinceLast =
+      reviewer.lastBatchAt === undefined
+        ? Number.POSITIVE_INFINITY
+        : DateTime.toEpochMillis(now) - Date.parse(reviewer.lastBatchAt);
+    if (!immediate && busy && sinceLast < intervalMs) return;
     const text = renderAutoreviewBatch({
       reviewedThread: thread,
       items: plan.items,
@@ -321,9 +338,12 @@ export const make = (port: AutoreviewPort) => {
       preamble: reviewer.preamble,
       ownFindings: ownSections(reviewer),
       instructions: reviewer.resendInstructions === true,
+      running: plan.running,
     });
-    // A slow reviewer waits for a large buffer, but always sees how the work ended.
-    if (!immediate && (reviewer.minBatchChars ?? 0) > text.length && isBusy(reviewed.runs)) return;
+    // A slow reviewer waits for a large buffer, but always sees how the work ended, and one
+    // with wakeOnToolCall sees each finished tool call.
+    const toolWake = reviewer.wakeOnToolCall === true && batchHasToolCall(plan);
+    if (!immediate && !toolWake && (reviewer.minBatchChars ?? 0) > text.length && busy) return;
     const last = plan.items.at(-1)!;
     const key = `${reviewer.threadId}:${last.ordinal}:${plan.items.length}`;
     yield* engine.dispatch({
@@ -343,7 +363,12 @@ export const make = (port: AutoreviewPort) => {
     // Own sections this batch carried have come back; the reviewer will not see them again.
     const shown = findingsTexts(plan.items);
     state.record = withOwnSections(
-      { ...sent, throughOrdinal: plan.throughOrdinal, sentItemIds: plan.sentItemIds },
+      {
+        ...sent,
+        throughOrdinal: plan.throughOrdinal,
+        sentItemIds: plan.sentItemIds,
+        lastBatchAt: DateTime.formatIso(now),
+      },
       ownSections(sent).filter((section) => !shown.some((text) => hasSection(text, section))),
     );
     state.changed = true;
@@ -670,6 +695,10 @@ export const make = (port: AutoreviewPort) => {
               ...(input.brief?.trim() ? { brief: input.brief.trim() } : {}),
               ...(input.minBatchChars ? { minBatchChars: input.minBatchChars } : {}),
               ...(input.wakeOnUserMessage ? { wakeOnUserMessage: true } : {}),
+              ...(input.wakeOnToolCall ? { wakeOnToolCall: true } : {}),
+              ...(input.minWakeIntervalSeconds
+                ? { minWakeIntervalSeconds: input.minWakeIntervalSeconds }
+                : {}),
               ...(input.preamble?.trim() ? { preamble: input.preamble.trim() } : {}),
               throughOrdinal: plan.throughOrdinal,
               sentItemIds: plan.sentItemIds,
@@ -742,11 +771,14 @@ export const make = (port: AutoreviewPort) => {
           input.brief === undefined &&
           input.minBatchChars === undefined &&
           input.wakeOnUserMessage === undefined &&
+          input.wakeOnToolCall === undefined &&
+          input.minWakeIntervalSeconds === undefined &&
           input.preamble === undefined
         ) {
           return yield* new AutoreviewError({
             reason: "invalid",
-            detail: "Pass a new target, brief, preamble, minBatchChars or wakeOnUserMessage.",
+            detail:
+              "Pass a new target, brief, preamble, minBatchChars, wakeOnUserMessage, wakeOnToolCall or minWakeIntervalSeconds.",
           });
         }
         if (input.modelSelection !== undefined) {
@@ -765,8 +797,16 @@ export const make = (port: AutoreviewPort) => {
           minBatchChars: _min,
           preamble: _preamble,
           wakeOnUserMessage: _wake,
+          wakeOnToolCall: _toolWake,
+          minWakeIntervalSeconds: _interval,
           ...reviewer
         } = current[index]!;
+        const wakeOnToolCall =
+          input.wakeOnToolCall === undefined ? _toolWake : input.wakeOnToolCall || undefined;
+        const minWakeIntervalSeconds =
+          input.minWakeIntervalSeconds === undefined
+            ? _interval
+            : input.minWakeIntervalSeconds || undefined;
         const wakeOnUserMessage =
           input.wakeOnUserMessage === undefined ? _wake : input.wakeOnUserMessage || undefined;
         const preamble =
@@ -785,6 +825,8 @@ export const make = (port: AutoreviewPort) => {
           ...(brief === undefined ? {} : { brief }),
           ...(minBatchChars === undefined ? {} : { minBatchChars }),
           ...(wakeOnUserMessage === undefined ? {} : { wakeOnUserMessage }),
+          ...(wakeOnToolCall === undefined ? {} : { wakeOnToolCall }),
+          ...(minWakeIntervalSeconds === undefined ? {} : { minWakeIntervalSeconds }),
           ...(preamble === undefined ? {} : { preamble }),
           ...(resend ? { resendInstructions: true } : {}),
         };
@@ -866,6 +908,12 @@ export const make = (port: AutoreviewPort) => {
           ...(reviewer.wakeOnUserMessage === undefined
             ? {}
             : { wakeOnUserMessage: reviewer.wakeOnUserMessage }),
+          ...(reviewer.wakeOnToolCall === undefined
+            ? {}
+            : { wakeOnToolCall: reviewer.wakeOnToolCall }),
+          ...(reviewer.minWakeIntervalSeconds === undefined
+            ? {}
+            : { minWakeIntervalSeconds: reviewer.minWakeIntervalSeconds }),
           state: child !== null && isBusy(child.runs) ? "reviewing" : "idle",
           bufferedItems: planAutoreviewBatch({
             reviewer,

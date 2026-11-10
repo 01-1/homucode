@@ -475,6 +475,12 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
   minBatchChars: Schema.optional(NonNegativeInt),
   /** Send a message from the user, or one sent through a tool, at once, without waiting for agent activity. */
   wakeOnUserMessage: Schema.optional(Schema.Boolean),
+  /** A finished tool call sends the batch even below `minBatchChars` (still one wake at a time). */
+  wakeOnToolCall: Schema.optional(Schema.Boolean),
+  /** While the reviewed thread works, at most one batch per this many seconds. */
+  minWakeIntervalSeconds: Schema.optional(NonNegativeInt),
+  /** When the last batch went out; paces `minWakeIntervalSeconds`. */
+  lastBatchAt: Schema.optional(IsoDateTime),
   /** Repeat the instructions with the next batch, after the brief or model changed. */
   resendInstructions: Schema.optional(Schema.Boolean),
   addedAt: IsoDateTime,

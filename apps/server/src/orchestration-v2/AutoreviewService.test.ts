@@ -1559,6 +1559,128 @@ it.layer(layerTest)("autoreview", (it) => {
     }),
   );
 
+  it.effect(
+    "a reviewer with wakeOnToolCall gets each finished tool call while the agent works",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make(orchestrator);
+        const { threadId, runId, now } = yield* seedReviewedThread("paced");
+        const attach = (name: string, wakeOnToolCall: boolean) =>
+          service.attach({
+            commandId: CommandId.make(`command:autoreview-attach:${name}`),
+            threadId,
+            modelSelection: reviewerModel,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            minBatchChars: 10_000,
+            wakeOnToolCall,
+            createdBy: "agent",
+            creationSource: "mcp",
+          });
+        const paced = yield* attach("paced", true);
+        const slow = yield* attach("paced-slow", false);
+        for (const reviewer of [paced, slow]) {
+          const done = yield* finishReview(
+            reviewer.reviewerThreadId,
+            "LGTM",
+            reviewer.reviewerThreadId,
+          );
+          yield* service.handle(done.ended);
+        }
+        const tool: OrchestrationV2TurnItem = {
+          ...itemBase({ threadId, runId, id: "paced:tool", ordinal: 21, now }),
+          type: "dynamic_tool",
+          toolName: "t3_thread_send",
+          input: { threadId: "thread:other", message: "do the debugging" },
+          output: { delivery: "started" },
+        };
+        const running: OrchestrationV2TurnItem = {
+          ...itemBase({ threadId, runId, id: "paced:long", ordinal: 20, now }),
+          status: "running",
+          completedAt: null,
+          type: "command_execution",
+          input: "pnpm run dist:desktop:linux",
+        };
+        // A long command is under way when another tool call finishes.
+        for (const item of [running, tool]) {
+          yield* eventSink.write({ events: [itemEvent(item)] });
+          yield* service.handle(itemEvent(item));
+        }
+        const pacedBatches = yield* messagesTo(
+          paced.reviewerThreadId,
+          AUTOREVIEW_BATCH_MESSAGE_PREFIX,
+        );
+        assert.lengthOf(pacedBatches, 1);
+        assert.include(pacedBatches[0]!.text, "### Tool t3_thread_send");
+        assert.include(pacedBatches[0]!.text, "do the debugging");
+        assert.include(pacedBatches[0]!.text, "### Running now");
+        assert.include(pacedBatches[0]!.text, "pnpm run dist:desktop:linux");
+        // Without the option, the minimum batch size still holds it back.
+        assert.lengthOf(
+          yield* messagesTo(slow.reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX),
+          0,
+        );
+        const [status] = (yield* service.list(threadId)).filter(
+          (entry) => entry.reviewerThreadId === paced.reviewerThreadId,
+        );
+        assert.isTrue(status?.wakeOnToolCall);
+      }),
+  );
+
+  it.effect("minWakeIntervalSeconds paces batches while the agent works, not at its end", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("paced");
+      const { reviewerThreadId } = yield* service.attach({
+        commandId: CommandId.make("command:autoreview-attach:paced"),
+        threadId,
+        modelSelection: reviewerModel,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        minWakeIntervalSeconds: 600,
+        createdBy: "agent",
+        creationSource: "mcp",
+      });
+      const batches = () => messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      const step = (id: string, ordinal: number) =>
+        Effect.gen(function* () {
+          const item = assistantItem({ threadId, runId, id, ordinal, now, text: `Step ${id}.` });
+          yield* eventSink.write({ events: [itemEvent(item)] });
+          yield* service.handle(itemEvent(item));
+        });
+      const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
+      yield* service.handle(first.ended);
+      yield* step("paced:a", 20);
+      assert.lengthOf(yield* batches(), 1);
+
+      const second = yield* finishReview(reviewerThreadId, "LGTM", "paced-2");
+      yield* service.handle(second.ended);
+      yield* step("paced:b", 21);
+      assert.lengthOf(yield* batches(), 1);
+
+      const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+        (r) => r.id === runId,
+      )!;
+      const ended: OrchestrationV2DomainEvent = {
+        id: EventId.make("event:paced:ended"),
+        type: "run.updated",
+        threadId,
+        runId,
+        providerInstanceId: modelSelection.instanceId,
+        occurredAt: now,
+        payload: { ...run, status: "completed", completedAt: now },
+      };
+      yield* eventSink.write({ events: [ended] });
+      yield* service.handle(ended);
+      assert.lengthOf(yield* batches(), 2);
+      assert.include((yield* batches())[1]!.text, "Step paced:b.");
+    }),
+  );
+
   it.effect("refuses to attach to a thread that is not working", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

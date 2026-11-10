@@ -295,6 +295,18 @@ export const OrchestratorMcpAutoreviewInput = Schema.Struct({
         "`add`/`update`. For an answerer: get each user message at once, not at the agent's next activity.",
     }),
   ),
+  wakeOnToolCall: Schema.optional(
+    Schema.Boolean.annotate({
+      description:
+        "`add`/`update`. For a close reviewer: wake after each finished tool call while the agent works, even below minBatchChars. Still one wake at a time; its reply steers in.",
+    }),
+  ),
+  minWakeIntervalSeconds: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 3_600 })).annotate({
+      description:
+        "`add`/`update`. While the agent works, at most one batch per this many seconds; the rest waits for the next one. 0 clears.",
+    }),
+  ),
   preamble: Schema.optional(
     Schema.String.check(Schema.isMaxLength(8_000)).annotate({
       description:
@@ -323,6 +335,8 @@ export const OrchestratorMcpAutoreviewResult = Schema.Struct({
       brief: Schema.optional(Schema.String),
       minBatchChars: Schema.optional(Schema.Number),
       wakeOnUserMessage: Schema.optional(Schema.Boolean),
+      wakeOnToolCall: Schema.optional(Schema.Boolean),
+      minWakeIntervalSeconds: Schema.optional(Schema.Number),
       state: Schema.Literals(["reviewing", "idle"]),
       bufferedItems: Schema.Number,
     }),

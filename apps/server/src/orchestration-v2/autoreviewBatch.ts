@@ -6,6 +6,7 @@ import type {
   TurnItemId,
 } from "@t3tools/contracts";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
+import { DateTime } from "effect";
 
 /** Message ids the reviewer flushes use; the reactor recognizes reviewer runs by them. */
 export const AUTOREVIEW_BATCH_MESSAGE_PREFIX = "message:autoreview-batch:";
@@ -23,6 +24,9 @@ export const AUTOREVIEW_REVIEWABLE_TYPES = [
   "assistant_message",
   "command_execution",
   "file_change",
+  "dynamic_tool",
+  "web_search",
+  "file_search",
   "proposed_plan",
   "error",
   "run_interrupt_result",
@@ -119,6 +123,9 @@ export function isReviewableItem(item: OrchestrationV2TurnItem): boolean {
     case "assistant_message":
     case "proposed_plan":
     case "file_change":
+    case "dynamic_tool":
+    case "web_search":
+    case "file_search":
     case "error":
     case "run_interrupt_result":
       return true;
@@ -135,6 +142,8 @@ export const isTerminalItem = (item: OrchestrationV2TurnItem): boolean =>
 export interface AutoreviewBatchPlan {
   /** Finished items not yet sent, oldest first. */
   readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
+  /** Tool calls still running after the cursor, shown so a reviewer sees what is under way. */
+  readonly running?: ReadonlyArray<OrchestrationV2TurnItem>;
   readonly throughOrdinal: number;
   readonly sentItemIds: ReadonlyArray<TurnItemId>;
 }
@@ -180,8 +189,19 @@ export function planAutoreviewBatch(input: {
     ),
     ...items.filter((item) => item.ordinal > throughOrdinal).map((item) => item.id),
   ];
-  return { items, throughOrdinal, sentItemIds };
+  const running = candidates.filter((item) => isToolCall(item) && !isTerminalItem(item));
+  return { items, throughOrdinal, sentItemIds, running };
 }
+
+/** A command, file change, tool or search call: what `wakeOnToolCall` reacts to. */
+const isToolCall = (item: OrchestrationV2TurnItem): boolean =>
+  item.type === "command_execution" ||
+  item.type === "file_change" ||
+  item.type === "dynamic_tool" ||
+  item.type === "web_search" ||
+  item.type === "file_search";
+
+export const batchHasToolCall = (plan: AutoreviewBatchPlan): boolean => plan.items.some(isToolCall);
 
 /**
  * A lone user message waits for the agent's first activity, so a reviewer is not woken to
@@ -207,6 +227,28 @@ function clip(text: string, max: number): string {
   const head = Math.floor(max * 0.6);
   const tail = max - head;
   return `${text.slice(0, head)}\n[... ${text.length - max} characters omitted ...]\n${text.slice(text.length - tail)}`;
+}
+
+function toText(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** One line per tool call still running, e.g. a long command the agent waits on. */
+function runningLine(item: OrchestrationV2TurnItem): string {
+  const started = item.startedAt === null ? "" : ` since ${DateTime.formatIso(item.startedAt)}`;
+  switch (item.type) {
+    case "command_execution":
+      return `- command${started}: ${clip(item.input, 300)}`;
+    case "dynamic_tool":
+      return `- tool ${item.toolName ?? "call"}${started}: ${clip(toText(item.input), 300)}`;
+    default:
+      return `- ${item.type}${started}`;
+  }
 }
 
 function renderReviewItem(
@@ -253,6 +295,18 @@ function renderReviewItem(
         ...(diff ? ["```diff", clip(diff, ITEM_MAX_CHARS), "```"] : []),
       ].join("\n");
     }
+    case "dynamic_tool":
+      return [
+        `### Tool ${item.toolName ?? "call"}${status}`,
+        "```",
+        `input: ${clip(toText(item.input), 2_000)}`,
+        ...(item.output === undefined ? [] : [`output: ${clip(toText(item.output), 6_000)}`]),
+        "```",
+      ].join("\n");
+    case "web_search":
+      return `### Web search${status}: ${clip((item.patterns ?? []).join(" | "), 1_000)}`;
+    case "file_search":
+      return `### File search${status}: ${clip(item.pattern ?? "", 1_000)}`;
     case "proposed_plan":
       return `### Proposed plan\n${clip(item.markdown, ITEM_MAX_CHARS)}`;
     case "error":
@@ -302,6 +356,8 @@ export function renderAutoreviewBatch(input: {
   readonly ownFindings?: ReadonlyArray<string> | undefined;
   /** Repeat the instructions on a later batch, after the brief or model changed. */
   readonly instructions?: boolean;
+  /** Tool calls still running, listed after the activity. */
+  readonly running?: ReadonlyArray<OrchestrationV2TurnItem> | undefined;
 }): string {
   const preamble =
     input.first || input.instructions === true ? `${autoreviewInstructions(input)}\n\n` : "";
@@ -315,6 +371,10 @@ export function renderAutoreviewBatch(input: {
   // On the first batch the opening request is kept even when earlier items are dropped.
   const pinned = input.first && input.items[0]?.type === "user_message" ? rendered[0] : undefined;
   const rest = pinned === undefined ? rendered : rendered.slice(1);
+  const runningNote =
+    (input.running?.length ?? 0) === 0
+      ? undefined
+      : clip(`### Running now\n${input.running!.map(runningLine).join("\n")}`, 3_000);
   const omittedNote = (count: number) =>
     `[${count} earlier item${count === 1 ? "" : "s"} omitted; read them with t3_thread_read on thread ${input.reviewedThread.id}.]`;
   let remaining =
@@ -322,6 +382,7 @@ export function renderAutoreviewBatch(input: {
     preamble.length -
     header.length -
     (pinned?.length ?? 0) -
+    (runningNote?.length ?? 0) -
     omittedNote(rest.length).length -
     8;
   const kept: Array<string> = [];
@@ -337,6 +398,7 @@ export function renderAutoreviewBatch(input: {
     ...(pinned === undefined ? [] : [pinned]),
     ...(omitted > 0 ? [omittedNote(omitted)] : []),
     ...kept,
+    ...(runningNote === undefined ? [] : [runningNote]),
   ].join("\n\n");
 }
 
