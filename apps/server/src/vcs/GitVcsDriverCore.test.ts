@@ -130,6 +130,53 @@ const makeDriverReleasingLock = (
     return { driver, failures };
   });
 
+it.effect(
+  "coalesces config reads by directory and key, expires them, and invalidates after writes",
+  () =>
+    Effect.gen(function* () {
+      let reads = 0;
+      let value = "first";
+      const spawner = ChildProcessSpawner.make((command) =>
+        Effect.sync(() => {
+          if (!ChildProcess.isStandardCommand(command)) return makeNonRepositoryHandle();
+          const args = command.args.map(String);
+          if (args[0] !== "config") return makeNonRepositoryHandle();
+          if (args[1] === "--get") {
+            reads++;
+            return makeSuccessfulHandle(value);
+          }
+          value = args[2]!;
+          return makeSuccessfulHandle("");
+        }),
+      );
+      const driver = yield* makeGitVcsDriverCore().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provide(layerServerConfig),
+      );
+      assert.deepStrictEqual(
+        yield* Effect.all(
+          Array.from({ length: 8 }, () => driver.readConfigValue("/repo", "t3.test")),
+          {
+            concurrency: "unbounded",
+          },
+        ),
+        Array(8).fill("first"),
+      );
+      assert.equal(reads, 1);
+      yield* driver.readConfigValue("/other", "t3.test");
+      yield* driver.readConfigValue("/repo", "t3.other");
+      assert.equal(reads, 3);
+      value = "external";
+      assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "first");
+      yield* TestClock.adjust("1001 millis");
+      assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "external");
+      assert.equal(reads, 4);
+      yield* driver.writeConfigValue({ cwd: "/repo", key: "t3.test", value: "written" });
+      assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "written");
+      assert.equal(reads, 5);
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
 it.effect("runs background Git in its own lane so user commands never queue behind it", () =>
   Effect.gen(function* () {
     const gate = yield* Deferred.make<void>();
