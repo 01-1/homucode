@@ -1685,6 +1685,55 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
+  it.effect("a reviewer with a short interval does not wait for another's longer one", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make(orchestrator);
+      const { threadId, runId, now } = yield* seedReviewedThread("mixed");
+      const attach = (name: string, minWakeIntervalSeconds: number) =>
+        service.attach({
+          commandId: CommandId.make(`command:autoreview-attach:${name}`),
+          threadId,
+          modelSelection: reviewerModel,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          minWakeIntervalSeconds,
+          createdBy: "agent",
+          creationSource: "mcp",
+        });
+      const slow = yield* attach("mixed-slow", 600);
+      const fast = yield* attach("mixed-fast", 60);
+      for (const reviewer of [slow, fast]) {
+        const done = yield* finishReview(
+          reviewer.reviewerThreadId,
+          "LGTM",
+          reviewer.reviewerThreadId,
+        );
+        yield* service.handle(done.ended);
+      }
+      const item = assistantItem({
+        threadId,
+        runId,
+        id: "mixed:last",
+        ordinal: 20,
+        now,
+        text: "Last.",
+      });
+      yield* eventSink.write({ events: [itemEvent(item)] });
+      yield* service.handle(itemEvent(item));
+      const batches = (reviewerThreadId: ThreadId) =>
+        messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      assert.lengthOf(yield* batches(fast.reviewerThreadId), 0);
+
+      yield* TestClock.adjust("61 seconds");
+      assert.lengthOf(yield* batches(fast.reviewerThreadId), 1);
+      assert.lengthOf(yield* batches(slow.reviewerThreadId), 0);
+      yield* TestClock.adjust("10 minutes");
+      assert.lengthOf(yield* batches(slow.reviewerThreadId), 1);
+    }),
+  );
+
   it.effect("the running list does not count toward a reviewer's minimum batch size", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

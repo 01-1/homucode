@@ -333,7 +333,7 @@ export const make = (port: AutoreviewPort) => {
         ? Number.POSITIVE_INFINITY
         : DateTime.toEpochMillis(now) - Date.parse(reviewer.lastBatchAt);
     if (!immediate && sinceLast < intervalMs) {
-      yield* flushLater(thread.id, intervalMs - sinceLast);
+      yield* flushLater(thread.id, reviewer.threadId, intervalMs - sinceLast);
       return;
     }
     const batch = {
@@ -423,16 +423,22 @@ export const make = (port: AutoreviewPort) => {
 
   const flush = (threadId: ThreadId) => lock.withPermits(1)(flushUnlocked(threadId));
 
-  // One timer per reviewed thread for batches held by minWakeIntervalSeconds.
-  const pendingFlushes = new Set<ThreadId>();
+  // One timer per reviewer for batches held by minWakeIntervalSeconds, so a reviewer with a
+  // short interval never waits behind another's longer one.
+  const pendingFlushes = new Set<string>();
   // Typed: it closes the loop flush -> flushReviewer -> flushLater, which inference cannot.
-  const flushLater = (threadId: ThreadId, delayMs: number): Effect.Effect<void> =>
-    pendingFlushes.has(threadId)
+  const flushLater = (
+    threadId: ThreadId,
+    reviewerThreadId: ThreadId,
+    delayMs: number,
+  ): Effect.Effect<void> => {
+    const key = `${threadId}\u0000${reviewerThreadId}`;
+    return pendingFlushes.has(key)
       ? Effect.void
-      : Effect.sync(() => pendingFlushes.add(threadId)).pipe(
+      : Effect.sync(() => pendingFlushes.add(key)).pipe(
           Effect.andThen(
             Effect.sleep(Duration.millis(Math.max(1, Math.ceil(delayMs)))).pipe(
-              Effect.andThen(Effect.sync(() => pendingFlushes.delete(threadId))),
+              Effect.andThen(Effect.sync(() => pendingFlushes.delete(key))),
               Effect.andThen(flush(threadId)),
               Effect.catchCause((cause) =>
                 Effect.logWarning("autoreview could not send a paced batch", { threadId, cause }),
@@ -442,6 +448,7 @@ export const make = (port: AutoreviewPort) => {
           ),
           Effect.asVoid,
         );
+  };
 
   /** The reviewed thread and reviewer record, when `childThreadId` is an attached reviewer. */
   const reviewerOf = Effect.fnUntraced(function* (childThreadId: ThreadId) {
