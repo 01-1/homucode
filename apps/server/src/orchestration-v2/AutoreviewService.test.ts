@@ -24,6 +24,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -1629,54 +1630,59 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
-  it.effect("minWakeIntervalSeconds paces batches while the agent works, not at its end", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const eventSink = yield* EventSink.EventSinkV2;
-      const service = AutoreviewService.make(orchestrator);
-      const { threadId, runId, now } = yield* seedReviewedThread("paced");
-      const { reviewerThreadId } = yield* service.attach({
-        commandId: CommandId.make("command:autoreview-attach:paced"),
-        threadId,
-        modelSelection: reviewerModel,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        minWakeIntervalSeconds: 600,
-        createdBy: "agent",
-        creationSource: "mcp",
-      });
-      const batches = () => messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
-      const step = (id: string, ordinal: number) =>
-        Effect.gen(function* () {
-          const item = assistantItem({ threadId, runId, id, ordinal, now, text: `Step ${id}.` });
-          yield* eventSink.write({ events: [itemEvent(item)] });
-          yield* service.handle(itemEvent(item));
+  it.effect(
+    "minWakeIntervalSeconds paces batches, turn ends included, and sends held ones later",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make(orchestrator);
+        const { threadId, runId, now } = yield* seedReviewedThread("paced");
+        const { reviewerThreadId } = yield* service.attach({
+          commandId: CommandId.make("command:autoreview-attach:paced"),
+          threadId,
+          modelSelection: reviewerModel,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          minWakeIntervalSeconds: 600,
+          createdBy: "agent",
+          creationSource: "mcp",
         });
-      // The backlog sent at attach counts as the last batch.
-      const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
-      yield* service.handle(first.ended);
-      yield* step("paced:a", 20);
-      yield* step("paced:b", 21);
-      assert.lengthOf(yield* batches(), 0);
+        const batches = () => messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+        const step = (id: string, ordinal: number) =>
+          Effect.gen(function* () {
+            const item = assistantItem({ threadId, runId, id, ordinal, now, text: `Step ${id}.` });
+            yield* eventSink.write({ events: [itemEvent(item)] });
+            yield* service.handle(itemEvent(item));
+          });
+        // The backlog sent at attach counts as the last batch.
+        const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
+        yield* service.handle(first.ended);
+        yield* step("paced:a", 20);
+        yield* step("paced:b", 21);
+        assert.lengthOf(yield* batches(), 0);
 
-      const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
-        (r) => r.id === runId,
-      )!;
-      const ended: OrchestrationV2DomainEvent = {
-        id: EventId.make("event:paced:ended"),
-        type: "run.updated",
-        threadId,
-        runId,
-        providerInstanceId: modelSelection.instanceId,
-        occurredAt: now,
-        payload: { ...run, status: "completed", completedAt: now },
-      };
-      yield* eventSink.write({ events: [ended] });
-      yield* service.handle(ended);
-      assert.lengthOf(yield* batches(), 1);
-      assert.include((yield* batches())[0]!.text, "Step paced:a.");
-      assert.include((yield* batches())[0]!.text, "Step paced:b.");
-    }),
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+          (r) => r.id === runId,
+        )!;
+        const ended: OrchestrationV2DomainEvent = {
+          id: EventId.make("event:paced:ended"),
+          type: "run.updated",
+          threadId,
+          runId,
+          providerInstanceId: modelSelection.instanceId,
+          occurredAt: now,
+          payload: { ...run, status: "completed", completedAt: now },
+        };
+        yield* eventSink.write({ events: [ended] });
+        yield* service.handle(ended);
+        // A short turn ending inside the interval does not wake the reviewer early.
+        assert.lengthOf(yield* batches(), 0);
+        yield* TestClock.adjust("10 minutes");
+        assert.lengthOf(yield* batches(), 1);
+        assert.include((yield* batches())[0]!.text, "Step paced:a.");
+        assert.include((yield* batches())[0]!.text, "Step paced:b.");
+      }),
   );
 
   it.effect("the running list does not count toward a reviewer's minimum batch size", () =>

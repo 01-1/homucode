@@ -15,6 +15,7 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -323,13 +324,18 @@ export const make = (port: AutoreviewPort) => {
     if (!batchHasAgentActivity(plan) && !immediate) return;
     const busy = isBusy(reviewed.runs);
     const now = yield* DateTime.now;
-    // Pacing applies while the thread works; its end and a user message always go out.
+    // Pacing also covers turn ends, so short turns cannot wake a paced reviewer each time; a
+    // held batch goes out with the next one or once the interval is over. A user message for
+    // a wakeOnUserMessage reviewer is never held.
     const intervalMs = (reviewer.minWakeIntervalSeconds ?? 0) * 1000;
     const sinceLast =
       reviewer.lastBatchAt === undefined
         ? Number.POSITIVE_INFINITY
         : DateTime.toEpochMillis(now) - Date.parse(reviewer.lastBatchAt);
-    if (!immediate && busy && sinceLast < intervalMs) return;
+    if (!immediate && sinceLast < intervalMs) {
+      yield* flushLater(thread.id, intervalMs - sinceLast);
+      return;
+    }
     const batch = {
       reviewedThread: thread,
       items: plan.items,
@@ -416,6 +422,26 @@ export const make = (port: AutoreviewPort) => {
   });
 
   const flush = (threadId: ThreadId) => lock.withPermits(1)(flushUnlocked(threadId));
+
+  // One timer per reviewed thread for batches held by minWakeIntervalSeconds.
+  const pendingFlushes = new Set<ThreadId>();
+  // Typed: it closes the loop flush -> flushReviewer -> flushLater, which inference cannot.
+  const flushLater = (threadId: ThreadId, delayMs: number): Effect.Effect<void> =>
+    pendingFlushes.has(threadId)
+      ? Effect.void
+      : Effect.sync(() => pendingFlushes.add(threadId)).pipe(
+          Effect.andThen(
+            Effect.sleep(Duration.millis(Math.max(1, Math.ceil(delayMs)))).pipe(
+              Effect.andThen(Effect.sync(() => pendingFlushes.delete(threadId))),
+              Effect.andThen(flush(threadId)),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("autoreview could not send a paced batch", { threadId, cause }),
+              ),
+              Effect.forkDetach,
+            ),
+          ),
+          Effect.asVoid,
+        );
 
   /** The reviewed thread and reviewer record, when `childThreadId` is an attached reviewer. */
   const reviewerOf = Effect.fnUntraced(function* (childThreadId: ThreadId) {
