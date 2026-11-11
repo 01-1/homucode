@@ -745,7 +745,7 @@ export type OrchestratorMcpCapabilitiesResult = typeof OrchestratorMcpCapabiliti
 const ScheduledTaskModelSelection = Schema.Struct({
   instanceId: ProviderInstanceId,
   model: TrimmedNonEmptyString,
-  options: Schema.optional(OrchestratorMcpTargetOptions),
+  options: Schema.optionalKey(OrchestratorMcpTargetOptions),
 }).annotate({
   description:
     "Stored provider, model and options for new threads. Bound runs follow the bound thread current model, including its options.",
