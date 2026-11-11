@@ -14,9 +14,10 @@ import { forkParked } from "../serverActivation.ts";
 import { isActiveRun, resolveMessageDispatchIntent } from "./CommandPolicy.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import { queuedRunsInDeliveryOrder } from "./QueuedRunOrder.ts";
 
-/** Most queued sends steered into one turn per trigger; the rest go on the next trigger. */
-const MAX_PROMOTIONS_PER_PASS = 20;
+/** Safety bound; each promotion consumes one queued run, so a pass ends long before this. */
+const MAX_PROMOTIONS_PER_PASS = 500;
 
 /**
  * Sends that asked to steer (auto/steer) queue when the turn cannot take a steer yet: a
@@ -34,15 +35,14 @@ export function nextAutoSteerPromotion(projection: {
   readonly providerSessions: Parameters<
     typeof resolveMessageDispatchIntent
   >[0]["providerSessions"];
-}): { readonly queuedRunId: OrchestrationV2Run["id"]; readonly targetRunId: OrchestrationV2Run["id"] } | null {
-  const queued = projection.runs
-    .filter((run) => run.status === "queued")
-    .toSorted(
-      (left, right) =>
-        (left.queuePosition ?? left.ordinal) - (right.queuePosition ?? right.ordinal) ||
-        left.ordinal - right.ordinal,
-    );
-  const head = queued[0];
+}): {
+  readonly queuedRunId: OrchestrationV2Run["id"];
+  readonly targetRunId: OrchestrationV2Run["id"];
+  readonly skipsCompaction: boolean;
+} | null {
+  const head = queuedRunsInDeliveryOrder(
+    projection as Parameters<typeof queuedRunsInDeliveryOrder>[0],
+  )[0];
   if (
     head === undefined ||
     head.autoSteer !== true ||
@@ -62,14 +62,16 @@ export function nextAutoSteerPromotion(projection: {
   );
   // Promote skips a compaction and starts the message, as the manual Steer button does.
   if (activeMessage !== undefined && isCompactionCommandMessage(activeMessage)) {
-    return { queuedRunId: head.id, targetRunId: activeRun.id };
+    return { queuedRunId: head.id, targetRunId: activeRun.id, skipsCompaction: true };
   }
   const mode = resolveMessageDispatchIntent(
     projection as Parameters<typeof resolveMessageDispatchIntent>[0],
     { type: "start_immediately" },
     "auto",
   );
-  return mode.type === "steer_active" ? { queuedRunId: head.id, targetRunId: mode.targetRunId } : null;
+  return mode.type === "steer_active"
+    ? { queuedRunId: head.id, targetRunId: mode.targetRunId, skipsCompaction: false }
+    : null;
 }
 
 const triggers = (event: OrchestrationV2DomainEvent): boolean =>
@@ -84,6 +86,9 @@ export const make = Effect.gen(function* () {
   let sequence = 0;
   // Threads that got a trigger while their pass was running; the pass runs again for them.
   const dirty = new Set<ThreadId>();
+  // Compaction runs already asked to stop for a queued send. The stop settles later, and
+  // asking again would emit queued-run updates that retrigger this service in a loop.
+  const compactionsSkipped = new Set<string>();
 
   const promote = Effect.fn("AutoSteerQueuedService.promote")(
     function* (threadId: ThreadId) {
@@ -98,9 +103,13 @@ export const make = Effect.gen(function* () {
         ]);
         if (records.thread.archivedAt !== null || records.thread.deletedAt !== null) return;
         const next = nextAutoSteerPromotion(records);
-        if (next === null) {
+        if (next === null || (next.skipsCompaction && compactionsSkipped.has(next.targetRunId))) {
           if (!dirty.delete(threadId)) return;
           continue;
+        }
+        if (next.skipsCompaction) {
+          if (compactionsSkipped.size > 1_000) compactionsSkipped.clear();
+          compactionsSkipped.add(next.targetRunId);
         }
         const stamp = DateTime.toEpochMillis(yield* DateTime.now);
         yield* orchestrator.dispatch({
@@ -113,6 +122,9 @@ export const make = Effect.gen(function* () {
           targetRunId: next.targetRunId,
         });
       }
+      yield* Effect.logWarning("auto-steer pass hit its bound; the next turn event continues", {
+        threadId,
+      });
     },
     (effect, threadId) =>
       effect.pipe(
