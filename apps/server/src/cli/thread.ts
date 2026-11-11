@@ -1,11 +1,16 @@
 import {
   OrchestratorMcpFailure,
+  OrchestratorMcpClientRequestId,
+  ProviderOptionSelections,
   OrchestratorMcpThreadListResult,
   OrchestratorMcpThreadReadResult,
   OrchestratorMcpThreadSendResult,
   OrchestratorMcpThreadWaitResult,
   ProjectId,
   RunId,
+  RuntimeRequestId,
+  ProviderUserInputAnswers,
+  OrchestrationV2DispatchCommandResult,
   ThreadId,
   TrimmedNonEmptyString,
   type OrchestratorMcpThreadListItem,
@@ -598,6 +603,24 @@ const threadListCommand = Command.make("list", {
   ),
 );
 
+export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(function* (raw: ReadonlyArray<string>, effort?: string) {
+  const values = effort === undefined ? raw : [...raw, `reasoningEffort=${effort}`];
+  const options: Array<{ id: string; value: string | boolean }> = [];
+  for (const option of values) {
+    const at = option.indexOf("=");
+    const id = option.slice(0, at).trim();
+    const value = option.slice(at + 1).trim();
+    if (at <= 0 || !id || !value || options.some((existing) => existing.id === id)) {
+      return yield* new ThreadUsageError({ detail: "Each --option must be a unique ID=VALUE with a nonempty value." });
+    }
+    options.push({ id, value: value === "true" ? true : value === "false" ? false : value });
+  }
+  yield* Schema.decodeUnknownEffect(ProviderOptionSelections)(options).pipe(
+    Effect.mapError(() => new ThreadUsageError({ detail: "Invalid model options." })),
+  );
+  return options;
+});
+
 const threadStartCommand = Command.make("start", {
   ...projectLocationFlags,
   project: Argument.String("project").pipe(
@@ -616,6 +639,9 @@ const threadStartCommand = Command.make("start", {
     Flag.withDescription("Model slug. Defaults to the project's default model."),
     Flag.optional,
   ),
+  effort: Flag.String("effort").pipe(Flag.withDescription("Reasoning effort (shorthand for --option reasoningEffort=VALUE)."), Flag.optional),
+  options: Flag.String("option").pipe(Flag.withDescription("Model option ID=VALUE; repeat for several options. true/false are booleans."), Flag.atLeast(0)),
+  clientRequestId: Flag.String("client-request-id").pipe(Flag.withDescription("Stable retry key; reuse to avoid launching another thread."), Flag.optional),
   worktree: Flag.String("worktree").pipe(
     Flag.withDescription(
       "Run in a new git worktree based on this branch, tag, or commit, instead of the project folder.",
@@ -637,6 +663,13 @@ const threadStartCommand = Command.make("start", {
       if (Option.isSome(flags.provider) !== Option.isSome(flags.model)) {
         return yield* new ThreadUsageError({ detail: "--provider and --model go together." });
       }
+      const options = yield* parseLaunchOptions(flags.options, Option.getOrUndefined(flags.effort));
+      if (options.length > 0 && Option.isNone(flags.provider)) {
+        return yield* new ThreadUsageError({ detail: "Model options require --provider and --model." });
+      }
+      const clientRequestId = Option.isNone(flags.clientRequestId) ? undefined : yield* Schema.decodeUnknownEffect(OrchestratorMcpClientRequestId)(flags.clientRequestId.value).pipe(
+        Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --client-request-id." })),
+      );
       const title = yield* decodeTitle(
         Option.getOrElse(flags.title, () => titleFromMessage(message)),
       ).pipe(Effect.mapError(() => new ThreadUsageError({ detail: "The title is empty." })));
@@ -650,12 +683,14 @@ const threadStartCommand = Command.make("start", {
               projectId: project.id,
               title,
               message,
+              ...(clientRequestId === undefined ? {} : { clientRequestId }),
               ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
               ...(Option.isSome(flags.provider) && Option.isSome(flags.model)
                 ? {
                     modelSelection: {
                       instanceId: flags.provider.value,
                       model: flags.model.value,
+                      ...(options.length === 0 ? {} : { options }),
                     },
                   }
                 : {}),
@@ -832,6 +867,59 @@ const threadConfigureCommand = Command.make("configure", {
       );
     }).pipe(reportThreadErrors),
   ),
+);
+
+const PendingQuestionResult = Schema.Struct({
+  requestId: RuntimeRequestId,
+  questions: Schema.Array(Schema.Struct({
+    id: Schema.String, header: Schema.String, question: Schema.String,
+    options: Schema.Array(Schema.Struct({ label: Schema.String, description: Schema.String, value: Schema.optional(Schema.String) })),
+    multiSelect: Schema.optional(Schema.Boolean), allowCustomAnswer: Schema.optional(Schema.Boolean),
+    initialAnswer: Schema.optional(Schema.String), required: Schema.optional(Schema.Boolean),
+  })),
+});
+const pendingFlags = { ...projectLocationFlags, thread: threadArgument, json: jsonFlag };
+const requestArgument = Argument.String("request");
+const pendingListCommand = Command.make("list", pendingFlags).pipe(Command.withHandler((flags) =>
+  withThreadTools(flags, Effect.fn("cli.pendingRequest.list")(function* (tools) {
+    const threadId = yield* decodeThreadId(flags.thread);
+    const result = yield* tools.call("t3_pending_request", { action: "list", threadId }, Schema.Struct({ requestIds: Schema.Array(RuntimeRequestId) }));
+    yield* flags.json ? printJson(result) : Console.log(result.requestIds.join("\n"));
+  })).pipe(reportThreadErrors),
+));
+const pendingReadCommand = Command.make("read", { ...pendingFlags, request: requestArgument }).pipe(Command.withHandler((flags) =>
+  withThreadTools(flags, Effect.fn("cli.pendingRequest.read")(function* (tools) {
+    const threadId = yield* decodeThreadId(flags.thread);
+    const requestId = yield* Schema.decodeUnknownEffect(RuntimeRequestId)(flags.request);
+    const result = yield* tools.call("t3_pending_request", { action: "read", threadId, requestId }, PendingQuestionResult);
+    yield* printJson(result);
+  })).pipe(reportThreadErrors),
+));
+const pendingRespondCommand = Command.make("respond", {
+  ...pendingFlags, request: requestArgument,
+  answersFile: Flag.String("answers-file").pipe(Flag.withDescription("Absolute path to a JSON answers object, or - for stdin.")),
+}).pipe(Command.withHandler((flags) =>
+  withThreadTools(flags, Effect.fn("cli.pendingRequest.respond")(function* (tools) {
+    const threadId = yield* decodeThreadId(flags.thread);
+    const requestId = yield* Schema.decodeUnknownEffect(RuntimeRequestId)(flags.request);
+    // The native read refuses stale requests, approvals, and secret cards before any answer is read.
+    yield* tools.call("t3_pending_request", { action: "read", threadId, requestId }, PendingQuestionResult);
+    const path = yield* Path.Path;
+    const fs = yield* FileSystem.FileSystem;
+    if (flags.answersFile !== "-" && !path.isAbsolute(flags.answersFile)) {
+      return yield* new ThreadUsageError({ detail: "--answers-file must be an absolute path or -." });
+    }
+    const raw = flags.answersFile === "-" ? yield* readMessageArgument("-") : yield* fs.readFileString(flags.answersFile);
+    const answers = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ProviderUserInputAnswers))(raw).pipe(
+      Effect.mapError(() => new ThreadUsageError({ detail: "Answers must be a JSON object." })),
+    );
+    const result = yield* tools.call("t3_pending_request", { action: "respond", threadId, requestId, answers }, OrchestrationV2DispatchCommandResult);
+    yield* printJson(result);
+  })).pipe(reportThreadErrors),
+));
+export const pendingRequestCommand = Command.make("pending-request").pipe(
+  Command.withDescription("Read and answer pending user questions. Secret cards and approvals stay in T3."),
+  Command.withSubcommands([pendingListCommand, pendingReadCommand, pendingRespondCommand]),
 );
 
 export const threadCommand = Command.make("thread").pipe(

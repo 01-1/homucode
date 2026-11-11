@@ -102,6 +102,9 @@ export const T3ProjectFile = Schema.Struct({
         'How new worktrees populate git submodules: "recursive" (the default) initializes nested submodules too, "top-level" initializes only those declared by this repository, and "none" leaves every submodule empty for a setup script to handle. A project or environment setting in T3 Code overrides this.',
     }),
   ),
+  completionSink: Schema.optionalKey(Schema.Struct({
+    command: Schema.Array(trimmedNonEmpty({ description: "Executable and arguments. Receives completion JSON on stdin; exit 0 acknowledges durable deduplication by thread_id and run_id." })).check(Schema.isMinLength(1)),
+  }).annotate({ description: "Local completion receiver. No shell is used. Runs retry after failures and restart; receiver must deduplicate thread_id/run_id before exit 0. Remove to disable new deliveries." })),
   scripts: Schema.optionalKey(
     Schema.Array(T3ProjectFileScript)
       .annotate({

@@ -1,3 +1,6 @@
+import * as CompletionSink from "./CompletionSink.ts";
+import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
+import * as CompletionProcessRunner from "../processRunner.ts";
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
@@ -394,6 +397,9 @@ export const layerProduction = Layer.mergeAll(
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
+  CompletionSink.layerWorker.pipe(Layer.provide(CompletionSink.layer.pipe(
+    Layer.provide(Layer.merge(T3ProjectFileLoader.layer, CompletionProcessRunner.layer)),
+  ))),
 ).pipe(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
   Layer.provide(Scheduler.layer),
