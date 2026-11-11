@@ -1738,12 +1738,13 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
     threadId === null ? Effect.undefined : mcpSessions.read(threadId);
   const { clientFactory, digest, fileSystem, idAllocator, serverConfig } = adapterOptions;
   const continuationRequests = adapterOptions.continuationRequests;
-  const withObservedUsageFailure = (failure: OrchestrationV2ProviderFailure, nativeError: unknown) =>
-    Effect.gen(function* () {
+  const withObservedUsageFailure = Effect.fn("CodexAdapterV2.withObservedUsageFailure")(
+    function* (failure: OrchestrationV2ProviderFailure, nativeError: unknown) {
       const managed = withCodexManagedFailure(failure, nativeError);
       return yield* readLocalCodexUsageStop(fileSystem, adapterOptions.localUsageGuardPath, managed,
         DateTime.toEpochMillis(yield* DateTime.now));
-    });
+    },
+  );
 
   return ProviderAdapter.ProviderAdapterV2.of({
     instanceId: adapterOptions.instanceId,
