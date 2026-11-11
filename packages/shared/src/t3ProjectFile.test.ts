@@ -10,11 +10,13 @@ describe("T3ProjectFileFromJson", () => {
     const decoded = decodeJson(`{
       // team scripts
       "iconPath": "assets/logo.svg",
+      "completionSink": { "command": ["/usr/bin/python3", "receiver.py", "-"] },
       "scripts": [
         { "name": "Dev", "command": "pnpm dev", "stopOnSettle": true, },
       ],
     }`);
 
+    expect(decoded.completionSink?.command).toEqual(["/usr/bin/python3", "receiver.py", "-"]);
     expect(decoded.iconPath).toBe("assets/logo.svg");
     expect(decoded.scripts?.[0]).toEqual({ name: "Dev", command: "pnpm dev", stopOnSettle: true });
   });

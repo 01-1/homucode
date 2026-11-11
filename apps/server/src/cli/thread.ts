@@ -1,5 +1,6 @@
 import {
   OrchestratorMcpFailure,
+  OrchestratorMcpCapabilitiesResult,
   OrchestratorMcpClientRequestId,
   ProviderOptionSelections,
   OrchestratorMcpThreadListResult,
@@ -224,6 +225,7 @@ const withThreadTools = Effect.fn("cli.thread.withThreadTools")(function* <A, E,
     const issued = yield* Effect.acquireRelease(
       environmentAuth.issueMcpClientSession({
         label: "t3 thread cli",
+        localCli: true,
         // The CLI runs as the machine's owner. New threads still start at
         // the project's default mode, never at this ceiling by default.
         access: "full-access",
@@ -621,6 +623,16 @@ export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(fun
   return options;
 });
 
+const threadCapabilitiesCommand = Command.make("capabilities", {
+  ...projectLocationFlags, json: jsonFlag,
+  search: Flag.String("search").pipe(Flag.optional),
+}).pipe(Command.withDescription("List the running environment's provider models and options."),
+  Command.withHandler((flags) => withThreadTools(flags, Effect.fn("cli.thread.capabilities")(function* (tools) {
+    const result = yield* tools.call("orchestrator_capabilities", Option.isSome(flags.search) ? { search: flags.search.value } : {}, OrchestratorMcpCapabilitiesResult);
+    yield* printJson(result);
+  })).pipe(reportThreadErrors)),
+);
+
 const threadStartCommand = Command.make("start", {
   ...projectLocationFlags,
   project: Argument.String("project").pipe(
@@ -927,6 +939,7 @@ export const threadCommand = Command.make("thread").pipe(
   Command.withSubcommands([
     threadListCommand,
     threadStartCommand,
+    threadCapabilitiesCommand,
     threadSendCommand,
     threadShowCommand,
     threadConfigureCommand,

@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   AuthMcpClientAccess,
+  EnvironmentId,
   AuthStandardClientScopes,
   type AuthCreatePairingCredentialInput,
   EnvironmentHttpApi,
@@ -25,6 +26,8 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
+import type * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
+import * as McpHttpServer from "../mcp/McpHttpServer.ts";
 import * as McpOAuth from "./McpOAuth.ts";
 import * as McpOAuthHttp from "./mcpOAuthHttp.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
@@ -593,3 +596,27 @@ it("matches loopback redirects on everything but the port, and https redirects e
   expect(matches("https://bot.example/cb", "https://bot.example/cb?x=1")).toBe(false);
   expect(matches("https://bot.example/cb", "https://evil.example/cb")).toBe(false);
 });
+
+it.live("local CLI retry namespaces survive fresh sessions and cannot be claimed by an OAuth client label", () =>
+  withRoutes((_handler, auth) => Effect.gen(function* () {
+    const scopes: Array<McpInvocationContext.McpInvocationScope> = [];
+    for (const localCli of [true, true, false]) {
+      const issued = yield* auth.issueMcpClientSession({ label: "t3 thread cli", access: "full-access", peerLink: false, localCli, client: { deviceType: "bot" } });
+      const client = yield* auth.authenticateMcpClient(HttpServerRequest.fromWeb(at("/mcp", { headers: { authorization: `Bearer ${issued.token}` } })));
+      expect(client.localCli).toBe(localCli ? true : undefined);
+      const scope = yield* Effect.gen(function* () {
+        const authenticator = yield* McpHttpServer.McpClientAuthenticator;
+        return yield* authenticator.authenticate(HttpServerRequest.fromWeb(at("/mcp", { headers: { authorization: `Bearer ${issued.token}` } })));
+      }).pipe(Effect.provide(McpOAuth.layerMcpClientAuthenticator.pipe(Layer.provide(Layer.mergeAll(
+        Layer.succeed(EnvironmentAuth.EnvironmentAuth, auth),
+        Layer.mock(ServerEnvironment.ServerEnvironment)({ getEnvironmentId: Effect.succeed(EnvironmentId.make("test-environment")) }),
+      )))));
+      if (scope === undefined) return yield* Effect.die("Missing authenticated scope");
+      scopes.push(scope);
+    }
+    expect(scopes[0]!.client!.sessionId).not.toBe(scopes[1]!.client!.sessionId);
+    expect(scopes[0]!.requestNamespace).toBe("local-cli");
+    expect(scopes[1]!.requestNamespace).toBe("local-cli");
+    expect(scopes[2]!.requestNamespace).toBe(`client:${scopes[2]!.client!.sessionId}`);
+  })),
+);

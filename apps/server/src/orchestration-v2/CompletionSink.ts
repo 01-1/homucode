@@ -2,12 +2,13 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as ProcessRunner from "../processRunner.ts";
-import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
+import { T3ProjectFileFromJson } from "@t3tools/shared/t3ProjectFile";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 
 const Command = Schema.Array(Schema.String).check(Schema.isMinLength(1));
@@ -19,7 +20,8 @@ export class CompletionSink extends Context.Service<CompletionSink, {
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const files = yield* T3ProjectFileLoader.T3ProjectFileLoader;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const processes = yield* ProcessRunner.ProcessRunner;
   const permit = yield* Semaphore.make(1);
   const drain = Effect.fn("CompletionSink.drain")(function* () {
@@ -32,8 +34,16 @@ const make = Effect.gen(function* () {
     for (const row of rows) {
       let commandJson = row.command_json;
       if (commandJson === null) {
-        const config = yield* files.load(row.workspace_root);
-        const command = Option.isSome(config) ? config.value.completionSink?.command : undefined;
+        const config = yield* fs.readFileString(path.join(row.workspace_root, "t3.json")).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)),
+          Effect.result,
+        );
+        if (config._tag === "Failure") {
+          yield* sql`UPDATE thread_completion_outbox SET attempts = attempts + 1, next_attempt_at = ${now + 5000}
+            WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;
+          continue;
+        }
+        const command = config.success.completionSink?.command;
         if (command === undefined) {
           yield* sql`UPDATE thread_completion_outbox SET delivered = 1
             WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;

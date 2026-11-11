@@ -121,3 +121,33 @@ result that always includes the thread id.
 Approved agents appear under **Settings → Sharing & access** like other clients.
 Revoke one there to cut off its access immediately. A sign-in lasts 30 days;
 after that the agent asks you to approve it again.
+
+For retry-safe starts, reuse `--client-request-id` on each attempt. The machine-owner
+CLI shares its retry namespace across temporary authenticated sessions. Supply
+`--provider` and `--model` with repeatable model options such as
+`--option reasoningEffort=high --option fast=true`; `--effort high` is shorthand
+for the reasoningEffort option. Reusing a key replays the original launch.
+
+Use `t3 pending-request list THREAD --json`, `read THREAD REQUEST --json`, and
+`respond THREAD REQUEST --answers-file /absolute/answers.json --json` to answer
+pending user questions. `--answers-file -` reads a JSON object from stdin, mapping
+question IDs to answers. Secret cards and approvals remain in T3's secure UI.
+
+A project's `t3.json` can configure a local completion receiver:
+
+```json
+{ "completionSink": { "command": ["/absolute/receiver", "append-result", "-"] } }
+```
+
+T3 passes one JSON object on stdin with `schema: 1`, `project_id`, `thread_id`,
+`run_id`, `title`, `status`, `created_at` and `text` (the last visible assistant
+message, or an empty string). Reasoning and tool output are excluded. No shell
+is used. Terminal outcomes enqueue atomically with the run update. Failed
+commands retry after 5 seconds with exponential backoff capped at 5 minutes,
+including after restart. The receiver must durably deduplicate `thread_id` plus
+`run_id` before exiting zero: a crash after acceptance can repeat the invocation.
+A nonzero exit, including an unknown task registration, retains the delivery.
+Unreadable or invalid configuration is retried; a valid config without
+`completionSink` disables new deliveries. Once selected, a pending delivery keeps
+its command and payload across retries. Removing the config does not cancel
+already selected deliveries. Receivers run without any model turn.

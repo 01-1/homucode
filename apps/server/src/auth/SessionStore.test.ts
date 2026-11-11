@@ -352,10 +352,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("SessionStore.lay
         subject: "mcp-client",
         method: "bearer-access-token",
         runtimeModeCeiling: "auto",
+        localCli: true,
       });
       const uncapped = yield* sessions.issue({ method: "bearer-access-token" });
 
       expect((yield* sessions.verify(capped.token)).runtimeModeCeiling).toBe("auto");
+      expect((yield* sessions.verify(capped.token)).localCli).toBe(true);
+      expect((yield* sessions.verify(uncapped.token)).localCli).toBeUndefined();
       expect((yield* sessions.verify(uncapped.token)).runtimeModeCeiling).toBeUndefined();
     }).pipe(Effect.provide(layerSessionStore())),
   );

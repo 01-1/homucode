@@ -3,13 +3,13 @@ import { EventId, MessageId, ProjectId, ProviderInstanceId, RunId, ThreadId, typ
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProcessRunner from "../processRunner.ts";
-import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
+import * as FileSystem from "effect/FileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as CompletionSink from "./CompletionSink.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
@@ -27,7 +27,7 @@ const run = (status: OrchestrationV2Run["status"]): OrchestrationV2Run => ({
   completedAt: status === "running" ? null : at, checkpointId: null, contextHandoffId: null,
 });
 const event = (id: string, payload: OrchestrationV2Run): OrchestrationV2DomainEvent => ({
-  type: "run.updated", id: EventId.make(id), threadId, runId, occurredAt: at, payload,
+  type: "run.updated", id: EventId.make(id), threadId, runId: payload.id, occurredAt: at, payload,
 });
 const seed = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -45,8 +45,16 @@ const seed = Effect.gen(function* () {
   }, { ...event("run-created", run("running")), type: "run.created" }, {
     type: "message.updated", id: EventId.make("visible-message"), threadId, runId, occurredAt: at,
     payload: { id: MessageId.make("visible"), threadId, runId, nodeId: null, role: "assistant",
-      text: "Final visible reply", attachments: [], streaming: false, createdAt: at, updatedAt: at },
+      createdBy: "agent", creationSource: "provider", text: "Final visible reply", attachments: [], streaming: false, createdAt: at, updatedAt: at },
+  }, {
+    type: "message.updated", id: EventId.make("commentary-message"), threadId, runId, occurredAt: at,
+    payload: { id: MessageId.make("z-commentary"), threadId, runId, nodeId: null, role: "assistant",
+      createdBy: "agent", creationSource: "provider", text: "Earlier commentary", attachments: [], streaming: false, createdAt: at, updatedAt: at },
   }] });
+  yield* sql`INSERT INTO orchestration_v2_projection_turn_items
+    (turn_item_id, thread_id, run_id, ordinal, type, status, updated_at, payload_json)
+    VALUES ('commentary-item', ${threadId}, ${runId}, 1, 'assistant_message', 'completed', '2026-11-10', '{"messageId":"z-commentary"}'),
+           ('final-item', ${threadId}, ${runId}, 2, 'assistant_message', 'completed', '2026-11-10', '{"messageId":"visible"}')`;
   // Non-message payloads must never leak into the completion JSON.
   yield* sql`INSERT INTO orchestration_v2_projection_turn_items
     (turn_item_id, thread_id, run_id, ordinal, type, status, updated_at, payload_json)
@@ -63,8 +71,10 @@ it.effect("captures outcomes atomically once and retries across worker reconstru
   yield* seed;
   const calls: Array<ProcessRunner.ProcessRunInput> = [];
   let fail = true;
+  let validConfig = false;
   const layer = CompletionSink.layer.pipe(Layer.provide(Layer.mergeAll(
-    Layer.succeed(T3ProjectFileLoader.T3ProjectFileLoader, { load: () => Effect.succeed(Option.some({ completionSink: { command: ["receiver", "append-result", "-"] } })) }),
+    Layer.mock(FileSystem.FileSystem)({ readFileString: () => Effect.sync(() => validConfig ? JSON.stringify({ completionSink: { command: ["receiver", "append-result", "-"] } }) : "{broken") }),
+    NodePath.layer,
     Layer.succeed(ProcessRunner.ProcessRunner, { run: (input) => Effect.sync(() => {
       calls.push(input);
       return { stdout: "", stderr: "", code: ChildProcessSpawner.ExitCode(fail ? 1 : 0), timedOut: false,
@@ -79,6 +89,10 @@ it.effect("captures outcomes atomically once and retries across worker reconstru
   yield* events.write({ events: [event("terminal-again", run("completed"))] });
   assert.lengthOf(yield* sql`SELECT * FROM thread_completion_outbox`, 1);
   yield* drain;
+  assert.lengthOf(calls, 0);
+  validConfig = true;
+  yield* TestClock.adjust("5 seconds");
+  yield* drain;
   assert.lengthOf(calls, 1);
   const payload = JSON.parse(calls[0]!.stdin!);
   assert.deepEqual(payload, { schema: 1, thread_id: threadId, run_id: runId, project_id: "completion-project",
@@ -86,14 +100,15 @@ it.effect("captures outcomes atomically once and retries across worker reconstru
   yield* drain;
   assert.lengthOf(calls, 1);
   fail = false;
-  yield* TestClock.adjust("5 seconds");
+  yield* TestClock.adjust("10 seconds");
   yield* drain;
   assert.lengthOf(calls, 2);
   assert.equal(calls[0]!.stdin, calls[1]!.stdin);
   yield* drain;
   assert.lengthOf(calls, 2);
+  let ordinal = 1;
   for (const status of ["failed", "interrupted", "cancelled"] as const) {
-    const nextRun = { ...run(status), id: RunId.make(`run-${status}`), ordinal: 2 };
+    const nextRun = { ...run(status), id: RunId.make(`run-${status}`), ordinal: ++ordinal };
     yield* events.write({ events: [event(`event-${status}`, nextRun)] });
     yield* drain;
     assert.equal(JSON.parse(calls.at(-1)!.stdin!).status, status);
