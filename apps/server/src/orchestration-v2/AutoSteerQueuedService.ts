@@ -26,6 +26,12 @@ const MAX_PROMOTIONS_PER_PASS = 500;
  * the head of the queue, so nothing waits for a manual "Send now". It stops at the first
  * queued run that is held or did not ask to steer, so queue order is never jumped.
  */
+export interface AutoSteerPromotion {
+  readonly queuedRunId: OrchestrationV2Run["id"];
+  readonly targetRunId: OrchestrationV2Run["id"];
+  readonly skipsCompaction: boolean;
+}
+
 export function nextAutoSteerPromotion(projection: {
   readonly thread?: object;
   readonly runs: ReadonlyArray<OrchestrationV2Run>;
@@ -35,11 +41,7 @@ export function nextAutoSteerPromotion(projection: {
   readonly providerSessions: Parameters<
     typeof resolveMessageDispatchIntent
   >[0]["providerSessions"];
-}): {
-  readonly queuedRunId: OrchestrationV2Run["id"];
-  readonly targetRunId: OrchestrationV2Run["id"];
-  readonly skipsCompaction: boolean;
-} | null {
+}): AutoSteerPromotion | null {
   const head = queuedRunsInDeliveryOrder(
     projection as Parameters<typeof queuedRunsInDeliveryOrder>[0],
   )[0];
@@ -80,6 +82,47 @@ const triggers = (event: OrchestrationV2DomainEvent): boolean =>
     (event.payload.status === "running" ||
       (event.payload.status === "queued" && event.payload.autoSteer === true)));
 
+export interface AutoSteerPassDeps<R> {
+  /** Threads that got a trigger since their pass last read; a pass consumes its own entry. */
+  readonly dirty: Set<ThreadId>;
+  readonly compactionsSkipped: Set<string>;
+  readonly read: (threadId: ThreadId) => Effect.Effect<R | null, unknown>;
+  readonly select: (records: R) => AutoSteerPromotion | null;
+  readonly dispatch: (threadId: ThreadId, next: AutoSteerPromotion) => Effect.Effect<unknown, unknown>;
+}
+
+/**
+ * One drain of a thread's queue. A refused promotion (the locked recheck saw a reorder or a
+ * hold) ends the pass unless a trigger arrived meanwhile; then the queue is read again, so the
+ * new head is not stranded until the next turn event.
+ */
+export const runAutoSteerPass = <R>(deps: AutoSteerPassDeps<R>, threadId: ThreadId) =>
+  Effect.gen(function* () {
+  deps.dirty.delete(threadId);
+  for (let pass = 0; pass < MAX_PROMOTIONS_PER_PASS; pass++) {
+    const records = yield* deps.read(threadId);
+    if (records === null) return;
+    const next = deps.select(records);
+    if (next === null || (next.skipsCompaction && deps.compactionsSkipped.has(next.targetRunId))) {
+      if (!deps.dirty.delete(threadId)) return;
+      continue;
+    }
+    if (next.skipsCompaction) {
+      if (deps.compactionsSkipped.size > 1_000) deps.compactionsSkipped.clear();
+      deps.compactionsSkipped.add(next.targetRunId);
+    }
+    const exit = yield* Effect.exit(deps.dispatch(threadId, next));
+    if (exit._tag === "Failure") {
+      if (next.skipsCompaction) deps.compactionsSkipped.delete(next.targetRunId);
+      yield* Effect.logDebug("queued send still cannot steer", { threadId, cause: exit.cause });
+      if (!deps.dirty.delete(threadId)) return;
+    }
+  }
+  yield* Effect.logWarning("auto-steer pass hit its bound; the next turn event continues", {
+    threadId,
+  });
+  });
+
 export const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -90,50 +133,49 @@ export const make = Effect.gen(function* () {
   // asking again would emit queued-run updates that retrigger this service in a loop.
   const compactionsSkipped = new Set<string>();
 
-  const promote = Effect.fn("AutoSteerQueuedService.promote")(
-    function* (threadId: ThreadId) {
-      dirty.delete(threadId);
-      for (let pass = 0; pass < MAX_PROMOTIONS_PER_PASS; pass++) {
-        const records = yield* projections.getThreadRecords(threadId, [
-          "runs",
-          "messages",
-          "providerTurns",
-          "providerThreads",
-          "providerSessions",
-        ]);
-        if (records.thread.archivedAt !== null || records.thread.deletedAt !== null) return;
-        const next = nextAutoSteerPromotion(records);
-        if (next === null || (next.skipsCompaction && compactionsSkipped.has(next.targetRunId))) {
-          if (!dirty.delete(threadId)) return;
-          continue;
-        }
-        if (next.skipsCompaction) {
-          if (compactionsSkipped.size > 1_000) compactionsSkipped.clear();
-          compactionsSkipped.add(next.targetRunId);
-        }
-        const stamp = DateTime.toEpochMillis(yield* DateTime.now);
-        yield* orchestrator.dispatch({
-          type: "queued-message.promote-to-steer",
-          commandId: CommandId.make(
-            `server:auto-steer:${next.queuedRunId}:${stamp}:${++sequence}`,
+  const promote = (threadId: ThreadId) =>
+    runAutoSteerPass(
+      {
+        dirty,
+        compactionsSkipped,
+        read: (id) =>
+          projections
+            .getThreadRecords(id, [
+              "runs",
+              "messages",
+              "providerTurns",
+              "providerThreads",
+              "providerSessions",
+            ])
+            .pipe(
+              Effect.map((records) =>
+                records.thread.archivedAt !== null || records.thread.deletedAt !== null
+                  ? null
+                  : records,
+              ),
+            ),
+        select: nextAutoSteerPromotion,
+        dispatch: (id, next) =>
+          DateTime.now.pipe(
+            Effect.flatMap((now) =>
+              orchestrator.dispatch({
+                type: "queued-message.promote-to-steer",
+                commandId: CommandId.make(
+                  `server:auto-steer:${next.queuedRunId}:${DateTime.toEpochMillis(now)}:${++sequence}`,
+                ),
+                threadId: id,
+                queuedRunId: next.queuedRunId,
+                targetRunId: next.targetRunId,
+              }),
+            ),
           ),
-          threadId,
-          queuedRunId: next.queuedRunId,
-          targetRunId: next.targetRunId,
-        });
-      }
-      yield* Effect.logWarning("auto-steer pass hit its bound; the next turn event continues", {
-        threadId,
-      });
-    },
-    (effect, threadId) =>
-      effect.pipe(
-        // A refused steer leaves the run queued; the next turn event tries again.
-        Effect.catchCause((cause) =>
-          Effect.logDebug("queued send still cannot steer", { threadId, cause }),
-        ),
+      },
+      threadId,
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logDebug("auto-steer pass could not read the thread", { threadId, cause }),
       ),
-  );
+    );
 
   const start = Effect.fn("AutoSteerQueuedService.start")(function* () {
     // Keyed by thread so passes for one thread never race each other.
