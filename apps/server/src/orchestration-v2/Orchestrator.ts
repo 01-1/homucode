@@ -6746,6 +6746,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         (heldRunsToRelease.length === 0 && queueIsHeld && !wakeSkipsHold)
           ? { queueHeld: true }
           : {}),
+        // A send that asked to steer but had to queue (compaction, turn not started yet)
+        // is promoted to a steer by AutoSteerQueuedService once the turn can take it.
+        ...((command.deliveryIntent === "auto" || command.deliveryIntent === "steer") &&
+        command.notification === undefined &&
+        command.delegatedCompletion === undefined &&
+        command.idleCompaction === undefined &&
+        command.turnOnlyModelSelection !== true &&
+        !freshContext &&
+        goalCommand === null &&
+        worktreeMissingRun === undefined &&
+        stoppedRunHoldingFindings === undefined
+          ? { autoSteer: true }
+          : {}),
         queuePosition:
           goalStopRunId !== undefined
             ? 1
