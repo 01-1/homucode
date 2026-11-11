@@ -4768,7 +4768,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           threadId,
         });
         assert.isFalse(
-          result.storedEvents.some((event) => event.type === "provider-session.detached"),
+          result.storedEvents.some((stored) => stored.event.type === "provider-session.detached"),
         );
         const projection = yield* orchestrator.getThreadProjection(threadId);
         const run = projection.runs[0]!;
