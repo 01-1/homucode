@@ -88,7 +88,7 @@ const setup = Effect.gen(function* () {
       ordinal: 1, status: "running", startedAt: now, completedAt: null } }),
   ];
   // Validate each complete event before the production EventStore append.
-  const checkedEvents = yield* Effect.forEach(seededEvents, Schema.decodeEffect(OrchestrationV2DomainEvent));
+  const checkedEvents = yield* Effect.forEach(seededEvents, (event) => Schema.decodeEffect(OrchestrationV2DomainEvent)(event));
   yield* events.writeWithEffects({ events: checkedEvents, effects: [] });
   const ready = yield* store.getThreadProjection(threadId);
   assert.equal(ready.providerSessions.find((row) => row.id === session.id)?.status, "ready");
