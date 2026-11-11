@@ -1398,15 +1398,18 @@ describe("background Git disabled", () => {
     return Effect.gen(function* () {
       const broadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
       const detailed = yield* Stream.runCollect(broadcaster.streamStatus({ cwd: "/repo" })).pipe(
+        Effect.asVoid,
         Effect.exit,
       );
       const branch = yield* Stream.runCollect(
         broadcaster.streamBranchStatus({ cwd: "/repo" }),
-      ).pipe(Effect.exit);
-      const poll = yield* broadcaster.refreshBranchStatus({ cwd: "/repo" }).pipe(Effect.exit);
+      ).pipe(Effect.asVoid, Effect.exit);
+      const poll = yield* broadcaster
+        .refreshBranchStatus({ cwd: "/repo" })
+        .pipe(Effect.asVoid, Effect.exit);
       const automatic = yield* broadcaster
         .refreshStatus("/repo", { background: true })
-        .pipe(Effect.exit);
+        .pipe(Effect.asVoid, Effect.exit);
       for (const result of [detailed, branch, poll, automatic]) {
         assert.isTrue(Exit.isFailure(result));
         if (Exit.isFailure(result)) assert.include(String(result.cause), "T3CODE_BACKGROUND_GIT=0");

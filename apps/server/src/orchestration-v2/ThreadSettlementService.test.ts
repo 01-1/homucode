@@ -595,6 +595,7 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
   const summaryRecovery = yield* Ref.make<ReadonlyArray<boolean | undefined>>([]);
   const invalidatedCwds = yield* Ref.make<ReadonlyArray<string>>([]);
   const domainEvents = yield* PubSub.unbounded<OrchestrationV2DomainEvent>();
+  const eventsSubscribed = yield* Deferred.make<void>();
   const closedIdle = yield* Queue.unbounded<{ readonly threadId: string }>();
   const scriptRuns =
     yield* Queue.unbounded<ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput>();
@@ -697,7 +698,12 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
       },
     }),
     Layer.mock(Orchestrator.OrchestratorV2)({
-      streamDomainEvents: Stream.fromPubSub(domainEvents),
+      streamDomainEvents: Stream.unwrap(
+        PubSub.subscribe(domainEvents).pipe(
+          Effect.tap(() => Deferred.succeed(eventsSubscribed, undefined)),
+          Effect.map((subscription) => Stream.fromSubscription(subscription)),
+        ),
+      ),
       dispatch,
     }),
     Layer.mock(TerminalManager.TerminalManager)({
@@ -756,7 +762,8 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
     invalidatedCwds,
     closedIdle,
     scriptRuns,
-    publishEvent: (event: OrchestrationV2DomainEvent) => PubSub.publish(domainEvents, event),
+    publishEvent: (event: OrchestrationV2DomainEvent) =>
+      Deferred.await(eventsSubscribed).pipe(Effect.andThen(PubSub.publish(domainEvents, event))),
     updateSettings,
     publishMerge: PubSub.publish(mergedPullRequests, {
       projectId: PROJECT_ID,

@@ -24,6 +24,7 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ServerConfig from "./config.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
+import { BackgroundGitEnabled } from "./vcs/BackgroundGit.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as Settings from "./serverSettings.ts";
@@ -604,6 +605,34 @@ const runCleanupTest = <A, E>(
     | Scope.Scope
   >,
 ) => effect.pipe(Effect.provide(cleanupTestLayer), Effect.scoped);
+
+it.effect("background Git disabled skips automatic worktrees and preserves manual cleanup", () =>
+  Effect.gen(function* () {
+    yield* TestClock.setTime(NOW_MS);
+    const fixture = yield* cleanupFixture();
+    fixture.setSessionLive(false);
+    yield* fixture.activate(Stream.empty);
+    yield* fixture.service.reports.pipe(
+      Stream.filter((report) => report !== null),
+      Stream.take(1),
+      Stream.runDrain,
+    );
+    yield* fixture.service.drain;
+    expect(fixture.gitInspections()).toBe(0);
+    expect(fixture.snapshotReads()).toBe(0);
+    expect(yield* fixture.fs.exists(fixture.worktree)).toBe(true);
+    const manual = yield* fixture.service.runNow;
+    expect(manual.entries.find((entry) => entry.path === fixture.worktree)).toMatchObject({
+      outcome: "removed",
+    });
+    expect(fixture.gitInspections()).toBeGreaterThan(0);
+    expect(yield* fixture.fs.exists(fixture.worktree)).toBe(false);
+  }).pipe(
+    Effect.provide(cleanupTestLayer),
+    Effect.provideService(BackgroundGitEnabled, false),
+    Effect.scoped,
+  ),
+);
 
 const submoduleCleanupFixture = () =>
   Effect.gen(function* () {

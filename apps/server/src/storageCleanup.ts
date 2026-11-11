@@ -1309,11 +1309,13 @@ const make = Effect.gen(function* () {
     const serverSettings = yield* settingsService.getSettings;
     const settings = serverSettings.storageCleanup;
     const entries: StorageCleanupReportEntry[] = [];
-    const deletedWorktrees = yield* (
-      trigger === "manual" || (yield* BackgroundGitEnabled)
-        ? cleanWorktrees(serverSettings, now, entries)
-        : Effect.succeed({ waiting: false, kept: [] as ReadonlyArray<string> })
-    ).pipe(
+    const backgroundGitEnabled = yield* BackgroundGitEnabled;
+    const deletedWorktrees = yield* Effect.gen(function* () {
+      if (trigger !== "manual" && !backgroundGitEnabled) {
+        return { waiting: false, kept: [] as string[] };
+      }
+      return yield* cleanWorktrees(serverSettings, now, entries);
+    }).pipe(
       Effect.catch((error) =>
         Effect.gen(function* () {
           entries.push({

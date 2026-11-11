@@ -100,10 +100,11 @@ export const layerObserver = Layer.effect(
     const pullRequests = yield* PullRequestService.PullRequestService;
     const pullRequestLookups = yield* FiberMap.make<string>();
     return {
-      refreshAfterTurn: (projectId) =>
+      refreshAfterTurn: Effect.fn("RunFinalizationObserver.refreshAfterTurn")((projectId) =>
         Effect.flatMap(BackgroundGitEnabled, (enabled) =>
           enabled ? pullRequests.refreshAfterTurn(projectId) : Effect.void,
         ),
+      ),
       refresh: Effect.fn("RunFinalizationService.refresh")(
         function* ({ cwd, threadId, runId }) {
           if (!(yield* BackgroundGitEnabled)) {
