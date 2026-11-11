@@ -1522,7 +1522,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent({
             ...settledEvent(thread),
             type: "provider-session.detached",
-          });
+          } as OrchestrationV2DomainEvent);
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),
@@ -1562,7 +1562,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent({
             ...settledEvent(thread),
             type: "provider-session.detached",
-          });
+          } as OrchestrationV2DomainEvent);
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),
