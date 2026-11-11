@@ -946,8 +946,7 @@ it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN cl
       .pipe(Effect.flip);
     expect(denied.code).toBe("capability_denied");
   }).pipe(
-    Effect.provide(registration),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(registration.pipe(Layer.provide(SqlitePersistence.layerMemory))),
     Effect.runPromise,
   );
 });
