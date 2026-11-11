@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - Matches the cached launcher to the running executable before app readiness.
+import * as NodePath from "node:path";
 import { assert, describe, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -6,6 +8,7 @@ import * as Layer from "effect/Layer";
 import { beforeEach, vi } from "vite-plus/test";
 
 const {
+  accessSyncMock,
   appendSwitchMock,
   getSwitchValueMock,
   hasSwitchMock,
@@ -17,6 +20,7 @@ const {
   execFileSyncMock,
   readFileSyncMock,
 } = vi.hoisted(() => ({
+  accessSyncMock: vi.fn(),
   appendSwitchMock: vi.fn(),
   getSwitchValueMock: vi.fn(),
   hasSwitchMock: vi.fn(),
@@ -47,6 +51,8 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("node:fs", () => ({
+  constants: { X_OK: 1 },
+  accessSync: accessSyncMock,
   readFileSync: readFileSyncMock,
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
@@ -57,11 +63,13 @@ vi.mock("node:child_process", () => ({
   execFileSync: execFileSyncMock,
 }));
 
+import { renderAppImageLauncher } from "./DesktopAppImageLauncher.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import * as DesktopPreReadyPlatform from "./DesktopPreReadyPlatform.ts";
 
 describe("DesktopPreReadyPlatform", () => {
   beforeEach(() => {
+    accessSyncMock.mockReset();
     appendSwitchMock.mockReset();
     getSwitchValueMock.mockReset();
     hasSwitchMock.mockReset();
@@ -170,6 +178,42 @@ describe("DesktopPreReadyPlatform", () => {
       }),
     ).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())));
   });
+
+  it.effect.each(["current", "stale", "not-executable"] as const)(
+    "keeps a %s cached URL launcher correct across successive second-instance startups",
+    (state) => {
+      vi.stubEnv("VITE_DEV_SERVER_URL", "");
+      getSwitchValueMock.mockReturnValue("");
+      const appImage = "/Applications/current.AppImage";
+      const launcher = "/isolated/bin/t3-desktop";
+      const script = renderAppImageLauncher({
+        appImage: state === "stale" ? "/Applications/old.AppImage" : appImage,
+        executableName: NodePath.posix.basename(process.execPath),
+        t3Home: "/isolated",
+      });
+      readFileSyncMock.mockImplementation((path: string) => (path === launcher ? script : "{}"));
+      if (state === "not-executable") {
+        accessSyncMock.mockImplementation(() => { throw new Error("EACCES"); });
+      }
+      return Effect.gen(function* () {
+        for (const _launch of [1, 2]) {
+          yield* DesktopPreReadyPlatform.make;
+          const entry = writeFileSyncMock.mock.calls
+            .filter(([path]) => path === "/xdg/applications/com.t3tools.T3Code.desktop")
+            .at(-1)?.[1];
+          assert.include(entry, `Exec=${state === "current" ? launcher : appImage} %U`);
+        }
+      }).pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.provide(DesktopConfig.layerTest({
+          XDG_DATA_HOME: "/xdg",
+          APPIMAGE: appImage,
+          T3CODE_HOME: "/isolated",
+        })),
+        Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())),
+      );
+    },
+  );
 
   it.effect("points the early portal entry at a configured distribution launcher", () => {
     vi.stubEnv("VITE_DEV_SERVER_URL", "");

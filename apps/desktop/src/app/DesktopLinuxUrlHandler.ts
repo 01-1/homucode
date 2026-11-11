@@ -162,7 +162,7 @@ export const make = Effect.gen(function* () {
           yield* fileSystem.rename(staging, launcher);
         }
         return launcher;
-      }).pipe(Effect.catch(() => Effect.succeed(appImage)));
+      }).pipe(Effect.orElseSucceed(() => appImage));
       execTarget = installed;
     }
     const content = renderUrlHandlerDesktopEntry({

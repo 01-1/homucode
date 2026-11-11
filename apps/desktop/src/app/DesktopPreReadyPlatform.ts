@@ -13,6 +13,8 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as DesktopEarlyElectronStartup from "./DesktopEarlyElectronStartup.ts";
 import { trimmedString } from "./DesktopConfig.ts";
+import { renderAppImageLauncher } from "./DesktopAppImageLauncher.ts";
+import { resolveDesktopBaseDir } from "./DesktopStatePaths.ts";
 import { resolveDesktopAppBranding } from "./DesktopEnvironment.ts";
 import { renderUrlHandlerDesktopEntry } from "./DesktopLinuxUrlHandler.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
@@ -53,6 +55,7 @@ export class DesktopPreReadyElectronOptions extends Context.Service<
 >()("@t3tools/desktop/app/DesktopPreReadyPlatform/DesktopPreReadyElectronOptions") {}
 
 const LinuxDesktopEntryConfig = Config.all({
+  t3Home: trimmedString("T3CODE_HOME"),
   xdgDataHome: trimmedString("XDG_DATA_HOME"),
   launcherPath: trimmedString("T3CODE_DESKTOP_LAUNCHER_PATH"),
   appImagePath: trimmedString("APPIMAGE"),
@@ -113,6 +116,36 @@ export const make = Effect.gen(function* () {
             );
           } catch {}
         }
+        let execTarget =
+          Option.getOrUndefined(
+            Option.orElse(
+              linuxDesktopEntryConfig.launcherPath,
+              () => linuxDesktopEntryConfig.appImagePath,
+            ),
+          ) ?? process.execPath;
+        if (
+          Electron.app.isPackaged &&
+          Option.isNone(linuxDesktopEntryConfig.launcherPath) &&
+          Option.isSome(linuxDesktopEntryConfig.appImagePath)
+        ) {
+          const t3Home = resolveDesktopBaseDir({
+            homeDirectory,
+            joinPath: NodePath.posix.join,
+            t3Home: linuxDesktopEntryConfig.t3Home,
+          });
+          const launcher = NodePath.posix.join(t3Home, "bin", "t3-desktop");
+          const expected = renderAppImageLauncher({
+            appImage: linuxDesktopEntryConfig.appImagePath.value,
+            executableName: NodePath.posix.basename(process.execPath),
+            t3Home,
+          });
+          try {
+            if (NodeFS.readFileSync(launcher, "utf8") === expected) {
+              NodeFS.accessSync(launcher, NodeFS.constants.X_OK);
+              execTarget = launcher;
+            }
+          } catch {}
+        }
         NodeFS.writeFileSync(
           NodePath.posix.join(applicationsDir, linux.linuxDesktopEntryName),
           renderUrlHandlerDesktopEntry({
@@ -120,13 +153,7 @@ export const make = Effect.gen(function* () {
               isDevelopment: linux.isDevelopment,
               appVersion: Electron.app.getVersion(),
             }).displayName,
-            execTarget:
-              Option.getOrUndefined(
-                Option.orElse(
-                  linuxDesktopEntryConfig.launcherPath,
-                  () => linuxDesktopEntryConfig.appImagePath,
-                ),
-              ) ?? process.execPath,
+            execTarget,
             scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment),
             ...(iconPath === undefined ? {} : { iconPath }),
           }),
