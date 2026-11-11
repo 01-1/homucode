@@ -92,7 +92,7 @@ export function renderUrlHandlerDesktopEntry(input: {
     ...(input.iconPath === undefined ? [] : [`Icon=${escapeDesktopEntryString(input.iconPath)}`]),
     "Terminal=false",
     "NoDisplay=true",
-    "StartupNotify=false",
+    "StartupNotify=true",
     `MimeType=x-scheme-handler/${input.scheme};`,
     "",
   ].join("\n");

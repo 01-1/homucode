@@ -188,7 +188,7 @@ describe("renderAppImageLauncher", () => {
     const { root, image, appImage, shim } = fakeAppImage();
     writeExecutable(
       NodePath.join(image, "t3code"),
-      '#!/bin/sh\nprintf "%s\\n" "node=$ELECTRON_RUN_AS_NODE" "image=$APPIMAGE" "$@"\nexit 3\n',
+      '#!/bin/sh\nprintf "%s\\n" "node=$ELECTRON_RUN_AS_NODE" "image=$APPIMAGE" "activation=$XDG_ACTIVATION_TOKEN startup=$DESKTOP_STARTUP_ID" "$@"\nexit 3\n',
     );
     expect(run(shim, []).status).toBe(3);
     const desktop = NodePath.join(root, "bin", "t3-desktop");
@@ -200,10 +200,17 @@ describe("renderAppImageLauncher", () => {
     const result = run(desktop, [url, "space and 'quote'"], {
       ELECTRON_RUN_AS_NODE: "1",
       APPIMAGE_EXTRACT_AND_RUN: "1",
+      XDG_ACTIVATION_TOKEN: "user-launch-token",
+      DESKTOP_STARTUP_ID: "user-startup-id",
     });
     expect(result.status).toBe(3);
     expect(result.stdout.split("\n")).toEqual([
-      "node=", `image=${appImage}`, url, "space and 'quote'", "",
+      "node=",
+      `image=${appImage}`,
+      "activation=user-launch-token startup=user-startup-id",
+      url,
+      "space and 'quote'",
+      "",
     ]);
     expect(NodeFS.readFileSync(NodePath.join(root, "extractions"), "utf8")).toBe("extract\n");
   });
