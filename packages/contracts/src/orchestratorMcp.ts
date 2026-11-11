@@ -42,6 +42,7 @@ import {
   OrchestrationV2TurnItemStatus,
 } from "./orchestrationV2.ts";
 import { ProviderOptionSelection, ProviderOptionSelectionValue } from "./model.ts";
+import { ModelSelection } from "./modelSelection.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 const OrchestratorMcpPrompt = TrimmedNonEmptyString.check(Schema.isMaxLength(120_000));
@@ -741,11 +742,21 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
 });
 export type OrchestratorMcpCapabilitiesResult = typeof OrchestratorMcpCapabilitiesResult.Type;
 
+const ScheduledTaskModelSelection = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  model: TrimmedNonEmptyString,
+  options: Schema.optional(OrchestratorMcpTargetOptions),
+}).annotate({
+  description:
+    "Stored provider, model and options for new threads. Bound runs follow the bound thread current model, including its options.",
+});
+
 export const OrchestratorMcpScheduleTaskInput = Schema.Struct({
   environmentId: OrchestratorMcpEnvironmentTarget,
   projectId: OrchestratorMcpProjectTarget,
   prompt: OrchestratorMcpPrompt,
   schedule: OrchestratorMcpSchedule,
+  modelSelection: Schema.optional(ScheduledTaskModelSelection),
   title: Schema.optional(OrchestratorMcpTitle),
   enabled: Schema.optional(Schema.Boolean.annotate({ description: "Default true." })),
   bindToCurrentThread: Schema.optional(
@@ -756,7 +767,7 @@ export const OrchestratorMcpScheduleTaskInput = Schema.Struct({
   freshSession: Schema.optional(
     Schema.Boolean.annotate({
       description:
-        "Runs share one thread but each starts a fresh session without earlier runs' context. Unbound: the first run makes the thread.",
+        "Default false: continue the bound conversation. True starts each run fresh without earlier context. Unbound: the first run makes the thread.",
     }),
   ),
   clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
@@ -781,6 +792,9 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
   projectId: ProjectId,
   boundThreadId: Schema.NullOr(ThreadId),
   freshSession: Schema.Boolean,
+  modelSelection: ModelSelection.annotate({
+    description: "Stored selection for new threads; bound runs follow their thread current model and options.",
+  }),
   schedule: ScheduledTaskSchedule,
   nextRunAt: Schema.NullOr(IsoDateTime),
   lastRunStatus: ScheduledTaskRunStatus,
@@ -824,6 +838,7 @@ export const OrchestratorMcpUpdateScheduledTaskInput = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   bindToCurrentThread: Schema.optional(Schema.Boolean),
   freshSession: Schema.optional(Schema.Boolean),
+  modelSelection: Schema.optional(ScheduledTaskModelSelection),
 });
 export type OrchestratorMcpUpdateScheduledTaskInput =
   typeof OrchestratorMcpUpdateScheduledTaskInput.Type;

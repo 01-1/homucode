@@ -176,7 +176,7 @@ const EMPTY_DRAFT: DraftState = {
   weekdays: new Set([1, 2, 3, 4, 5]),
   projectId: "",
   threadId: "",
-  threadMode: "new_thread",
+  threadMode: "continue",
   workspaceMode: "worktree",
   baseRef: "main",
   startFromOrigin: true,

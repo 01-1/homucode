@@ -541,6 +541,13 @@ it.effect("a fresh-session task launches one thread, then starts each later run 
         runtimeMode: "full-access",
         interactionMode: "default",
       } as const;
+      const defaults = yield* service.upsert(input);
+      assert.equal(defaults.task.threadMode, "continue");
+      assert.equal((yield* service.runNow({ id: input.id })).threadId, launched);
+      yield* service.runNow({ id: input.id });
+      assert.equal(yield* Ref.get(launches), 1);
+      assert.deepEqual(yield* Ref.get(sends), [{ threadId: launched }]);
+      yield* Ref.set(sends, []);
       yield* service.upsert({ ...input, threadMode: "fresh_session" });
 
       assert.equal((yield* service.runNow({ id: input.id })).threadId, launched);
@@ -559,7 +566,10 @@ it.effect("a fresh-session task launches one thread, then starts each later run 
       yield* service.runNow({ id: input.id });
 
       assert.equal(yield* Ref.get(launches), 1);
-      assert.deepEqual(yield* Ref.get(sends), [{ threadId: launched, freshContext: true }]);
+      assert.deepEqual(yield* Ref.get(sends), [
+        { threadId: launched, freshContext: true },
+        { threadId: launched, freshContext: true },
+      ]);
       // Its thread stays in the old project, so moving the task leaves it for a new one.
       const moved = yield* service.upsert({
         ...input,

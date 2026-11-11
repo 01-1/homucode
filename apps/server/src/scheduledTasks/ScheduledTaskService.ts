@@ -203,7 +203,7 @@ function resolveThreadMode(
   existing: Pick<ScheduledTask, "threadId" | "threadMode"> | null,
 ): ScheduledTaskThreadMode {
   if (input.threadMode !== undefined) return input.threadMode;
-  const stored = existing === null ? "new_thread" : scheduledTaskThreadMode(existing);
+  const stored = existing === null ? "continue" : scheduledTaskThreadMode(existing);
   return stored === "new_thread" && input.threadId != null ? "continue" : stored;
 }
 

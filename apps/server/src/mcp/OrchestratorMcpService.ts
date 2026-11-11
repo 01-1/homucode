@@ -313,6 +313,7 @@ function scheduledTaskSummary(task: ScheduledTask, mayRun: boolean): Orchestrato
     projectId: task.projectId,
     boundThreadId: task.threadId,
     freshSession: scheduledTaskThreadMode(task) === "fresh_session",
+    modelSelection: task.modelSelection,
     schedule: task.schedule,
     nextRunAt: task.nextRunAt,
     lastRunStatus: task.lastRunStatus,
@@ -2079,7 +2080,9 @@ const make = Effect.gen(function* () {
         );
       }
       const modelSelection =
-        parent?.thread.modelSelection ?? (yield* projectDefaultModelSelection(project));
+        input.modelSelection ??
+        parent?.thread.modelSelection ??
+        (yield* projectDefaultModelSelection(project));
       const derivedTitle = input.prompt.split("\n")[0]?.trim() ?? "";
       const title =
         input.title ?? (derivedTitle.length > 0 ? derivedTitle.slice(0, 80) : "Scheduled task");
@@ -2092,9 +2095,9 @@ const make = Effect.gen(function* () {
         threadId: bindToCurrentThread && parent !== undefined ? parent.thread.id : null,
         threadMode: input.freshSession
           ? "fresh_session"
-          : bindToCurrentThread
-            ? "continue"
-            : "new_thread",
+          : input.bindToCurrentThread === false
+            ? "new_thread"
+            : "continue",
         workspaceStrategy: yield* scheduledTaskWorkspaceStrategy(bindToCurrentThread, projectId),
         modelSelection,
         runtimeMode: limits.runtimeMode,
@@ -2201,7 +2204,7 @@ const make = Effect.gen(function* () {
                   ? "new_thread"
                   : "continue",
           workspaceStrategy,
-          modelSelection: existing.modelSelection,
+          modelSelection: input.modelSelection ?? existing.modelSelection,
           runtimeMode: existing.runtimeMode,
           interactionMode: existing.interactionMode,
           createdBy: existing.createdBy,

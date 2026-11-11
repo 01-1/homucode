@@ -2779,6 +2779,7 @@ describe("OrchestratorMcpService provider resolution", () => {
       saved: Ref.Ref<ReadonlyArray<ScheduledTask["workspaceStrategy"]>>,
       task: ScheduledTask = existing,
       modes?: Ref.Ref<ReadonlyArray<ScheduledTaskUpsertInput["threadMode"]>>,
+      selections?: Ref.Ref<ReadonlyArray<ScheduledTask["modelSelection"]>>,
     ) =>
       OrchestratorMcpService.layer.pipe(
         Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
@@ -2814,7 +2815,12 @@ describe("OrchestratorMcpService provider resolution", () => {
                       ? Effect.void
                       : Ref.update(modes, (all) => [...all, input.threadMode]),
                   ),
-                  Effect.as({ task }),
+                  Effect.andThen(
+                    selections === undefined
+                      ? Effect.void
+                      : Ref.update(selections, (all) => [...all, input.modelSelection]),
+                  ),
+                  Effect.as({ task: { ...task, modelSelection: input.modelSelection } }),
                 ),
             }),
           ),
@@ -2838,6 +2844,38 @@ describe("OrchestratorMcpService provider resolution", () => {
         assert.deepEqual(yield* Ref.get(saved), [
           { type: "worktree", baseRef: "origin/master", startFromOrigin: true },
         ]);
+      }),
+    );
+
+    it.effect("saves an explicit scheduled model on create and update without resetting other settings", () =>
+      Effect.gen(function* () {
+        const selections = yield* Ref.make<ReadonlyArray<ScheduledTask["modelSelection"]>>([]);
+        const mcp = yield* OrchestratorMcpService.OrchestratorMcpService.pipe(
+          Effect.provide(service(
+              masterRepository,
+              yield* Ref.make<ReadonlyArray<ScheduledTask["workspaceStrategy"]>>([]),
+              existing,
+              undefined,
+              selections,
+            )),
+        );
+        const modelSelection = {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5.4",
+          options: [{ id: "reasoningEffort", value: "high" }],
+        };
+        const created = yield* mcp.scheduleTask(client, {
+          projectId, prompt: "Check the build", schedule, modelSelection,
+        });
+        const updated = yield* mcp.updateScheduledTask(client, {
+          scheduledTaskId: existing.id, modelSelection,
+        });
+        yield* mcp.updateScheduledTask(client, { scheduledTaskId: existing.id, title: "Renamed" });
+        assert.deepEqual(yield* Ref.get(selections), [modelSelection, modelSelection, existing.modelSelection]);
+        assert.deepEqual(created.modelSelection, modelSelection);
+        assert.deepEqual(updated.modelSelection, modelSelection);
+        assert.equal(updated.enabled, existing.enabled);
+        assert.deepEqual(updated.schedule, existing.schedule);
       }),
     );
 

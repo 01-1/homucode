@@ -768,6 +768,21 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
       expect(updated.isError).toBe(false);
       expect(updated.structuredContent).toMatchObject({ freshSession });
     }
+    const modelSelection = {
+      instanceId: "codex",
+      model: "gpt-5.4",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    };
+    const selected = yield* call("schedule_task", {
+      scheduledTaskId: "task-auto",
+      modelSelection,
+    });
+    expect(selected.isError).toBe(false);
+    expect(selected.structuredContent).toMatchObject({ modelSelection });
+    const listed = yield* call("list_scheduled_tasks", {});
+    expect(listed.structuredContent).toMatchObject({
+      tasks: expect.arrayContaining([expect.objectContaining({ modelSelection: expect.any(Object) })]),
+    });
     const incomplete = yield* call("schedule_task", { prompt: "Run nightly" });
     expect(declaredFailure(incomplete)).toMatchObject({ code: "invalid_request" });
   }).pipe(
