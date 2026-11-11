@@ -26,6 +26,7 @@ const MAX_PROMOTIONS_PER_PASS = 20;
  * queued run that is held or did not ask to steer, so queue order is never jumped.
  */
 export function nextAutoSteerPromotion(projection: {
+  readonly thread?: object;
   readonly runs: ReadonlyArray<OrchestrationV2Run>;
   readonly messages: Parameters<typeof resolveMessageDispatchIntent>[0]["messages"];
   readonly providerTurns: Parameters<typeof resolveMessageDispatchIntent>[0]["providerTurns"];
@@ -42,7 +43,18 @@ export function nextAutoSteerPromotion(projection: {
         left.ordinal - right.ordinal,
     );
   const head = queued[0];
-  if (head === undefined || head.autoSteer !== true || head.queueHeld === true) return null;
+  if (
+    head === undefined ||
+    head.autoSteer !== true ||
+    head.queueHeld === true ||
+    // Host status-check continuations must reach their own startup guard, never steer.
+    head.restartContinuationOfRunId !== undefined ||
+    // Retirement fences (added by the role-retirement release); absent fields read as unset.
+    ((head as { readonly retirementHold?: unknown }).retirementHold ?? null) !== null ||
+    ((projection.thread as { readonly roleRetirement?: unknown } | undefined)?.roleRetirement ??
+      null) !== null
+  )
+    return null;
   const activeRun = projection.runs.findLast(isActiveRun);
   if (activeRun === undefined) return null;
   const activeMessage = projection.messages.find(
