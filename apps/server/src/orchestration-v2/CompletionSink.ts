@@ -12,7 +12,9 @@ import * as Path from "effect/Path";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 
 const Command = Schema.Array(Schema.String).check(Schema.isMinLength(1));
-const decodeCommand = Schema.decodeUnknownEffect(Schema.fromJsonString(Command));
+const CommandJson = Schema.fromJsonString(Command);
+const decodeCommand = Schema.decodeEffect(CommandJson);
+const encodeCommand = Schema.encodeEffect(CommandJson);
 
 export class CompletionSink extends Context.Service<
   CompletionSink,
@@ -44,16 +46,14 @@ const make = Effect.gen(function* () {
     for (const row of rows) {
       let commandJson = row.command_json;
       if (commandJson === null) {
-        const config = yield* fs
-          .readFileString(path.join(row.workspace_root, "t3.json"))
-          .pipe(
-            Effect.catchTags({
-              PlatformError: (error) =>
-                error.reason._tag === "NotFound" ? Effect.succeed("{}") : Effect.fail(error),
-            }),
-            Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)),
-            Effect.result,
-          );
+        const config = yield* fs.readFileString(path.join(row.workspace_root, "t3.json")).pipe(
+          Effect.catchTags({
+            PlatformError: (error) =>
+              error.reason._tag === "NotFound" ? Effect.succeed("{}") : Effect.fail(error),
+          }),
+          Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)),
+          Effect.result,
+        );
         if (config._tag === "Failure") {
           yield* sql`UPDATE thread_completion_outbox SET attempts = attempts + 1, next_attempt_at = ${now + 5000}
             WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;
@@ -65,7 +65,7 @@ const make = Effect.gen(function* () {
             WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;
           continue;
         }
-        commandJson = JSON.stringify(command);
+        commandJson = yield* encodeCommand(command);
         yield* sql`UPDATE thread_completion_outbox SET command_json = ${commandJson}
           WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;
       }
@@ -82,7 +82,7 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           Effect.map((result) => result.code === 0 && !result.timedOut),
-          Effect.catch(() => Effect.succeed(false)),
+          Effect.orElseSucceed(() => false),
         );
       const next = now + Math.min(300_000, 5_000 * 2 ** Math.min(row.attempts, 6));
       yield* sql`UPDATE thread_completion_outbox SET delivered = ${accepted ? 1 : 0},

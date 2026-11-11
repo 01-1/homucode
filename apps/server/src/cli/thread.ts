@@ -622,7 +622,7 @@ export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(fun
     }
     options.push({ id, value: value === "true" ? true : value === "false" ? false : value });
   }
-  yield* Schema.decodeUnknownEffect(ProviderOptionSelections)(options).pipe(
+  yield* Schema.decodeEffect(ProviderOptionSelections)(options).pipe(
     Effect.mapError(() => new ThreadUsageError({ detail: "Invalid model options." })),
   );
   return options;
@@ -710,7 +710,7 @@ const threadStartCommand = Command.make("start", {
       }
       const clientRequestId = Option.isNone(flags.clientRequestId)
         ? undefined
-        : yield* Schema.decodeUnknownEffect(OrchestratorMcpClientRequestId)(
+        : yield* Schema.decodeEffect(OrchestratorMcpClientRequestId)(
             flags.clientRequestId.value,
           ).pipe(
             Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --client-request-id." })),
@@ -959,7 +959,7 @@ const pendingReadCommand = Command.make("read", { ...pendingFlags, request: requ
       flags,
       Effect.fn("cli.pendingRequest.read")(function* (tools) {
         const threadId = yield* decodeThreadId(flags.thread);
-        const requestId = yield* Schema.decodeUnknownEffect(RuntimeRequestId)(flags.request);
+        const requestId = yield* Schema.decodeEffect(RuntimeRequestId)(flags.request);
         const result = yield* tools.call(
           "t3_pending_request",
           { action: "read", threadId, requestId },
@@ -982,7 +982,7 @@ const pendingRespondCommand = Command.make("respond", {
       flags,
       Effect.fn("cli.pendingRequest.respond")(function* (tools) {
         const threadId = yield* decodeThreadId(flags.thread);
-        const requestId = yield* Schema.decodeUnknownEffect(RuntimeRequestId)(flags.request);
+        const requestId = yield* Schema.decodeEffect(RuntimeRequestId)(flags.request);
         // The native read refuses stale requests, approvals, and secret cards before any answer is read.
         yield* tools.call(
           "t3_pending_request",
@@ -1000,9 +1000,9 @@ const pendingRespondCommand = Command.make("respond", {
           flags.answersFile === "-"
             ? yield* readMessageArgument("-")
             : yield* fs.readFileString(flags.answersFile);
-        const answers = yield* Schema.decodeUnknownEffect(
-          Schema.fromJsonString(ProviderUserInputAnswers),
-        )(raw).pipe(
+        const answers = yield* Schema.decodeEffect(Schema.fromJsonString(ProviderUserInputAnswers))(
+          raw,
+        ).pipe(
           Effect.mapError(() => new ThreadUsageError({ detail: "Answers must be a JSON object." })),
         );
         const result = yield* tools.call(

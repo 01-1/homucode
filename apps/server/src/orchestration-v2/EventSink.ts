@@ -410,7 +410,9 @@ const layerBase: Layer.Layer<
               updated_at = excluded.updated_at
           `;
         }
-        yield* CompletionOutbox.capture(storedEvents);
+        yield* CompletionOutbox.capture(storedEvents).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
         // Read lineage here, on the connection this transaction holds; see makeRunOutcomeRecorder.
         return yield* runOutcomes.prepare(storedEvents);
       });

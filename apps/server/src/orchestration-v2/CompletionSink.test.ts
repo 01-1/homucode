@@ -47,7 +47,10 @@ const run = (status: OrchestrationV2Run["status"]): OrchestrationV2Run => ({
   checkpointId: null,
   contextHandoffId: null,
 });
-const event = (id: string, payload: OrchestrationV2Run): OrchestrationV2DomainEvent => ({
+const event = (
+  id: string,
+  payload: OrchestrationV2Run,
+): Extract<OrchestrationV2DomainEvent, { type: "run.updated" }> => ({
   type: "run.updated",
   id: EventId.make(id),
   threadId,
@@ -164,7 +167,7 @@ it.effect(
       const layer = CompletionSink.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
-            Layer.mock(FileSystem.FileSystem)({
+            FileSystem.layerNoop({
               readFileString: () =>
                 missingConfig
                   ? Effect.fail(
