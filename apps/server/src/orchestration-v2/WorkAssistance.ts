@@ -91,6 +91,24 @@ export function activityItem(row: State, now: DateTime.Utc): ThreadActivityItem 
   };
 }
 
+export const readLatestHumanMessageAt = Effect.fn("WorkAssistance.readLatestHumanMessageAt")(
+  function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const [row] = yield* sql<{ latest_human_message_at: string | null }>`
+      SELECT MAX(m.created_at) AS latest_human_message_at
+      FROM orchestration_v2_projection_messages m
+      JOIN orchestration_v2_projection_threads t ON t.thread_id = m.thread_id
+      WHERE t.project_id = ${MAIN_PROJECT} AND t.deleted_at IS NULL
+        AND m.role = 'user'
+        AND json_extract(m.payload_json, '$.createdBy') = 'user'
+        AND json_extract(m.payload_json, '$.creationSource') IN ('web', 'mobile')
+    `;
+    return row?.latest_human_message_at == null
+      ? null
+      : IsoDateTime.make(row.latest_human_message_at);
+  },
+);
+
 export const readActivity = Effect.fn("WorkAssistance.readActivity")(function* (
   threadId?: ThreadId,
 ) {

@@ -3,6 +3,8 @@ import * as McpHttpServer from "./McpHttpServer.ts";
 import { AssistanceToolkit } from "./toolkits/thread/tools.ts";
 import * as ThreadHandlers from "./toolkits/thread/handlers.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as WorkAssistance from "../orchestration-v2/WorkAssistance.ts";
 import {
   EnvironmentId,
   NodeId,
@@ -949,4 +951,47 @@ it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN cl
     Effect.provide(registration.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))),
     Effect.runPromise,
   );
+});
+
+
+it("human activity returns only MAIN web/mobile receipt timestamps, including archived and settled threads", async () => {
+  await Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBeNull();
+    const at = "2026-08-04T12:00:00.000Z";
+    for (const [id, project, deleted, archived] of [
+      ["activity-main", WorkAssistance.MAIN_PROJECT, null, null],
+      ["activity-other", "other-project", null, null],
+      ["activity-deleted", WorkAssistance.MAIN_PROJECT, at, null],
+      ["activity-archived", WorkAssistance.MAIN_PROJECT, null, at],
+    ] as const) {
+      yield* sql`INSERT INTO orchestration_v2_projection_threads ${sql.insert({
+        thread_id: id, project_id: project, title: id, default_provider: "codex",
+        runtime_mode: "full-access", interaction_mode: "default", created_at: at,
+        updated_at: at, deleted_at: deleted, archived_at: archived,
+        payload_json: JSON.stringify({ settledOverride: "settled" }),
+      })}`;
+    }
+    const insert = (id: string, thread: string, role: string, by: string, source: string,
+      created: string, updated = created) =>
+      sql`INSERT INTO orchestration_v2_projection_messages ${sql.insert({
+        message_id: id, thread_id: thread, role, streaming: 0,
+        created_at: created, updated_at: updated,
+        payload_json: JSON.stringify({ createdBy: by, creationSource: source, text: "PRIVATE-SENTINEL" }),
+      })}`;
+    const newer = "2026-08-04T14:00:00.000Z";
+    for (const source of ["mcp", "provider", "server", "import"]) {
+      yield* insert(`source-${source}`, "activity-main", "user", "user", source, newer);
+    }
+    yield* insert("agent", "activity-main", "user", "agent", "web", newer);
+    yield* insert("assistant", "activity-main", "assistant", "user", "web", newer);
+    yield* insert("other", "activity-other", "user", "user", "web", newer);
+    yield* insert("deleted", "activity-deleted", "user", "user", "web", newer);
+    expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBeNull();
+    yield* insert("web-edited", "activity-main", "user", "user", "web", at, newer);
+    yield* insert("mobile", "activity-main", "user", "user", "mobile", "2026-08-04T12:01:00.000Z");
+    expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBe("2026-08-04T12:01:00.000Z");
+    yield* insert("archived", "activity-archived", "user", "user", "web", "2026-08-04T12:02:00.000Z");
+    expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBe("2026-08-04T12:02:00.000Z");
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory), Effect.runPromise);
 });

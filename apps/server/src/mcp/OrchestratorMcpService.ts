@@ -2483,6 +2483,11 @@ const make = Effect.gen(function* () {
           environmentId: scope.environmentId,
           projectId,
           observedAt: DateTime.formatIso(state.now),
+          latestHumanMessageAt: yield* WorkAssistance.readLatestHumanMessageAt().pipe(
+            Effect.mapError(() =>
+              failure("orchestration_error", "Unable to read human activity timestamp."),
+            ),
+          ),
           threads: state.threads,
         };
       },

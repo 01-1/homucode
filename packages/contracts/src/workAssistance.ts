@@ -38,6 +38,7 @@ export const ThreadActivityResult = Schema.Struct({
   environmentId: Schema.String,
   projectId: ProjectId,
   observedAt: IsoDateTime,
+  latestHumanMessageAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
   threads: Schema.Array(ThreadActivityItem),
 });
 export type ThreadActivityResult = typeof ThreadActivityResult.Type;
