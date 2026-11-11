@@ -83,10 +83,28 @@ describe("renderCliShim", () => {
     );
   });
 
+  it("keeps runtime caches per invoking user without changing the install home", () => {
+    const { root, shim } = fakeAppImage();
+    const firstHome = NodePath.join(root, "first-user");
+    const secondHome = NodePath.join(root, "second-user");
+    const first = run(shim, [], { HOME: firstHome });
+    const second = run(shim, [], { HOME: secondHome });
+    expect(first.status).toBe(3);
+    expect(second.status).toBe(3);
+    expect(first.stdout).toContain(`home=${root}/home`);
+    expect(second.stdout).toContain(`home=${root}/home`);
+    expect(first.stdout).toContain(`${firstHome}/.cache/t3code/cli-runtime/`);
+    expect(second.stdout).toContain(`${secondHome}/.cache/t3code/cli-runtime/`);
+    const xdg = NodePath.join(root, "xdg-cache");
+    expect(run(shim, [], { HOME: firstHome, XDG_CACHE_HOME: xdg }).stdout).toContain(
+      `${xdg}/t3code/cli-runtime/`,
+    );
+  });
+
   it("retries failed extraction without publishing a partial runtime", () => {
     const { root, shim } = fakeAppImage();
     expect(run(shim, [], { FAIL_EXTRACT: "1" }).status).toBe(1);
-    const cache = NodePath.join(root, "home", "cli-runtime");
+    const cache = NodePath.join(root, "home", ".cache", "t3code", "cli-runtime");
     expect(NodeFS.readdirSync(cache).filter((name) => !name.endsWith(".lock"))).toEqual([]);
     expect(run(shim, []).status).toBe(3);
   });
