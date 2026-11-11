@@ -82,13 +82,16 @@ const triggers = (event: OrchestrationV2DomainEvent): boolean =>
     (event.payload.status === "running" ||
       (event.payload.status === "queued" && event.payload.autoSteer === true)));
 
-export interface AutoSteerPassDeps<R> {
+export interface AutoSteerPassDeps<R, ReadError, DispatchError> {
   /** Threads that got a trigger since their pass last read; a pass consumes its own entry. */
   readonly dirty: Set<ThreadId>;
   readonly compactionsSkipped: Set<string>;
-  readonly read: (threadId: ThreadId) => Effect.Effect<R | null, unknown>;
+  readonly read: (threadId: ThreadId) => Effect.Effect<R | null, ReadError>;
   readonly select: (records: R) => AutoSteerPromotion | null;
-  readonly dispatch: (threadId: ThreadId, next: AutoSteerPromotion) => Effect.Effect<unknown, unknown>;
+  readonly dispatch: (
+    threadId: ThreadId,
+    next: AutoSteerPromotion,
+  ) => Effect.Effect<unknown, DispatchError>;
 }
 
 /**
@@ -96,8 +99,11 @@ export interface AutoSteerPassDeps<R> {
  * hold) ends the pass unless a trigger arrived meanwhile; then the queue is read again, so the
  * new head is not stranded until the next turn event.
  */
-export const runAutoSteerPass = <R>(deps: AutoSteerPassDeps<R>, threadId: ThreadId) =>
-  Effect.gen(function* () {
+export const runAutoSteerPass = Effect.fn("runAutoSteerPass")(function* <
+  R,
+  ReadError,
+  DispatchError,
+>(deps: AutoSteerPassDeps<R, ReadError, DispatchError>, threadId: ThreadId) {
   deps.dirty.delete(threadId);
   for (let pass = 0; pass < MAX_PROMOTIONS_PER_PASS; pass++) {
     const records = yield* deps.read(threadId);
@@ -121,7 +127,7 @@ export const runAutoSteerPass = <R>(deps: AutoSteerPassDeps<R>, threadId: Thread
   yield* Effect.logWarning("auto-steer pass hit its bound; the next turn event continues", {
     threadId,
   });
-  });
+});
 
 export const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
