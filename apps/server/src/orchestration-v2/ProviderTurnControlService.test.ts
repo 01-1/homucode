@@ -481,7 +481,7 @@ it.effect.each(["human", "agent", "scheduled", "coalesced", "slash"] as const)(
                 }),
             }),
             Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
-              get: () => Effect.succeed(Option.some(runtime)),
+              get: () => Effect.succeedSome(runtime),
             }),
           ),
         ),
@@ -498,10 +498,10 @@ it.effect.each(["human", "agent", "scheduled", "coalesced", "slash"] as const)(
         yield* control.steer(target);
         yield* control.steer(target);
       }).pipe(Effect.provide(layer));
-      const sent = new Date(DateTime.toEpochMillis(createdAt));
-      const timestamp = new Date(sent.getTime() - sent.getTimezoneOffset() * 60_000)
-        .toISOString()
-        .slice(0, 19);
+      const sent = DateTime.toDateUtc(createdAt);
+      const timestamp = DateTime.formatIso(
+        DateTime.add(createdAt, { minutes: -sent.getTimezoneOffset() }),
+      ).slice(0, 19);
       assert.deepEqual(
         received.map((input) => input.message.text),
         [

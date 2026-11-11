@@ -12,7 +12,7 @@ export function withMessageTimestamp(
   // Providers parse commands and skills at the start of the original prompt.
   if (message.text.trimStart().startsWith("/") || leadingSkillMention.test(message.text))
     return text;
-  const sent = new Date(DateTime.toEpochMillis(message.createdAt));
+  const sent = DateTime.toDateUtc(message.createdAt);
   const pad = (value: number) => String(value).padStart(2, "0");
   const prefix = `${sent.getFullYear()}-${pad(sent.getMonth() + 1)}-${pad(sent.getDate())}T${pad(sent.getHours())}:${pad(sent.getMinutes())}:${pad(sent.getSeconds())}: `;
   return text.startsWith(prefix) ? text : `${prefix}${text}`;

@@ -37,8 +37,10 @@ const modelSelection = { instanceId, model: "test-model" };
 
 // TestClock starts at the Unix epoch; slash commands retain their native prompt.
 const timestamped = (text: string) => {
-  const sent = new Date(0);
-  const local = new Date(-sent.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+  const sent = DateTime.makeUnsafe(0);
+  const local = DateTime.formatIso(
+    DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
+  ).slice(0, 19);
   return text.trimStart().startsWith("/") ? text : `${local}: ${text}`;
 };
 
@@ -856,10 +858,10 @@ it.effect("a promoted queued message retains its original send time and device l
         const before = yield* orchestrator.getThreadProjection(threadId);
         const queued = before.runs.find((run) => run.status === "queued")!;
         const message = before.messages.find((message) => message.id === queued.userMessageId)!;
-        const sent = new Date(DateTime.toEpochMillis(message.createdAt));
-        const timestamp = new Date(sent.getTime() - sent.getTimezoneOffset() * 60_000)
-          .toISOString()
-          .slice(0, 19);
+        const sent = DateTime.toDateUtc(message.createdAt);
+        const timestamp = DateTime.formatIso(
+          DateTime.add(message.createdAt, { minutes: -sent.getTimezoneOffset() }),
+        ).slice(0, 19);
         yield* TestClock.adjust("1 hour");
         yield* orchestrator.dispatch({
           type: "queued-message.promote-to-steer",

@@ -7,6 +7,7 @@ import {
   EventId,
   ProviderInstanceId,
   RuntimeRequestId,
+  NodeId,
   RunId,
   ThreadId,
   TurnItemId,
@@ -1521,7 +1522,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent({
             ...settledEvent(thread),
             type: "provider-session.detached",
-          } as OrchestrationV2DomainEvent);
+          });
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),
@@ -1561,7 +1562,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent({
             ...settledEvent(thread),
             type: "provider-session.detached",
-          } as OrchestrationV2DomainEvent);
+          });
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),
@@ -1593,7 +1594,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
             type: "runtime-request.updated",
             payload: {
               id: RuntimeRequestId.make("cleanup-question"),
-              nodeId: null,
+              nodeId: NodeId.make("cleanup-question-node"),
               providerTurnId: null,
               nativeRequestRef: null,
               kind: "user_input",
@@ -1603,7 +1604,7 @@ describe("ThreadSettlementServiceV2 terminals", () => {
               createdAt: at(0),
               resolvedAt: at(0),
             },
-          } as OrchestrationV2DomainEvent);
+          });
           assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),

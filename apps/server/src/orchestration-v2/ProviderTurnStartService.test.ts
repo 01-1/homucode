@@ -1304,9 +1304,9 @@ effectIt.effect.each([
 
       yield* harness.start;
 
-      const local = new Date("2026-11-10T22:49:34.987Z");
+      const local = DateTime.toDateUtc(DateTime.makeUnsafe("2026-11-10T22:49:34.987Z"));
       const offset = local.getTimezoneOffset() * 60_000;
-      const timestamp = new Date(local.getTime() - offset).toISOString().slice(0, 19);
+      const timestamp = DateTime.formatIso(DateTime.makeUnsafe(local.getTime() - offset)).slice(0, 19);
       expect(harness.startTurn.mock.calls.map(([turn]) => turn.message.text)).toEqual([
         `${timestamp}: Status?${line}`,
       ]);
