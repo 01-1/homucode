@@ -17,6 +17,7 @@ import {
 import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapshot";
 import type { CodexEffectiveRuntime } from "../../provider/CodexManagedRuntime.ts";
 import { classifyCodexManagedError } from "../../provider/CodexManagedErrors.ts";
+import { readLocalCodexUsageStop, LOCAL_CODEX_USAGE_STOP_CODE } from "../../provider/LocalCodexUsageStop.ts";
 import {
   buildCodexInitializeParams,
   codexAppServerEnvironment,
@@ -1180,7 +1181,7 @@ function failureResetAt(
   snapshot: CodexRateLimitSnapshot | undefined,
 ) {
   // Sharing caps have no reset timestamp in the ordinary Codex allowance snapshot.
-  return classifyCodexManagedError(failure.code)?.usageLimit
+  return failure.code === LOCAL_CODEX_USAGE_STOP_CODE || classifyCodexManagedError(failure.code)?.usageLimit
     ? null
     : codexUsageLimitResetAt(snapshot);
 }
@@ -1668,6 +1669,8 @@ export const createCodexAdapterV2 = Effect.fn("CodexAdapterV2.createCodexAdapter
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const serverConfig = yield* ServerConfig;
   const homeLayout = yield* resolveCodexHomeLayout(config);
+  const homeDirectory = yield* HostProcess.HomeDirectory;
+  const path = yield* Path.Path;
 
   yield* materializeCodexShadowHome(homeLayout).pipe(
     Effect.mapError(
@@ -1698,6 +1701,7 @@ export const createCodexAdapterV2 = Effect.fn("CodexAdapterV2.createCodexAdapter
     idAllocator,
     serverConfig,
     continuationRequests,
+    localUsageGuardPath: path.join(homeDirectory, ".local", "state", "claude-usage", "hard-stops.json"),
     ...hooks,
   });
 });
@@ -1716,6 +1720,8 @@ export interface CodexAdapterV2Options {
   readonly fileSystem: FileSystem.FileSystem;
   readonly idAllocator: IdAllocator.IdAllocatorV2["Service"];
   readonly serverConfig: ServerConfig["Service"];
+  /** Read-only local guard evidence; omitted by isolated/replay callers by default. */
+  readonly localUsageGuardPath?: string;
   /** Omitting this leaves late completions projection-only. */
   readonly continuationRequests?: {
     readonly offer: (
@@ -1732,6 +1738,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
     threadId === null ? Effect.undefined : mcpSessions.read(threadId);
   const { clientFactory, digest, fileSystem, idAllocator, serverConfig } = adapterOptions;
   const continuationRequests = adapterOptions.continuationRequests;
+  const withObservedUsageFailure = (failure: OrchestrationV2ProviderFailure, nativeError: unknown) =>
+    Effect.gen(function* () {
+      const managed = withCodexManagedFailure(failure, nativeError);
+      return yield* readLocalCodexUsageStop(fileSystem, adapterOptions.localUsageGuardPath, managed,
+        DateTime.toEpochMillis(yield* DateTime.now));
+    });
 
   return ProviderAdapter.ProviderAdapterV2.of({
     instanceId: adapterOptions.instanceId,
@@ -4767,7 +4779,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               context.latestProviderFailure = {
                 nativeMessage: payload.error.message,
                 nativeCode: notificationCode,
-                failure: withCodexManagedFailure(
+                failure: yield* withObservedUsageFailure(
                   makeProviderFailure({
                     message: payload.error.additionalDetails?.trim() || payload.error.message,
                     code: notificationCode,
@@ -4790,7 +4802,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             };
             const code = codexErrorInfoCode(payload.error.codexErrorInfo);
             const additionalDetails = payload.error.additionalDetails?.trim();
-            const failure = withCodexManagedFailure(
+            const failure = yield* withObservedUsageFailure(
               makeProviderFailure({
                 message:
                   additionalDetails === undefined || additionalDetails.length === 0
@@ -5913,7 +5925,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 (failureCode === undefined || failureCode === previousFailure.nativeCode) &&
                 (exhaustionStatus === null || previousFailure.failure.class === failureClass)
                   ? previousFailure.failure
-                  : withCodexManagedFailure(
+                  : yield* withObservedUsageFailure(
                       makeProviderFailure({
                         message: input.failureMessage,
                         code: failureCode,

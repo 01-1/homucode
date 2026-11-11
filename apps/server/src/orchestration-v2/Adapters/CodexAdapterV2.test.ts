@@ -1239,6 +1239,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     beforeEmitInbound?: CodexReplay.CodexAppServerReplayDriver["beforeEmitInbound"],
     onUsageLimits?: CodexAdapterV2.CodexAdapterV2Options["onUsageLimits"],
     promptSuggestions: Effect.Effect<boolean> = Effect.succeed(false),
+    localUsageGuardPath?: string,
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1297,6 +1298,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         environment: {},
         clientFactory,
         ...(onUsageLimits ? { onUsageLimits } : {}),
+        ...(localUsageGuardPath === undefined ? {} : {localUsageGuardPath}),
         digest: yield* Digest.Digest,
         fileSystem,
         idAllocator,
@@ -6302,6 +6304,109 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         assert.equal(terminal?.status, "failed");
         if (terminal?.status !== "failed") return;
         assert.equal(terminal.failure.message, message);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect.each(["codex", "fable", "empty", "malformed"] as const)(
+    "correlates native modelNotFound only with observed matching local latch (%s)", (category) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const nativeThreadId = "native-unlisted-error-info";
+        const nativeTurnId = "turn-unlisted-error-info";
+        const message = "unknown provider for model gpt-6.1-terra";
+        const error = { message, codexErrorInfo: "modelNotFound", additionalDetails: null };
+        const usage = {
+          totalTokens: 1,
+          inputTokens: 1,
+          cachedInputTokens: 0,
+          outputTokens: 0,
+          reasoningOutputTokens: 0,
+        };
+        const transcript = makeCodexReplayTranscript({
+          scenario: "codex-unlisted-error-info",
+          entries: [
+            ...codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "say hi" }),
+            {
+              type: "emit_inbound",
+              label: "error",
+              frame: {
+                method: "error",
+                params: { threadId: nativeThreadId, turnId: nativeTurnId, willRetry: false, error },
+              },
+            },
+            {
+              type: "emit_inbound",
+              label: "turn/completed",
+              frame: {
+                method: "turn/completed",
+                params: {
+                  threadId: nativeThreadId,
+                  turn: { ...makeCodexReplayTurn({ id: nativeTurnId, status: "failed" }), error },
+                },
+              },
+            },
+            // Notifications dispatch in order, so this marks turn/completed as handled.
+            {
+              type: "emit_inbound",
+              label: "usage",
+              frame: {
+                method: "thread/tokenUsage/updated",
+                params: {
+                  threadId: nativeThreadId,
+                  turnId: nativeTurnId,
+                  tokenUsage: { total: usage, last: usage, modelContextWindow: 200_000 },
+                },
+              },
+            },
+          ],
+        });
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* fs.makeTempDirectoryScoped({prefix: "codex-local-guard-"});
+        const guardPath = `${root}/hard-stops.json`;
+        const at = DateTime.toEpochMillis(yield* DateTime.now) / 1000;
+        const raw = category === "malformed" ? "{" : JSON.stringify({latches: category === "empty" ? {} : {
+          test: {category, box: "Preparation: 30-minute rate", reason: "allowance reached", at, end: at - 1},
+        }});
+        yield* fs.writeFileString(guardPath, raw);
+        const harness = yield* makeCodexReplayHarness(transcript, undefined, undefined, undefined,
+          undefined, undefined, Effect.succeed(false), guardPath);
+        yield* harness.runtime.startTurn(
+          makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            text: "say hi",
+            attemptId: RunAttemptId.make("attempt-unlisted-error-info"),
+          }),
+        );
+        yield* harness.until(
+          () =>
+            harness.terminalEvents().length > 0 ||
+            harness.events.some(
+              (event) =>
+                event.type === "provider_turn.updated" && event.providerTurn.tokenUsage != null,
+            ),
+        );
+        const terminal = harness.terminalEvents()[0];
+        assert.equal(terminal?.status, "failed");
+        if (terminal?.status !== "failed") return;
+        assert.equal(terminal.failure.message, category === "codex"
+          ? "The local Codex category is paused by its usage limit. Retry after the category becomes available." : message);
+        assert.equal(terminal.failure.class, category === "codex" ? "usage_limit" : "provider_error");
+        assert.equal(terminal.failure.code, category === "codex" ? "local_category_usage_stop" : "modelNotFound");
+        if (category === "codex") assert.equal(terminal.failure.resetAt, null);
+        // Adapter never edits the file or invents release from its already-past end.
+        assert.equal(yield* fs.readFileString(guardPath), raw);
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
