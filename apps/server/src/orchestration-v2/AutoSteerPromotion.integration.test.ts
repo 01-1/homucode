@@ -1,12 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import { CommandId, EventId, MessageId, ProjectId, ProviderDriverKind, ProviderInstanceId,
-  ProviderSessionId, ProviderTurnId, ThreadId, type OrchestrationV2DomainEvent } from "@t3tools/contracts";
+  ProviderSessionId, ProviderTurnId, ThreadId, OrchestrationV2DomainEvent } from "@t3tools/contracts";
 import type * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
+import * as Schema from "effect/Schema";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Events from "./EventSink.ts";
@@ -29,7 +30,7 @@ const adapter: Adapter.ProviderAdapterV2["Service"] = { instanceId, driver,
     return {
       instanceId, driver, providerSessionId: input.providerSessionId,
       providerSession: { id: input.providerSessionId, driver, providerInstanceId: instanceId,
-        status: "ready", cwd: input.runtimePolicy.cwd, model: input.modelSelection.model,
+        status: "ready", cwd: input.runtimePolicy.cwd ?? "/tmp", model: input.modelSelection.model,
         capabilities: CodexProviderCapabilitiesV2, createdAt: now, updatedAt: now, lastError: null },
       events: Stream.never,
       ensureThread: () => Effect.die("unused ensureThread"),
@@ -76,7 +77,7 @@ const setup = Effect.gen(function* () {
   let serial = 0;
   const event = <E extends OrchestrationV2DomainEvent>(value: Omit<E, "id">): E => ({ ...value, id: EventId.make(`event:auto-promotion:${++serial}`) } as E);
   const base = { threadId, providerInstanceId: instanceId, occurredAt: now };
-  yield* events.writeWithEffects({ events: [
+  const seededEvents = [
     event({ ...base, type: "provider-session.updated", payload: { ...session, status: "ready" } }),
     event({ ...base, type: "provider-thread.updated", payload: { ...providerThread, providerSessionId: session.id, status: "active", nativeThreadRef: { driver, nativeId: "native:auto-promotion", strength: "strong" } } }),
     event({ ...base, type: "run.updated", runId: active.id, payload: { ...active, status: "running", startedAt: now } }),
@@ -85,7 +86,10 @@ const setup = Effect.gen(function* () {
     event({ ...base, type: "provider-turn.updated", runId: active.id, nodeId: node.id, payload: { id: turnId,
       providerThreadId: providerThread.id, nodeId: node.id, runAttemptId: attempt.id, nativeTurnRef: { driver, nativeId: "turn:auto-promotion", strength: "strong" },
       ordinal: 1, status: "running", startedAt: now, completedAt: null } }),
-  ], effects: [] });
+  ];
+  // Validate each complete event before the production EventStore append.
+  const checkedEvents = yield* Effect.forEach(seededEvents, Schema.decodeEffect(OrchestrationV2DomainEvent));
+  yield* events.writeWithEffects({ events: checkedEvents, effects: [] });
   const ready = yield* store.getThreadProjection(threadId);
   assert.equal(ready.providerSessions.find((row) => row.id === session.id)?.status, "ready");
   assert.equal(ready.providerThreads.find((row) => row.id === providerThread.id)?.providerSessionId, session.id);
