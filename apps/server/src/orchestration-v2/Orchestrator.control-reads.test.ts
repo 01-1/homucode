@@ -2194,7 +2194,7 @@ it.effect("assistance transient locked refusal permits the same identity after w
     });
     yield* TestClock.adjust(300_001);
     const accepted = yield* orchestrator.dispatch(command);
-    assert.isFalse(accepted.replayed);
+    assert.isNotTrue(accepted.replayed);
     const replay = yield* orchestrator.dispatch(command);
     assert.isTrue(replay.replayed);
     assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 1);

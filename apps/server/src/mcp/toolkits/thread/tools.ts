@@ -279,9 +279,9 @@ const ThreadAssistTool = Tool.make("t3_thread_assist", {
   ],
 }).annotate(Tool.Destructive, true);
 
+export const AssistanceToolkit = Toolkit.make(ThreadActivityTool, ThreadAssistTool);
+
 export const ThreadToolkit = Toolkit.make(
-  ThreadActivityTool,
-  ThreadAssistTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadConfigureTool,

@@ -1,4 +1,8 @@
-import * as SqlClient from "effect/sql/SqlClient";
+import { McpSchema, McpServer } from "effect/ai";
+import * as McpHttpServer from "./McpHttpServer.ts";
+import { AssistanceToolkit } from "./toolkits/thread/tools.ts";
+import * as ThreadHandlers from "./toolkits/thread/handlers.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import {
   EnvironmentId,
   NodeId,
@@ -33,7 +37,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import type * as McpInvocationContext from "./McpInvocationContext.ts";
+import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import { liveThreadShell } from "./McpToolAccess.testkit.ts";
 
@@ -868,8 +872,54 @@ it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN cl
       ),
     ),
   );
+  const registration = McpHttpServer.toolkitRegistration(
+    AssistanceToolkit,
+    ThreadHandlers.layerAssistance,
+  ).pipe(
+    Layer.provideMerge(layer),
+    Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+    Layer.provide(Layer.mock(ThreadManagementService.ThreadManagementService)({})),
+    Layer.provide(NodeCrypto.layer),
+  );
   await Effect.gen(function* () {
     const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+    const server = yield* McpServer.McpServer;
+    expect(server.tools.map(({ tool }) => tool.name).toSorted()).toEqual([
+      "t3_thread_activity",
+      "t3_thread_assist",
+    ]);
+    const registeredDenial = yield* server
+      .callTool({ name: "t3_thread_activity", arguments: { projectId: project } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...client,
+          requestNamespace: "client:oauth",
+        }),
+        Effect.provideService(
+          McpSchema.McpServerClient,
+          McpSchema.McpServerClient.of({
+            clientId: 1,
+            protocolVersion: "2025-06-18",
+            clientCapabilities: {},
+            clientInfo: { name: "assistance-test", version: "1" },
+            initializePayload: {
+              protocolVersion: "2025-06-18",
+              capabilities: {},
+              clientInfo: { name: "assistance-test", version: "1" },
+            },
+            getClient: Effect.die("unused MCP client"),
+          }),
+        ),
+      );
+    expect(registeredDenial.isError).toBe(true);
+    expect(registeredDenial.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("capability_denied"),
+        }),
+      ]),
+    );
     for (const scope of [
       makeScope(),
       { ...client, requestNamespace: "client:oauth" },
@@ -896,8 +946,8 @@ it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN cl
       .pipe(Effect.flip);
     expect(denied.code).toBe("capability_denied");
   }).pipe(
-    Effect.provide(layer),
-    Effect.provide(Layer.mock(SqlClient.SqlClient)({})),
+    Effect.provide(registration),
+    Effect.provide(SqlitePersistence.layerMemory),
     Effect.runPromise,
   );
 });
