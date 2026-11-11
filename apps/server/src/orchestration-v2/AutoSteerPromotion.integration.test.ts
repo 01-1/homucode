@@ -1,11 +1,12 @@
 import { assert, it } from "@effect/vitest";
 import { CommandId, EventId, MessageId, ProjectId, ProviderDriverKind, ProviderInstanceId,
-  ProviderTurnId, ThreadId, type OrchestrationV2DomainEvent } from "@t3tools/contracts";
+  ProviderSessionId, ProviderTurnId, ThreadId, type OrchestrationV2DomainEvent } from "@t3tools/contracts";
 import type * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
+import * as Stream from "effect/Stream";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Events from "./EventSink.ts";
@@ -13,15 +14,36 @@ import * as Outbox from "./EffectOutbox.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as Projections from "./ProjectionStore.ts";
 import * as Registry from "./ProviderAdapterRegistry.ts";
+import * as Sessions from "./ProviderSessionManager.ts";
 import * as Replay from "./testkit/ProviderReplayHarness.ts";
 
 const instanceId = ProviderInstanceId.make("codex"), driver = ProviderDriverKind.make("codex");
 const modelSelection = { instanceId, model: "gpt-5.1-codex" };
-const adapter = { instanceId, driver,
+const adapter: Adapter.ProviderAdapterV2["Service"] = { instanceId, driver,
   getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
-  openSession: () => Effect.die("Promotion transaction cases never execute provider effects"),
-} as Adapter.ProviderAdapterV2["Service"];
+  openSession: (input) => Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    // The real manager owns this runtime. Provider effects stay undrained so the
+    // test inspects the promotion transaction independently of delivery.
+    return {
+      instanceId, driver, providerSessionId: input.providerSessionId,
+      providerSession: { id: input.providerSessionId, driver, providerInstanceId: instanceId,
+        status: "ready", cwd: input.runtimePolicy.cwd, model: input.modelSelection.model,
+        capabilities: CodexProviderCapabilitiesV2, createdAt: now, updatedAt: now, lastError: null },
+      events: Stream.never,
+      ensureThread: () => Effect.die("unused ensureThread"),
+      resumeThread: () => Effect.die("unused resumeThread"),
+      startTurn: () => Effect.die("provider start effect is not drained"),
+      steerTurn: () => Effect.die("provider steer effect is not drained"),
+      interruptTurn: () => Effect.die("unused interruptTurn"),
+      respondToRuntimeRequest: () => Effect.die("unused runtime request"),
+      readThreadSnapshot: () => Effect.die("unused snapshot"),
+      rollbackThread: () => Effect.die("unused rollback"),
+      forkThread: () => Effect.die("unused fork"),
+    } satisfies Adapter.ProviderAdapterV2SessionRuntime;
+  }),
+};
 const database = Sqlite.layerMemory;
 const layer = Layer.mergeAll(Projections.layer.pipe(Layer.provide(database)), Outbox.layer.pipe(Layer.provide(database)),
   Replay.layerWithRegistry({ name: "automatic-promotion-recheck" }, Registry.layerFromAdapters([adapter]),
@@ -43,14 +65,20 @@ const setup = Effect.gen(function* () {
   const active = p.runs.find((run) => run.ordinal === 1)!, first = p.runs.find((run) => run.ordinal === 2)!, second = p.runs.find((run) => run.ordinal === 3)!;
   const attempt = p.attempts.find((row) => row.id === active.activeAttemptId)!, node = p.nodes.find((row) => row.id === active.rootNodeId)!;
   const providerThread = p.providerThreads.find((row) => row.id === active.providerThreadId)!;
-  const session = p.providerSessions.find((row) => row.id === providerThread.providerSessionId)!;
+  assert.ok(active); assert.ok(first); assert.ok(second);
+  assert.ok(attempt); assert.ok(node); assert.ok(providerThread);
+  const runtime = yield* (yield* Sessions.ProviderSessionManagerV2).open({
+    threadId, providerSessionId: ProviderSessionId.make("session:auto-promotion"), modelSelection,
+    runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: "/tmp" },
+  });
+  const session = runtime.providerSession;
   const turnId = ProviderTurnId.make("provider-turn:auto-promotion");
   let serial = 0;
   const event = <E extends OrchestrationV2DomainEvent>(value: Omit<E, "id">): E => ({ ...value, id: EventId.make(`event:auto-promotion:${++serial}`) } as E);
   const base = { threadId, providerInstanceId: instanceId, occurredAt: now };
   yield* events.writeWithEffects({ events: [
     event({ ...base, type: "provider-session.updated", payload: { ...session, status: "ready" } }),
-    event({ ...base, type: "provider-thread.updated", payload: { ...providerThread, status: "active", nativeThreadRef: { driver, nativeId: "native:auto-promotion", strength: "strong" } } }),
+    event({ ...base, type: "provider-thread.updated", payload: { ...providerThread, providerSessionId: session.id, status: "active", nativeThreadRef: { driver, nativeId: "native:auto-promotion", strength: "strong" } } }),
     event({ ...base, type: "run.updated", runId: active.id, payload: { ...active, status: "running", startedAt: now } }),
     event({ ...base, type: "run-attempt.updated", runId: active.id, payload: { ...attempt, status: "running", startedAt: now, providerTurnId: turnId } }),
     event({ ...base, type: "node.updated", runId: active.id, nodeId: node.id, payload: { ...node, status: "running", startedAt: now, providerTurnId: turnId } }),
@@ -58,6 +86,11 @@ const setup = Effect.gen(function* () {
       providerThreadId: providerThread.id, nodeId: node.id, runAttemptId: attempt.id, nativeTurnRef: { driver, nativeId: "turn:auto-promotion", strength: "strong" },
       ordinal: 1, status: "running", startedAt: now, completedAt: null } }),
   ], effects: [] });
+  const ready = yield* store.getThreadProjection(threadId);
+  assert.equal(ready.providerSessions.find((row) => row.id === session.id)?.status, "ready");
+  assert.equal(ready.providerThreads.find((row) => row.id === providerThread.id)?.providerSessionId, session.id);
+  assert.isTrue(yield* (yield* Sessions.ProviderSessionManagerV2).isLive(session.id));
+  assert.equal(ready.providerTurns.find((row) => row.id === turnId)?.status, "running");
   return { engine, store, events, threadId, active, first, second, event, base };
 });
 
