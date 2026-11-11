@@ -681,7 +681,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     discardComposerDraft(threadRef);
   };
 
-  const gitCwd = thread.worktreePath ?? props.project?.workspaceRoot ?? null;
+  const gitCwd =
+    thread.worktreePath ?? thread.workspaceRoot ?? props.project?.workspaceRoot ?? null;
   const linkedPullRequestStatus = useLinkedThreadPullRequest(
     thread.environmentId,
     thread.linkedPullRequest,
@@ -1665,7 +1666,8 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
     setDragNodeRef(row);
     return leaseRowRef(row);
   };
-  const gitCwd = thread.worktreePath ?? props.project?.workspaceRoot ?? null;
+  const gitCwd =
+    thread.worktreePath ?? thread.workspaceRoot ?? props.project?.workspaceRoot ?? null;
   const branchTarget =
     leaseLiveStatus && (thread.branch != null || thread.worktreePath !== null) && gitCwd !== null
       ? { environmentId: thread.environmentId, cwd: gitCwd }

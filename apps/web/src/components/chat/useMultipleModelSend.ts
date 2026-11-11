@@ -87,6 +87,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
   return async ({
     threadId,
     project,
+    workspaceRoot,
     branch,
     selections,
     targets,
@@ -100,6 +101,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
   }: {
     readonly threadId: ThreadId;
     readonly project: EnvironmentProject;
+    readonly workspaceRoot?: string;
     readonly branch: string;
     readonly selections: ReadonlyArray<ModelSelection>;
     readonly targets: ReadonlyArray<MultipleModelTarget>;
@@ -185,10 +187,11 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
                       interactionMode: DEFAULT_INTERACTION_MODE,
                       branch,
                       worktreePath: null,
+                      ...(workspaceRoot ? { workspaceRoot } : {}),
                       createdAt: createdAt,
                     },
                     prepareWorktree: {
-                      projectCwd: project.workspaceRoot,
+                      projectCwd: workspaceRoot ?? project.workspaceRoot,
                       baseBranch: branch,
                       requireWorktree: true,
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),

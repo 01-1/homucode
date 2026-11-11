@@ -58,6 +58,7 @@ const makeScope = (
 });
 
 interface ThreadFixture {
+  readonly workspaceRoot?: string;
   readonly branch?: string | null;
   readonly worktreePath?: string | null;
   readonly archivedAt?: string | null;
@@ -708,6 +709,15 @@ describe("t3_worktree_handoff", () => {
 });
 
 describe("t3_worktree_status", () => {
+  it.effect("reports the original workspace after a project move", () => {
+    const harness = makeHarness({ thread: { workspaceRoot: "/original-project" } });
+    return Effect.gen(function* () {
+      const result = yield* runStatus(harness);
+      expect(result.projectWorkspaceRoot).toBe("/original-project");
+      expect(result.attached).toBe(false);
+    });
+  });
+
   it.effect("reports an attached thread's worktree and branch", () => {
     const harness = makeHarness({
       thread: {

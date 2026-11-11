@@ -175,7 +175,11 @@ const make = Effect.gen(function* () {
       );
     }
 
-    const project = yield* loadProject(scope, projection.thread.projectId);
+    const storedProject = yield* loadProject(scope, projection.thread.projectId);
+    const project = {
+      ...storedProject,
+      workspaceRoot: projection.thread.workspaceRoot ?? storedProject.workspaceRoot,
+    };
     const projectCwd = project.workspaceRoot;
 
     const localStatus = yield* gitWorkflow
@@ -439,7 +443,7 @@ const make = Effect.gen(function* () {
         attached: projection.thread.worktreePath !== null,
         worktreePath: projection.thread.worktreePath,
         branch: projection.thread.branch,
-        projectWorkspaceRoot: project.workspaceRoot,
+        projectWorkspaceRoot: projection.thread.workspaceRoot ?? project.workspaceRoot,
         defaultStartFromOrigin,
       };
       return result;

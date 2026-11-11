@@ -476,6 +476,25 @@ export const layer: Layer.Layer<
                     modelSelectionsEqual(existing.modelSelection, offered.modelSelection)))
               )
                 return [];
+              const parentId = offered.lineage.parentThreadId;
+              const parent =
+                existing === null && parentId !== null
+                  ? yield* projections.getThread(parentId).pipe(
+                      Effect.catchTags({
+                        ProjectionStoreThreadNotFoundError: () => Effect.succeed(null),
+                      }),
+                    )
+                  : null;
+              const created =
+                parent === null
+                  ? offered
+                  : {
+                      ...offered,
+                      projectId: parent.projectId,
+                      ...((offered.workspaceRoot ?? parent.workspaceRoot) === undefined
+                        ? {}
+                        : { workspaceRoot: offered.workspaceRoot ?? parent.workspaceRoot }),
+                    };
               const now = yield* DateTime.now;
               return [
                 yield* makeDomainEvent(input, {
@@ -483,7 +502,7 @@ export const layer: Layer.Layer<
                   threadId: offered.id,
                   payload:
                     existing === null
-                      ? offered
+                      ? created
                       : {
                           ...existing,
                           title: offered.title,
@@ -819,10 +838,15 @@ export const layer: Layer.Layer<
                   });
                 }),
               ),
-              (effect) =>
-                input.event.type === "app_thread.created"
-                  ? threadCommands.withLock(input.event.appThread.id, effect)
-                  : effect,
+              (effect) => {
+                if (input.event.type !== "app_thread.created") return effect;
+                const child = input.event.appThread;
+                const locked = threadCommands.withLock(child.id, effect);
+                return child.lineage.parentThreadId === null ||
+                  child.lineage.parentThreadId === child.id
+                  ? locked
+                  : threadCommands.withLock(child.lineage.parentThreadId, locked);
+              },
             ),
         ),
     });

@@ -278,6 +278,35 @@ describe.each([
     expect(testState.draftStore.setLogicalProjectDraftThreadId).not.toHaveBeenCalled();
   });
 
+  it("carries the retained checkout into a branch draft", async () => {
+    testState.reset(draft);
+    const opened = await useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      {
+        branch: "feature/source",
+        worktreePath: null,
+        workspaceRoot: "/source-repo",
+        envMode: "local",
+      },
+    );
+    const calls = [
+      ...testState.draftStore.setLogicalProjectDraftThreadId.mock.calls,
+      ...testState.draftStore.setDraftThreadContext.mock.calls,
+    ];
+    expect(opened).not.toBeNull();
+    expect(
+      calls.some((args) =>
+        args.some(
+          (value: unknown) =>
+            value !== null &&
+            typeof value === "object" &&
+            "workspaceRoot" in value &&
+            value.workspaceRoot === "/source-repo",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it("sets the prompt before the draft shows", async () => {
     testState.reset(draft);
     const pendingOpen = useNewThreadHandler()(

@@ -225,9 +225,10 @@ export const layer: Layer.Layer<
       ) {
         const project = yield* projects.get(context.thread.projectId);
         if (Option.isSome(project)) {
-          yield* gitWorkflow.pruneWorktrees({ cwd: project.value.workspaceRoot });
+          const cwd = context.thread.workspaceRoot ?? project.value.workspaceRoot;
+          yield* gitWorkflow.pruneWorktrees({ cwd });
           yield* gitWorkflow.createWorktree({
-            cwd: project.value.workspaceRoot,
+            cwd,
             refName: branch,
             path: worktreePath,
           });

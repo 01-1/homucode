@@ -166,7 +166,7 @@ export const make = Effect.gen(function* () {
         (thread.branch !== null || thread.branchPullRequest != null),
     );
     const groups = Map.groupBy(threads, (thread) =>
-      JSON.stringify([thread.projectId, thread.worktreePath, thread.branch]),
+      JSON.stringify([thread.projectId, thread.workspaceRoot, thread.worktreePath, thread.branch]),
     );
 
     yield* Effect.forEach(
@@ -174,8 +174,10 @@ export const make = Effect.gen(function* () {
       (group) =>
         Effect.gen(function* () {
           const first = group[0]!;
-          const project = projects.get(first.projectId);
-          if (project === undefined) return finishBackfill(group);
+          const storedProject = projects.get(first.projectId);
+          if (storedProject === undefined) return finishBackfill(group);
+          const workspaceRoot = first.workspaceRoot ?? storedProject.workspaceRoot;
+          const project = { ...storedProject, workspaceRoot };
           const { project: resolvedProject, repository } =
             yield* resolveProjectForPullRequestDiscovery(project, repositoryIdentities, {
               refresh: request.refresh,
@@ -275,7 +277,7 @@ export const make = Effect.gen(function* () {
               { cwd, branch: first.branch },
               { freshGitState: true },
             );
-            const currentIdentity = yield* repositoryIdentities.resolve(project.workspaceRoot, {
+            const currentIdentity = yield* repositoryIdentities.resolve(workspaceRoot, {
               refresh: true,
             });
             if (
@@ -299,7 +301,7 @@ export const make = Effect.gen(function* () {
               Effect.gen(function* () {
                 // Discovery yields to network I/O; recheck the project at commit to reject deleted projects or changed checkouts.
                 const currentProject = yield* projectStore.getShell(project.id);
-                if (!projectWorkspaceMatchesSnapshot(currentProject, project.workspaceRoot)) {
+                if (!projectWorkspaceMatchesSnapshot(currentProject, storedProject.workspaceRoot)) {
                   return failBackfill([thread]);
                 }
                 const uuid = yield* random.uuidV4();

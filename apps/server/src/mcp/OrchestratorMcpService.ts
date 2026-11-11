@@ -2488,10 +2488,16 @@ const make = Effect.gen(function* () {
       );
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
       if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
-        const project = yield* requireProject(parent.thread.projectId);
+        const storedProject = yield* requireProject(parent.thread.projectId);
+        const project = {
+          ...storedProject,
+          workspaceRoot: parent.thread.workspaceRoot ?? storedProject.workspaceRoot,
+        };
+        const cwd =
+          parent.thread.worktreePath ?? parent.thread.workspaceRoot ?? project.workspaceRoot;
         const base = yield* gitDriver
           .resolveCommit({
-            cwd: parent.thread.worktreePath ?? project.workspaceRoot,
+            cwd,
             revision: "HEAD",
           })
           .pipe(
@@ -2502,7 +2508,7 @@ const make = Effect.gen(function* () {
         // Launch preparation creates the worktree from the project root, so a
         // parent checkout in another repository (such as a Git folder inside
         // Scratch) would hand it a commit it cannot find.
-        if (parent.thread.worktreePath !== null) {
+        if (cwd !== project.workspaceRoot) {
           yield* gitDriver
             .resolveCommit({ cwd: project.workspaceRoot, revision: base.commitSha })
             .pipe(

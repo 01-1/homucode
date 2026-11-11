@@ -890,6 +890,36 @@ describe("composerDraftStore project draft thread mapping", () => {
     expect(store.getComposerDraft(draftId)?.prompt).toBe("keep this prompt");
   });
 
+  it("retains a branch draft checkout through persistence and clears it on project retarget", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, {
+      threadId,
+      branch: "feature/source",
+      worktreePath: null,
+      workspaceRoot: "/source-repo",
+      envMode: "local",
+    });
+    const persisted = partializeComposerDraftStoreState(useComposerDraftStore.getState());
+    const persistApi = useComposerDraftStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useComposerDraftStore.getState>,
+        ) => ReturnType<typeof useComposerDraftStore.getState>;
+      };
+    };
+    const hydrated = persistApi.getOptions().merge(persisted, useComposerDraftStore.getState());
+    expect(hydrated.draftThreadsByThreadKey[draftId]?.workspaceRoot).toBe("/source-repo");
+    store.setDraftThreadContext(draftId, { workspaceRoot: "/changed-source" });
+    expect(useComposerDraftStore.getState().getDraftSession(draftId)?.workspaceRoot).toBe(
+      "/changed-source",
+    );
+    store.setDraftThreadContext(draftId, { projectRef: otherProjectRef });
+    expect(
+      useComposerDraftStore.getState().getDraftSession(draftId)?.workspaceRoot ?? null,
+    ).toBeNull();
+  });
+
   it("rotates a failed bootstrap thread id without losing its draft", () => {
     const store = useComposerDraftStore.getState();
     const retryThreadId = ThreadId.make("thread-retry");

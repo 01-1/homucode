@@ -1082,6 +1082,7 @@ export function useComposerSend(input: ComposerSendInput) {
       await sendToMultipleModels({
         threadId: threadIdForSend,
         project: activeProject,
+        ...(activeThread.workspaceRoot ? { workspaceRoot: activeThread.workspaceRoot } : {}),
         branch: activeThreadBranch!,
         selections: multipleModelSelections,
         targets: multipleTargets,
@@ -1227,6 +1228,9 @@ export function useComposerSend(input: ComposerSendInput) {
                       interactionMode: DEFAULT_INTERACTION_MODE,
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
+                      ...(activeThread.workspaceRoot
+                        ? { workspaceRoot: activeThread.workspaceRoot }
+                        : {}),
                       createdAt: activeThread.createdAt,
                     },
                   }
@@ -1234,7 +1238,7 @@ export function useComposerSend(input: ComposerSendInput) {
               ...(baseBranchForWorktree
                 ? {
                     prepareWorktree: {
-                      projectCwd: activeProject.workspaceRoot,
+                      projectCwd: activeThread.workspaceRoot ?? activeProject.workspaceRoot,
                       baseBranch: baseBranchForWorktree,
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },

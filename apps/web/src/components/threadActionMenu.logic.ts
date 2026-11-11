@@ -31,6 +31,9 @@ export type ThreadActionMenuId =
   | "copy-thread"
   | "copy-thread-id"
   | "stop-with-subagents"
+  | "move-to-new-project"
+  | "move-to-project"
+  | `move-to-project:${string}`
   | "move-to-root"
   | "move-under"
   | `move-under:${string}`
@@ -106,6 +109,7 @@ export interface ThreadActionMenuState {
   /** Where the thread can be re-parented to, or null when it cannot move. */
   readonly move?: ThreadMoveOptions | null;
   /** The thread has running subagents, which plain Stop leaves running. */
+  readonly moveProjectOptions?: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   readonly hasRunningSubagents?: boolean;
 }
 
@@ -317,6 +321,22 @@ export function buildThreadActionMenuItems(
             label: "Turn into project",
             icon: "folder-plus",
             disabled: state.isRunning,
+          },
+        ]
+      : []),
+    ...(state.moveProjectOptions !== undefined
+      ? [
+          {
+            id: "move-to-project" as const,
+            label: "Move to project",
+            icon: "folder" as const,
+            children: [
+              ...state.moveProjectOptions.map((project) => ({
+                id: `move-to-project:${project.id}` as const,
+                label: project.title,
+              })),
+              { id: "move-to-new-project" as const, label: "New project…" },
+            ],
           },
         ]
       : []),

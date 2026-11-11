@@ -16,6 +16,7 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2Run,
   type OrchestrationV2TurnItem,
+  ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderThreadId,
@@ -1717,6 +1718,50 @@ layer("ProviderEventIngestorV2", (it) => {
       assert.isBelow(projectedLarge.diffStr?.length ?? 0, 40_000);
       assert.isTrue(largeDiff.startsWith(projectedLarge.diffStr?.split("\n…")[0] ?? "-"));
       assert.deepEqual(projectedSmall, small);
+    }),
+  );
+
+  it.effect("native child creation follows its parent's current project and pinned workspace", () =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const ingestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const rootEvent = yield* threadCreatedEvent(now);
+      if (rootEvent.type !== "thread.created") throw new Error("Expected thread fixture");
+      const parent = { ...rootEvent.payload, workspaceRoot: "/original-checkout" };
+      yield* sink.write({ events: [{ ...rootEvent, payload: parent }] });
+      const childId = ids.derive.threadFromProviderThread({
+        driver: CODEX_DRIVER,
+        nativeThreadId: "after-project-move",
+      });
+      yield* ingestor.ingestNormalized({
+        providerSessionId: yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId: parent.id,
+        }),
+        providerInstanceId: modelSelection.instanceId,
+        threadId: parent.id,
+        event: {
+          type: "app_thread.created",
+          driver: CODEX_DRIVER,
+          appThread: {
+            ...rootEvent.payload,
+            id: childId,
+            projectId: ProjectId.make("stale-before-move"),
+            lineage: {
+              parentThreadId: parent.id,
+              rootThreadId: parent.id,
+              relationshipToParent: "subagent",
+            },
+          },
+        },
+      });
+      const child = yield* projections.getThread(childId);
+      assert.equal(child.projectId, parent.projectId);
+      assert.equal(child.workspaceRoot, parent.workspaceRoot);
+      assert.equal(child.worktreePath, rootEvent.payload.worktreePath);
     }),
   );
 

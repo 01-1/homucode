@@ -936,6 +936,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     archiveThread,
     deleteThread,
     moveThread,
+    moveThreadToProject,
+    moveThreadToNewProject,
     stopThreadWithSubagents,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
@@ -2603,6 +2605,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         if (!thread) return;
         const threadWorkspacePath =
           thread.worktreePath ??
+          thread.workspaceRoot ??
           projectByKey.get(`${thread.environmentId}:${thread.projectId}`)?.workspaceRoot ??
           null;
         const configLoaded = serverConfigs.has(thread.environmentId);
@@ -2653,6 +2656,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              moveProjectOptions: [...projectByKey.values()]
+                .filter(
+                  (project) =>
+                    project.environmentId === threadRef.environmentId &&
+                    project.id !== thread.projectId &&
+                    !project.archivedAt,
+                )
+                .map((project) => ({ id: project.id, title: project.title })),
               move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
               hasRunningSubagents: hasRunningSubagents(
                 thread.id,
@@ -2675,6 +2686,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
+        if (clicked.value === "move-to-new-project") {
+          await moveThreadToNewProject(threadRef);
+          return;
+        }
+        if (clicked.value.startsWith("move-to-project:")) {
+          const moved = await moveThreadToProject(
+            threadRef,
+            clicked.value.slice(
+              "move-to-project:".length,
+            ) as import("@t3tools/contracts").ProjectId,
+          );
+          if (moved._tag === "Failure" && !isAtomCommandInterrupted(moved)) {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to move thread",
+                description: String(squashAtomCommandFailure(moved)),
+              }),
+            );
+          }
+          return;
+        }
         const moveParent = moveParentFromMenuId(clicked.value);
         const stopWithSubagents = clicked.value === "stop-with-subagents";
         if (moveParent !== undefined || stopWithSubagents) {
@@ -2728,6 +2761,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               handleNewThread(scopeProjectRef(thread.environmentId, thread.projectId), {
                 branch: thread.branch,
                 worktreePath: thread.worktreePath,
+                workspaceRoot: thread.workspaceRoot ?? null,
                 envMode: thread.worktreePath ? "worktree" : "local",
                 startFromOrigin: false,
               }),

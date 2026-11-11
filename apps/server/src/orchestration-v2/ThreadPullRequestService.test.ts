@@ -424,13 +424,14 @@ describe("ThreadPullRequestServiceV2 reads", () => {
   );
 
   it.effect.each([
-    { state: "closed", sameBranch: false },
-    { state: "merged", sameBranch: false },
-    { state: "closed", sameBranch: true },
-    { state: "merged", sameBranch: true },
+    { state: "closed", sameBranch: false, workspaceRoot: null },
+    { state: "closed", sameBranch: false, workspaceRoot: "/workspace/original" },
+    { state: "merged", sameBranch: false, workspaceRoot: null },
+    { state: "closed", sameBranch: true, workspaceRoot: null },
+    { state: "merged", sameBranch: true, workspaceRoot: null },
   ] as const)(
-    "restores a $state automatic PR only for its own branch (sameBranch=$sameBranch)",
-    ({ state, sameBranch }) =>
+    "restores a $state automatic PR only for its own branch (sameBranch=$sameBranch, checkout=$workspaceRoot)",
+    ({ state, sameBranch, workspaceRoot }) =>
       Effect.scoped(
         Effect.gen(function* () {
           const savedReference = {
@@ -442,6 +443,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           const thread = {
             ...threadShell("branch-pr-thread"),
             branch: "main",
+            ...(workspaceRoot ? { workspaceRoot } : {}),
             branchPullRequest: savedReference,
             linkedPullRequest: savedReference,
           };
@@ -557,7 +559,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
               threadId: thread.id,
               snapshotSequence: 7,
               expected: {
-                workspaceRoot: project.workspaceRoot,
+                workspaceRoot: thread.workspaceRoot ?? project.workspaceRoot,
                 branch: thread.branch,
                 worktreePath: thread.worktreePath,
                 linkedPullRequest: savedReference,

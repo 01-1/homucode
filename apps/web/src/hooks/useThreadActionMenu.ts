@@ -92,6 +92,8 @@ export function useThreadActionMenu(input: {
     deleteThread,
     markThreadUnread,
     moveThread,
+    moveThreadToProject,
+    moveThreadToNewProject,
     stopThreadWithSubagents,
     turnThreadIntoProject,
   } = useThreadActions();
@@ -156,6 +158,14 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        moveProjectOptions: projects
+          .filter(
+            (project) =>
+              project.environmentId === threadRef.environmentId &&
+              project.id !== thread.projectId &&
+              !project.archivedAt,
+          )
+          .map((project) => ({ id: project.id, title: project.title })),
         move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
         hasRunningSubagents: hasRunningSubagents(
           thread.id,
@@ -202,6 +212,19 @@ export function useThreadActionMenu(input: {
           failureToast(title, squashAtomCommandFailure(result));
         }
       };
+      if (action === "move-to-new-project") {
+        await moveThreadToNewProject(threadRef);
+        return;
+      }
+      if (action.startsWith("move-to-project:")) {
+        await reportFailure("Failed to move thread", () =>
+          moveThreadToProject(
+            threadRef,
+            action.slice("move-to-project:".length) as import("@t3tools/contracts").ProjectId,
+          ),
+        );
+        return;
+      }
       const moveParent = moveParentFromMenuId(action);
       if (moveParent !== undefined) {
         await reportFailure("Failed to move thread", () => moveThread(threadRef, moveParent));
@@ -231,6 +254,7 @@ export function useThreadActionMenu(input: {
             handleNewThread(scopeProjectRef(threadRef.environmentId, thread.projectId), {
               branch: thread.branch,
               worktreePath: thread.worktreePath,
+              workspaceRoot: thread.workspaceRoot ?? null,
               envMode: thread.worktreePath ? "worktree" : "local",
               startFromOrigin: false,
             }),
@@ -297,7 +321,7 @@ export function useThreadActionMenu(input: {
           return;
         }
         case "copy-path": {
-          const workspacePath = thread.worktreePath ?? projectCwd;
+          const workspacePath = thread.worktreePath ?? thread.workspaceRoot ?? projectCwd;
           if (!workspacePath) {
             toastManager.add(
               stackedThreadToast({

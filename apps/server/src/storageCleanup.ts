@@ -859,7 +859,11 @@ const make = Effect.gen(function* () {
         `.pipe(NodeSqliteClient.readOnly);
     const deletedThreads = (yield* Effect.forEach(deletedRows, (row) =>
       decodeCleanupThread(row.payload_json).pipe(
-        Effect.map((thread) => ({ ...thread, workspaceRoot: row.workspaceRoot })),
+        Effect.map((thread) => ({
+          ...thread,
+          workspaceRoot: thread.workspaceRoot ?? row.workspaceRoot,
+          deletedCleanup: true as const,
+        })),
       ),
     )).filter((thread) => thread.worktreePath !== null && thread.branch !== null);
     const snapshot = yield* readThreads();
@@ -896,15 +900,22 @@ const make = Effect.gen(function* () {
       const worktreePath = path.resolve(thread.worktreePath!);
       const group = groups.get(worktreePath) ?? [];
       const activityAt = Math.max(...group.map(storageCleanupActivityAt));
-      const deleted = "workspaceRoot" in thread;
+      const deleted = "deletedCleanup" in thread;
       const settlementChain = deleted
         ? []
         : worktreeSettlementChain(thread, threadsById, now, serverSettings);
       const settledThread = settlementChain.at(-1);
       const members = deleted ? [thread, ...group] : group;
-      const project = deleted
+      const storedProject = deleted
         ? { workspaceRoot: thread.workspaceRoot }
         : snapshot.projects.find((entry) => entry.id === thread.projectId);
+      const project =
+        storedProject === undefined
+          ? undefined
+          : {
+              ...storedProject,
+              workspaceRoot: thread.workspaceRoot ?? storedProject.workspaceRoot,
+            };
       const entry: StorageCleanupReportEntry = {
         kind: "worktree",
         outcome: "kept",

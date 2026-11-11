@@ -159,6 +159,7 @@ interface StartThreadBootstrap {
     readonly interactionMode: ProviderInteractionMode;
     readonly branch: string | null;
     readonly worktreePath: string | null;
+    readonly workspaceRoot?: string;
     readonly createdAt: string;
   };
   readonly prepareWorktree?: {
@@ -555,6 +556,17 @@ export const reorderActiveThread = Effect.fn("EnvironmentCommands.reorderActiveT
   });
 });
 
+export const moveThreadToProject = Effect.fn("EnvironmentCommands.moveThreadToProject")(function* (
+  input: ThreadCommandInput & { readonly projectId: import("@t3tools/contracts").ProjectId },
+) {
+  return yield* dispatch({
+    type: "thread.project.move",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    projectId: input.projectId,
+  });
+});
+
 export const moveThread = Effect.fn("EnvironmentCommands.moveThread")(function* (
   input: MoveThreadInput,
 ) {
@@ -737,6 +749,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       threadId: input.threadId,
       ...(bootstrap === undefined ? { reuseExistingThread: true } : {}),
       projectId: thread.projectId,
+      ...(bootstrap?.workspaceRoot === undefined ? {} : { workspaceRoot: bootstrap.workspaceRoot }),
       title: input.titleSeed ?? thread.title,
       generateTitle: input.titleSeed !== undefined,
       modelSelection: input.modelSelection ?? thread.modelSelection,

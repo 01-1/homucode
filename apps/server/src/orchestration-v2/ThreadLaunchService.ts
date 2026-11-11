@@ -82,6 +82,7 @@ export interface ThreadLaunchInput {
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
+  readonly workspaceRoot?: string;
   readonly title: string;
   readonly generateTitle?: boolean;
   readonly modelSelection: ModelSelection;
@@ -296,7 +297,7 @@ const make = Effect.gen(function* () {
     threadId: ThreadId,
     runId: RunId | null,
   ) {
-    const project = yield* projects.getById(input.projectId).pipe(
+    const storedProject = yield* projects.getById(input.projectId).pipe(
       Effect.mapError(mapError(input, "resolve-project", threadId)),
       Effect.flatMap(
         Option.match({
@@ -307,6 +308,13 @@ const make = Effect.gen(function* () {
       ),
     );
 
+    const shell = yield* threads
+      .getThreadShell(threadId)
+      .pipe(Effect.mapError(mapError(input, "resolve-project", threadId)));
+    const project = {
+      ...storedProject,
+      workspaceRoot: shell?.workspaceRoot ?? storedProject.workspaceRoot,
+    };
     const reused = input.reusedWorktree;
     const tracked = input.workspaceStrategy.type === "worktree" || reused !== undefined;
     let createdWorktreePath: string | null = null;
@@ -837,6 +845,7 @@ const make = Effect.gen(function* () {
       // Scratch has no Git repository. Normalize before folder allocation so
       // durable preparation and retries use the thread's own Scratch folder.
       const input: ThreadLaunchInput =
+        request.workspaceRoot === undefined &&
         request.workspaceStrategy.type === "worktree" &&
         (yield* managedFolders.isScratchProject(request.projectId))
           ? { ...request, workspaceStrategy: { type: "root" } }
@@ -904,7 +913,9 @@ const make = Effect.gen(function* () {
         }
 
         const workspaceStrategy: ThreadLaunchWorkspaceStrategy =
-          input.workspaceStrategy.type === "root" && Option.isNone(launchReceipt)
+          input.workspaceStrategy.type === "root" &&
+          input.workspaceRoot === undefined &&
+          Option.isNone(launchReceipt)
             ? Option.match(
                 yield* managedFolders
                   .folderForThread({
@@ -941,6 +952,9 @@ const make = Effect.gen(function* () {
                 interactionMode: input.interactionMode,
                 branch: initialBranch,
                 worktreePath: initialWorktreePath,
+                ...(input.workspaceRoot === undefined
+                  ? {}
+                  : { workspaceRoot: input.workspaceRoot }),
                 ...(input.importedNativeThread === undefined
                   ? {}
                   : { importedNativeThread: input.importedNativeThread }),

@@ -7293,6 +7293,157 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
       Effect.flatMap((orchestrator) => orchestrator.getThreadShell(threadId)),
     );
 
+  it.effect(
+    "moves a working thread and archived descendants to another project preserving checkout and schedules",
+    () =>
+      Effect.gen(function* () {
+        const projects = yield* ProjectService.ProjectService;
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const tasks = yield* ScheduledTaskService.ScheduledTaskService;
+        const { folder, createThread } = yield* setup("project-move");
+        const rootId = yield* createThread("main", folder);
+        const childId = yield* createThread("child", `${folder}/child-checkout`);
+        const grandchildId = yield* createThread("grandchild", `${folder}/grandchild-checkout`);
+        const unrelatedId = yield* createThread("unrelated", folder);
+        const destination = yield* projects.create({
+          commandId: CommandId.make("project-move-destination"),
+          projectId: ProjectId.make("project-move-destination"),
+          title: "Destination",
+          workspaceRoot: "/tmp/project-move-destination",
+        });
+        const now = yield* DateTime.now;
+        for (const [id, parent] of [
+          [childId, rootId],
+          [grandchildId, childId],
+        ] as const) {
+          const thread = (yield* orchestrator.getThreadProjection(id)).thread;
+          yield* eventSink.write({
+            commandId: CommandId.make(`family:${id}`),
+            events: [
+              {
+                id: EventId.make(`family:${id}`),
+                type: "thread.metadata-updated",
+                threadId: id,
+                occurredAt: now,
+                payload: {
+                  ...thread,
+                  ...(id === childId ? { worktreePath: null } : {}),
+                  lineage: {
+                    parentThreadId: parent,
+                    rootThreadId: rootId,
+                    relationshipToParent: "subagent",
+                  },
+                },
+              },
+            ],
+          });
+        }
+        yield* orchestrator.dispatch({
+          type: "thread.archive",
+          commandId: CommandId.make("project-move-archive-grandchild"),
+          threadId: grandchildId,
+        });
+        const { task } = yield* tasks.upsert({
+          id: ScheduledTaskId.make("project-move-bound"),
+          title: "Bound",
+          prompt: "Check in",
+          enabled: true,
+          schedule: { type: "interval", everyMs: 60_000 },
+          projectId: SCRATCH_PROJECT_ID,
+          threadId: childId,
+          workspaceStrategy: { type: "root" },
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          createdBy: "user",
+          creationSource: "web",
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("project-move-start"),
+          threadId: rootId,
+          messageId: MessageId.make("project-move-start"),
+          text: "Continue working",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const before = yield* orchestrator.getThreadProjection(rootId);
+        const moved = yield* orchestrator.dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("project-move-command"),
+          threadId: rootId,
+          projectId: destination.id,
+        });
+        assert.isTrue(
+          moved.storedEvents.every((stored) => stored.event.type === "thread.metadata-updated"),
+        );
+        const after = yield* orchestrator.getThreadProjection(rootId);
+        assert.deepEqual(after.runs, before.runs);
+        assert.deepEqual(after.messages, before.messages);
+        assert.deepEqual(after.providerThreads, before.providerThreads);
+        assert.deepEqual(after.thread.autoreviewers, before.thread.autoreviewers);
+        for (const id of [rootId, childId, grandchildId])
+          assert.equal((yield* shellOf(id))?.projectId, destination.id);
+        assert.equal((yield* shellOf(rootId))?.worktreePath, folder);
+        assert.equal((yield* shellOf(rootId))?.workspaceRoot, SCRATCH_ROOT);
+        assert.isNull((yield* shellOf(childId))?.worktreePath);
+        assert.equal((yield* shellOf(childId))?.workspaceRoot, SCRATCH_ROOT);
+        assert.equal((yield* shellOf(grandchildId))?.lineage.parentThreadId, childId);
+        assert.isNotNull((yield* shellOf(grandchildId))?.archivedAt);
+        assert.equal((yield* shellOf(unrelatedId))?.projectId, SCRATCH_PROJECT_ID);
+        assert.equal(
+          (yield* tasks.list()).tasks.find((candidate) => candidate.id === task.id)?.projectId,
+          destination.id,
+        );
+        const movedChild = (yield* orchestrator.getThreadProjection(childId)).thread;
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.sync",
+          commandId: CommandId.make("project-move-retained-checkout-pr"),
+          threadId: childId,
+          projectId: destination.id,
+          snapshotSequence: (yield* orchestrator.getShellSnapshot()).snapshotSequence,
+          expected: {
+            workspaceRoot: SCRATCH_ROOT,
+            branch: movedChild.branch,
+            worktreePath: movedChild.worktreePath,
+            linkedPullRequest: movedChild.linkedPullRequest ?? null,
+            branchPullRequest: movedChild.branchPullRequest ?? null,
+          },
+          branchPullRequest: {
+            projectId: destination.id,
+            repository: "owner/source",
+            number: 1,
+            url: "https://github.com/owner/source/pull/1",
+          },
+        });
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(childId)).thread.branchPullRequest?.number,
+          1,
+        );
+        const retry = yield* orchestrator.dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("project-move-retry"),
+          threadId: rootId,
+          projectId: destination.id,
+        });
+        assert.equal(retry.storedEvents.length, 0);
+        const rejected = yield* orchestrator
+          .dispatch({
+            type: "thread.project.move",
+            commandId: CommandId.make("project-move-missing"),
+            threadId: rootId,
+            projectId: ProjectId.make("missing-project"),
+          })
+          .pipe(Effect.flip);
+        assert.equal(rejected._tag, "OrchestratorDispatchError");
+        assert.equal((yield* shellOf(rootId))?.projectId, destination.id);
+      }),
+  );
+
   it.effect("moves every thread in the folder and its bound tasks into one project", () =>
     Effect.gen(function* () {
       const promotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;

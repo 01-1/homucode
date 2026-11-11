@@ -15,7 +15,7 @@ export const capture = Effect.fn("CompletionOutbox.capture")(function* (
     yield* sql`
       INSERT OR IGNORE INTO thread_completion_outbox
         (thread_id, run_id, workspace_root, payload_json)
-      SELECT t.thread_id, ${run.id}, p.workspace_root,
+      SELECT t.thread_id, ${run.id}, COALESCE(json_extract(t.payload_json, '$.workspaceRoot'), p.workspace_root),
         json_object('schema', 1, 'thread_id', t.thread_id, 'run_id', ${run.id},
           'project_id', t.project_id, 'title', t.title, 'status', ${run.status},
           'created_at', ${DateTime.formatIso(run.completedAt ?? event.occurredAt)},

@@ -4,7 +4,11 @@ import {
   scopeThreadRef,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  isAtomCommandInterrupted,
+  settlePromise,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import {
@@ -56,6 +60,7 @@ import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useClientSettings } from "./useSettings";
 import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
 import { showThreadUndoNotice } from "./showThreadUndoNotice";
+import { requestNewProjectMove } from "../components/NewProjectMoveDialog";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
@@ -274,6 +279,7 @@ function threadOperationFailure(target: ScopedThreadRef) {
 }
 
 export function useThreadActions() {
+  const createNewProject = useAtomCommand(projectEnvironment.createNew, { reportFailure: false });
   const archiveThreadMutation = useOrchestrationCommand(threadEnvironment.archive, {
     reportFailure: false,
   });
@@ -293,6 +299,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const unpinThreadMutation = useOrchestrationCommand(threadEnvironment.unpin, {
+    reportFailure: false,
+  });
+  const moveThreadToProjectMutation = useOrchestrationCommand(threadEnvironment.moveToProject, {
     reportFailure: false,
   });
   const moveThreadMutation = useOrchestrationCommand(threadEnvironment.move, {
@@ -982,6 +991,39 @@ export function useThreadActions() {
       moveThreadMutation({
         environmentId: target.environmentId,
         input: { threadId: target.threadId, parentThreadId },
+      }),
+    moveThreadToNewProject: async (target: ScopedThreadRef) => {
+      if (threadOperationFailure(target)) return;
+      const name = await requestNewProjectMove();
+      if (name === null) return;
+      const created = await createNewProject({
+        environmentId: target.environmentId,
+        input: { name },
+      });
+      const result =
+        created._tag === "Failure"
+          ? created
+          : await moveThreadToProjectMutation({
+              environmentId: target.environmentId,
+              input: { threadId: target.threadId, projectId: created.value.projectId },
+            });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not move to a new project",
+            description: String(squashAtomCommandFailure(result)),
+          }),
+        );
+      }
+    },
+    moveThreadToProject: (
+      target: ScopedThreadRef,
+      projectId: import("@t3tools/contracts").ProjectId,
+    ) =>
+      moveThreadToProjectMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, projectId },
       }),
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({

@@ -4271,6 +4271,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
             interactionMode: "default",
             branch: null,
             worktreePath: null,
+            workspaceRoot: "/workspace/original-before-project-move",
             activeProviderThreadId: null,
             lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
             forkedFrom: null,
@@ -4321,6 +4322,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         (thread) => thread.id === readThreadId,
       )!;
       const metadata = discovery.threads.find((thread) => thread.id === readThreadId)!;
+      assert.equal(metadata.workspaceRoot, "/workspace/original-before-project-move");
       for (const key of Object.keys(metadata) as Array<keyof typeof metadata>) {
         assert.deepEqual(metadata[key], fullShell[key]);
       }

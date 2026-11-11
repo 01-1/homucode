@@ -91,6 +91,17 @@ export const make = Effect.gen(function* () {
         if (within(yield* resolveRoot(project.workspaceRoot))) return true;
       }
 
+      const pinnedRoots = yield* sql<{ workspaceRoot: string }>`
+        SELECT DISTINCT json_extract(payload_json, '$.workspaceRoot') AS "workspaceRoot"
+        FROM orchestration_v2_projection_threads
+        WHERE deleted_at IS NULL AND json_extract(payload_json, '$.workspaceRoot') IS NOT NULL
+      `.pipe(
+        NodeSqliteClient.readOnly,
+        Effect.orElseSucceed(() => []),
+      );
+      for (const pinned of pinnedRoots) {
+        if (within(yield* resolveRoot(pinned.workspaceRoot))) return true;
+      }
       const threads = yield* sql<{ readonly worktreePath: string; readonly projectId: string }>`
         SELECT DISTINCT
           json_extract(payload_json, '$.worktreePath') AS "worktreePath",

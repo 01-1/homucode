@@ -34,7 +34,7 @@ const handlers = {
         .listRefs({
           ...refs,
           worktreePath: thread.worktreePath,
-          workspaceRoot: project.value.workspaceRoot,
+          workspaceRoot: thread.workspaceRoot ?? project.value.workspaceRoot,
         })
         .pipe(Effect.mapError(unavailable));
     }),

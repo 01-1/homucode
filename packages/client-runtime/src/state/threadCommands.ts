@@ -32,6 +32,7 @@ import {
   markThreadUnread,
   mergeThreadBack,
   moveThread,
+  moveThreadToProject,
   promoteQueuedRun,
   resumeThreadQueue,
   retryWorkspacePreparation,
@@ -189,6 +190,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     unpin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:unpin",
       execute: unpinThread,
+      scheduler,
+      concurrency,
+    }),
+    moveToProject: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:move-to-project",
+      execute: moveThreadToProject,
       scheduler,
       concurrency,
     }),

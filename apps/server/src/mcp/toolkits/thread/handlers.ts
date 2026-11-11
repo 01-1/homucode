@@ -417,6 +417,13 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           case "mark_unread":
             command = { ...common, type: "thread.mark-unread" };
             break;
+          case "move_project":
+            command = {
+              ...common,
+              type: "thread.project.move",
+              projectId: yield* required(input.projectId, "projectId"),
+            };
+            break;
           case "move_under":
             command = {
               ...common,

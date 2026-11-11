@@ -63,6 +63,7 @@ import {
   type OrchestrationV2TurnItem,
   latestProviderTurnForAttempt,
   parseGoalCommand,
+  orchestrationV2ThreadWorkspacePath,
   orchestrationV2RunWorkStartedAt,
   orchestrationV2WorktreePending,
   ProviderInstanceId,
@@ -591,6 +592,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.pull-request-watch.sync":
     case "thread.pull-request.sync":
     case "thread.title.regeneration.complete":
+    case "thread.project.move":
     case "thread.project.adopt-folder":
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
@@ -2220,7 +2222,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 runId: queuedRun.id,
                 rootNodeId: rootNode.id,
                 providerThreadId: queuedProviderThread.id,
-                cwd: resolvedRuntimePolicy.cwd ?? projection.thread.worktreePath ?? process.cwd(),
+                cwd:
+                  resolvedRuntimePolicy.cwd ??
+                  projection.thread.worktreePath ??
+                  projection.thread.workspaceRoot ??
+                  process.cwd(),
                 createdAt: now,
               }),
             ),
@@ -3083,6 +3089,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       interactionMode: command.interactionMode,
       branch: command.branch,
       worktreePath: command.worktreePath,
+      ...(command.workspaceRoot === undefined ? {} : { workspaceRoot: command.workspaceRoot }),
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
@@ -3559,7 +3566,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         Option.isNone(project) ||
         project.value.deletedAt !== null ||
-        project.value.workspaceRoot !== command.expected.workspaceRoot ||
+        (thread.workspaceRoot ?? project.value.workspaceRoot) !== command.expected.workspaceRoot ||
         currentSequence > command.snapshotSequence ||
         thread.projectId !== command.projectId ||
         thread.branch !== command.expected.branch ||
@@ -4600,6 +4607,76 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     },
   );
 
+  const dispatchThreadProjectMove = Effect.fn("orchestrationV2.dispatch.threadProjectMove")(
+    function* (
+      command: Extract<OrchestrationV2ServerCommand, { readonly type: "thread.project.move" }>,
+      events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    ) {
+      const reject = (cause: string) =>
+        new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause,
+        });
+      const root = yield* projectionStore
+        .getThread(command.threadId)
+        .pipe(mapDispatchError(command));
+      if (root.deletedAt !== null) return yield* reject("The thread is deleted.");
+      const target = yield* projects.get(command.projectId).pipe(mapDispatchError(command));
+      if (
+        Option.isNone(target) ||
+        target.value.deletedAt !== null ||
+        target.value.archivedAt != null
+      ) {
+        return yield* reject("The destination project is missing or archived.");
+      }
+      const family = yield* Effect.forEach(["active", "archive"] as const, (location) =>
+        projectionStore.getShellSnapshot({ location, familyOf: root.id }),
+      ).pipe(mapDispatchError(command));
+      const descendants = new Set<ThreadId>([root.id]);
+      const shells = family.flatMap((snapshot) => [
+        ...snapshot.threads,
+        ...snapshot.archivedThreads,
+      ]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const shell of shells) {
+          if (
+            !descendants.has(shell.id) &&
+            shell.lineage.parentThreadId !== null &&
+            descendants.has(shell.lineage.parentThreadId)
+          ) {
+            descendants.add(shell.id);
+            changed = true;
+          }
+        }
+      }
+      const now = yield* DateTime.now;
+      for (const id of descendants) {
+        const thread =
+          id === root.id
+            ? root
+            : yield* projectionStore.getThread(id).pipe(mapDispatchError(command));
+        if (thread.projectId === command.projectId) continue;
+        const source = yield* projects.get(thread.projectId).pipe(mapDispatchError(command));
+        const cwd = thread.workspaceRoot ?? Option.getOrUndefined(source)?.workspaceRoot;
+        if (cwd === undefined) return yield* reject(`Cannot resolve the checkout for ${id}.`);
+        // Project membership changes independently of the checkout binding.
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "thread.metadata-updated",
+          threadId: id,
+          providerInstanceId: thread.providerInstanceId,
+          occurredAt: now,
+          payload: { ...thread, projectId: command.projectId, workspaceRoot: cwd, updatedAt: now },
+        });
+      }
+    },
+  );
+
   const dispatchThreadProjectAdoptFolder = Effect.fn(
     "orchestrationV2.dispatch.threadProjectAdoptFolder",
   )(function* (
@@ -4633,7 +4710,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return yield* reject(`cannot move to missing project ${command.projectId}.`);
     }
     // The thread always lands in the project root, so the move must not change its cwd.
-    const cwd = thread.worktreePath ?? Option.getOrUndefined(current)?.workspaceRoot;
+    const cwd = orchestrationV2ThreadWorkspacePath(
+      thread,
+      Option.getOrUndefined(current)?.workspaceRoot,
+    );
     if (cwd !== target.value.workspaceRoot) {
       return yield* reject(`does not work in ${target.value.workspaceRoot}.`);
     }
@@ -4646,7 +4726,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.threadId,
       providerInstanceId: thread.providerInstanceId,
       occurredAt: now,
-      payload: { ...thread, projectId: command.projectId, worktreePath: null, updatedAt: now },
+      payload: {
+        ...thread,
+        projectId: command.projectId,
+        worktreePath: null,
+        workspaceRoot: target.value.workspaceRoot,
+        updatedAt: now,
+      },
     });
   });
 
@@ -5788,6 +5874,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         cwd:
           resolvedRuntimePolicy.cwd ??
           input.projection.thread.worktreePath ??
+          input.projection.thread.workspaceRoot ??
           session.providerSession.cwd,
         createdAt: now,
       })
@@ -6615,6 +6702,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     resolvedRuntimePolicy.cwd ??
                     selectedProviderSession?.cwd ??
                     projection.thread.worktreePath ??
+                    projection.thread.workspaceRoot ??
                     process.cwd(),
                   createdAt: now,
                 }),
@@ -7032,7 +7120,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     rootNodeId,
                     providerThreadId,
                     cwd:
-                      resolvedRuntimePolicy.cwd ?? projection.thread.worktreePath ?? process.cwd(),
+                      resolvedRuntimePolicy.cwd ??
+                      projection.thread.worktreePath ??
+                      projection.thread.workspaceRoot ??
+                      process.cwd(),
                     createdAt: now,
                   }),
                 ),
@@ -7810,6 +7901,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           resolvedRuntimePolicy.cwd ??
           existingProviderSession?.cwd ??
           projection.thread.worktreePath ??
+          projection.thread.workspaceRoot ??
           process.cwd(),
         createdAt: now,
       })
@@ -10770,7 +10862,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           runId: state.run.id,
           rootNodeId: state.rootNode.id,
           providerThreadId: state.providerThread.id,
-          cwd: resolvedRuntimePolicy.cwd ?? projection.thread.worktreePath ?? process.cwd(),
+          cwd:
+            resolvedRuntimePolicy.cwd ??
+            projection.thread.worktreePath ??
+            projection.thread.workspaceRoot ??
+            process.cwd(),
           createdAt: now,
         })
         .pipe(mapDispatchError(command));
@@ -13891,6 +13987,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "provider-session.detach":
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
+      case "thread.project.move":
+        yield* dispatchThreadProjectMove(command, events);
+        break;
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);
         break;
@@ -14244,6 +14343,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           command.type === "thread.interrupt.unresponsive" ||
           command.type === "thread.stop" ||
           command.type === "subagent.stop" ||
+          command.type === "thread.project.move" ||
           // Closing a share again, or after it ended, is not an error.
           command.type === "thread.guest-share.close" ||
           (command.type === "thread.delete" && command.onlyIfUnused === true),
@@ -14437,11 +14537,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // A parent's lock comes before its side chats' locks, so a delete cascade and a side chat
     // fork or command never interleave. A fork from a side chat or onto an existing thread would
     // invert that order; dispatch rejects both, so they skip the source lock.
-    if (
-      command.type === "thread.fork" &&
-      command.sideChat === true &&
-      command.sourceThreadId !== command.targetThreadId
-    ) {
+    if (command.type === "thread.fork" && command.sourceThreadId !== command.targetThreadId) {
       const source = yield* findThread(command.sourceThreadId);
       const target = yield* findThread(command.targetThreadId);
       return yield* source === null || source.lineage.sideChat === true || target !== null
@@ -14460,6 +14556,48 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ),
         ),
       );
+    if (command.type === "thread.project.move") {
+      const lockDescendants = Effect.fn("orchestrationV2.lockProjectMoveDescendants")(function* (
+        locked: ReadonlySet<ThreadId>,
+      ): Effect.fn.Return<
+        Effect.Success<typeof dispatch>,
+        Effect.Error<typeof dispatch>,
+        Effect.Services<typeof dispatch>
+      > {
+        const snapshots = yield* Effect.forEach(["active", "archive"] as const, (location) =>
+          projectionStore.getShellSnapshot({ location, familyOf: command.threadId }),
+        ).pipe(mapDispatchError(command));
+        const members = snapshots.flatMap((snapshot) => [
+          ...snapshot.threads,
+          ...snapshot.archivedThreads,
+        ]);
+        const descendants = new Set<ThreadId>([command.threadId]);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const member of members) {
+            if (
+              !descendants.has(member.id) &&
+              member.lineage.parentThreadId !== null &&
+              descendants.has(member.lineage.parentThreadId)
+            ) {
+              descendants.add(member.id);
+              changed = true;
+            }
+          }
+        }
+        const missing = [...descendants].filter((id) => !locked.has(id));
+        if (missing.length === 0) return yield* dispatchWithReceiptEffect(command);
+        return yield* missing.reduceRight(
+          (effect, id) => threadDispatch.withLock(id, effect),
+          Effect.suspend(() => lockDescendants(new Set([...locked, ...missing]))),
+        );
+      });
+      return yield* threadDispatch.withLock(
+        THREAD_MOVE_LOCK_KEY,
+        threadDispatch.withLock(command.threadId, lockDescendants(new Set([command.threadId]))),
+      );
+    }
     // Moves run one at a time, or reciprocal moves both pass their cycle checks and deadlock.
     // Then the new parent locks before the moved thread, as in delegation; a target at or
     // below the thread is refused, and locking it first would invert that order.

@@ -49,6 +49,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as Metrics from "../observability/Metrics.ts";
@@ -454,6 +455,7 @@ export const layer = Layer.effect(
   ScheduledTaskService,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const eventSink = yield* Effect.serviceOption(EventSink.EventSinkV2);
     const random = yield* SecureRandom.SecureRandom;
     const digest = yield* Digest.Digest;
     const mac = yield* Mac.Mac;
@@ -1246,9 +1248,21 @@ export const layer = Layer.effect(
         Effect.gen(function* () {
           // Subscribe before reading to buffer concurrent changes.
           const subscription = yield* PubSub.subscribe(changesPubSub);
+          const changes = Stream.fromSubscription(subscription);
+          const updates = Option.isSome(eventSink)
+            ? Stream.merge(
+                changes,
+                eventSink.value
+                  .stream({
+                    eventType: "thread.metadata-updated",
+                    afterSequence: yield* eventSink.value.latestSequence().pipe(Effect.orDie),
+                  })
+                  .pipe(Stream.orDie),
+              )
+            : changes;
           return Stream.concat(
             Stream.fromEffect(list()),
-            Stream.fromSubscription(subscription).pipe(Stream.mapEffect(() => list())),
+            updates.pipe(Stream.mapEffect(() => list())),
           );
         }),
       );

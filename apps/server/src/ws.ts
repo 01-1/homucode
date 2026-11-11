@@ -2280,6 +2280,9 @@ export const layerWsRpc = (
                       ? {}
                       : { reuseExistingThread: input.reuseExistingThread }),
                     projectId: input.projectId,
+                    ...(input.workspaceRoot === undefined
+                      ? {}
+                      : { workspaceRoot: input.workspaceRoot }),
                     title: input.title,
                     ...(input.generateTitle === undefined
                       ? {}
@@ -3155,7 +3158,10 @@ export const layerWsRpc = (
             }
             return yield* issueAssetUrl({
               resource: input.resource,
-              workspaceRoot: thread.thread.worktreePath ?? project.value.workspaceRoot,
+              workspaceRoot:
+                thread.thread.worktreePath ??
+                thread.thread.workspaceRoot ??
+                project.value.workspaceRoot,
             });
           }),
         [WS_METHODS.assetsPersistChatAttachments]: (input) =>

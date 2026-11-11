@@ -45,6 +45,14 @@ moves and the agent keeps working in the same place. Other threads in that folde
 move with it. Rename the project in its settings, and use **Initialize Git** to
 get branch and diff controls.
 
+### Move a thread to another project
+
+On web or desktop, choose **Move to project** from the thread's menu, then select
+an existing project on the same machine or **New project…**. The thread and its
+children move together, including archived children. Their history, schedules,
+working folders and running turns stay attached. Moving changes where the thread
+is organized; the agent continues working in its original checkout.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`

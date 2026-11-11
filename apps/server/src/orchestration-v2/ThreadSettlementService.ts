@@ -415,7 +415,7 @@ export const make = Effect.gen(function* () {
                 .exists(path.join(thread.worktreePath, ".git"))
                 .pipe(Effect.orElseSucceed(() => true)))
               ? thread.worktreePath
-              : project.workspaceRoot,
+              : (thread.workspaceRoot ?? project.workspaceRoot),
           );
         }),
       { concurrency: 8, discard: true },

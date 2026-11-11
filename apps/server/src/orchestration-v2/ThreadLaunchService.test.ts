@@ -961,6 +961,36 @@ const preparationSettled = (threadId: ThreadId) =>
     return yield* threads.getThreadProjection(threadId);
   });
 
+it.effect.each([
+  { type: "root", branch: "source-main" },
+  { type: "worktree", baseRef: "source-main", branch: "source-feature" },
+] as const)("launches a retained checkout in another project ($type)", (workspaceStrategy) => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const launched = yield* launches.launch({
+      ...launchInput({
+        command: "command:retained-checkout",
+        thread: "thread:retained-checkout",
+        message: "Continue here",
+      }),
+      projectId: otherProjectId,
+      workspaceRoot: project.workspaceRoot,
+      workspaceStrategy,
+    });
+    assert.equal(launched.projection.thread.projectId, otherProjectId);
+    assert.equal(launched.projection.thread.workspaceRoot, project.workspaceRoot);
+    if (workspaceStrategy.type === "worktree") {
+      const projection = yield* preparationSettled(launched.threadId);
+      assert.equal(projection.runs[0]?.status, "starting");
+      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.cwd, project.workspaceRoot);
+      assert.equal(projection.thread.workspaceRoot, project.workspaceRoot);
+    } else {
+      assert.isNull(launched.projection.thread.worktreePath);
+    }
+  }).pipe(Effect.provide(harness.layer));
+});
+
 function scheduledTaskInput(id: string, targetProjectId: ProjectId) {
   return {
     id: ScheduledTaskId.make(id),

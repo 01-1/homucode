@@ -154,7 +154,7 @@ export function BranchToolbarBranchSelector({
   const activeWorktreePath = forceNewWorktree
     ? null
     : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
-  const activeProjectCwd = activeProject?.workspaceRoot ?? null;
+  const activeProjectCwd = serverThread?.workspaceRoot ?? activeProject?.workspaceRoot ?? null;
   const branchCwd = activeWorktreePath ?? activeProjectCwd;
   const hasServerThread = serverThread !== null;
   const canUpdateThreadBranch = !hasServerThread || canOperateThread;

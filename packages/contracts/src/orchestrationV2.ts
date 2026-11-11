@@ -498,6 +498,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -564,6 +565,13 @@ export const OrchestrationV2AppThread = Schema.Struct({
   deletedAt: Schema.NullOr(Schema.DateTimeUtc),
 });
 export type OrchestrationV2AppThread = typeof OrchestrationV2AppThread.Type;
+
+export function orchestrationV2ThreadWorkspacePath(
+  thread: Pick<OrchestrationV2AppThread, "worktreePath" | "workspaceRoot">,
+  projectWorkspaceRoot?: string | null,
+): string | null {
+  return thread.worktreePath ?? thread.workspaceRoot ?? projectWorkspaceRoot ?? null;
+}
 
 /** A thread another agent drives: a local subagent or a task delegated from a linked environment. */
 export const isDelegatedAppThread = (
@@ -2150,6 +2158,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -2971,6 +2980,13 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
 export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJson.Type;
 
 export const OrchestrationV2Command = Schema.Union([
+  /** Refiles this thread and its descendants without changing their checkout paths or running work. */
+  Schema.Struct({
+    type: Schema.Literal("thread.project.move"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    projectId: ProjectId,
+  }),
   Schema.Struct({
     type: Schema.Literal("thread.stop"),
     commandId: CommandId,
@@ -2999,6 +3015,7 @@ export const OrchestrationV2Command = Schema.Union([
     interactionMode: ProviderInteractionMode,
     branch: Schema.NullOr(TrimmedNonEmptyString),
     worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+    workspaceRoot: Schema.optional(TrimmedNonEmptyString),
     /** Only the server sets this; a client's thread.create never carries one. */
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
@@ -3759,6 +3776,7 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
   reuseExistingThread: Schema.optional(Schema.Boolean),
   projectId: ProjectId,
+  workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   title: TrimmedNonEmptyString,
   generateTitle: Schema.optional(Schema.Boolean),
   modelSelection: ModelSelection,

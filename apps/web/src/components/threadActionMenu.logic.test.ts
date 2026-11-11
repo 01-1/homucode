@@ -34,6 +34,25 @@ const baseState: ThreadActionMenuState = {
 };
 
 describe("buildThreadActionMenuItems", () => {
+  it("offers project moves while working and enforces operation permission", () => {
+    const state = {
+      ...baseState,
+      isRunning: true,
+      moveProjectOptions: [{ id: "destination", title: "Destination" }],
+    };
+    const move = buildThreadActionMenuItems(state).find((item) => item.id === "move-to-project");
+    expect(move?.disabled).not.toBe(true);
+    expect(move?.children?.map((item) => item.id)).toEqual([
+      "move-to-project:destination",
+      "move-to-new-project",
+    ]);
+    const denied = buildThreadActionMenuItems({ ...state, canOperate: false }).find(
+      (item) => item.id === "move-to-project",
+    );
+    expect(denied?.disabled).toBe(true);
+    expect(denied?.children?.[0]?.disabled).toBe(true);
+  });
+
   it.each([false, true])(
     "disables both lifecycle directions without permission (reversed: %s)",
     (reversed) => {

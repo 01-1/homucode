@@ -1266,7 +1266,8 @@ export default function ChatView(props: ChatViewProps) {
     draftThread?.environmentSelection !== "manual" &&
     (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)) &&
     (!draftThread?.branch || draftThread.environmentSelection === "auto") &&
-    !draftThread?.worktreePath,
+    !draftThread?.worktreePath &&
+    !draftThread?.workspaceRoot,
   );
   const autoUpdateEnvironments = automaticEnvironment
     ? logicalProjectEnvironments.flatMap(({ environmentId }) => {
@@ -1592,11 +1593,11 @@ export default function ChatView(props: ChatViewProps) {
 
   const gitCwd = activeProject
     ? projectScriptCwd({
-        project: { cwd: activeProject.workspaceRoot },
+        project: { cwd: activeThread?.workspaceRoot ?? activeProject.workspaceRoot },
         worktreePath: activeThread?.worktreePath ?? null,
       })
     : null;
-  const gitStatusCwd = activeThread?.worktreePath ?? gitCwd;
+  const gitStatusCwd = activeThread?.worktreePath ?? activeThread?.workspaceRoot ?? gitCwd;
   const gitStatusQuery = useEnvironmentQuery(
     gitStatusCwd === null
       ? null
@@ -1682,7 +1683,7 @@ export default function ChatView(props: ChatViewProps) {
     ? activeProviderStatus
     : null;
   const hasTimelineTopBanner = Boolean(timelineThreadError) || visibleProviderStatus !== null;
-  const activeProjectCwd = activeProject?.workspaceRoot ?? null;
+  const activeProjectCwd = activeThread?.workspaceRoot ?? activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
   const activeTerminalLaunchContext =
@@ -3891,7 +3892,7 @@ export default function ChatView(props: ChatViewProps) {
                   threadKey={activeThreadKey}
                   environmentId={activeThread.environmentId}
                   threadId={activeThread.id}
-                  cwd={activeProject?.workspaceRoot ?? null}
+                  cwd={activeThread.workspaceRoot ?? activeProject?.workspaceRoot ?? null}
                   onPrepared={handlePreparedPullRequestThreadStable}
                 />
               </>

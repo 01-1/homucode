@@ -153,13 +153,32 @@ const infrastructure = EventSink.layer.pipe(
   Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 
-it.effect(
-  "captures outcomes atomically once and retries across worker reconstruction without reasoning or tool output",
-  () =>
+it.effect.each([false, true])(
+  "captures outcomes atomically once and retries across worker reconstruction without reasoning or tool output (moved=%s)",
+  (moved) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const events = yield* EventSink.EventSinkV2;
       yield* seed;
+      const destinationId = ProjectId.make("completion-destination");
+      if (moved) {
+        yield* sql`INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at)
+          VALUES (${destinationId}, 'Destination', '/destination', '[]', '2026-11-10', '2026-11-10')`;
+        const projection = yield* ProjectionStore.ProjectionStoreV2;
+        const thread = yield* projection.getThread(threadId);
+        yield* events.write({
+          events: [
+            {
+              type: "thread.metadata-updated",
+              id: EventId.make("completion-project-moved"),
+              threadId,
+              occurredAt: at,
+              payload: { ...thread, projectId: destinationId, workspaceRoot: "/workspace" },
+            },
+          ],
+        });
+      }
+      const configPaths: string[] = [];
       const calls: Array<ProcessRunner.ProcessRunInput> = [];
       let fail = true;
       let validConfig = false;
@@ -168,8 +187,9 @@ it.effect(
         Layer.provide(
           Layer.mergeAll(
             FileSystem.layerNoop({
-              readFileString: () =>
-                missingConfig
+              readFileString: (filePath) => {
+                configPaths.push(filePath);
+                return missingConfig
                   ? Effect.fail(
                       PlatformError.systemError({
                         _tag: "NotFound",
@@ -183,7 +203,8 @@ it.effect(
                             completionSink: { command: ["receiver", "append-result", "-"] },
                           })
                         : "{broken",
-                    ),
+                    );
+              },
             }),
             NodePath.layer,
             Layer.succeed(ProcessRunner.ProcessRunner, {
@@ -227,7 +248,7 @@ it.effect(
         schema: 1,
         thread_id: threadId,
         run_id: runId,
-        project_id: "completion-project",
+        project_id: moved ? destinationId : "completion-project",
         title: "Completion test",
         status: "completed",
         created_at: "2026-11-10T22:00:00.000Z",
@@ -268,5 +289,8 @@ it.effect(
       yield* TestClock.adjust("5 seconds");
       yield* drain;
       assert.lengthOf(calls, 5);
+      assert.isTrue(configPaths.length > 0);
+      assert.deepEqual([...new Set(configPaths)], ["/workspace/t3.json"]);
+      assert.deepEqual([...new Set(calls.map((call) => call.cwd))], ["/workspace"]);
     }).pipe(Effect.provide(infrastructure)),
 );
