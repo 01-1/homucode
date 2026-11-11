@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { renderAppImageLauncher } from "./DesktopAppImageLauncher.ts";
 import { type CliShimTarget, renderCliShim } from "./DesktopCliShim.ts";
 
 const directories: Array<string> = [];
@@ -179,5 +180,50 @@ describe("renderCliShim", () => {
     );
     expect(bare).toEqual([]);
     expect(lines).toContain('set "T3CODE_CLI_PATH=C:\\Users\\José\\.t3\\bin\\t3.cmd"');
+  });
+});
+
+describe("renderAppImageLauncher", () => {
+  it("reuses the CLI cache and forwards exact desktop URLs without Node mode or a CLI entry", () => {
+    const { root, image, appImage, shim } = fakeAppImage();
+    writeExecutable(
+      NodePath.join(image, "t3code"),
+      '#!/bin/sh\nprintf "%s\\n" "node=$ELECTRON_RUN_AS_NODE" "image=$APPIMAGE" "$@"\nexit 3\n',
+    );
+    expect(run(shim, []).status).toBe(3);
+    const desktop = NodePath.join(root, "bin", "t3-desktop");
+    writeExecutable(
+      desktop,
+      renderAppImageLauncher({ appImage, executableName: "t3code", t3Home: `${root}/home` }),
+    );
+    const url = "t3code://threads/env/mcp%3Alaunch%3Atarget%2520id";
+    const result = run(desktop, [url, "space and 'quote'"], {
+      ELECTRON_RUN_AS_NODE: "1",
+      APPIMAGE_EXTRACT_AND_RUN: "1",
+    });
+    expect(result.status).toBe(3);
+    expect(result.stdout.split("\n")).toEqual([
+      "node=", `image=${appImage}`, url, "space and 'quote'", "",
+    ]);
+    expect(NodeFS.readFileSync(NodePath.join(root, "extractions"), "utf8")).toBe("extract\n");
+  });
+
+  it("falls back to the pinned AppImage when the cache cannot be prepared", () => {
+    const { root, appImage } = fakeAppImage();
+    writeExecutable(
+      appImage,
+      '#!/bin/sh\nprintf "%s\\n" "node=$ELECTRON_RUN_AS_NODE" "$@"\nexit 7\n',
+    );
+    const desktop = NodePath.join(root, "bin", "t3-desktop");
+    writeExecutable(
+      desktop,
+      renderAppImageLauncher({ appImage, executableName: "t3code", t3Home: `${root}/home` }),
+    );
+    const invalidCache = NodePath.join(root, "not-a-directory");
+    NodeFS.writeFileSync(invalidCache, "fixture");
+    const url = "t3code://threads/env/target";
+    const result = run(desktop, [url], { XDG_CACHE_HOME: invalidCache, ELECTRON_RUN_AS_NODE: "1" });
+    expect(result.status).toBe(7);
+    expect(result.stdout).toBe(`node=\n${url}\n`);
   });
 });

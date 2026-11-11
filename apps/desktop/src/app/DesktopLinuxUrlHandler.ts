@@ -3,11 +3,13 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { APPIMAGE_LAUNCHER_MARKER, renderAppImageLauncher } from "./DesktopAppImageLauncher.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
@@ -134,12 +136,35 @@ export const make = Effect.gen(function* () {
   const writeDesktopEntry = Effect.gen(function* () {
     // Distribution packages that run on a shared Electron set
     // T3CODE_DESKTOP_LAUNCHER_PATH, because process.execPath is that Electron.
-    // Inside the mounted AppImage, process.execPath points at a transient
-    // /tmp/.mount_* path — the handler must launch the AppImage itself.
-    const execTarget = environment.desktopLauncherPath.pipe(
+    let execTarget = environment.desktopLauncherPath.pipe(
       Option.orElse(() => environment.appImagePath),
       Option.getOrElse(() => process.execPath),
     );
+    if (
+      environment.isPackaged &&
+      Option.isNone(environment.desktopLauncherPath) &&
+      Option.isSome(environment.appImagePath)
+    ) {
+      const appImage = environment.appImagePath.value;
+      const launcher = environment.path.join(environment.baseDir, "bin", "t3-desktop");
+      const script = renderAppImageLauncher({
+        appImage,
+        executableName: environment.path.basename(process.execPath),
+        t3Home: environment.baseDir,
+      });
+      const installed = yield* Effect.gen(function* () {
+        const current = yield* fileSystem.readFileString(launcher).pipe(Effect.option);
+        if (Option.isSome(current) && !current.value.includes(APPIMAGE_LAUNCHER_MARKER)) return appImage;
+        if (Option.getOrUndefined(current) !== script) {
+          yield* fileSystem.makeDirectory(environment.path.dirname(launcher), { recursive: true });
+          const staging = `${launcher}.${process.pid}.${yield* Random.nextIntBetween(0, 0xffffff)}.tmp`;
+          yield* fileSystem.writeFileString(staging, script, { mode: 0o755 });
+          yield* fileSystem.rename(staging, launcher);
+        }
+        return launcher;
+      }).pipe(Effect.catch(() => Effect.succeed(appImage)));
+      execTarget = installed;
+    }
     const content = renderUrlHandlerDesktopEntry({
       displayName: environment.displayName,
       execTarget,

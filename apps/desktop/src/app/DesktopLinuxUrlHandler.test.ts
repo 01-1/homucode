@@ -36,7 +36,8 @@ const makeEnvironment = (path: Path.Path, overrides: Record<string, unknown> = {
     displayName: "T3 Code (Alpha)",
     linuxDesktopEntryName: "com.t3tools.T3Code.desktop",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
-    desktopLauncherPath: Option.none(),
+    desktopLauncherPath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
+    baseDir: "/home/alice/.t3",
     appImagePath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
     path,
     ...overrides,
@@ -97,7 +98,13 @@ const layerHandler = (
               : Effect.sync(() => {
                   recorded.copies.push({ source, destination });
                 }),
-          readFileString: () => Effect.succeed(input.existingEntry ?? ""),
+          rename: () => Effect.void,
+          readFileString: (path) =>
+            Effect.succeed(
+              path.endsWith("t3-desktop")
+                ? "# Written by T3 Code: launches the desktop from its pinned AppImage cache."
+                : (input.existingEntry ?? ""),
+            ),
           makeDirectory: (path) =>
             Effect.sync(() => {
               recorded.directories.push(path);
@@ -218,11 +225,23 @@ describe("DesktopLinuxUrlHandler", () => {
     },
   );
 
+  it.effect("uses the pinned cached launcher for packaged AppImage links", () => {
+    const recorded = emptyRecording();
+    return Effect.gen(function* () {
+      yield* runRegister(recorded, { environment: { desktopLauncherPath: Option.none() } });
+      assert.include(recorded.files[0]?.content, "app='/home/alice/Applications/T3-Code.AppImage'");
+      assert.include(recorded.files[0]?.content, "unset ELECTRON_RUN_AS_NODE");
+      assert.include(recorded.files[1]?.content, "Exec=/home/alice/.t3/bin/t3-desktop %U");
+    });
+  });
+
   it.effect("falls back to the process executable outside an AppImage", () => {
     const recorded = emptyRecording();
 
     return Effect.gen(function* () {
-      yield* runRegister(recorded, { environment: { appImagePath: Option.none() } });
+      yield* runRegister(recorded, {
+        environment: { appImagePath: Option.none(), desktopLauncherPath: Option.none() },
+      });
 
       assert.include(
         recorded.files[0]?.content,
