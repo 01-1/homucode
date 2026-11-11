@@ -78,6 +78,20 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
+  it.effect("takes no write transaction when the schema is already current", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations();
+      const before = yield* history;
+      // query_only makes BEGIN IMMEDIATE fail with SQLITE_READONLY, so any write-lock acquisition
+      // by CLI bootstrap against an up-to-date database fails this test.
+      yield* sql`PRAGMA query_only = ON`;
+
+      assert.deepStrictEqual(yield* runMigrations(), []);
+      assert.deepStrictEqual(yield* history, before);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("drops the unused correlation index and keeps correlation values", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
