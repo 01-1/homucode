@@ -14406,6 +14406,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ) {
             return yield* cause;
           }
+          // Eligibility can change between preflight and the parent lock. Keep the stable
+          // assistance identity retryable; accepted launches still use durable deduplication.
+          if (
+            command.type === "delegated_task.request" &&
+            command.assistance === "pace-v1" &&
+            cause._tag === "OrchestratorDispatchError" &&
+            typeof cause.cause === "string" &&
+            cause.cause.startsWith("assistance_ineligible:")
+          ) {
+            return yield* cause;
+          }
           // Resolving a turn's policy refuses the same way, from inside the decision.
           const ceiling = runtimePolicyCeilingCause(cause);
           if (ceiling !== undefined) {

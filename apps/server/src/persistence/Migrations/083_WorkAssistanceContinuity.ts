@@ -6,6 +6,8 @@ export default Effect.gen(function* () {
   yield* sql`CREATE TABLE work_assistance_continuity (
     thread_id TEXT PRIMARY KEY,
     run_id TEXT,
+    provider_session_id TEXT,
+    detached_session_id TEXT,
     continuous_working_since TEXT
   )`;
   yield* sql`CREATE TABLE work_assistance_launches (

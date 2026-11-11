@@ -1788,92 +1788,100 @@ const seedAssistanceWork = Effect.fn("test.seedAssistanceWork")(function* () {
     createdBy: "system",
     creationSource: "server",
   } as const;
-  return { orchestrator, projections, sink, threadId, run: running, root, command };
+  return {
+    orchestrator,
+    projections,
+    sink,
+    threadId,
+    run: running,
+    root,
+    command,
+    providerThread,
+    sessionId,
+  };
 });
 
-it.effect(
-  "assistance continuity resets across waits, native child waits and restart with a strict threshold",
-  () =>
-    Effect.gen(function* () {
-      const { sink, threadId, run, root } = yield* seedAssistanceWork();
-      const read = WorkAssistance.readActivity(threadId).pipe(Effect.map((s) => s.threads[0]!));
-      assert.equal((yield* read).reason, "under_threshold");
-      yield* TestClock.adjust(300_000);
-      assert.isFalse((yield* read).eligible);
-      yield* TestClock.adjust(1);
-      assert.isTrue((yield* read).eligible);
-      const writeRun = (status: "waiting" | "running", id: string) =>
-        DateTime.now.pipe(
-          Effect.flatMap((now) =>
-            sink.write({
-              events: [
-                {
-                  id: EventId.make(id),
-                  type: "run.updated",
-                  threadId,
-                  runId: run.id,
-                  occurredAt: now,
-                  payload: { ...run, status },
-                },
-              ],
-            }),
-          ),
-        );
-      yield* writeRun("waiting", "assistance-waiting");
-      assert.isNull((yield* read).continuousWorkingSince);
-      yield* TestClock.adjust(600_000);
-      yield* writeRun("running", "assistance-resumed");
-      assert.equal((yield* read).reason, "under_threshold");
-      const now = yield* DateTime.now;
-      const wait = {
-        id: TurnItemId.make("assistance-native-wait"),
-        threadId,
-        runId: run.id,
-        nodeId: root.id,
-        providerThreadId: run.providerThreadId,
-        providerTurnId: null,
-        nativeItemRef: null,
-        parentItemId: null,
-        ordinal: 25,
-        status: "running",
-        title: null,
-        startedAt: now,
-        completedAt: null,
-        updatedAt: now,
-        type: "dynamic_tool",
-        toolName: "mcp__t3_code__t3_thread_wait",
-        input: { threadId: "child" },
-      } as const;
-      yield* sink.write({
-        events: [
-          {
-            id: EventId.make("assistance-wait-tool"),
-            threadId,
-            occurredAt: now,
-            type: "turn-item.updated",
-            payload: wait,
-          },
-        ],
-      });
-      assert.equal((yield* read).reason, "thread_wait");
-      yield* TestClock.adjust(600_000);
-      const resumed = yield* DateTime.now;
-      yield* sink.write({
-        events: [
-          {
-            id: EventId.make("assistance-wait-result"),
-            threadId,
-            occurredAt: resumed,
-            type: "turn-item.updated",
-            payload: { ...wait, status: "completed", completedAt: resumed, updatedAt: resumed },
-          },
-        ],
-      });
-      assert.equal((yield* read).continuousWorkingSince, DateTime.formatIso(resumed));
-      yield* WorkAssistance.resetContinuity();
-      assert.equal((yield* read).reason, "unknown_continuity");
-      assert.isNull((yield* read).continuousWorkingSince);
-    }).pipe(Effect.provide(layerTest)),
+it.effect("assistance continuity resets across waits and restart with a strict threshold", () =>
+  Effect.gen(function* () {
+    const { sink, threadId, run, root } = yield* seedAssistanceWork();
+    const read = WorkAssistance.readActivity(threadId).pipe(Effect.map((s) => s.threads[0]!));
+    assert.equal((yield* read).reason, "under_threshold");
+    yield* TestClock.adjust(300_000);
+    assert.isFalse((yield* read).eligible);
+    yield* TestClock.adjust(1);
+    assert.isTrue((yield* read).eligible);
+    const writeRun = (status: "waiting" | "running", id: string) =>
+      DateTime.now.pipe(
+        Effect.flatMap((now) =>
+          sink.write({
+            events: [
+              {
+                id: EventId.make(id),
+                type: "run.updated",
+                threadId,
+                runId: run.id,
+                occurredAt: now,
+                payload: { ...run, status },
+              },
+            ],
+          }),
+        ),
+      );
+    yield* writeRun("waiting", "assistance-waiting");
+    assert.isNull((yield* read).continuousWorkingSince);
+    yield* TestClock.adjust(600_000);
+    yield* writeRun("running", "assistance-resumed");
+    assert.equal((yield* read).reason, "under_threshold");
+    const now = yield* DateTime.now;
+    const wait = {
+      id: TurnItemId.make("assistance-native-wait"),
+      threadId,
+      runId: run.id,
+      nodeId: root.id,
+      providerThreadId: run.providerThreadId,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 25,
+      status: "running",
+      title: null,
+      startedAt: now,
+      completedAt: null,
+      updatedAt: now,
+      type: "dynamic_tool",
+      toolName: "codex.wait_agent",
+      input: { threadId: "child" },
+    } as const;
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("assistance-wait-tool"),
+          threadId,
+          occurredAt: now,
+          type: "turn-item.updated",
+          payload: wait,
+        },
+      ],
+    });
+    assert.equal((yield* read).reason, "thread_wait");
+    yield* TestClock.adjust(600_000);
+    const resumed = yield* DateTime.now;
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("assistance-wait-result"),
+          threadId,
+          occurredAt: resumed,
+          type: "turn-item.updated",
+          payload: { ...wait, status: "completed", completedAt: resumed, updatedAt: resumed },
+        },
+      ],
+    });
+    assert.equal((yield* read).continuousWorkingSince, DateTime.formatIso(resumed));
+    yield* WorkAssistance.resetContinuity();
+    assert.equal((yield* read).reason, "unknown_continuity");
+    assert.isNull((yield* read).continuousWorkingSince);
+  }).pipe(Effect.provide(layerTest)),
 );
 
 it.effect(
@@ -1975,4 +1983,220 @@ it.effect(
       assert.equal((yield* projections.getThreadProjection(threadId)).runs[0]!.status, "running");
       assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 0);
     }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "assistance requires attached sessions including native children and resets on replacement",
+  () =>
+    Effect.gen(function* () {
+      const { orchestrator, projections, sink, threadId, command, providerThread, sessionId } =
+        yield* seedAssistanceWork();
+      const parent = yield* projections.getThreadProjection(threadId);
+      const session = parent.providerSessions.find((s) => s.id === sessionId)!;
+      // A native child shares its provider owner's attachment rather than opening a process.
+      yield* orchestrator.dispatch({
+        ...command,
+        assistance: undefined,
+        commandId: CommandId.make("assistance-native-child"),
+      });
+      const task = (yield* projections.getThreadProjection(threadId)).subagents[0]!;
+      const child = yield* projections.getThreadProjection(task.childThreadId!);
+      const childRun = child.runs[0]!;
+      const childRoot = child.nodes.find((n) => n.id === childRun.rootNodeId)!;
+      const childProvider = child.providerThreads[0]!;
+      const now = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-native-task"),
+            threadId,
+            occurredAt: now,
+            type: "subagent.updated",
+            payload: { ...task, origin: "provider_native", providerThreadId: childProvider.id },
+          },
+          {
+            id: EventId.make("assistance-native-provider"),
+            threadId: child.thread.id,
+            occurredAt: now,
+            type: "provider-thread.updated",
+            payload: {
+              ...childProvider,
+              status: "active",
+              providerSessionId: sessionId,
+              forkedFrom: {
+                providerThreadId: providerThread.id,
+                providerTurnId: ProviderTurnId.make("assistance-turn"),
+              },
+            },
+          },
+          {
+            id: EventId.make("assistance-native-run"),
+            threadId: child.thread.id,
+            occurredAt: now,
+            type: "run.updated",
+            payload: { ...childRun, status: "running", startedAt: now },
+          },
+          {
+            id: EventId.make("assistance-native-root"),
+            threadId: child.thread.id,
+            occurredAt: now,
+            type: "node.updated",
+            payload: { ...childRoot, status: "running", startedAt: now },
+          },
+          {
+            id: EventId.make("assistance-native-turn"),
+            threadId: child.thread.id,
+            occurredAt: now,
+            type: "provider-turn.updated",
+            payload: {
+              id: ProviderTurnId.make("assistance-child-turn"),
+              providerThreadId: childProvider.id,
+              nodeId: childRoot.id,
+              runAttemptId: childRun.activeAttemptId,
+              nativeTurnRef: null,
+              ordinal: 1,
+              status: "running",
+              startedAt: now,
+              completedAt: null,
+            },
+          },
+        ],
+      });
+      const read = (id: ThreadId) =>
+        WorkAssistance.readActivity(id).pipe(Effect.map((s) => s.threads[0]!));
+      yield* TestClock.adjust(300_001);
+      assert.isTrue((yield* read(threadId)).eligible);
+      assert.isTrue((yield* read(child.thread.id)).eligible);
+      const detachedAt = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-detached"),
+            threadId,
+            occurredAt: detachedAt,
+            type: "provider-session.detached",
+            payload: { providerSessionId: sessionId, detachedAt },
+          },
+        ],
+      });
+      for (const id of [threadId, child.thread.id]) {
+        assert.equal((yield* read(id)).reason, "not_running");
+        assert.isNull((yield* read(id)).continuousWorkingSince);
+      }
+      yield* TestClock.adjust(600_000);
+      const attachedAt = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-reattached"),
+            threadId,
+            occurredAt: attachedAt,
+            type: "provider-session.attached",
+            payload: { ...session, updatedAt: attachedAt },
+          },
+        ],
+      });
+      for (const id of [threadId, child.thread.id])
+        assert.equal((yield* read(id)).continuousWorkingSince, DateTime.formatIso(attachedAt));
+      yield* TestClock.adjust(300_001);
+      assert.isTrue((yield* read(threadId)).eligible);
+      const replacedAt = yield* DateTime.now;
+      const replacement = ProviderSessionId.make("assistance-replacement");
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-new-session"),
+            threadId,
+            occurredAt: replacedAt,
+            type: "provider-session.attached",
+            payload: { ...session, id: replacement, updatedAt: replacedAt },
+          },
+          {
+            id: EventId.make("assistance-session-replaced"),
+            threadId,
+            occurredAt: replacedAt,
+            type: "provider-thread.updated",
+            payload: { ...providerThread, status: "active", providerSessionId: replacement },
+          },
+        ],
+      });
+      assert.equal((yield* read(threadId)).reason, "under_threshold");
+      assert.equal((yield* read(threadId)).continuousWorkingSince, DateTime.formatIso(replacedAt));
+      // Switching back to an attached old session must also start a fresh interval.
+      yield* TestClock.adjust(1);
+      const switchedAt = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-session-switch-back"),
+            threadId,
+            occurredAt: switchedAt,
+            type: "provider-thread.updated",
+            payload: { ...providerThread, status: "active", providerSessionId: sessionId },
+          },
+        ],
+      });
+      assert.equal((yield* read(threadId)).continuousWorkingSince, DateTime.formatIso(switchedAt));
+      const childDetachedAt = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-native-child-detached"),
+            threadId: child.thread.id,
+            occurredAt: childDetachedAt,
+            type: "provider-session.detached",
+            payload: { providerSessionId: sessionId, detachedAt: childDetachedAt },
+          },
+        ],
+      });
+      assert.equal((yield* read(child.thread.id)).reason, "not_running");
+      yield* TestClock.adjust(300_001);
+      assert.isTrue((yield* read(threadId)).eligible);
+      assert.isFalse((yield* read(child.thread.id)).eligible);
+    }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("assistance transient locked refusal permits the same identity after work resumes", () =>
+  Effect.gen(function* () {
+    const { orchestrator, sink, projections, threadId, run, command } = yield* seedAssistanceWork();
+    yield* TestClock.adjust(300_001);
+    const waitingAt = yield* DateTime.now;
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("assistance-race-wait"),
+          threadId,
+          occurredAt: waitingAt,
+          type: "run.updated",
+          payload: { ...run, status: "waiting" },
+        },
+      ],
+    });
+    const refusal = yield* orchestrator.dispatch(command).pipe(Effect.result);
+    assert.isTrue(Result.isFailure(refusal));
+    const sql = yield* SqlClient.SqlClient;
+    assert.deepEqual(
+      yield* sql`SELECT command_id FROM orchestration_command_receipts WHERE command_id = ${command.commandId}`,
+      [],
+    );
+    assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 0);
+    const resumedAt = yield* DateTime.now;
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("assistance-race-resume"),
+          threadId,
+          occurredAt: resumedAt,
+          type: "run.updated",
+          payload: run,
+        },
+      ],
+    });
+    yield* TestClock.adjust(300_001);
+    const accepted = yield* orchestrator.dispatch(command);
+    assert.isFalse(accepted.replayed);
+    const replay = yield* orchestrator.dispatch(command);
+    assert.isTrue(replay.replayed);
+    assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 1);
+  }).pipe(Effect.provide(layerTest)),
 );

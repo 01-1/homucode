@@ -1075,7 +1075,7 @@ const threadAssistCommand = Command.make("assist", {
           {
             projectId: project.id,
             threadId,
-            runId: yield* Schema.decodeUnknownEffect(RunId)(flags.run).pipe(
+            runId: yield* Schema.decodeEffect(RunId)(flags.run).pipe(
               Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --run id." })),
             ),
             origin: flags.origin,

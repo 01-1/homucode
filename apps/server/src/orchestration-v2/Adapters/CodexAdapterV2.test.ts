@@ -6662,6 +6662,112 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ),
   );
 
+  it.effect.each(["completed", "interrupted"] as const)(
+    "projects native collab wait start and %s for assistance continuity",
+    (terminalStatus) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const nativeThreadId = "native-assistance-wait-thread";
+          const nativeTurnId = "native-assistance-wait-turn";
+          const prompt = "Wait for the child.";
+          const releaseCompletion = yield* Deferred.make<void>();
+          const updates = yield* Queue.unbounded<OrchestrationV2TurnItem>();
+          const item = {
+            type: "collabAgentToolCall" as const,
+            id: "native-assistance-wait",
+            tool: "wait" as const,
+            senderThreadId: nativeThreadId,
+            receiverThreadIds: ["native-assistance-child"],
+            agentsStates: {},
+          };
+          const harness = yield* makeCodexReplayHarness(
+            makeCodexReplayTranscript({
+              scenario: `assistance-native-collab-wait-${terminalStatus}`,
+              entries: [
+                ...codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt }),
+                {
+                  type: "emit_inbound",
+                  frame: {
+                    method: "item/started",
+                    params: {
+                      item: { ...item, status: "inProgress" },
+                      threadId: nativeThreadId,
+                      turnId: nativeTurnId,
+                      startedAtMs: 1782622440500,
+                    },
+                  },
+                },
+                {
+                  type: "emit_inbound",
+                  label: "complete-native-wait",
+                  frame: {
+                    method: "item/completed",
+                    params: {
+                      item: { ...item, status: terminalStatus },
+                      threadId: nativeThreadId,
+                      turnId: nativeTurnId,
+                      completedAtMs: 1782623040501,
+                    },
+                  },
+                },
+              ],
+            }),
+            (event) =>
+              event.type === "turn_item.updated" &&
+              event.turnItem.nativeItemRef?.nativeId === item.id
+                ? Queue.offer(updates, event.turnItem)
+                : Effect.void,
+            undefined,
+            undefined,
+            (entry) =>
+              entry.label === "complete-native-wait"
+                ? Deferred.await(releaseCompletion)
+                : Effect.void,
+          );
+          yield* harness.runtime.startTurn(
+            makeCodexTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now: yield* DateTime.now,
+              attemptId: RunAttemptId.make("attempt-assistance-native-wait"),
+              text: prompt,
+            }),
+          );
+          const started = yield* Queue.take(updates);
+          assert.equal(started.type, "dynamic_tool");
+          assert.equal(started.status, "running");
+          assert.equal(
+            started.type === "dynamic_tool" ? started.toolName : null,
+            "codex.wait_agent",
+          );
+          assert.isNull(started.completedAt);
+          yield* TestClock.adjust(600_001);
+          yield* Deferred.succeed(releaseCompletion, undefined);
+          const completed = yield* Queue.take(updates);
+          assert.equal(completed.id, started.id);
+          assert.equal(completed.nodeId, started.nodeId);
+          assert.equal(completed.runId, started.runId);
+          assert.equal(completed.status, terminalStatus);
+          assert.isNotNull(completed.completedAt);
+          assert.deepEqual(
+            harness.events
+              .filter((event) => event.type === "node.updated" && event.node.id === started.nodeId)
+              .map((event) => (event.type === "node.updated" ? event.node.status : null)),
+            ["running", terminalStatus],
+          );
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              IdAllocator.layer,
+              McpProviderSessions.layer,
+              NodeServices.layer,
+              NodeCrypto.layer,
+            ),
+          ),
+        ),
+      ),
+  );
+
   const ORPHAN_WAIT_SCENARIO = "codex-orphaned-dynamic-tool";
   const ORPHAN_WAIT_NATIVE_THREAD = "native-codex-orphan-wait-thread";
   const ORPHAN_WAIT_NATIVE_TURN = "native-codex-orphan-wait-turn";

@@ -1,12 +1,6 @@
 import * as Schema from "effect/Schema";
-import {
-  IsoDateTime,
-  NodeId,
-  ProjectId,
-  ProviderInstanceId,
-  RunId,
-  ThreadId,
-} from "./baseSchemas.ts";
+import { IsoDateTime, NodeId, ProjectId, RunId, ThreadId } from "./baseSchemas.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 import { ProviderOptionSelections } from "./model.ts";
 
 export const WorkAssistanceReason = Schema.Literals([

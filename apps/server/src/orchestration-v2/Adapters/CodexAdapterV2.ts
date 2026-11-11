@@ -410,7 +410,9 @@ function providerTurnStatusToTerminal(
   }
 }
 
-function codexItemStatus(status: "inProgress" | "completed" | "failed" | "declined"): {
+function codexItemStatus(
+  status: "inProgress" | "completed" | "failed" | "declined" | "interrupted",
+): {
   readonly node: OrchestrationV2ExecutionNode["status"];
   readonly turnItem: OrchestrationV2TurnItem["status"];
   readonly completed: boolean;
@@ -426,6 +428,8 @@ function codexItemStatus(status: "inProgress" | "completed" | "failed" | "declin
       };
     case "failed":
       return { node: "failed", turnItem: "failed", completed: true };
+    case "interrupted":
+      return { node: "interrupted", turnItem: "interrupted", completed: true };
     case "declined":
       return {
         node: "cancelled",
@@ -3872,7 +3876,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
 
         const buildDynamicToolArtifacts = Effect.fn("CodexAdapterV2.buildDynamicToolArtifacts")(
-          function* (context: ActiveCodexTurnContext, item: CodexDynamicToolItem) {
+          function* (
+            context: ActiveCodexTurnContext,
+            item: CodexDynamicToolItem | CodexCollabAgentToolCallItem,
+          ) {
             const updatedAt = yield* DateTime.now;
             const status = codexItemStatus(item.status);
             const completedAt = status.completed ? updatedAt : null;
@@ -3885,9 +3892,16 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               nativeItemId: item.id,
             });
             const { ordinal, startedAt } = yield* resolveItemPosition(context, item.id);
-            const projection = yield* projectCodexDynamicToolItem(item).pipe(
-              Effect.provideService(Digest.Digest, digest),
-            );
+            const projection: CodexDynamicToolProjection =
+              item.type === "collabAgentToolCall"
+                ? {
+                    toolName: "codex.wait_agent",
+                    input: { threadIds: item.receiverThreadIds },
+                    status: status.turnItem,
+                  }
+                : yield* projectCodexDynamicToolItem(item).pipe(
+                    Effect.provideService(Digest.Digest, digest),
+                  );
             const node: OrchestrationV2ExecutionNode = {
               id: nodeId,
               threadId: context.projectionThreadId,
@@ -5012,6 +5026,21 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return;
             }
 
+            if (payload.item.type === "collabAgentToolCall" && payload.item.tool === "wait") {
+              const artifacts = yield* buildDynamicToolArtifacts(context, payload.item);
+              yield* emitProviderEvent({
+                type: "node.updated",
+                driver: CODEX_PROVIDER,
+                node: artifacts.node,
+              });
+              yield* emitProviderEvent({
+                type: "turn_item.updated",
+                driver: CODEX_PROVIDER,
+                turnItem: artifacts.turnItem,
+              });
+              return;
+            }
+
             if (payload.item.type !== "webSearch") {
               return;
             }
@@ -5053,6 +5082,25 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return;
             }
             if (payload.item.type === "collabAgentToolCall" && payload.item.tool !== "spawnAgent") {
+              if (payload.item.tool === "wait") {
+                const resolved = yield* resolveItemEventContext(payload.turnId);
+                if (resolved !== undefined) {
+                  const artifacts = yield* buildDynamicToolArtifacts(
+                    resolved.context,
+                    payload.item,
+                  );
+                  yield* emitProviderEvent({
+                    type: "node.updated",
+                    driver: CODEX_PROVIDER,
+                    node: artifacts.node,
+                  });
+                  yield* emitProviderEvent({
+                    type: "turn_item.updated",
+                    driver: CODEX_PROVIDER,
+                    turnItem: artifacts.turnItem,
+                  });
+                }
+              }
               yield* updateSubagentStates({ item: payload.item });
               return;
             }
