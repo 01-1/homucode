@@ -141,8 +141,10 @@ it.effect(
           Effect.provideService(HostProcess.HomeDirectory, home),
           Effect.provideService(HostProcess.WorkingDirectory, cwd),
         );
+        const output = (yield* TestConsole.logLines).at(-1);
+        assert.ok(typeof output === "string");
         assert.deepStrictEqual(
-          JSON.parse((yield* TestConsole.logLines).at(-1)!),
+          JSON.parse(output),
           {
             messageId: "native-message",
             threadId,
