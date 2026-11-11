@@ -1,0 +1,94 @@
+import { assert, it } from "@effect/vitest";
+import { CommandId, EventId, MessageId, ProjectId, ProviderDriverKind, ProviderInstanceId,
+  ProviderTurnId, ThreadId, type OrchestrationV2DomainEvent } from "@t3tools/contracts";
+import type * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Sqlite from "../persistence/Sqlite.ts";
+import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
+import * as Events from "./EventSink.ts";
+import * as Outbox from "./EffectOutbox.ts";
+import * as Orchestrator from "./Orchestrator.ts";
+import * as Projections from "./ProjectionStore.ts";
+import * as Registry from "./ProviderAdapterRegistry.ts";
+import * as Replay from "./testkit/ProviderReplayHarness.ts";
+
+const instanceId = ProviderInstanceId.make("codex"), driver = ProviderDriverKind.make("codex");
+const modelSelection = { instanceId, model: "gpt-5.1-codex" };
+const adapter = { instanceId, driver,
+  getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+  planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
+  openSession: () => Effect.die("Promotion transaction cases never execute provider effects"),
+} as Adapter.ProviderAdapterV2["Service"];
+const database = Sqlite.layerMemory;
+const layer = Layer.mergeAll(Projections.layer.pipe(Layer.provide(database)), Outbox.layer.pipe(Layer.provide(database)),
+  Replay.layerWithRegistry({ name: "automatic-promotion-recheck" }, Registry.layerFromAdapters([adapter]),
+    { databaseLayer: database, runEffectWorker: false }));
+
+const setup = Effect.gen(function* () {
+  const engine = yield* Orchestrator.OrchestratorV2, store = yield* Projections.ProjectionStoreV2;
+  const events = yield* Events.EventSinkV2;
+  const threadId = ThreadId.make("thread:auto-promotion"), now = yield* DateTime.now;
+  yield* engine.dispatch({ type: "thread.create", commandId: CommandId.make("create:auto-promotion"), threadId,
+    projectId: ProjectId.make("project:auto-promotion"), title: "Promotion", modelSelection,
+    runtimeMode: "full-access", interactionMode: "default", branch: null, worktreePath: null,
+    createdBy: "user", creationSource: "web" });
+  for (const key of ["active", "first", "second"]) yield* engine.dispatch({ type: "message.dispatch",
+    commandId: CommandId.make(`send:auto-promotion:${key}`), threadId, messageId: MessageId.make(`message:auto-promotion:${key}`),
+    text: key, attachments: [], dispatchMode: { type: key === "active" ? "start_immediately" : "queue_after_active" },
+    createdBy: "user", creationSource: "web" });
+  const p = yield* store.getThreadProjection(threadId);
+  const active = p.runs.find((run) => run.ordinal === 1)!, first = p.runs.find((run) => run.ordinal === 2)!, second = p.runs.find((run) => run.ordinal === 3)!;
+  const attempt = p.attempts.find((row) => row.id === active.activeAttemptId)!, node = p.nodes.find((row) => row.id === active.rootNodeId)!;
+  const providerThread = p.providerThreads.find((row) => row.id === active.providerThreadId)!;
+  const session = p.providerSessions.find((row) => row.id === providerThread.providerSessionId)!;
+  const turnId = ProviderTurnId.make("provider-turn:auto-promotion");
+  let serial = 0;
+  const event = <E extends OrchestrationV2DomainEvent>(value: Omit<E, "id">): E => ({ ...value, id: EventId.make(`event:auto-promotion:${++serial}`) } as E);
+  const base = { threadId, providerInstanceId: instanceId, occurredAt: now };
+  yield* events.writeWithEffects({ events: [
+    event({ ...base, type: "provider-session.updated", payload: { ...session, status: "ready" } }),
+    event({ ...base, type: "provider-thread.updated", payload: { ...providerThread, status: "active", nativeThreadRef: { driver, nativeId: "native:auto-promotion", strength: "strong" } } }),
+    event({ ...base, type: "run.updated", runId: active.id, payload: { ...active, status: "running", startedAt: now } }),
+    event({ ...base, type: "run-attempt.updated", runId: active.id, payload: { ...attempt, status: "running", startedAt: now, providerTurnId: turnId } }),
+    event({ ...base, type: "node.updated", runId: active.id, nodeId: node.id, payload: { ...node, status: "running", startedAt: now, providerTurnId: turnId } }),
+    event({ ...base, type: "provider-turn.updated", runId: active.id, nodeId: node.id, payload: { id: turnId,
+      providerThreadId: providerThread.id, nodeId: node.id, runAttemptId: attempt.id, nativeTurnRef: { driver, nativeId: "turn:auto-promotion", strength: "strong" },
+      ordinal: 1, status: "running", startedAt: now, completedAt: null } }),
+  ], effects: [] });
+  return { engine, store, events, threadId, active, first, second, event, base };
+});
+
+for (const scenario of ["reordered", "head-held", "tail-held", "no-opt-in"] as const) {
+  it.effect(`refuses automatic promotion after ${scenario} without consuming queued input`, () => Effect.gen(function* () {
+    const f = yield* setup;
+    if (scenario === "reordered") yield* f.engine.dispatch({ type: "queued-run.reorder", commandId: CommandId.make("reorder:auto-promotion"),
+      threadId: f.threadId, runId: f.second.id, beforeRunId: f.first.id });
+    if (scenario === "head-held" || scenario === "tail-held") {
+      const held = scenario === "head-held" ? f.first : f.second;
+      yield* f.events.writeWithEffects({ events: [f.event({ ...f.base, type: "run.updated", runId: held.id,
+        payload: { ...held, queueHeld: true } })], effects: [] });
+    }
+    const before = yield* f.store.getThreadProjection(f.threadId);
+    const commandId = CommandId.make(`server:auto-steer:${scenario}`);
+    const result = yield* f.engine.dispatch({ type: "queued-message.promote-to-steer", commandId,
+      threadId: f.threadId, queuedRunId: f.first.id, targetRunId: f.active.id }).pipe(Effect.result);
+    assert.isTrue(Result.isFailure(result));
+    assert.match(JSON.stringify(result), scenario === "reordered" ? /queue head/ : scenario === "no-opt-in" ? /auto-steer opt-in/ : /held queue/);
+    const after = yield* f.store.getThreadProjection(f.threadId);
+    assert.deepEqual(after.runs, before.runs); assert.deepEqual(after.attempts, before.attempts);
+    assert.deepEqual(after.nodes, before.nodes); assert.deepEqual(after.messages, before.messages);
+    assert.deepEqual(yield* (yield* Outbox.EffectOutboxV2).listByCommandId(commandId), []);
+  }).pipe(Effect.provide(layer)));
+}
+
+it.effect("manual promotion still consumes ordinary input without automatic opt-in", () => Effect.gen(function* () {
+  const f = yield* setup;
+  yield* f.engine.dispatch({ type: "queued-message.promote-to-steer", commandId: CommandId.make("manual:steer-button"),
+    threadId: f.threadId, queuedRunId: f.first.id, targetRunId: f.active.id });
+  const after = yield* f.store.getThreadProjection(f.threadId);
+  assert.equal(after.runs.find((run) => run.id === f.first.id)!.status, "cancelled");
+  assert.equal(after.messages.find((message) => message.id === f.first.userMessageId)!.runId, f.active.id);
+}).pipe(Effect.provide(layer)));

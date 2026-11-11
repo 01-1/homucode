@@ -10316,6 +10316,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         cause: `Queued run ${command.queuedRunId} is not queued.`,
       });
     }
+    // Automatic selectors read outside this dispatch lock. Revalidate their snapshot
+    // before cancelling/reassigning a queued message or interrupting compaction.
+    if (String(command.commandId).startsWith("server:auto-steer:")) {
+      if (queuedRunsInDeliveryOrder(projection)[0]?.id !== queuedRun.id)
+        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
+          cause: "Automatic promotion no longer targets the queue head." });
+      if (projection.runs.some((run) => run.status === "queued" && run.queueHeld === true))
+        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
+          cause: "Automatic promotion cannot consume a held queue." });
+      // Optional on214; Sid's producer persists this opt-in when composed.
+      if ((queuedRun as typeof queuedRun & { readonly autoSteer?: boolean }).autoSteer !== true)
+        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
+          cause: "Automatic promotion requires the queued message's auto-steer opt-in." });
+    }
     const queuedRootNode =
       queuedRun.rootNodeId === null
         ? undefined
