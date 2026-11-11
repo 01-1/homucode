@@ -97,16 +97,25 @@ export const readActivity = Effect.fn("WorkAssistance.readActivity")(function* (
   const sql = yield* SqlClient.SqlClient;
   const now = yield* DateTime.now;
   const rows = yield* sql<State>`
-    WITH RECURSIVE attached_provider_threads(provider_thread_id, provider_session_id) AS (
+    -- Extract each fork parent once: native children share a provider session (one shared
+    -- Codex session holds hundreds of threads), so joining on json_extract per session match
+    -- reparsed every payload for every attached row and cost ~400ms per call on the event loop.
+    WITH RECURSIVE forked_provider_threads AS MATERIALIZED (
+      SELECT provider_thread_id, provider_session_id, thread_id,
+        json_extract(payload_json, '$.forkedFrom.providerThreadId') AS forked_from_provider_thread_id
+      FROM orchestration_v2_projection_provider_threads
+      WHERE json_extract(payload_json, '$.forkedFrom.providerThreadId') IS NOT NULL
+    ),
+    attached_provider_threads(provider_thread_id, provider_session_id) AS (
       SELECT pt.provider_thread_id, pt.provider_session_id
       FROM orchestration_v2_projection_provider_threads pt
       JOIN orchestration_v2_projection_provider_session_bindings b
         ON b.provider_session_id = pt.provider_session_id AND b.thread_id = pt.thread_id
       UNION
       SELECT child.provider_thread_id, child.provider_session_id
-      FROM orchestration_v2_projection_provider_threads child
+      FROM forked_provider_threads child
       JOIN attached_provider_threads parent
-        ON parent.provider_thread_id = json_extract(child.payload_json, '$.forkedFrom.providerThreadId')
+        ON parent.provider_thread_id = child.forked_from_provider_thread_id
         AND parent.provider_session_id = child.provider_session_id
       WHERE EXISTS (SELECT 1 FROM orchestration_v2_projection_subagents a
         WHERE a.provider_thread_id = child.provider_thread_id AND a.origin = 'provider_native')
