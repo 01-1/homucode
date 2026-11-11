@@ -597,7 +597,8 @@ export const layerMcpClientAuthenticator = Layer.effect(
                 Effect.map((issuedAt): McpInvocationContext.McpInvocationScope => ({
                   environmentId,
                   // Only the machine-owner CLI can mint this signed session claim.
-                  requestNamespace: client.localCli === true ? "local-cli" : `client:${client.sessionId}`,
+                  requestNamespace:
+                    client.localCli === true ? "local-cli" : `client:${client.sessionId}`,
                   thread: undefined,
                   client: {
                     sessionId: client.sessionId,

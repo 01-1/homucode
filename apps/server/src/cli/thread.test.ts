@@ -85,7 +85,14 @@ it.effect(
               case "t3_project_list":
                 return Effect.succeed({ structuredContent: { projects, nextCursor: null } });
               case "t3_thread_launch":
-                assert.deepEqual(args.modelSelection, { instanceId: "codex", model: "gpt-6.1-sol", options: [{ id: "reasoningEffort", value: "high" }, { id: "fast", value: true }] });
+                assert.deepEqual(args.modelSelection, {
+                  instanceId: "codex",
+                  model: "gpt-6.1-sol",
+                  options: [
+                    { id: "reasoningEffort", value: "high" },
+                    { id: "fast", value: true },
+                  ],
+                });
                 assert.equal(args.clientRequestId, "launch-retry-1");
                 return Effect.succeed({
                   structuredContent: { threadId, projectId: args.projectId, runId: null },
@@ -113,9 +120,16 @@ it.effect(
           identifier,
           "Inspect this project",
           "--json",
-          "--provider", "codex", "--model", "gpt-6.1-sol",
-          "--option", "reasoningEffort=high", "--option", "fast=true",
-          "--client-request-id", "launch-retry-1",
+          "--provider",
+          "codex",
+          "--model",
+          "gpt-6.1-sol",
+          "--option",
+          "reasoningEffort=high",
+          "--option",
+          "fast=true",
+          "--client-request-id",
+          "launch-retry-1",
           "--base-dir",
           baseDir,
         ]).pipe(
@@ -408,48 +422,109 @@ it.effect("configure sets the permission mode, then prints the thread's modes", 
   ),
 );
 
-it.effect("rejects malformed and duplicate launch options and accepts effort shorthand", () => Effect.gen(function* () {
-  assert.deepEqual(yield* parseLaunchOptions(["fast=false"], "high"), [{ id: "fast", value: false }, { id: "reasoningEffort", value: "high" }]);
-  for (const input of [["bad"], ["=high"], ["effort="], ["x=a", "x=b"]]) {
-    const error = yield* parseLaunchOptions(input).pipe(Effect.flip);
-    assert.equal(error._tag, "ThreadUsageError");
-  }
-}));
-
-it.effect("pending-request uses native MCP auth and refuses secure or stale cards before reading answers", () =>
+it.effect("rejects malformed and duplicate launch options and accepts effort shorthand", () =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pending-cli-" });
-    yield* persistServerRuntimeState({
-      path: path.join(baseDir, "userdata", "server-runtime.json"),
-      state: yield* makePersistedServerRuntimeState({ config: { host: "127.0.0.1", devUrl: undefined }, port: 3773 }),
-    });
-    const calls: Array<Record<string, unknown>> = [];
-    const questions = [{ id: "q", header: "Choice", question: "Choose?", options: [{ label: "One", description: "First", value: "one" }] }];
-    using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(Effect.succeed({ call: (tool, args) => {
-      assert.equal(tool, "t3_pending_request");
-      calls.push(args);
-      if (args.requestId === "secret" || args.requestId === "stale") return Effect.succeed({
-        structuredContent: { _tag: "OrchestratorMcpFailure", code: "invalid_request", message: "The pending user-input request was not found." }, isError: true,
-      });
-      return Effect.succeed({ structuredContent: args.action === "list" ? { requestIds: ["question"] } : args.action === "read" ? { requestId: "question", questions } : { sequence: 42 } });
-    } }));
-    const run = (args: ReadonlyArray<string>) => Command.runWith(pendingRequestCommand, { version: "0.0.0" })([...args, "--base-dir", baseDir, "--json"]);
-    yield* run(["list", threadId]);
-    assert.equal((yield* TestConsole.logLines).at(-1), JSON.stringify({ requestIds: ["question"] }));
-    yield* run(["read", threadId, "question"]);
-    assert.equal((yield* TestConsole.logLines).at(-1), JSON.stringify({ requestId: "question", questions }));
-    const answersFile = path.join(baseDir, "answers.json");
-    yield* fs.writeFileString(answersFile, JSON.stringify({ q: "one" }));
-    yield* run(["respond", threadId, "question", "--answers-file", answersFile]);
-    assert.equal((yield* TestConsole.logLines).at(-1), JSON.stringify({ sequence: 42 }));
-    assert.deepEqual(calls.at(-1)?.answers, { q: "one" });
-    for (const id of ["secret", "stale"]) {
-      const error = yield* run(["respond", threadId, id, "--answers-file", "/does-not-exist"]).pipe(Effect.flip);
-      assert.equal(error._tag, "ThreadToolFailedError");
-      assert.equal(calls.at(-1)?.action, "read");
+    assert.deepEqual(yield* parseLaunchOptions(["fast=false"], "high"), [
+      { id: "fast", value: false },
+      { id: "reasoningEffort", value: "high" },
+    ]);
+    for (const input of [["bad"], ["=high"], ["effort="], ["x=a", "x=b"]]) {
+      const error = yield* parseLaunchOptions(input).pipe(Effect.flip);
+      assert.equal(error._tag, "ThreadUsageError");
     }
-  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer,
-    ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } }))))),
+  }),
+);
+
+it.effect(
+  "pending-request uses native MCP auth and refuses secure or stale cards before reading answers",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pending-cli-" });
+      yield* persistServerRuntimeState({
+        path: path.join(baseDir, "userdata", "server-runtime.json"),
+        state: yield* makePersistedServerRuntimeState({
+          config: { host: "127.0.0.1", devUrl: undefined },
+          port: 3773,
+        }),
+      });
+      const calls: Array<Record<string, unknown>> = [];
+      const questions = [
+        {
+          id: "q",
+          header: "Choice",
+          question: "Choose?",
+          options: [{ label: "One", description: "First", value: "one" }],
+        },
+      ];
+      using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
+        Effect.succeed({
+          call: (tool, args) => {
+            assert.equal(tool, "t3_pending_request");
+            calls.push(args);
+            if (args.requestId === "secret" || args.requestId === "stale")
+              return Effect.succeed({
+                structuredContent: {
+                  _tag: "OrchestratorMcpFailure",
+                  code: "invalid_request",
+                  message: "The pending user-input request was not found.",
+                },
+                isError: true,
+              });
+            return Effect.succeed({
+              structuredContent:
+                args.action === "list"
+                  ? { requestIds: ["question"] }
+                  : args.action === "read"
+                    ? { requestId: "question", questions }
+                    : { sequence: 42 },
+            });
+          },
+        }),
+      );
+      const run = (args: ReadonlyArray<string>) =>
+        Command.runWith(pendingRequestCommand, { version: "0.0.0" })([
+          ...args,
+          "--base-dir",
+          baseDir,
+          "--json",
+        ]);
+      yield* run(["list", threadId]);
+      assert.equal(
+        (yield* TestConsole.logLines).at(-1),
+        JSON.stringify({ requestIds: ["question"] }),
+      );
+      yield* run(["read", threadId, "question"]);
+      assert.equal(
+        (yield* TestConsole.logLines).at(-1),
+        JSON.stringify({ requestId: "question", questions }),
+      );
+      const answersFile = path.join(baseDir, "answers.json");
+      yield* fs.writeFileString(answersFile, JSON.stringify({ q: "one" }));
+      yield* run(["respond", threadId, "question", "--answers-file", answersFile]);
+      assert.equal((yield* TestConsole.logLines).at(-1), JSON.stringify({ sequence: 42 }));
+      assert.deepEqual(calls.at(-1)?.answers, { q: "one" });
+      for (const id of ["secret", "stale"]) {
+        const error = yield* run([
+          "respond",
+          threadId,
+          id,
+          "--answers-file",
+          "/does-not-exist",
+        ]).pipe(Effect.flip);
+        assert.equal(error._tag, "ThreadToolFailedError");
+        assert.equal(calls.at(-1)?.action, "read");
+      }
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          NetService.layer,
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+        ),
+      ),
+    ),
 );

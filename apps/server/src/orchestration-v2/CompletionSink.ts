@@ -14,9 +14,15 @@ import * as Scheduler from "../scheduling/Scheduler.ts";
 const Command = Schema.Array(Schema.String).check(Schema.isMinLength(1));
 const decodeCommand = Schema.decodeUnknownEffect(Schema.fromJsonString(Command));
 
-export class CompletionSink extends Context.Service<CompletionSink, {
-  readonly drain: () => Effect.Effect<void, Schema.SchemaError | import("effect/sql/SqlError").SqlError>;
-}>()("t3/orchestration-v2/CompletionSink") {}
+export class CompletionSink extends Context.Service<
+  CompletionSink,
+  {
+    readonly drain: () => Effect.Effect<
+      void,
+      Schema.SchemaError | import("effect/sql/SqlError").SqlError
+    >;
+  }
+>()("t3/orchestration-v2/CompletionSink") {}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -27,17 +33,20 @@ const make = Effect.gen(function* () {
   const drain = Effect.fn("CompletionSink.drain")(function* () {
     const now = DateTime.toEpochMillis(yield* DateTime.now);
     const rows = yield* sql<{
-      thread_id: string; run_id: string; workspace_root: string; payload_json: string;
-      command_json: string | null; attempts: number;
+      thread_id: string;
+      run_id: string;
+      workspace_root: string;
+      payload_json: string;
+      command_json: string | null;
+      attempts: number;
     }>`SELECT * FROM thread_completion_outbox WHERE delivered = 0 AND next_attempt_at <= ${now}
        ORDER BY next_attempt_at, rowid LIMIT 32`;
     for (const row of rows) {
       let commandJson = row.command_json;
       if (commandJson === null) {
-        const config = yield* fs.readFileString(path.join(row.workspace_root, "t3.json")).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)),
-          Effect.result,
-        );
+        const config = yield* fs
+          .readFileString(path.join(row.workspace_root, "t3.json"))
+          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)), Effect.result);
         if (config._tag === "Failure") {
           yield* sql`UPDATE thread_completion_outbox SET attempts = attempts + 1, next_attempt_at = ${now + 5000}
             WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;
@@ -55,11 +64,19 @@ const make = Effect.gen(function* () {
       }
       const command = yield* decodeCommand(commandJson);
       // The receiver must durably deduplicate (thread_id, run_id) before acknowledging exit 0.
-      const accepted = yield* processes.run({
-        command: command[0]!, args: command.slice(1), cwd: row.workspace_root,
-        stdin: row.payload_json + "\n", timeout: "30 seconds", maxOutputBytes: 4096,
-      }).pipe(Effect.map((result) => result.code === 0 && !result.timedOut),
-        Effect.catch(() => Effect.succeed(false)));
+      const accepted = yield* processes
+        .run({
+          command: command[0]!,
+          args: command.slice(1),
+          cwd: row.workspace_root,
+          stdin: row.payload_json + "\n",
+          timeout: "30 seconds",
+          maxOutputBytes: 4096,
+        })
+        .pipe(
+          Effect.map((result) => result.code === 0 && !result.timedOut),
+          Effect.catch(() => Effect.succeed(false)),
+        );
       const next = now + Math.min(300_000, 5_000 * 2 ** Math.min(row.attempts, 6));
       yield* sql`UPDATE thread_completion_outbox SET delivered = ${accepted ? 1 : 0},
         attempts = attempts + 1, next_attempt_at = ${next}
@@ -70,8 +87,10 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(CompletionSink, make);
-export const layerWorker = Layer.effectDiscard(Effect.gen(function* () {
-  const sink = yield* CompletionSink;
-  const scheduler = yield* Scheduler.Scheduler;
-  yield* scheduler.register("thread-completion-sink", sink.drain());
-}));
+export const layerWorker = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const sink = yield* CompletionSink;
+    const scheduler = yield* Scheduler.Scheduler;
+    yield* scheduler.register("thread-completion-sink", sink.drain());
+  }),
+);
