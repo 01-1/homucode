@@ -562,6 +562,10 @@ interface HarnessOptions {
     input: ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput,
   ) => Effect.Effect<void>;
   readonly onCloseIdle?: () => Effect.Effect<void>;
+  readonly onExists?: () => Effect.Effect<void>;
+  readonly cleanupQuestion?: () => boolean;
+  readonly onCleanupRead?: Effect.Effect<void>;
+  readonly cleanupBusy?: () => boolean;
   readonly currentThreads?: ReadonlyArray<OrchestrationV2AppThread>;
 }
 
@@ -670,6 +674,19 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
               : snapshot.threads.filter((thread) => thread.id === threadId),
           ),
         ),
+      getThreadShell: () =>
+        Effect.succeed(
+          shell({
+            activityRunStatus: options.cleanupBusy?.() ? "running" : null,
+            pendingRuntimeRequest: options.cleanupQuestion?.()
+              ? {
+                  id: RuntimeRequestId.make("cleanup-question"),
+                  kind: "user_input",
+                  createdAt: at(0),
+                }
+              : null,
+          }),
+        ).pipe(Effect.tap(() => options.onCleanupRead ?? Effect.void)),
       getThread: (threadId) => {
         const thread = options.currentThreads?.find((candidate) => candidate.id === threadId);
         return thread
@@ -716,7 +733,9 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
                 pathOrDescriptor: path,
               }),
             )
-          : Effect.succeed(options.existingWorktreePaths?.includes(path) ?? false),
+          : (options.onExists?.() ?? Effect.void).pipe(
+              Effect.as(options.existingWorktreePaths?.includes(path) ?? false),
+            ),
     }),
     Path.layer,
   );
@@ -1473,6 +1492,119 @@ describe("ThreadSettlementServiceV2 terminals", () => {
           yield* fixture.publishEvent(settledEvent(settled));
           yield* fixture.publishEvent(settledEvent(marker));
           assert.deepStrictEqual(yield* Queue.take(fixture.closedIdle), { threadId: marker.id });
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("defers terminal and script cleanup while the settled thread is working", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = appThread("working-settled", "settled", "/worktrees/working");
+        let busy = true;
+        const read = yield* Deferred.make<void>();
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads: [thread],
+          existingWorktreePaths: ["/worktrees/working"],
+          cleanupBusy: () => busy,
+          onCleanupRead: Deferred.succeed(read, undefined),
+        });
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent(settledEvent(thread));
+          yield* Deferred.await(read);
+          assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
+          assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
+          busy = false;
+          yield* fixture.publishEvent({
+            ...settledEvent(thread),
+            type: "provider-session.detached",
+          } as OrchestrationV2DomainEvent);
+          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("keeps cleanup deferred when a queued run starts during worktree I/O", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = appThread("queued-cleanup", "settled", "/worktrees/queued");
+        let busy = false;
+        let promote = true;
+        const marker = yield* Deferred.make<void>();
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads: [thread],
+          existingWorktreePaths: ["/worktrees/queued"],
+          cleanupBusy: () => busy,
+          onCleanupRead: Effect.suspend(() =>
+            busy ? Deferred.succeed(marker, undefined) : Effect.void,
+          ),
+          onExists: () =>
+            Effect.sync(() => {
+              if (promote) {
+                busy = true;
+                promote = false;
+              }
+            }),
+        });
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent(settledEvent(thread));
+          yield* Deferred.await(marker);
+          assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
+          busy = false;
+          yield* fixture.publishEvent({
+            ...settledEvent(thread),
+            type: "provider-session.detached",
+          } as OrchestrationV2DomainEvent);
+          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("resumes deferred cleanup when the last pending question is dismissed", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = appThread("question-cleanup", "settled", "/worktrees/question");
+        let pending = true;
+        const read = yield* Deferred.make<void>();
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads: [thread],
+          existingWorktreePaths: ["/worktrees/question"],
+          cleanupQuestion: () => pending,
+          onCleanupRead: Deferred.succeed(read, undefined),
+        });
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent(settledEvent(thread));
+          yield* Deferred.await(read);
+          assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
+          pending = false;
+          yield* fixture.publishEvent({
+            ...settledEvent(thread),
+            type: "runtime-request.updated",
+            payload: {
+              id: RuntimeRequestId.make("cleanup-question"),
+              nodeId: null,
+              providerTurnId: null,
+              nativeRequestRef: null,
+              kind: "user_input",
+              status: "resolved",
+              decision: "cancel",
+              responseCapability: { type: "message" },
+              createdAt: at(0),
+              resolvedAt: at(0),
+            },
+          } as OrchestrationV2DomainEvent);
+          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),

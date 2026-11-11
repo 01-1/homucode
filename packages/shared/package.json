@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./messageTimestamp": {
+      "types": "./src/messageTimestamp.ts",
+      "import": "./src/messageTimestamp.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"

@@ -1278,8 +1278,14 @@ effectIt.effect.each([
     line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
   },
   { driver: "claudeAgent", createdBy: "agent", line: "" },
+  { driver: "codex", createdBy: "agent", line: "" },
+  {
+    driver: "cursor",
+    createdBy: "user",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+  },
 ] as const)(
-  "tells $driver which device a $createdBy message came from",
+  "tells $driver which device and send time a $createdBy message came from",
   ({ driver, createdBy, line }) =>
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
@@ -1287,6 +1293,7 @@ effectIt.effect.each([
         driver,
         message: {
           createdBy,
+          createdAt: DateTime.makeUnsafe("2026-11-10T22:49:34.987Z"),
           context: {
             version: 1,
             records: [],
@@ -1297,8 +1304,11 @@ effectIt.effect.each([
 
       yield* harness.start;
 
+      const local = new Date("2026-11-10T22:49:34.987Z");
+      const offset = local.getTimezoneOffset() * 60_000;
+      const timestamp = new Date(local.getTime() - offset).toISOString().slice(0, 19);
       expect(harness.startTurn.mock.calls.map(([turn]) => turn.message.text)).toEqual([
-        `Status?${line}`,
+        `${timestamp}: Status?${line}`,
       ]);
       // The transcript keeps what the user typed.
       expect(harness.projection().messages.find((row) => row.role === "user")?.text).toBe(
@@ -1338,9 +1348,9 @@ effectIt.effect.each([
       expect(harness.open).toHaveBeenCalledWith(
         expect.objectContaining({ runtimePolicy: expect.objectContaining({ runtimeMode }) }),
       );
-      expect(harness.startTurn.mock.calls.map(([turn]) => turn.message.text)).toEqual([
-        withInlineContext(context, "What is the main thread doing?"),
-      ]);
+      const text = harness.startTurn.mock.calls[0]?.[0].message.text;
+      expect(text).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /);
+      expect(text?.slice(21)).toBe(withInlineContext(context, "What is the main thread doing?"));
       expect(harness.projection().contextHandoffs).toMatchObject([
         {
           id: "side-chat-context",

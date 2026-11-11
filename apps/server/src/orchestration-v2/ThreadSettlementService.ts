@@ -597,16 +597,34 @@ export const make = Effect.gen(function* () {
     });
 
   // Skip settle scripts in shared checkouts where other threads may still work.
+  const deferredCleanup = new Set<ThreadId>();
   const cleanUpSettledThread = Effect.fn("ThreadSettlementServiceV2.cleanUpSettledThread")(
     function* (threadId: ThreadId) {
       const settled = yield* projections.getThread(threadId);
-      if (settled.settledOverride !== "settled") return;
+      if (settled.settledOverride !== "settled") {
+        deferredCleanup.delete(threadId);
+        return;
+      }
+      const deferIfBusy = Effect.gen(function* () {
+        const shell = yield* projections.getThreadShell(threadId);
+        const busy =
+          shell !== null &&
+          ((shell.activityRunStatus ?? null) !== null ||
+            shell.status === "queued" ||
+            shell.pendingRuntimeRequest !== null ||
+            backgroundWorkHoldsCompletion(shell.pendingBackgroundTasks ?? []));
+        if (busy) deferredCleanup.add(threadId);
+        return busy;
+      });
+      if (yield* deferIfBusy) return;
       yield* terminals.closeOnSettle({ threadId });
       const worktreePath = settled.worktreePath;
       if (worktreePath === null || !(yield* fileSystem.exists(worktreePath))) return;
       // Recheck after closing and worktree I/O; re-engaged threads must not be cleaned up.
       const thread = yield* projections.getThread(threadId);
       if (thread.settledOverride !== "settled") return;
+      if (yield* deferIfBusy) return;
+      deferredCleanup.delete(threadId);
       const settledAtMs = toMillis(thread.settledAt);
       if (settledAtMs === null || settleActionRunAt.get(threadId) === settledAtMs) return;
       const run = yield* projectScripts.runForThread({
@@ -634,24 +652,37 @@ export const make = Effect.gen(function* () {
       ),
   );
 
+  const workEnded = (threadId: ThreadId) =>
+    enqueueThread(threadId).pipe(
+      Effect.andThen(
+        Effect.suspend(() =>
+          deferredCleanup.has(threadId) ? cleanUpSettledThread(threadId) : Effect.void,
+        ),
+      ),
+    );
+
   const processEvent = (event: OrchestrationV2DomainEvent) => {
     switch (event.type) {
       case "thread.settled":
         return cleanUpSettledThread(event.threadId);
+      case "runtime-request.updated":
+        return event.payload.status === "pending" || !deferredCleanup.has(event.threadId)
+          ? Effect.void
+          : cleanUpSettledThread(event.threadId);
       case "thread.pull-request-link-updated":
       case "thread.pull-request-synced":
       case "provider-session.detached":
       case "run.background-work-cancelled":
-        return enqueueThread(event.threadId);
+        return workEnded(event.threadId);
       // Sweep only when the work can have ended: progress updates cannot settle anything.
       case "subagent.updated":
         return isOrchestrationV2WorkActive(event.payload.status)
           ? Effect.void
-          : enqueueThread(event.threadId);
+          : workEnded(event.threadId);
       case "provider-thread.updated":
         return backgroundWorkHoldsCompletion(event.payload.pendingBackgroundTasks ?? [])
           ? Effect.void
-          : enqueueThread(event.threadId);
+          : workEnded(event.threadId);
       case "turn-item.updated": {
         const item = event.payload;
         if (
@@ -663,19 +694,17 @@ export const make = Effect.gen(function* () {
         ) {
           shellClosedThreads.add(event.threadId);
         }
-        return turnItemUpdateCanEndBackgroundWork(item)
-          ? enqueueThread(event.threadId)
-          : Effect.void;
+        return turnItemUpdateCanEndBackgroundWork(item) ? workEnded(event.threadId) : Effect.void;
       }
       case "provider-session.updated":
         return event.payload.status !== "starting" && event.payload.status !== "running"
-          ? enqueueThread(event.threadId)
+          ? workEnded(event.threadId)
           : Effect.void;
       case "run.updated":
         return ["completed", "interrupted", "failed", "cancelled", "rolled_back"].includes(
           event.payload.status,
         )
-          ? enqueueThread(event.threadId)
+          ? workEnded(event.threadId)
           : Effect.void;
       default:
         return Effect.void;

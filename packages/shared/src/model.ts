@@ -11,6 +11,7 @@ import {
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { copySorted } from "./Array.ts";
+import { preserveMessageTimestamp } from "./messageTimestamp.ts";
 
 const DEFAULT_PROVIDER_DRIVER_KIND = ProviderDriverKind.make("codex");
 
@@ -539,16 +540,18 @@ export function applyClaudePromptEffortPrefix(
   text: string,
   effort: string | null | undefined,
 ): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return trimmed;
-  }
-  // Prefixing slash commands prevents Claude invocation; command names allow any token without a second slash.
-  if (effort !== "ultrathink" || /^\/[^\s/]+(?:\s|$)/u.test(trimmed)) {
-    return trimmed;
-  }
-  if (trimmed.startsWith("Ultrathink:")) {
-    return trimmed;
-  }
-  return `Ultrathink:\n${trimmed}`;
+  return preserveMessageTimestamp(text, (text) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return trimmed;
+    }
+    // Prefixing slash commands prevents Claude invocation; command names allow any token without a second slash.
+    if (effort !== "ultrathink" || /^\/[^\s/]+(?:\s|$)/u.test(trimmed)) {
+      return trimmed;
+    }
+    if (trimmed.startsWith("Ultrathink:")) {
+      return trimmed;
+    }
+    return `Ultrathink:\n${trimmed}`;
+  });
 }

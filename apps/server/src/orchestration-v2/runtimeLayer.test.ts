@@ -1883,7 +1883,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const eventSink = yield* EventSink.EventSinkV2;
 
-      const seedQuestion = Effect.fn("runtimeLayerTest.seedQuestion")(function* (name: string) {
+      const seedQuestion = Effect.fn("runtimeLayerTest.seedQuestion")(function* (
+        name: string,
+        active = false,
+      ) {
         const threadId = ThreadId.make(`${name}-thread`);
         const requestId = RuntimeRequestId.make(`${name}-request`);
         const nodeId = NodeId.make(`${name}-node`);
@@ -1903,6 +1906,19 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
           branch: null,
           worktreePath: process.cwd(),
         });
+        if (active)
+          yield* orchestrator.dispatch({
+            type: "message.dispatch",
+            createdBy: "user",
+            creationSource: "web",
+            commandId: CommandId.make(`${name}-start`),
+            threadId,
+            messageId: MessageId.make(`${name}-message`),
+            text: "Keep working",
+            attachments: [],
+            modelSelection,
+            dispatchMode: { type: "start_immediately" },
+          });
         yield* eventSink.write({
           commandId: CommandId.make(`${name}-seed`),
           events: [
@@ -2018,6 +2034,16 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
         settledProjection.turnItems.find((item) => item.id === settled.itemId)?.status,
         "cancelled",
       );
+      const working = yield* seedQuestion("runtime-settle-working-question", true);
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("runtime-settle-working-question-command"),
+        threadId: working.threadId,
+      });
+      const workingProjection = yield* orchestrator.getThreadProjection(working.threadId);
+      assert.equal(workingProjection.thread.settledOverride, "settled");
+      assert.equal(workingProjection.runtimeRequests[0]?.status, "pending");
+      assert.equal(workingProjection.runs[0]?.status, "starting");
     }),
   );
 
@@ -4659,73 +4685,123 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       }),
   );
 
-  it.effect("rejects settling a thread while a run is active", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const threadId = ThreadId.make("runtime-layer-active-settle-thread");
+  it.effect(
+    "settles a working thread without stopping its run and stays settled at completion",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const threadId = ThreadId.make("runtime-layer-active-settle-thread");
 
-      yield* orchestrator.dispatch({
-        type: "thread.create",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: CommandId.make("runtime-layer-active-settle-create"),
-        threadId,
-        projectId: ProjectId.make("runtime-layer-active-settle-project"),
-        title: "Active settle",
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: "/tmp/runtime-layer-active-settle",
-      });
-      yield* orchestrator.dispatch({
-        type: "thread.settle",
-        commandId: CommandId.make("runtime-layer-active-settle-initial"),
-        threadId,
-      });
-      yield* orchestrator.dispatch({
-        type: "message.dispatch",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: CommandId.make("runtime-layer-active-settle-message"),
-        threadId,
-        messageId: MessageId.make("runtime-layer-active-settle-message"),
-        text: "Keep this run active.",
-        attachments: [],
-        modelSelection,
-        dispatchMode: { type: "start_immediately" },
-      });
-
-      const nonEmptyClaim = yield* orchestrator
-        .dispatch({
-          type: "thread.metadata.update",
-          commandId: CommandId.make("runtime-layer-active-settle-empty-claim"),
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("runtime-layer-active-settle-create"),
           threadId,
-          worktreePath: "/tmp/reassigned-after-message",
-          expectedEmpty: true,
-        })
-        .pipe(Effect.flip);
-      assert.instanceOf(nonEmptyClaim, Orchestrator.OrchestratorDispatchError);
+          projectId: ProjectId.make("runtime-layer-active-settle-project"),
+          title: "Active settle",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: "/tmp/runtime-layer-active-settle",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("runtime-layer-active-settle-initial"),
+          threadId,
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("runtime-layer-active-settle-message"),
+          threadId,
+          messageId: MessageId.make("runtime-layer-active-settle-message"),
+          text: "Keep this run active.",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
 
-      const error = yield* orchestrator
-        .dispatch({
+        const nonEmptyClaim = yield* orchestrator
+          .dispatch({
+            type: "thread.metadata.update",
+            commandId: CommandId.make("runtime-layer-active-settle-empty-claim"),
+            threadId,
+            worktreePath: "/tmp/reassigned-after-message",
+            expectedEmpty: true,
+          })
+          .pipe(Effect.flip);
+        assert.instanceOf(nonEmptyClaim, Orchestrator.OrchestratorDispatchError);
+
+        const before = yield* orchestrator.getThreadProjection(threadId);
+        const eventSink = yield* EventSink.EventSinkV2;
+        const now = yield* DateTime.now;
+        const sessionId = before.providerThreads[0]!.providerSessionId!;
+        yield* eventSink.write({
+          commandId: CommandId.make("runtime-layer-active-settle-session"),
+          events: [
+            {
+              id: EventId.make("runtime-layer-active-settle-session"),
+              type: "provider-session.attached",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: sessionId,
+                driver,
+                providerInstanceId: modelSelection.instanceId,
+                status: "running",
+                cwd: process.cwd(),
+                model: modelSelection.model,
+                capabilities: CodexProviderCapabilitiesV2,
+                createdAt: now,
+                updatedAt: now,
+                lastError: null,
+              },
+            },
+          ],
+        });
+        const result = yield* orchestrator.dispatch({
           type: "thread.settle",
           commandId: CommandId.make("runtime-layer-active-settle"),
           threadId,
-        })
-        .pipe(Effect.flip);
-
-      assert.equal(error._tag, "OrchestratorDispatchError");
-      assert.equal(error.cause, `Thread ${threadId} is still running. Stop it before settling.`);
-      const projection = yield* orchestrator.getThreadProjection(threadId);
-      assert.equal(projection.runs[0]?.status, "starting");
-      assert.isNull(projection.thread.settledOverride);
-      assert.isNull(projection.thread.settledAt);
-      assert.isNotNull(projection.thread.unsettledAt);
-    }),
+        });
+        assert.isFalse(
+          result.storedEvents.some((event) => event.type === "provider-session.detached"),
+        );
+        const projection = yield* orchestrator.getThreadProjection(threadId);
+        const run = projection.runs[0]!;
+        assert.equal(run.status, "starting");
+        assert.equal(
+          projection.providerSessions.find((session) => session.id === sessionId)?.status,
+          "running",
+        );
+        assert.equal(projection.thread.settledOverride, "settled");
+        assert.isNotNull(projection.thread.settledAt);
+        assert.isNull(projection.thread.unsettledAt);
+        yield* eventSink.write({
+          commandId: CommandId.make("runtime-layer-active-settle-complete"),
+          events: [
+            {
+              id: EventId.make("runtime-layer-active-settle-complete"),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+        const completed = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(completed.runs.length, 1);
+        assert.equal(completed.runs[0]?.status, "completed");
+        assert.equal(completed.thread.settledOverride, "settled");
+        assert.deepEqual(completed.thread.settledAt, projection.thread.settledAt);
+      }),
   );
 
-  it.effect("settles a thread its own agent settled once the turn completes", () =>
+  it.effect("lets its own agent settle immediately and stays settled when the turn completes", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const eventSink = yield* EventSink.EventSinkV2;
@@ -4770,8 +4846,11 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         commandId: CommandId.make("runtime-layer-settle-after-run-settle"),
         byOwnAgent: true,
       });
-      assert.deepEqual(result, { settlesWhenTurnEnds: true });
-      assert.isNull((yield* orchestrator.getThreadProjection(threadId)).thread.settledOverride);
+      assert.property(result, "sequence");
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(threadId)).thread.settledOverride,
+        "settled",
+      );
       const now = yield* DateTime.now;
       yield* eventSink.write({
         commandId: CommandId.make("runtime-layer-settle-after-run-completed"),

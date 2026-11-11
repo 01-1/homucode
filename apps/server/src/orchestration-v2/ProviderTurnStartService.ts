@@ -1,4 +1,5 @@
 import { withSentFromLine } from "./MessageSentFrom.ts";
+import { withMessageTimestamp } from "./MessageTimestamp.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import {
@@ -1613,7 +1614,10 @@ export const layer: Layer.Layer<
             ...(noteContinuation ? promptedInput : turnInput),
             message: {
               ...turnInput.message,
-              text: goalCommand ? userText : withInlineContext(context, userText),
+              text: withMessageTimestamp(
+                goalCommand ? userText : withInlineContext(context, userText),
+                message,
+              ),
             },
           }).pipe(
             // Clear pending handoff markers for refused prompts so the next turn retains the native session.
@@ -1668,14 +1672,7 @@ export const layer: Layer.Layer<
               }),
         ),
       );
-      const deliverySession =
-        effectiveHandoffs.length === 0 &&
-        retryHandoff.length === 0 &&
-        sideChatHandoff === undefined &&
-        restartNote === "" &&
-        !noteContinuation
-          ? session
-          : makeDeliverySession(session, startWithHandoffs);
+      const deliverySession = makeDeliverySession(session, startWithHandoffs);
       return runExecution.startRootRun({
         commandId: CommandId.make(`command:effect:provider-turn.start:${run.id}`),
         appThread: projection.thread,

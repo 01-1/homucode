@@ -313,6 +313,40 @@ describe("remote thread lifecycle commands", () => {
       }),
   );
 
+  it.effect.each(["running", "queued"] as const)(
+    "files a working thread with latest status %s without hiding its pending question",
+    (status) =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness();
+        h.registry.set(h.snapshotAtom(ENVIRONMENT_ID), {
+          ...SNAPSHOT,
+          threads: [
+            {
+              ...SNAPSHOT.threads[0]!,
+              status,
+              activityRunStatus: "running",
+              pendingRuntimeRequest: USER_INPUT,
+            },
+          ],
+        });
+        const result = h.commands.settle.run(h.registry, {
+          environmentId: ENVIRONMENT_ID,
+          input: { threadId: THREAD_ID },
+        });
+        const request = yield* Queue.take(h.requests);
+        expect(h.registry.get(h.visibleAtom)?.threads[0]).toMatchObject({
+          status,
+          settledOverride: "settled",
+          pendingRuntimeRequest: USER_INPUT,
+        });
+        yield* Deferred.succeed(request.reply, { sequence: 2 });
+        expect((yield* Effect.promise(() => result))._tag).toBe("Success");
+        expect(h.registry.get(h.visibleAtom)?.threads[0]?.pendingRuntimeRequest).toEqual(
+          USER_INPUT,
+        );
+      }),
+  );
+
   it.effect("restamps snoozedAt when re-snoozing to the same wake time", () =>
     Effect.gen(function* () {
       const h = yield* makeHarness();

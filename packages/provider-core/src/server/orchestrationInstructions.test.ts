@@ -83,3 +83,23 @@ describe("T3 device instructions", () => {
     assert.notInclude(t3AcpPromptWithInstructions({ prompt: "Hi.", state }), "## T3 Code devices");
   });
 });
+
+it("keeps agent timestamps outside ACP and Cursor instruction wrappers", () => {
+  const prefix = "2026-11-10T17:49:34: ";
+  const prompt = `${prefix}Check the login screen.`;
+  const state = { interactionMode: "default", hasT3Mcp: true, hasDeviceTools: false } as const;
+  const acp = t3AcpPromptWithInstructions({ prompt, state });
+  const cursor = t3OrchestrationPrompt({
+    prompt,
+    hasT3Mcp: true,
+    hasDeviceTools: false,
+    orchestrationDelivered: false,
+    deviceInstructionsDelivered: false,
+  });
+  for (const formatted of [acp, cursor]) {
+    assert.isTrue(formatted.startsWith(prefix));
+    assert.equal(formatted.split(prefix).length, 2);
+    assert.include(formatted, "<user_request>\nCheck the login screen.\n</user_request>");
+  }
+  assert.equal(t3AcpPromptWithInstructions({ prompt, state, previousState: state }), prompt);
+});

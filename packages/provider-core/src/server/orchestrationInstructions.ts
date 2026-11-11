@@ -1,4 +1,5 @@
 import type { ProviderInteractionMode } from "@t3tools/contracts";
+import { preserveMessageTimestamp } from "@t3tools/shared/messageTimestamp";
 
 // Codex truncates entries over 4,000 bytes; keep each section self-contained and below that limit.
 export const T3_CODE_ORCHESTRATION_SECTIONS: ReadonlyArray<string> = [
@@ -101,7 +102,11 @@ export function t3AcpPromptWithInstructions(input: {
         ]
       : []),
   ];
-  return `<t3_code_instructions>\n${instructions.join("\n\n")}\n</t3_code_instructions>\n\n<user_request>\n${input.prompt}\n</user_request>`;
+  return preserveMessageTimestamp(
+    input.prompt,
+    (prompt) =>
+      `<t3_code_instructions>\n${instructions.join("\n\n")}\n</t3_code_instructions>\n\n<user_request>\n${prompt}\n</user_request>`,
+  );
 }
 
 const orchestrationInstructions = (hasDeviceTools: boolean) =>
@@ -110,7 +115,11 @@ const orchestrationInstructions = (hasDeviceTools: boolean) =>
     : T3_CODE_ORCHESTRATION_INSTRUCTIONS;
 
 function prependT3OrchestrationInstructions(prompt: string, instructions: string): string {
-  return `<t3_code_orchestration_instructions>${instructions.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`;
+  return preserveMessageTimestamp(
+    prompt,
+    (prompt) =>
+      `<t3_code_orchestration_instructions>${instructions.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`,
+  );
 }
 
 /** For providers whose instructions ride on the prompt, so a compacted conversation loses them. */

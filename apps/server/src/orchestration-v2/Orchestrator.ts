@@ -3580,6 +3580,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
     }
+    let settlingActiveRun = false;
     if (command.type === "thread.settle") {
       const projection = yield* loadProjectionForCommand(command, ["runs", "runtimeRequests"]);
       if (
@@ -3613,7 +3614,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const automaticQueuedRuns = projection.runs.filter(
         (run) => run.status === "queued" && automaticMessageIds.has(run.userMessageId),
       );
-      const runningRunExists = projection.runs.some((run) =>
+      settlingActiveRun = projection.runs.some((run) =>
         ["preparing", "starting", "running", "waiting"].includes(run.status),
       );
       const queuedMessageExists = projection.runs.some(
@@ -3625,10 +3626,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const blockingRequestExists = pendingRequests.some(
         (request) => request.kind !== "user_input" || request.responseCapability.type !== "message",
       );
-      const blocker = blockingRequestExists
-        ? "is waiting on an approval or question. Answer it before settling."
-        : runningRunExists
-          ? "is still running. Stop it before settling."
+      const blocker = settlingActiveRun
+        ? null
+        : blockingRequestExists
+          ? "is waiting on an approval or question. Answer it before settling."
           : queuedMessageExists
             ? "has a queued message. Send it or remove it from the queue before settling."
             : null;
@@ -3640,7 +3641,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
 
-      for (const request of pendingRequests) {
+      for (const request of settlingActiveRun ? [] : pendingRequests) {
         yield* dispatchRuntimeRequestRespond(
           {
             type: "runtime-request.respond",
@@ -3653,7 +3654,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           effects,
         );
       }
-      for (const run of automaticQueuedRuns) {
+      for (const run of settlingActiveRun ? [] : automaticQueuedRuns) {
         yield* dispatchQueuedRunCancel(
           {
             type: "queued-run.cancel",
@@ -4455,10 +4456,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       yield* closePendingLinkRequests({ command, events, threadId: command.threadId, now });
     }
 
-    // Archive and settle stop idle background work; serialized commands prevent starts racing detach.
-    // Settlement rejects active or blocked runs.
+    // Filing a working thread must leave its provider session attached until the turn completes.
     const detachSessionIds = new Set(
-      command.type === "thread.archive" || command.type === "thread.settle"
+      command.type === "thread.archive" || (command.type === "thread.settle" && !settlingActiveRun)
         ? (providerContext?.providerSessions ?? []).map((session) => session.id)
         : command.type === "thread.metadata.update" &&
             command.worktreePath !== undefined &&
@@ -5441,7 +5441,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           attachments: input.attachments,
           ...(input.context ? { context: input.context } : {}),
           streaming: false,
-          createdAt: now,
+          createdAt:
+            input.projection.messages.find((message) => message.id === input.messageId)
+              ?.createdAt ?? now,
           updatedAt: now,
         };
         const turnItem: OrchestrationV2TurnItem = {
@@ -5988,6 +5990,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+    const originalCreatedAt = projection.messages.find(
+      (message) => message.id === command.messageId,
+    )?.createdAt;
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
       const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
@@ -6723,7 +6728,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.context ? { context: command.context } : {}),
         attachments: command.attachments,
         streaming: false,
-        createdAt: now,
+        createdAt: originalCreatedAt ?? now,
         updatedAt: now,
         ...(delegatedCompletion === undefined ? {} : { delegatedCompletion }),
         ...(command.notification === undefined ? {} : { notification: command.notification }),
@@ -7112,7 +7117,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.context ? { context: command.context } : {}),
         attachments: command.attachments,
         streaming: false,
-        createdAt: now,
+        createdAt: originalCreatedAt ?? now,
         updatedAt: now,
         ...(delegatedCompletion === undefined ? {} : { delegatedCompletion }),
         ...(command.notification === undefined ? {} : { notification: command.notification }),
@@ -7898,7 +7903,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.context ? { context: command.context } : {}),
       attachments: command.attachments,
       streaming: false,
-      createdAt: now,
+      createdAt: originalCreatedAt ?? now,
       updatedAt: now,
       ...(delegatedCompletion === undefined ? {} : { delegatedCompletion }),
       ...(command.notification === undefined ? {} : { notification: command.notification }),

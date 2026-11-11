@@ -21,6 +21,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as EventSink from "./EventSink.ts";
@@ -33,6 +34,13 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 const driver = ProviderDriverKind.make("codex");
 const instanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId, model: "test-model" };
+
+// TestClock starts at the Unix epoch; slash commands retain their native prompt.
+const timestamped = (text: string) => {
+  const sent = new Date(0);
+  const local = new Date(-sent.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+  return text.trimStart().startsWith("/") ? text : `${local}: ${text}`;
+};
 
 it.effect.each(
   (
@@ -313,7 +321,9 @@ it.effect.each(
               }
             : {}),
         });
+        const originalSentAt = yield* DateTime.now;
         if (timing !== "before dispatch") yield* dispatchSteer;
+        if (timing === "during delivery") yield* TestClock.adjust("1 minute");
         if (timing === "during continuation") {
           const projection = yield* orchestrator.getThreadProjection(threadId);
           const turn = projection.providerTurns[0]!;
@@ -382,6 +392,15 @@ it.effect.each(
         yield* worker.drain();
         yield* orchestrator.resumeQueuedRuns;
         yield* worker.drain();
+        if (timing === "during delivery") {
+          const fallback = yield* orchestrator.getThreadProjection(threadId);
+          assert.equal(
+            DateTime.toEpochMillis(
+              fallback.messages.find((message) => message.id === messageId)!.createdAt,
+            ),
+            DateTime.toEpochMillis(originalSentAt),
+          );
+        }
         if (timing === "after delivery") {
           assert.equal(steerCalls, 1);
           assert.equal(started.length, 1);
@@ -417,7 +436,7 @@ it.effect.each(
         assert.equal(started.length, 2);
         assert.equal(started[1]?.message.messageId, messageId);
         if (mailbox) assert.include(started[1]?.message.text ?? "", String(taskId));
-        else assert.equal(started[1]?.message.text, "fix the popover");
+        else assert.equal(started[1]?.message.text, timestamped("fix the popover"));
         assert.deepEqual(started[1]?.message.attachments, [
           {
             type: "image",
@@ -698,7 +717,7 @@ it.effect("steers a delegated task question notice into the running parent turn"
         });
         yield* worker.drain();
         const after = yield* orchestrator.getThreadProjection(threadId);
-        assert.deepEqual(steered, ["Delegated task asked a question"]);
+        assert.deepEqual(steered, [timestamped("Delegated task asked a question")]);
         assert.lengthOf(started, 1);
         assert.isFalse(after.runs.some((run) => run.status === "queued"));
         const message = after.messages.find((candidate) => candidate.id === messageId);
@@ -776,7 +795,7 @@ it.effect("sends a selected held message once and preserves the remaining queue 
         assert.equal(after.runs.find((run) => run.id === selected.id)?.status, "running");
         assert.deepEqual(
           started.map((input) => input.message.text),
-          ["first", "selected"],
+          ["first", "selected"].map(timestamped),
         );
         assert.equal(started[1]?.runId, selected.id);
         assert.equal(started[1]?.message.messageId, selected.userMessageId);
@@ -803,7 +822,7 @@ it.effect("sends a selected held message once and preserves the remaining queue 
   ),
 );
 
-it.effect("a steered user message carries its device line", () =>
+it.effect("a promoted queued message retains its original send time and device line", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const { started, steered, layer, startFirstTurn } =
@@ -834,9 +853,14 @@ it.effect("a steered user message carries its device line", () =>
           createdBy: "user",
           creationSource: "mobile",
         });
-        const queued = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
-          (run) => run.status === "queued",
-        )!;
+        const before = yield* orchestrator.getThreadProjection(threadId);
+        const queued = before.runs.find((run) => run.status === "queued")!;
+        const message = before.messages.find((message) => message.id === queued.userMessageId)!;
+        const sent = new Date(DateTime.toEpochMillis(message.createdAt));
+        const timestamp = new Date(sent.getTime() - sent.getTimezoneOffset() * 60_000)
+          .toISOString()
+          .slice(0, 19);
+        yield* TestClock.adjust("1 hour");
         yield* orchestrator.dispatch({
           type: "queued-message.promote-to-steer",
           commandId: CommandId.make("promote-from-phone"),
@@ -846,8 +870,14 @@ it.effect("a steered user message carries its device line", () =>
         });
         yield* worker.drain();
         assert.deepEqual(steered, [
-          "from the phone\n\n[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)",
+          `${timestamp}: from the phone\n\n[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)`,
         ]);
+        const after = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(
+          DateTime.toEpochMillis(after.messages.find((row) => row.id === message.id)!.createdAt),
+          DateTime.toEpochMillis(message.createdAt),
+        );
+        assert.equal(after.messages.find((row) => row.id === message.id)?.text, "from the phone");
       }).pipe(Effect.provide(layer));
     }),
   ),
@@ -893,7 +923,7 @@ it.effect("force sends multiple queued messages and can force send a requeued me
         yield* promote("one", "promote-one");
         yield* promote("two", "promote-two");
         yield* worker.drain();
-        assert.deepEqual(steered, ["one", "two"]);
+        assert.deepEqual(steered, ["one", "two"].map(timestamped));
 
         // The completion-race fallback redispatches the same message into the queue.
         yield* queue("one", "requeue-one");
@@ -906,7 +936,7 @@ it.effect("force sends multiple queued messages and can force send a requeued me
         );
         yield* promote("one", "promote-one-again");
         yield* worker.drain();
-        assert.deepEqual(steered, ["one", "two", "one"]);
+        assert.deepEqual(steered, ["one", "two", "one"].map(timestamped));
         assert.lengthOf(started, 1);
         const final = yield* orchestrator.getThreadProjection(threadId);
         assert.deepEqual(
@@ -997,7 +1027,7 @@ it.effect(
 
           yield* steer("steer-changed", composerSelection);
           const changed = yield* orchestrator.getThreadProjection(threadId);
-          assert.deepEqual(steered, ["steer-changed"]);
+          assert.deepEqual(steered, [timestamped("steer-changed")]);
           assert.equal(started.length, 1);
           assert.lengthOf(changed.attempts, 1);
           assert.equal(changed.runs[0]?.status, "running");
@@ -1006,7 +1036,7 @@ it.effect(
 
           yield* steer("steer-reverted", runSelection);
           const reverted = yield* orchestrator.getThreadProjection(threadId);
-          assert.deepEqual(steered, ["steer-changed", "steer-reverted"]);
+          assert.deepEqual(steered, ["steer-changed", "steer-reverted"].map(timestamped));
           assert.lengthOf(reverted.attempts, 1);
           assert.deepEqual(reverted.thread.modelSelection, runSelection);
 
@@ -1033,7 +1063,10 @@ it.effect(
           });
           yield* steer("steer-back", runSelection);
           const back = yield* orchestrator.getThreadProjection(threadId);
-          assert.deepEqual(steered, ["steer-changed", "steer-reverted", "steer-back"]);
+          assert.deepEqual(
+            steered,
+            ["steer-changed", "steer-reverted", "steer-back"].map(timestamped),
+          );
           assert.equal(back.thread.providerInstanceId, instanceId);
           assert.deepEqual(back.thread.modelSelection, runSelection);
         }).pipe(Effect.provide(layer));
@@ -1080,8 +1113,8 @@ it.effect("restarts the turn for an image when native steering takes text only",
         assert.deepEqual(
           started.map((turn) => [turn.message.text, turn.message.attachments.length]),
           [
-            ["first", 0],
-            ["look at this", 1],
+            [timestamped("first"), 0],
+            [timestamped("look at this"), 1],
           ],
         );
       }).pipe(Effect.provide(layer));
@@ -1225,7 +1258,7 @@ it.effect("queues a steer until the turn ends when the provider cannot steer it"
         assert.deepEqual(interrupted, []);
         assert.equal(started.length, 2);
         assert.equal(started[1]?.runId, queued?.id);
-        assert.equal(started[1]?.message.text, "follow up");
+        assert.equal(started[1]?.message.text, timestamped("follow up"));
       }).pipe(Effect.provide(layer));
     }),
   ),
@@ -1379,7 +1412,7 @@ it.effect("steers a promoted queued message with the selection it was queued wit
         yield* worker.drain();
 
         const projection = yield* orchestrator.getThreadProjection(threadId);
-        assert.deepEqual(steered, ["queued"]);
+        assert.deepEqual(steered, [timestamped("queued")]);
         assert.deepEqual(projection.thread.modelSelection, composerSelection);
       }).pipe(Effect.provide(layer));
     }),
@@ -1614,7 +1647,7 @@ it.effect("stops the running turn and starts a goal sent into it next", () =>
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued"],
-          started: ["first", "/goal all tests pass"],
+          started: ["first", "/goal all tests pass"].map(timestamped),
           stopRequested: true,
         });
       }).pipe(Effect.provide(layer));
@@ -1636,7 +1669,7 @@ it.effect("queues a goal clear without stopping work when no goal drives it", ()
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued", "/goal clear"],
-          started: ["first"],
+          started: [timestamped("first")],
           stopRequested: false,
         });
       }).pipe(Effect.provide(layer));
@@ -1670,7 +1703,7 @@ it.effect("promotes a queued goal by stopping the running turn", () =>
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued"],
-          started: ["first", "/goal ship it"],
+          started: ["first", "/goal ship it"].map(timestamped),
           stopRequested: true,
         });
       }).pipe(Effect.provide(layer));
@@ -1762,7 +1795,7 @@ it.effect.each(["next", "/goal ship it", "fresh next"])(
           assert.deepEqual((yield* read(threadId)).queue, ["queued"]);
           assert.deepEqual(
             started.map((turn) => turn.message.text),
-            ["first", "/compact", promoted],
+            ["first", "/compact", promoted].map(timestamped),
           );
         }).pipe(Effect.provide(layer));
       }),
@@ -1858,7 +1891,7 @@ it.effect("stops the running turn when a goal clear ends the goal driving it", (
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: [],
-          started: ["first", "/goal clear"],
+          started: ["first", "/goal clear"].map(timestamped),
           stopRequested: true,
         });
       }).pipe(Effect.provide(layer));
@@ -1936,7 +1969,7 @@ it.effect("a side chat that opens with /goal gets its context on the next questi
         yield* worker.drain();
 
         const [first, goal, question] = started.map((turn) => turn.message.text);
-        assert.deepEqual([first, goal], ["first", "/goal clear"]);
+        assert.deepEqual([first, goal], ["first", "/goal clear"].map(timestamped));
         assert.include(question, "You are in a side chat beside the main thread.");
         assert.include(question, "- User: first");
         assert.isTrue(question?.endsWith("What is the main thread doing?"));

@@ -101,6 +101,14 @@ describe("descriptor helpers", () => {
 });
 
 describe("applyClaudePromptEffortPrefix", () => {
+  it("keeps an agent timestamp outside ultrathink on start and steer", () => {
+    const text = "2026-11-10T17:49:34: Investigate this failure";
+    const formatted = applyClaudePromptEffortPrefix(text, "ultrathink");
+    expect(formatted).toBe("2026-11-10T17:49:34: Ultrathink:\nInvestigate this failure");
+    expect(applyClaudePromptEffortPrefix(formatted, "ultrathink")).toBe(formatted);
+    expect(applyClaudePromptEffortPrefix(text, "high")).toBe(text);
+  });
+
   it("keeps slash commands intact when ultrathink is selected", () => {
     expect(applyClaudePromptEffortPrefix("/compact", "ultrathink")).toBe("/compact");
     expect(applyClaudePromptEffortPrefix(" /compact keep recent errors ", "ultrathink")).toBe(

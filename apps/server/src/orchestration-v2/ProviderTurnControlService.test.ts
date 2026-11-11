@@ -1,6 +1,9 @@
 import { assert, it } from "@effect/vitest";
 import {
   type ModelSelection,
+  ChatAttachmentId,
+  MessageId,
+  ScheduledTaskId,
   NodeId,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ThreadProjection,
@@ -345,5 +348,170 @@ it.effect(
       assert.equal(interrupted?.providerSessionId, oldSessionId);
       assert.equal(interrupted?.id, providerThreadId);
       assert.equal(interrupted?.nativeThreadRef?.nativeId, "native-thread:restart-session");
+    }),
+);
+
+it.effect.each(["human", "agent", "scheduled", "coalesced", "slash"] as const)(
+  "steers a %s message with its original send time only in provider text",
+  (kind) =>
+    Effect.gen(function* () {
+      const now = DateTime.makeUnsafe("2026-11-11T12:00:00Z");
+      const createdAt = DateTime.makeUnsafe("2026-11-10T22:49:34.987Z");
+      const threadId = ThreadId.make("thread:timestamp");
+      const runId = RunId.make("run:timestamp");
+      const providerThreadId = ProviderThreadId.make("provider-thread:timestamp");
+      const providerTurnId = ProviderTurnId.make("provider-turn:timestamp");
+      const providerSessionId = ProviderSessionId.make("provider-session:timestamp");
+      const attemptId = RunAttemptId.make("attempt:timestamp");
+      const providerThread: OrchestrationV2ProviderThread = {
+        id: providerThreadId,
+        driver,
+        providerInstanceId,
+        providerSessionId,
+        appThreadId: threadId,
+        ownerNodeId: null,
+        nativeThreadRef: null,
+        nativeConversationHeadRef: null,
+        status: "active",
+        firstRunOrdinal: 1,
+        lastRunOrdinal: 1,
+        handoffIds: [],
+        forkedFrom: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const projection = makeProjection({
+        now,
+        threadId,
+        providerThread,
+        providerTurnId,
+        attemptId,
+      });
+      const text =
+        kind === "slash"
+          ? "/skill task"
+          : kind === "coalesced"
+            ? "Reviewer A:\nfirst finding\n\nReviewer B:\nsecond finding"
+            : "follow up";
+      const message: OrchestrationV2ThreadProjection["messages"][number] = {
+        id: MessageId.make("message:timestamp"),
+        threadId,
+        runId,
+        nodeId: null,
+        role: "user",
+        text,
+        attachments: [
+          {
+            id: ChatAttachmentId.make("attachment_timestamp"),
+            type: "image",
+            name: "image.png",
+            mimeType: "image/png",
+            sizeBytes: 42,
+          },
+        ],
+        streaming: false,
+        createdBy: kind === "human" || kind === "slash" ? "user" : "agent",
+        creationSource: "server",
+        createdAt,
+        updatedAt: now,
+        ...(kind === "agent" ? { senderThreadId: ThreadId.make("sender:timestamp") } : {}),
+        ...(kind === "scheduled"
+          ? { scheduledTaskId: ScheduledTaskId.make("schedule:timestamp") }
+          : {}),
+      };
+      const run: OrchestrationV2ThreadProjection["runs"][number] = {
+        id: runId,
+        threadId,
+        ordinal: 1,
+        providerInstanceId,
+        modelSelection,
+        providerThreadId,
+        userMessageId: message.id,
+        rootNodeId: null,
+        activeAttemptId: attemptId,
+        status: "running",
+        requestedAt: now,
+        startedAt: now,
+        completedAt: null,
+        checkpointId: null,
+        contextHandoffId: null,
+      };
+      const received: ProviderAdapter.ProviderAdapterV2SteerInput[] = [];
+      const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
+        instanceId: providerInstanceId,
+        driver,
+        providerSessionId,
+        providerSession: {
+          id: providerSessionId,
+          driver,
+          providerInstanceId,
+          status: "running",
+          cwd: "/workspace",
+          model: modelSelection.model,
+          capabilities: CodexProviderCapabilitiesV2,
+          createdAt: now,
+          updatedAt: now,
+          lastError: null,
+        },
+        events: Stream.empty,
+        steerTurn: (input) =>
+          Effect.sync(() => {
+            received.push(input);
+          }),
+        ensureThread: () => Effect.die("unused"),
+        resumeThread: () => Effect.die("unused"),
+        startTurn: () => Effect.die("unused"),
+        interruptTurn: () => Effect.die("unused"),
+        respondToRuntimeRequest: () => Effect.die("unused"),
+        readThreadSnapshot: () => Effect.die("unused"),
+        rollbackThread: () => Effect.die("unused"),
+        forkThread: () => Effect.die("unused"),
+      };
+      const layer = ProviderTurnControlService.layer.pipe(
+        Layer.provide(
+          Layer.merge(
+            Layer.mock(ProjectionStore.ProjectionStoreV2)({
+              getProviderControlContext: () =>
+                Effect.succeed({
+                  providerThread,
+                  providerTurn: { ...projection.providerTurns[0]!, status: "running" },
+                  attempt: undefined,
+                  message,
+                  run,
+                }),
+            }),
+            Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
+              get: () => Effect.succeed(Option.some(runtime)),
+            }),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const control = yield* ProviderTurnControlService.ProviderTurnControlServiceV2;
+        const target = {
+          threadId,
+          providerSessionId,
+          providerThreadId,
+          providerTurnId,
+          messageId: message.id,
+        };
+        yield* control.steer(target);
+        yield* control.steer(target);
+      }).pipe(Effect.provide(layer));
+      const sent = new Date(DateTime.toEpochMillis(createdAt));
+      const timestamp = new Date(sent.getTime() - sent.getTimezoneOffset() * 60_000)
+        .toISOString()
+        .slice(0, 19);
+      assert.deepEqual(
+        received.map((input) => input.message.text),
+        [
+          kind === "slash" ? text : `${timestamp}: ${text}`,
+          kind === "slash" ? text : `${timestamp}: ${text}`,
+        ],
+      );
+      assert.strictEqual(received[0]?.message.attachments, message.attachments);
+      assert.equal(received[0]?.message.senderThreadId, message.senderThreadId);
+      assert.equal(received[0]?.message.scheduledTaskId, message.scheduledTaskId);
+      assert.equal(message.text, text);
     }),
 );
