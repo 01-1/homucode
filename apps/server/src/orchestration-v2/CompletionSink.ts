@@ -46,7 +46,14 @@ const make = Effect.gen(function* () {
       if (commandJson === null) {
         const config = yield* fs
           .readFileString(path.join(row.workspace_root, "t3.json"))
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)), Effect.result);
+          .pipe(
+            Effect.catchTags({
+              PlatformError: (error) =>
+                error.reason._tag === "NotFound" ? Effect.succeed("{}") : Effect.fail(error),
+            }),
+            Effect.flatMap(Schema.decodeUnknownEffect(T3ProjectFileFromJson)),
+            Effect.result,
+          );
         if (config._tag === "Failure") {
           yield* sql`UPDATE thread_completion_outbox SET attempts = attempts + 1, next_attempt_at = ${now + 5000}
             WHERE thread_id = ${row.thread_id} AND run_id = ${row.run_id}`;

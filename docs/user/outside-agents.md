@@ -147,7 +147,7 @@ commands retry after 5 seconds with exponential backoff capped at 5 minutes,
 including after restart. The receiver must durably deduplicate `thread_id` plus
 `run_id` before exiting zero: a crash after acceptance can repeat the invocation.
 A nonzero exit, including an unknown task registration, retains the delivery.
-Unreadable or invalid configuration is retried; a valid config without
+Unreadable or invalid configuration is retried; an absent `t3.json` leaves the project unconfigured, and a valid config without
 `completionSink` disables new deliveries. Once selected, a pending delivery keeps
 its command and payload across retries. Removing the config does not cancel
 already selected deliveries. Receivers run without any model turn.

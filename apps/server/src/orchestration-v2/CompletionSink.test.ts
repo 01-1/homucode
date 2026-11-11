@@ -17,6 +17,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import * as PlatformError from "effect/PlatformError";
 import * as FileSystem from "effect/FileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import * as CompletionSink from "./CompletionSink.ts";
@@ -159,18 +160,27 @@ it.effect(
       const calls: Array<ProcessRunner.ProcessRunInput> = [];
       let fail = true;
       let validConfig = false;
+      let missingConfig = false;
       const layer = CompletionSink.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
             Layer.mock(FileSystem.FileSystem)({
               readFileString: () =>
-                Effect.sync(() =>
-                  validConfig
-                    ? JSON.stringify({
-                        completionSink: { command: ["receiver", "append-result", "-"] },
-                      })
-                    : "{broken",
-                ),
+                missingConfig
+                  ? Effect.fail(
+                      PlatformError.systemError({
+                        _tag: "NotFound",
+                        module: "FileSystem",
+                        method: "readFileString",
+                      }),
+                    )
+                  : Effect.sync(() =>
+                      validConfig
+                        ? JSON.stringify({
+                            completionSink: { command: ["receiver", "append-result", "-"] },
+                          })
+                        : "{broken",
+                    ),
             }),
             NodePath.layer,
             Layer.succeed(ProcessRunner.ProcessRunner, {
@@ -236,5 +246,24 @@ it.effect(
         yield* drain;
         assert.equal(JSON.parse(calls.at(-1)!.stdin!).status, status);
       }
+      missingConfig = true;
+      yield* events.write({
+        events: [
+          event("disabled", {
+            ...run("completed"),
+            id: RunId.make("disabled-run"),
+            ordinal: ++ordinal,
+          }),
+        ],
+      });
+      yield* drain;
+      const disabled = yield* sql<{
+        delivered: number;
+      }>`SELECT delivered FROM thread_completion_outbox WHERE run_id = 'disabled-run'`;
+      assert.equal(disabled[0]!.delivered, 1);
+      assert.lengthOf(calls, 5);
+      yield* TestClock.adjust("5 seconds");
+      yield* drain;
+      assert.lengthOf(calls, 5);
     }).pipe(Effect.provide(infrastructure)),
 );
