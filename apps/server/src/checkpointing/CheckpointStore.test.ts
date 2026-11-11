@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 
@@ -568,4 +569,33 @@ it.layer(layerTest)("CheckpointStore.layer", (it) => {
       }),
     );
   });
+});
+
+it.effect("background Git disabled skips repository probing and checkpoint cleanup", () => {
+  let calls = 0;
+  return Effect.gen(function* () {
+    const store = yield* CheckpointStore.make;
+    expect(yield* store.isGitRepository("/repo")).toBe(false);
+    yield* store.deleteCheckpointRefs({
+      cwd: "/repo",
+      checkpointRefs: [CheckpointRef.make("refs/t3/test")],
+    });
+    expect(calls).toBe(0);
+  }).pipe(
+    Effect.provide(
+      Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
+        detect: () =>
+          Effect.sync(() => {
+            calls++;
+            return null;
+          }),
+        resolve: () =>
+          Effect.sync(() => {
+            calls++;
+            throw new Error("unexpected Git lookup");
+          }),
+      }),
+    ),
+    Effect.provideService(BackgroundGitEnabled, false),
+  );
 });

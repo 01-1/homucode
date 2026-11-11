@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   CommandId,
   MessageId,
@@ -658,8 +659,12 @@ export const make = Effect.gen(function* () {
   );
 
   const start: PullRequestWatchReactor["Service"]["start"] = () =>
-    forkParked(
-      sweep.pipe(Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`)), Effect.asVoid),
+    Effect.flatMap(BackgroundGitEnabled, (enabled) =>
+      enabled
+        ? forkParked(
+            sweep.pipe(Effect.repeat(Schedule.spaced(`${SWEEP_MINUTES} minutes`)), Effect.asVoid),
+          )
+        : Effect.void,
     );
 
   return { start, sweep } satisfies PullRequestWatchReactor["Service"];

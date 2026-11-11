@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   backgroundWorkHoldsCompletion,
   turnItemUpdateCanEndBackgroundWork,
@@ -298,6 +299,7 @@ export function autoSettlementSettingsKey(
 }
 
 export const make = Effect.gen(function* () {
+  const backgroundGitEnabled = yield* BackgroundGitEnabled;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const projectStore = yield* ProjectStore.ProjectStoreV2;
@@ -653,7 +655,7 @@ export const make = Effect.gen(function* () {
   );
 
   const workEnded = (threadId: ThreadId) =>
-    enqueueThread(threadId).pipe(
+    (backgroundGitEnabled ? enqueueThread(threadId) : Effect.void).pipe(
       Effect.andThen(
         Effect.suspend(() =>
           deferredCleanup.has(threadId) ? cleanUpSettledThread(threadId) : Effect.void,
@@ -714,6 +716,16 @@ export const make = Effect.gen(function* () {
   const start: ThreadSettlementServiceV2["Service"]["start"] = Effect.fn(
     "ThreadSettlementServiceV2.start",
   )(function* () {
+    if (!backgroundGitEnabled) {
+      yield* forkParked(
+        Stream.runForEach(orchestrator.streamDomainEvents, processEvent).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("Thread settlement event stream failed", { cause }),
+          ),
+        ),
+      );
+      return;
+    }
     const settingsChanges = yield* settingsService.subscribeChanges;
     const mergedPullRequests = yield* pullRequests.subscribeMerges;
     const events = orchestrator.streamDomainEvents;

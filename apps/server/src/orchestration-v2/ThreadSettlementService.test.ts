@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { assert, describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -1476,6 +1477,37 @@ describe("ThreadSettlementServiceV2 terminals", () => {
     payload: thread,
   });
 
+  it.effect(
+    "background Git disabled retains manual settlement cleanup without automatic reads",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const thread = appThread("manual-settled-thread", "settled", "/worktrees/thread");
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([makeThread("candidate", { branch: "feature" })]),
+            currentThreads: [thread],
+            existingWorktreePaths: ["/worktrees/thread"],
+          });
+          yield* Effect.gen(function* () {
+            const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+            yield* service.start();
+            yield* Deferred.succeed(fixture.activation, undefined);
+            yield* TestClock.adjust("5 minutes");
+            yield* fixture.publishEvent(settledEvent(thread));
+            assert.deepStrictEqual(yield* Queue.take(fixture.closedIdle), { threadId: thread.id });
+            const script = yield* Queue.take(fixture.scriptRuns);
+            assert.strictEqual(script.threadId, thread.id);
+            assert.strictEqual(script.trigger, "settle");
+            assert.deepStrictEqual(yield* Ref.get(fixture.branchCalls), []);
+            assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 0);
+          }).pipe(
+            Effect.provide(fixture.layer),
+            Effect.provideService(BackgroundGitEnabled, false),
+          );
+        }),
+      ),
+  );
+
   it.effect("keeps the terminals of a thread re-engaged before the event ran", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1498,117 +1530,159 @@ describe("ThreadSettlementServiceV2 terminals", () => {
     ),
   );
 
-  it.effect("defers terminal and script cleanup while the settled thread is working", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const thread = appThread("working-settled", "settled", "/worktrees/working");
-        let busy = true;
-        const read = yield* Deferred.make<void>();
-        const fixture = yield* makeHarness({
-          snapshot: makeSnapshot([]),
-          currentThreads: [thread],
-          existingWorktreePaths: ["/worktrees/working"],
-          cleanupBusy: () => busy,
-          onCleanupRead: Deferred.succeed(read, undefined),
-        });
-        yield* Effect.gen(function* () {
-          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
-          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
-          yield* fixture.publishEvent(settledEvent(thread));
-          yield* Deferred.await(read);
-          assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
-          assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
-          busy = false;
-          yield* fixture.publishEvent({
-            ...settledEvent(thread),
-            type: "provider-session.detached",
-          } as OrchestrationV2DomainEvent);
-          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
-        }).pipe(Effect.provide(fixture.layer));
-      }),
-    ),
-  );
-
-  it.effect("keeps cleanup deferred when a queued run starts during worktree I/O", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const thread = appThread("queued-cleanup", "settled", "/worktrees/queued");
-        let busy = false;
-        let promote = true;
-        const marker = yield* Deferred.make<void>();
-        const fixture = yield* makeHarness({
-          snapshot: makeSnapshot([]),
-          currentThreads: [thread],
-          existingWorktreePaths: ["/worktrees/queued"],
-          cleanupBusy: () => busy,
-          onCleanupRead: Effect.suspend(() =>
-            busy ? Deferred.succeed(marker, undefined) : Effect.void,
-          ),
-          onExists: () =>
-            Effect.sync(() => {
-              if (promote) {
-                busy = true;
-                promote = false;
-              }
-            }),
-        });
-        yield* Effect.gen(function* () {
-          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
-          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
-          yield* fixture.publishEvent(settledEvent(thread));
-          yield* Deferred.await(marker);
-          assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
-          busy = false;
-          yield* fixture.publishEvent({
-            ...settledEvent(thread),
-            type: "provider-session.detached",
-          } as OrchestrationV2DomainEvent);
-          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
-        }).pipe(Effect.provide(fixture.layer));
-      }),
-    ),
-  );
-
-  it.effect("resumes deferred cleanup when the last pending question is dismissed", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const thread = appThread("question-cleanup", "settled", "/worktrees/question");
-        let pending = true;
-        const read = yield* Deferred.make<void>();
-        const fixture = yield* makeHarness({
-          snapshot: makeSnapshot([]),
-          currentThreads: [thread],
-          existingWorktreePaths: ["/worktrees/question"],
-          cleanupQuestion: () => pending,
-          onCleanupRead: Deferred.succeed(read, undefined),
-        });
-        yield* Effect.gen(function* () {
-          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
-          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
-          yield* fixture.publishEvent(settledEvent(thread));
-          yield* Deferred.await(read);
-          assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
-          pending = false;
-          yield* fixture.publishEvent({
-            ...settledEvent(thread),
-            type: "runtime-request.updated",
-            payload: {
-              id: RuntimeRequestId.make("cleanup-question"),
-              nodeId: NodeId.make("cleanup-question-node"),
-              providerTurnId: null,
-              nativeRequestRef: null,
-              kind: "user_input",
-              status: "resolved",
-              decision: "cancel",
-              responseCapability: { type: "message" },
-              createdAt: at(0),
-              resolvedAt: at(0),
-            },
+  it.effect.each([true, false])(
+    "defers terminal and script cleanup while the settled thread is working (background Git %s)",
+    (backgroundGitEnabled) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const thread = appThread("working-settled", "settled", "/worktrees/working");
+          let busy = true;
+          const read = yield* Deferred.make<void>();
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([]),
+            currentThreads: [thread],
+            existingWorktreePaths: ["/worktrees/working"],
+            cleanupBusy: () => busy,
+            onCleanupRead: Deferred.succeed(read, undefined),
           });
-          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
-        }).pipe(Effect.provide(fixture.layer));
-      }),
-    ),
+          yield* Effect.gen(function* () {
+            const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+            if (backgroundGitEnabled) {
+              yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+            } else {
+              yield* service.start();
+              yield* Deferred.succeed(fixture.activation, undefined);
+            }
+            yield* fixture.publishEvent(settledEvent(thread));
+            yield* Deferred.await(read);
+            assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
+            assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
+            busy = false;
+            yield* fixture.publishEvent({
+              ...settledEvent(thread),
+              type: "provider-session.detached",
+            } as OrchestrationV2DomainEvent);
+            assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
+            if (!backgroundGitEnabled) {
+              assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 0);
+              assert.deepStrictEqual(yield* Ref.get(fixture.branchCalls), []);
+            }
+          }).pipe(
+            Effect.provide(fixture.layer),
+            Effect.provideService(BackgroundGitEnabled, backgroundGitEnabled),
+          );
+        }),
+      ),
+  );
+
+  it.effect.each([true, false])(
+    "keeps cleanup deferred when a queued run starts during worktree I/O (background Git %s)",
+    (backgroundGitEnabled) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const thread = appThread("queued-cleanup", "settled", "/worktrees/queued");
+          let busy = false;
+          let promote = true;
+          const marker = yield* Deferred.make<void>();
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([]),
+            currentThreads: [thread],
+            existingWorktreePaths: ["/worktrees/queued"],
+            cleanupBusy: () => busy,
+            onCleanupRead: Effect.suspend(() =>
+              busy ? Deferred.succeed(marker, undefined) : Effect.void,
+            ),
+            onExists: () =>
+              Effect.sync(() => {
+                if (promote) {
+                  busy = true;
+                  promote = false;
+                }
+              }),
+          });
+          yield* Effect.gen(function* () {
+            const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+            if (backgroundGitEnabled) {
+              yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+            } else {
+              yield* service.start();
+              yield* Deferred.succeed(fixture.activation, undefined);
+            }
+            yield* fixture.publishEvent(settledEvent(thread));
+            yield* Deferred.await(marker);
+            assert.strictEqual(yield* Queue.size(fixture.scriptRuns), 0);
+            busy = false;
+            yield* fixture.publishEvent({
+              ...settledEvent(thread),
+              type: "provider-session.detached",
+            } as OrchestrationV2DomainEvent);
+            assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
+            if (!backgroundGitEnabled) {
+              assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 0);
+              assert.deepStrictEqual(yield* Ref.get(fixture.branchCalls), []);
+            }
+          }).pipe(
+            Effect.provide(fixture.layer),
+            Effect.provideService(BackgroundGitEnabled, backgroundGitEnabled),
+          );
+        }),
+      ),
+  );
+
+  it.effect.each([true, false])(
+    "resumes deferred cleanup when the last pending question is dismissed (background Git %s)",
+    (backgroundGitEnabled) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const thread = appThread("question-cleanup", "settled", "/worktrees/question");
+          let pending = true;
+          const read = yield* Deferred.make<void>();
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([]),
+            currentThreads: [thread],
+            existingWorktreePaths: ["/worktrees/question"],
+            cleanupQuestion: () => pending,
+            onCleanupRead: Deferred.succeed(read, undefined),
+          });
+          yield* Effect.gen(function* () {
+            const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+            if (backgroundGitEnabled) {
+              yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+            } else {
+              yield* service.start();
+              yield* Deferred.succeed(fixture.activation, undefined);
+            }
+            yield* fixture.publishEvent(settledEvent(thread));
+            yield* Deferred.await(read);
+            assert.strictEqual(yield* Queue.size(fixture.closedIdle), 0);
+            pending = false;
+            yield* fixture.publishEvent({
+              ...settledEvent(thread),
+              type: "runtime-request.updated",
+              payload: {
+                id: RuntimeRequestId.make("cleanup-question"),
+                nodeId: NodeId.make("cleanup-question-node"),
+                providerTurnId: null,
+                nativeRequestRef: null,
+                kind: "user_input",
+                status: "resolved",
+                decision: "cancel",
+                responseCapability: { type: "message" },
+                createdAt: at(0),
+                resolvedAt: at(0),
+              },
+            });
+            assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, thread.id);
+            if (!backgroundGitEnabled) {
+              assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 0);
+              assert.deepStrictEqual(yield* Ref.get(fixture.branchCalls), []);
+            }
+          }).pipe(
+            Effect.provide(fixture.layer),
+            Effect.provideService(BackgroundGitEnabled, backgroundGitEnabled),
+          );
+        }),
+      ),
   );
 
   it.effect("runs the settle script in the thread's own worktree", () =>

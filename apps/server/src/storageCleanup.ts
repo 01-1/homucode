@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "./vcs/BackgroundGit.ts";
 import {
   GitCommandError,
   OrchestrationV2AppThreadJson,
@@ -1308,7 +1309,11 @@ const make = Effect.gen(function* () {
     const serverSettings = yield* settingsService.getSettings;
     const settings = serverSettings.storageCleanup;
     const entries: StorageCleanupReportEntry[] = [];
-    const deletedWorktrees = yield* cleanWorktrees(serverSettings, now, entries).pipe(
+    const deletedWorktrees = yield* (
+      trigger === "manual" || (yield* BackgroundGitEnabled)
+        ? cleanWorktrees(serverSettings, now, entries)
+        : Effect.succeed({ waiting: false, kept: [] as ReadonlyArray<string> })
+    ).pipe(
       Effect.catch((error) =>
         Effect.gen(function* () {
           entries.push({

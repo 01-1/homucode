@@ -217,9 +217,64 @@ const TASK_ID = ScheduledTaskId.make("task-1");
 const AUTOMATION_PROMPT = "Triage the inbox\n\nLabel every new issue and close duplicates.";
 
 describe("MessagesTimeline work rows", () => {
+  it("keeps a finished reply expanded when the next turn starts and supports manual collapse", async () => {
+    const props = baseProps();
+    const runId = RunId.make("first-run");
+    const nextRunId = RunId.make("next-run");
+    const entries = [
+      message("Visible answer", { role: "assistant", runId }, "answer"),
+      work("finished-activity", { runId, label: "Checked status", tone: "info" }),
+      message("Final answer", { role: "assistant", runId }, "final-answer"),
+    ];
+    const ui = (next = false) => (
+      <MessagesTimeline
+        {...props}
+        timelineEntries={next ? [...entries, message("Next question", {}, "next-question")] : entries}
+        isWorking={next}
+        runningRunId={next ? nextRunId : null}
+        latestRun={{
+          runId: next ? nextRunId : runId,
+          status: next ? "running" : "completed",
+          startedAt: CREATED_AT,
+          completedAt: next ? null : CREATED_AT,
+        }}
+      />
+    );
+    await using screen = await renderElement(ui());
+    const heading = screen.getByRole("button", { name: /^Worked/ });
+    await expect.element(heading).toHaveAttribute("aria-expanded", "true");
+    await expect.element(screen.getByText("Visible answer", { exact: true })).toBeVisible();
+    await screen.rerender(ui(true));
+    await expect.element(heading).toHaveAttribute("aria-expanded", "true");
+    await expect.element(screen.getByText("Visible answer", { exact: true })).toBeVisible();
+    await expect.element(screen.getByText("Final answer", { exact: true })).toBeVisible();
+    await heading.click();
+    await expect.element(heading).toHaveAttribute("aria-expanded", "false");
+    await expect.element(screen.getByText("Visible answer", { exact: true })).not.toBeInTheDocument();
+    await expect.element(screen.getByText("Final answer", { exact: true })).toBeVisible();
+    await heading.click();
+    await expect.element(screen.getByText("Visible answer", { exact: true })).toBeVisible();
+  });
+
   it("keeps the worked-for heading in place when expanded at the bottom", async () => {
     const props = baseProps();
     const runId = RunId.make("completed-run");
+    rememberTimelinePosition(
+      props.routeThreadKey,
+      {
+        rowId: `turn-fold:${runId}`,
+        offsetWithinRow: 0,
+        scrollOffset: 0,
+        atEnd: true,
+        disclosures: {
+          collapsedRuns: new Set([runId]),
+          workGroups: new Set(),
+          attempts: new Set(),
+          workGroupState: { scrollPositions: new Map(), expandedEntries: new Set() },
+        },
+      },
+      true,
+    );
     const container = document.createElement("div");
     // Keep the heading on screen so Playwright does not scroll it before clicking.
     container.style.cssText =

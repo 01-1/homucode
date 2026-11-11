@@ -414,8 +414,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     ...timelineListStateFor(listIdentityKey),
     findOpenAtOpening: findOpen,
   }));
-  const [expandedRunIds, setExpandedRunIds] = useState<ReadonlySet<RunId>>(
-    () => listState.rememberedPosition?.disclosures?.runs ?? new Set(),
+  const [collapsedRunIds, setCollapsedRunIds] = useState<ReadonlySet<RunId>>(
+    () => listState.rememberedPosition?.disclosures?.collapsedRuns ?? new Set(),
   );
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(
     () => listState.rememberedPosition?.disclosures?.workGroups ?? new Set(),
@@ -435,7 +435,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     () => new Map(),
   );
   const [fullscreenAppRowId, setFullscreenAppRowId] = useState<string | null>(null);
-  let paintedExpandedRunIds = expandedRunIds;
+  let paintedCollapsedRunIds = collapsedRunIds;
   let paintedExpandedWorkGroupIds = expandedWorkGroupIds;
   let paintedExpandedAttemptIds = expandedAttemptIds;
   const identityChanged = listState.identity !== listIdentityKey;
@@ -455,10 +455,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     // A viewer pinned in another thread must not keep live follow off here,
     // nor when that thread comes back.
     setFullscreenAppRowId(null);
-    paintedExpandedRunIds = rememberedPosition?.disclosures?.runs ?? new Set();
+    paintedCollapsedRunIds = rememberedPosition?.disclosures?.collapsedRuns ?? new Set();
     paintedExpandedWorkGroupIds = rememberedPosition?.disclosures?.workGroups ?? new Set();
     paintedExpandedAttemptIds = rememberedPosition?.disclosures?.attempts ?? new Set();
-    setExpandedRunIds(paintedExpandedRunIds);
+    setCollapsedRunIds(paintedCollapsedRunIds);
     setExpandedWorkGroupIds(paintedExpandedWorkGroupIds);
     setExpandedAttemptIds(paintedExpandedAttemptIds);
   }
@@ -502,7 +502,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
 
   const onToggleTurnFold = (runId: RunId) => {
     suspendEndScrollMaintenanceForDisclosure(`turn-fold:${runId}`);
-    setExpandedRunIds((existing) => {
+    setCollapsedRunIds((existing) => {
       const next = new Set(existing);
       if (next.has(runId)) {
         next.delete(runId);
@@ -537,43 +537,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
     });
   };
 
-  // An interrupted run opens its fold; a newer run closes the previous run's.
-  const [observedLatestRun, setObservedLatestRun] = useState({
-    identity: listIdentityKey,
-    runId: latestRun?.runId,
-    status: latestRun?.status,
-  });
-  if (
-    observedLatestRun.identity !== listIdentityKey ||
-    observedLatestRun.runId !== latestRun?.runId ||
-    observedLatestRun.status !== latestRun?.status
-  ) {
-    setObservedLatestRun({
-      identity: listIdentityKey,
-      runId: latestRun?.runId,
-      status: latestRun?.status,
-    });
-    const previousRunId = observedLatestRun.runId;
-    if (
-      observedLatestRun.identity === listIdentityKey &&
-      latestRun &&
-      previousRunId !== undefined
-    ) {
-      if (latestRun.runId === previousRunId) {
-        if (observedLatestRun.status === "running" && latestRun.status === "interrupted") {
-          setExpandedRunIds((existing) => new Set(existing).add(latestRun.runId));
-        }
-      } else {
-        setExpandedRunIds((existing) => {
-          if (!existing.has(previousRunId)) return existing;
-          const next = new Set(existing);
-          next.delete(previousRunId);
-          return next;
-        });
-      }
-    }
-  }
-
   const preferredToolCallVisibility = useClientSettings((settings) => settings.toolCallVisibility);
   const toolCallVisibility =
     findActive && preferredToolCallVisibility === "zen" ? "hideAll" : preferredToolCallVisibility;
@@ -596,8 +559,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
   if (expandedFindRunId !== activeFindRunId) {
     setExpandedFindRunId(activeFindRunId);
     if (activeFindRunId) {
-      setExpandedRunIds((previous) =>
-        previous.has(activeFindRunId) ? previous : new Set(previous).add(activeFindRunId),
+      setCollapsedRunIds((previous) =>
+        previous.has(activeFindRunId)
+          ? new Set([...previous].filter((runId) => runId !== activeFindRunId))
+          : previous,
       );
     }
   }
@@ -635,8 +600,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     ).get(citedEntry.id);
     setCitationExpandedFor(citationRequest.key);
     if (citedRunId) {
-      setExpandedRunIds((previous) =>
-        previous.has(citedRunId) ? previous : new Set(previous).add(citedRunId),
+      setCollapsedRunIds((previous) =>
+        previous.has(citedRunId)
+          ? new Set([...previous].filter((runId) => runId !== citedRunId))
+          : previous,
       );
     }
     const citedAttempt = citedEntry.attempt;
@@ -646,10 +613,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
       );
     }
   }
-  const visibleExpandedRunIds =
-    !activeFindRunId || paintedExpandedRunIds.has(activeFindRunId)
-      ? paintedExpandedRunIds
-      : new Set(paintedExpandedRunIds).add(activeFindRunId);
+  const visibleCollapsedRunIds =
+    activeFindRunId && paintedCollapsedRunIds.has(activeFindRunId)
+      ? new Set([...paintedCollapsedRunIds].filter((runId) => runId !== activeFindRunId))
+      : paintedCollapsedRunIds;
 
   const activeFindAttemptId = activeFindMatch
     ? timelineEntries.find((entry) => entry.id === activeFindMatch.entryId)?.attempt?.id
@@ -678,7 +645,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     pendingApprovalRequestIds,
     latestRun,
     runningRunId,
-    expandedRunIds: visibleExpandedRunIds,
+    collapsedRunIds: visibleCollapsedRunIds,
     expandedAttemptIds: visibleExpandedAttemptIds,
     expandedWorkGroupIds,
     isWorking,
@@ -924,7 +891,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
           scrollOffset: element.scrollTop,
           atEnd: isAtEnd,
           disclosures: {
-            runs: paintedExpandedRunIds,
+            collapsedRuns: paintedCollapsedRunIds,
             workGroups: paintedExpandedWorkGroupIds,
             attempts: paintedExpandedAttemptIds,
             workGroupState: workGroupViewState,

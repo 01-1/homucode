@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   CommandId,
   isOrchestrationV2WorkActive,
@@ -676,6 +677,7 @@ export const make = Effect.gen(function* () {
   const start: PullRequestSyncReactor["Service"]["start"] = Effect.fn(
     "PullRequestSyncReactor.start",
   )(function* () {
+    if (!(yield* BackgroundGitEnabled)) return;
     const events = engine.streamDomainEvents;
     const stateChanges = Stream.merge(
       yield* pullRequests.subscribeStateChanges,

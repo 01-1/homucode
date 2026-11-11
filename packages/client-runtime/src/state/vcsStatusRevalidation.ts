@@ -16,7 +16,10 @@ export interface VcsStatusRevalidationTarget {
  */
 export function createVcsStatusRevalidationAtomFamily<R>(input: {
   readonly refreshStatus: AtomCommand<
-    { readonly environmentId: EnvironmentId; readonly input: { readonly cwd: string } },
+    {
+      readonly environmentId: EnvironmentId;
+      readonly input: { readonly cwd: string; readonly background?: boolean };
+    },
     R,
     unknown
   >;
@@ -33,7 +36,7 @@ export function createVcsStatusRevalidationAtomFamily<R>(input: {
       const result = await runAtomCommand(
         registry,
         input.refreshStatus,
-        { environmentId, input: { cwd } },
+        { environmentId, input: { cwd, background: true } },
         { reportFailure: false },
       );
       input.onRefreshed?.(result);

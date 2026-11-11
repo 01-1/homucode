@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "./BackgroundGit.ts";
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { assert, it, describe } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -1379,4 +1380,52 @@ it.effect("does not replay older queued branches after a new subscriber snapshot
     assert.deepEqual(yield* Queue.take(values), { refName: "latest" });
     yield* Fiber.join(subscriber);
   }).pipe(Effect.provide(layerTestFor(state)), Effect.scoped);
+});
+
+describe("background Git disabled", () => {
+  it.effect("blocks subscriptions and branch polling but preserves explicit status refresh", () => {
+    const state: Parameters<typeof layerTestFor>[0] = {
+      currentLocalStatus: { ...baseLocalStatus, isDefaultRef: true },
+      currentRemoteStatus: { ...baseRemoteStatus, behindCount: 1 },
+      remoteStatusRefreshUpstreamValues: [],
+      pullCurrentBranch: () => Effect.die("unexpected auto-pull"),
+      localStatusCalls: 0,
+      remoteStatusCalls: 0,
+      localInvalidationCalls: 0,
+      remoteInvalidationCalls: 0,
+      fileSystem: FileSystem.makeNoop({ realPath: (cwd) => Effect.succeed(cwd) }),
+    };
+    return Effect.gen(function* () {
+      const broadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+      const detailed = yield* Stream.runCollect(broadcaster.streamStatus({ cwd: "/repo" })).pipe(
+        Effect.exit,
+      );
+      const branch = yield* Stream.runCollect(
+        broadcaster.streamBranchStatus({ cwd: "/repo" }),
+      ).pipe(Effect.exit);
+      const poll = yield* broadcaster.refreshBranchStatus({ cwd: "/repo" }).pipe(Effect.exit);
+      const automatic = yield* broadcaster
+        .refreshStatus("/repo", { background: true })
+        .pipe(Effect.exit);
+      for (const result of [detailed, branch, poll, automatic]) {
+        assert.isTrue(Exit.isFailure(result));
+        if (Exit.isFailure(result)) assert.include(String(result.cause), "T3CODE_BACKGROUND_GIT=0");
+      }
+      yield* TestClock.adjust("5 minutes");
+      assert.strictEqual(state.localStatusCalls, 0);
+      assert.strictEqual(state.remoteStatusCalls, 0);
+      const status = yield* broadcaster.refreshStatus("/repo");
+      assert.strictEqual(status.refName, baseLocalStatus.refName);
+      assert.isAbove(state.localStatusCalls, 0);
+      assert.isAbove(state.remoteStatusCalls, 0);
+      assert.deepStrictEqual(state.remoteStatusRefreshUpstreamValues, [false]);
+    }).pipe(
+      Effect.provide(layerTestFor(state)),
+      Effect.provideService(BackgroundGitEnabled, false),
+      Effect.provideService(VcsStatusBroadcaster.VcsAutoPullPolicy, {
+        isEnabled: () => Effect.succeed(true),
+      }),
+      Effect.scoped,
+    );
+  });
 });

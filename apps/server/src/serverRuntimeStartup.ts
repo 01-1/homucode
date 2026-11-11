@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "./vcs/BackgroundGit.ts";
 import {
   CommandId,
   DEFAULT_MODEL,
@@ -193,6 +194,7 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   projects: ReadonlyArray<Pick<Project, "id" | "workspaceRoot" | "autoPull">>,
   settings = DEFAULT_SERVER_SETTINGS,
 ) {
+  if (!(yield* BackgroundGitEnabled)) return;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const workspaceRoots = [
     ...new Set(

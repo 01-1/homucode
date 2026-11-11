@@ -37,7 +37,10 @@ describe("createVcsStatusRevalidationAtomFamily", () => {
     const first = registry.mount(family(target));
     const second = registry.mount(family({ environmentId, cwd: "/repo" }));
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run).toHaveBeenCalledWith(expect.anything(), { environmentId, input: { cwd: "/repo" } });
+    expect(run).toHaveBeenCalledWith(expect.anything(), {
+      environmentId,
+      input: { cwd: "/repo", background: true },
+    });
 
     registry.set(connectedAtom, false);
     expect(run).toHaveBeenCalledTimes(1);

@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   NodeId,
   CommandId,
@@ -736,7 +737,8 @@ export const layer: Layer.Layer<
               ),
               Effect.flatMap((storedEvents) =>
                 Effect.gen(function* () {
-                  if (input.event.type !== "app_thread.created") return storedEvents;
+                  if (input.event.type !== "app_thread.created" || !(yield* BackgroundGitEnabled))
+                    return storedEvents;
                   const created = storedEvents.find(
                     (stored) => stored.event.type === "thread.created",
                   );

@@ -1,19 +1,22 @@
 import {
   type EnvironmentId,
+  GitManagerError,
   type VcsListRefsInput,
   type VcsListRefsResult,
   type VcsStatusResult,
   WS_METHODS,
 } from "@t3tools/contracts";
 import { applyGitStatusStreamEvent } from "@t3tools/shared/git";
+import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import {
   createEnvironmentRpcCommand,
@@ -45,6 +48,7 @@ const serverRefsRevisionAtom = Atom.family((_key: string) => Atom.make(0).pipe(A
 const OFFLINE_BRANCH_LIST_LIMIT = 100;
 const VCS_REFS_IDLE_TTL_MS = 30_000;
 const VCS_STATUS_IDLE_TTL_MS = 10_000;
+const isGitManagerError = Schema.is(GitManagerError);
 const VCS_REFS_RETRY_SCHEDULE = Schedule.exponential("1 second").pipe(
   Schedule.modifyDelay(({ duration }) =>
     Effect.succeed(Duration.min(duration, Duration.seconds(30))),
@@ -292,6 +296,45 @@ export function createVcsEnvironmentAtoms<R, E>(
       cwd: target.input.cwd,
     });
 
+  const refreshedStatus = Atom.family((_key: string) =>
+    Atom.make<VcsStatusResult | null>(null).pipe(Atom.setIdleTTL(VCS_STATUS_IDLE_TTL_MS)),
+  );
+  const statusKey = (target: {
+    readonly environmentId: EnvironmentId;
+    readonly input: { readonly cwd: string };
+  }) => JSON.stringify([target.environmentId, target.input.cwd]);
+  const liveStatus = createEnvironmentSubscriptionAtomFamily(runtime, {
+    label: "environment-data:vcs:status",
+    idleTtlMs: VCS_STATUS_IDLE_TTL_MS,
+    subscribe: (input: EnvironmentRpcInput<typeof WS_METHODS.subscribeVcsStatus>) =>
+      subscribe(WS_METHODS.subscribeVcsStatus, input).pipe(
+        Stream.mapAccum(
+          () => null as VcsStatusResult | null,
+          (current, event) => {
+            const next = applyGitStatusStreamEvent(current, event);
+            return [next, [next]] as const;
+          },
+        ),
+      ),
+  });
+  const statusFamily = Atom.family((key: string) => {
+    const target = JSON.parse(key) as Parameters<typeof liveStatus>[0];
+    return Atom.readable(
+      (get) => {
+        const live = get(liveStatus(target));
+        const refreshed = get(refreshedStatus(statusKey(target)));
+        if (AsyncResult.isFailure(live) && refreshed !== null) {
+          const error = Cause.squash(live.cause);
+          if (isGitManagerError(error) && error.operation === "backgroundGit") {
+            return AsyncResult.success(refreshed, { waiting: live.waiting });
+          }
+        }
+        return live;
+      },
+      (refresh) => refresh(liveStatus(target)),
+    ).pipe(Atom.setIdleTTL(VCS_STATUS_IDLE_TTL_MS));
+  });
+
   return {
     listRefs,
     // An uncached read for decisions that must match the repository now, not
@@ -313,20 +356,7 @@ export function createVcsEnvironmentAtoms<R, E>(
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
     }),
-    status: createEnvironmentSubscriptionAtomFamily(runtime, {
-      label: "environment-data:vcs:status",
-      idleTtlMs: VCS_STATUS_IDLE_TTL_MS,
-      subscribe: (input: EnvironmentRpcInput<typeof WS_METHODS.subscribeVcsStatus>) =>
-        subscribe(WS_METHODS.subscribeVcsStatus, input).pipe(
-          Stream.mapAccum(
-            () => null as VcsStatusResult | null,
-            (current, event) => {
-              const next = applyGitStatusStreamEvent(current, event);
-              return [next, [next]] as const;
-            },
-          ),
-        ),
-    }),
+    status: (target: Parameters<typeof liveStatus>[0]) => statusFamily(JSON.stringify(target)),
     pull: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:pull",
       tag: WS_METHODS.vcsPull,
@@ -337,9 +367,14 @@ export function createVcsEnvironmentAtoms<R, E>(
     refreshStatus: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:refresh-status",
       tag: WS_METHODS.vcsRefreshStatus,
+      onSuccess: (target, registry, result) =>
+        Effect.sync(() => registry.set(refreshedStatus(statusKey(target)), result)).pipe(
+          Effect.andThen(target.input.background ? invalidateRefs(target, registry) : Effect.void),
+        ),
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
-      onSettled: invalidateRefs,
+      onSettled: (target, registry) =>
+        target.input.background ? Effect.void : invalidateRefs(target, registry),
     }),
     createWorktree: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:create-worktree",

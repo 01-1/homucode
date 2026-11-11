@@ -157,7 +157,18 @@ export function useSourceControlActionRunning(
   );
 }
 
+function useVcsStatusRefresh(scope: SourceControlActionScope) {
+  const refresh = useAtomCommand(vcsEnvironment.refreshStatus, { reportFailure: false });
+  return () => {
+    const target = resolveScope(scope);
+    if (target !== null) {
+      void refresh({ environmentId: target.environmentId, input: { cwd: target.cwd } });
+    }
+  };
+}
+
 export function useVcsInitAction(scope: SourceControlActionScope) {
+  const refreshStatus = useVcsStatusRefresh(scope);
   const init = useAtomCommand(vcsEnvironment.init, { reportFailure: false });
   const action = async () => {
     const target = resolveScope(scope);
@@ -177,19 +188,18 @@ export function useVcsInitAction(scope: SourceControlActionScope) {
       input: { cwd: target.cwd },
     });
   };
-  return useAction({ kind: "init", label: "Initializing repository", scope, action });
+  return useAction({
+    kind: "init",
+    label: "Initializing repository",
+    scope,
+    action,
+    onSuccess: refreshStatus,
+  });
 }
 
 export function useVcsPullAction(scope: SourceControlActionScope) {
   const pull = useAtomCommand(vcsEnvironment.pull, { reportFailure: false });
-  const status = useEnvironmentQuery(
-    scope.environmentId !== null && scope.cwd !== null
-      ? vcsEnvironment.status({
-          environmentId: scope.environmentId,
-          input: { cwd: scope.cwd },
-        })
-      : null,
-  );
+  const refreshStatus = useVcsStatusRefresh(scope);
   const action = async () => {
     const target = resolveScope(scope);
     if (target === null) {
@@ -213,7 +223,7 @@ export function useVcsPullAction(scope: SourceControlActionScope) {
     label: "Pulling latest changes...",
     scope,
     action,
-    onSuccess: status.refresh,
+    onSuccess: refreshStatus,
   });
 }
 
@@ -221,14 +231,7 @@ export function useGitStackedAction(scope: SourceControlActionScope) {
   const runStackedAction = useAtomCommand(vcsActionManager.runStackedAction(scope), {
     reportFailure: false,
   });
-  const status = useEnvironmentQuery(
-    scope.environmentId !== null && scope.cwd !== null
-      ? vcsEnvironment.status({
-          environmentId: scope.environmentId,
-          input: { cwd: scope.cwd },
-        })
-      : null,
-  );
+  const refreshStatus = useVcsStatusRefresh(scope);
 
   const action = async (input: RunVcsStackedActionInput) => {
     if (resolveScope(scope) === null) {
@@ -250,7 +253,7 @@ export function useGitStackedAction(scope: SourceControlActionScope) {
     label: "Running source control action",
     scope,
     action,
-    onSuccess: status.refresh,
+    onSuccess: refreshStatus,
     managedExternally: true,
   });
 }
@@ -259,14 +262,7 @@ export function useSourceControlPublishRepositoryAction(scope: SourceControlActi
   const publishRepository = useAtomCommand(sourceControlEnvironment.publishRepository, {
     reportFailure: false,
   });
-  const status = useEnvironmentQuery(
-    scope.environmentId !== null && scope.cwd !== null
-      ? vcsEnvironment.status({
-          environmentId: scope.environmentId,
-          input: { cwd: scope.cwd },
-        })
-      : null,
-  );
+  const refreshStatus = useVcsStatusRefresh(scope);
   const action = async (input: {
     provider: SourceControlProviderKind;
     repository: string;
@@ -303,7 +299,7 @@ export function useSourceControlPublishRepositoryAction(scope: SourceControlActi
     label: "Publishing repository",
     scope,
     action,
-    onSuccess: status.refresh,
+    onSuccess: refreshStatus,
   });
 }
 

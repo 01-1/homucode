@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "./vcs/BackgroundGit.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
@@ -363,4 +364,19 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
     ).pipe(Effect.provideService(GitVcsDriver.GitVcsDriver, git));
     assert.deepStrictEqual(pulled, ["/inherited"]);
   }),
+);
+
+it.effect("background Git disabled skips startup auto-pull", () =>
+  ServerRuntimeStartup.autoPullProjects(
+    [{ id: ProjectId.make("project"), workspaceRoot: "/repo", autoPull: true }],
+    { ...DEFAULT_SERVER_SETTINGS, defaultAutoPull: true },
+  ).pipe(
+    Effect.provide(
+      Layer.mock(GitVcsDriver.GitVcsDriver)({
+        statusDetails: () => Effect.die("unexpected Git status"),
+        pullCurrentBranch: () => Effect.die("unexpected Git pull"),
+      }),
+    ),
+    Effect.provideService(BackgroundGitEnabled, false),
+  ),
 );

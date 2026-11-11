@@ -1,6 +1,7 @@
 import { vi } from "vite-plus/test";
 import {
   EnvironmentId,
+  GitManagerError,
   AuthSourceControlWriteScope,
   WS_METHODS,
   VcsProcessExitError,
@@ -392,9 +393,30 @@ describe("cached VCS refs", () => {
           environmentId: TARGET.environmentId,
           message: "pull failed after fetching refs",
         });
+        let subscriptionCount = 0;
+        let currentStatus = status({ hasWorkingTreeChanges: true });
         const client = {
           [WS_METHODS.vcsPull]: () => Effect.fail(expectedError),
-          [WS_METHODS.vcsRefreshStatus]: () => Effect.void,
+          [WS_METHODS.subscribeVcsStatus]: ({ cwd }: { readonly cwd: string }) => {
+            subscriptionCount++;
+            return Stream.fail(
+              new GitManagerError({
+                operation: "backgroundGit",
+                cwd,
+                detail: "Background Git is disabled (T3CODE_BACKGROUND_GIT=0)",
+              }),
+            );
+          },
+          [WS_METHODS.vcsRefreshStatus]: ({ background }: { readonly background?: boolean }) =>
+            background
+              ? Effect.fail(
+                  new GitManagerError({
+                    operation: "backgroundGit",
+                    cwd: "/repo",
+                    detail: "disabled",
+                  }),
+                )
+              : Effect.succeed(currentStatus),
           [WS_METHODS.gitPreparePullRequestThread]: () =>
             Effect.succeed({ branch: "feature/pr", worktreePath: null }),
         } as unknown as WsRpcProtocolClient;
@@ -413,7 +435,9 @@ describe("cached VCS refs", () => {
         ) => Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
         const environmentRegistry = EnvironmentRegistry.EnvironmentRegistry.of({
           run,
-        } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+          followStream: (_environmentId, stream) =>
+            Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        } as EnvironmentRegistry.EnvironmentRegistry["Service"]);
         const clears = yield* Ref.make(0);
         const runtime = Atom.runtime(
           Layer.merge(
@@ -430,6 +454,23 @@ describe("cached VCS refs", () => {
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (registry) =>
           Effect.sync(() => registry.dispose()),
         );
+
+        const statusTarget = { environmentId: TARGET.environmentId, input: { cwd: "/repo" } };
+        const statusAtom = atoms.status(statusTarget);
+        registry.mount(statusAtom);
+        const initial = yield* AtomRegistry.getResult(registry, statusAtom, {
+          suspendOnWaiting: true,
+        }).pipe(Effect.exit);
+        expect(initial._tag).toBe("Failure");
+        const automatic = yield* Effect.promise(() =>
+          atoms.refreshStatus.run(registry, {
+            environmentId: TARGET.environmentId,
+            input: { cwd: "/repo", background: true },
+          }),
+        );
+        expect(AsyncResult.isFailure(automatic)).toBe(true);
+        expect(yield* Ref.get(clears)).toBe(0);
+        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(0);
 
         const result = yield* Effect.promise(() =>
           atoms.pull.run(registry, {
@@ -450,8 +491,20 @@ describe("cached VCS refs", () => {
         );
 
         expect(AsyncResult.isSuccess(refreshResult)).toBe(true);
-        expect(yield* Ref.get(clears)).toBe(2);
-        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(2);
+        expect(
+          yield* AtomRegistry.getResult(registry, statusAtom, { suspendOnWaiting: true }),
+        ).toEqual(status({ hasWorkingTreeChanges: true }));
+        const beforeRefresh = subscriptionCount;
+        registry.refresh(statusAtom);
+        yield* AtomRegistry.getResult(registry, statusAtom, { suspendOnWaiting: true });
+        expect(subscriptionCount).toBe(beforeRefresh + 1);
+        currentStatus = status({ hasWorkingTreeChanges: false });
+        yield* Effect.promise(() => atoms.refreshStatus.run(registry, statusTarget));
+        expect(
+          yield* AtomRegistry.getResult(registry, statusAtom, { suspendOnWaiting: true }),
+        ).toEqual(currentStatus);
+        expect(yield* Ref.get(clears)).toBe(3);
+        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(3);
 
         const prepareResult = yield* Effect.promise(() =>
           createGitEnvironmentAtoms(runtime).preparePullRequestThread.run(registry, {
@@ -461,8 +514,8 @@ describe("cached VCS refs", () => {
         );
 
         expect(AsyncResult.isSuccess(prepareResult)).toBe(true);
-        expect(yield* Ref.get(clears)).toBe(3);
-        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(3);
+        expect(yield* Ref.get(clears)).toBe(4);
+        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(4);
       }),
     ),
   );

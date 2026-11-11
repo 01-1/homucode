@@ -41,7 +41,12 @@ vi.mock("./use-atom-command", () => ({
     },
 }));
 vi.mock("./vcs", () => ({
-  vcsEnvironment: { init: { action: "init" }, pull: { action: "pull" }, status: () => "status" },
+  vcsEnvironment: {
+    init: { action: "init" },
+    pull: { action: "pull" },
+    refreshStatus: { action: "refresh" },
+    status: () => "status",
+  },
   vcsActionManager: {
     stateAtom: () => "state",
     resetError: () => {},
@@ -200,4 +205,18 @@ describe("pull request worktree attachment permission", () => {
     expect(result._tag).toBe("Failure");
     expect(state.requests).toEqual([]);
   });
+});
+
+describe("explicit Git mutation status refresh", () => {
+  it.each(cases.filter(({ name }) => name !== "prepare"))(
+    "$name explicitly refreshes displayed status after success",
+    async ({ name, create }) => {
+      state.scopes.get(secondary)!.add(AuthSourceControlWriteScope);
+      expect((await create().run())._tag).toBe("Success");
+      expect(state.requests).toEqual([
+        { action: name, environmentId: secondary },
+        { action: "refresh", environmentId: secondary },
+      ]);
+    },
+  );
 });

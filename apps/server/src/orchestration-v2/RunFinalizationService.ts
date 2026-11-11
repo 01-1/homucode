@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import { CheckpointScopeId, ProjectId, RunId, ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -99,9 +100,16 @@ export const layerObserver = Layer.effect(
     const pullRequests = yield* PullRequestService.PullRequestService;
     const pullRequestLookups = yield* FiberMap.make<string>();
     return {
-      refreshAfterTurn: pullRequests.refreshAfterTurn,
+      refreshAfterTurn: (projectId) =>
+        Effect.flatMap(BackgroundGitEnabled, (enabled) =>
+          enabled ? pullRequests.refreshAfterTurn(projectId) : Effect.void,
+        ),
       refresh: Effect.fn("RunFinalizationService.refresh")(
         function* ({ cwd, threadId, runId }) {
+          if (!(yield* BackgroundGitEnabled)) {
+            yield* workspaceEntries.refresh(cwd);
+            return;
+          }
           const [, local] = yield* Effect.all(
             [workspaceEntries.refresh(cwd), vcsStatus.refreshLocalStatus(cwd)],
             { concurrency: "unbounded" },

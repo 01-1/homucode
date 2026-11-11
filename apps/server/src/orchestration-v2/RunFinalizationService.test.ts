@@ -1,6 +1,8 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CheckpointScopeId,
+  ProjectId,
   RunId,
   ThreadId,
   type OrchestrationV2ThreadShell,
@@ -240,4 +242,38 @@ it.effect("replaces a still-running PR lookup when a newer turn finishes", () =>
     yield* Deferred.await(secondLookedUp);
     assert.strictEqual(lookups, 2);
   }).pipe(Effect.provide(layer));
+});
+
+it.effect("background Git disabled preserves workspace refresh without Git or PR work", () => {
+  let refreshed = 0;
+  const layer = RunFinalization.layerObserver.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(WorkspaceEntries.WorkspaceEntries)({
+          refresh: () =>
+            Effect.sync(() => {
+              refreshed++;
+            }),
+        }),
+        Layer.mock(VcsStatusBroadcaster.VcsStatusBroadcaster)({
+          refreshLocalStatus: () => Effect.die("unexpected Git refresh"),
+          refreshPullRequestStatus: () => Effect.die("unexpected PR refresh"),
+        }),
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+        Layer.mock(PullRequestService.PullRequestService)({
+          refreshAfterTurn: () => Effect.die("unexpected PR invalidation"),
+        }),
+      ),
+    ),
+  );
+  return Effect.gen(function* () {
+    const observer = yield* RunFinalization.RunFinalizationObserver;
+    yield* observer.refresh({
+      cwd: "/repo",
+      threadId: ThreadId.make("thread"),
+      runId: RunId.make("run"),
+    });
+    yield* observer.refreshAfterTurn(ProjectId.make("project"));
+    assert.strictEqual(refreshed, 1);
+  }).pipe(Effect.provide(layer), Effect.provideService(BackgroundGitEnabled, false), Effect.scoped);
 });

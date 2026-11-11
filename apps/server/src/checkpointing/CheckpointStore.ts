@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import { type CheckpointRef } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -86,9 +87,13 @@ export const make = Effect.gen(function* () {
   });
 
   const isGitRepository: CheckpointStore["Service"]["isGitRepository"] = (cwd) =>
-    vcsRegistry
-      .detect({ cwd, requestedKind: "git" })
-      .pipe(Effect.map((repository) => repository !== null));
+    Effect.flatMap(BackgroundGitEnabled, (enabled) =>
+      enabled
+        ? vcsRegistry
+            .detect({ cwd, requestedKind: "git" })
+            .pipe(Effect.map((repository) => repository !== null))
+        : Effect.succeed(false),
+    );
 
   const captureCheckpoint: CheckpointStore["Service"]["captureCheckpoint"] = Effect.fn(
     "captureCheckpoint",
@@ -128,6 +133,7 @@ export const make = Effect.gen(function* () {
   const deleteCheckpointRefs: CheckpointStore["Service"]["deleteCheckpointRefs"] = Effect.fn(
     "deleteCheckpointRefs",
   )(function* (input) {
+    if (!(yield* BackgroundGitEnabled)) return;
     const checkpoints = yield* resolveCheckpoints(input.cwd);
     return yield* checkpoints.deleteCheckpointRefs(input);
   });

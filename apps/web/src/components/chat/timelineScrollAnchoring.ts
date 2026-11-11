@@ -97,7 +97,7 @@ export interface RememberedTimelinePosition {
   readonly scrollOffset: number;
   readonly atEnd: boolean;
   readonly disclosures?: {
-    readonly runs: ReadonlySet<RunId>;
+    readonly collapsedRuns?: ReadonlySet<RunId>;
     readonly workGroups: ReadonlySet<string>;
     readonly attempts: ReadonlySet<RunAttemptId>;
     readonly workGroupState: {

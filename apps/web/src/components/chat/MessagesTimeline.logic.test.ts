@@ -974,6 +974,100 @@ describe("deriveMessagesTimelineRows", () => {
     expect(assistantRow?.assistantTurnDiffSummary).toBe(assistantTurnDiffSummary);
   });
 
+  it.each([false, true])(
+    "keeps finished work and replies expanded with runless=%s through completion and the next turn",
+    (runless) => {
+      const runId = runless ? null : RunId.make("finished-run");
+      const time = (second: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, second)).toISOString();
+      const reply: TimelineEntry = {
+        id: "visible-reply",
+        kind: "message",
+        createdAt: time(1),
+        message: {
+          id: MessageId.make("visible-reply"),
+          role: "assistant",
+          text: "Here is the answer",
+          runId,
+          createdAt: time(1),
+          updatedAt: time(2),
+          streaming: false,
+        },
+      };
+      const work: TimelineEntry = {
+        id: "finished-work",
+        kind: "work",
+        createdAt: time(3),
+        entry: {
+          id: "finished-work",
+          createdAt: time(3),
+          runId,
+          label: "Checked status",
+          tone: "tool",
+          toolLifecycleStatus: "completed",
+        },
+      };
+      const final: TimelineEntry = {
+        ...reply,
+        id: "final-reply",
+        message: { ...reply.message, id: MessageId.make("final-reply"), text: "Done" },
+      };
+      const next: TimelineEntry = {
+        ...reply,
+        id: "next-prompt",
+        createdAt: time(5),
+        message: {
+          ...reply.message,
+          id: MessageId.make("next-prompt"),
+          role: "user",
+          text: "Next",
+          runId: null,
+        },
+      };
+      const prompt: TimelineEntry = {
+        ...next,
+        id: "initial-prompt",
+        createdAt: time(0),
+        message: {
+          ...next.message,
+          id: MessageId.make("initial-prompt"),
+          text: "Start",
+          inputIntent: "turn_start",
+          createdAt: time(0),
+          updatedAt: time(0),
+        },
+      };
+      for (const entries of [
+        [prompt, reply, work],
+        [prompt, reply, work, final],
+        [prompt, reply, work, final, next],
+      ]) {
+        const input = {
+          timelineEntries: entries,
+          collapsedRunIds: new Set<RunId>(),
+          isWorking: false,
+          turnDiffSummaries: [],
+          supportsConversationRollback: false,
+        };
+        const open = deriveMessagesTimelineRowsWithState(input);
+        const fold = open.rows.find((row) => row.kind === "turn-fold");
+        expect(fold).toMatchObject({ expanded: true });
+        expect(open.rows.some((row) => row.id === reply.id)).toBe(true);
+        expect(open.rows.some((row) => row.id === work.id)).toBe(true);
+        if (fold?.kind !== "turn-fold") throw new Error("Expected finished turn disclosure");
+        const closed = deriveMessagesTimelineRowsWithState(
+          { ...input, collapsedRunIds: new Set([fold.runId]) },
+          open,
+        );
+        expect(closed.rows.find((row) => row.id === fold.id)).toMatchObject({ expanded: false });
+        expect(closed.rows.some((row) => row.id === work.id)).toBe(false);
+        expect(
+          closed.rows.some((row) => row.id === (entries.includes(final) ? final.id : reply.id)),
+        ).toBe(true);
+        expect(deriveMessagesTimelineRowsWithState(input, closed).rows).toEqual(open.rows);
+      }
+    },
+  );
+
   it("folds the first assistant message and settled work before the terminal response", () => {
     const timelineEntries = [
       {

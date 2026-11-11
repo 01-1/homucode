@@ -333,3 +333,16 @@ the scope and merge strategy. GitHub rebases the remaining stack after merging.
 It can rewrite history and restart checks. If a layer fails, earlier updates remain; resolve that
 layer before retrying. GitHub may require manual conflict resolution after a lower layer is amended,
 even when its changes look independent. Stack actions require an environment that supports them.
+
+## Disable background Git
+
+Start the host with `T3CODE_BACKGROUND_GIT=0` to stop automatic Git status and branch
+subscriptions, fetch and auto-pull, PR discovery/sync/watches and auto-settlement,
+new turn checkpoints, and automatic worktree cleanup. Restart the host to apply or
+remove this override; leaving it unset keeps the normal behavior.
+
+New turns have no checkpoint diff or checkpoint undo while disabled. Branch and
+Changes displays do not update automatically. Open the Git action menu to explicitly
+refresh status and enable its actions. Explicit Git actions, status refresh,
+PR linking, manual cleanup and worktree creation remain available. Agents can still
+run `git` in their shells.

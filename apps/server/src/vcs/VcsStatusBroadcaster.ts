@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "./BackgroundGit.ts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -22,7 +23,7 @@ import type {
   VcsStatusStreamEvent,
   VcsStatusSubscriptionInput,
 } from "@t3tools/contracts";
-import { DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL } from "@t3tools/contracts";
+import { DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL, GitManagerError } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { mergeGitStatusParts } from "@t3tools/shared/git";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
@@ -224,7 +225,7 @@ export class VcsStatusBroadcaster extends Context.Service<
     ) => Effect.Effect<VcsStatusLocalResult, GitManagerServiceError>;
     readonly refreshStatus: (
       cwd: string,
-      options?: { readonly localOnly?: boolean },
+      options?: { readonly localOnly?: boolean; readonly background?: boolean },
     ) => Effect.Effect<VcsStatusResult, GitManagerServiceError>;
     readonly refreshPullRequestStatus: (
       cwd: string,
@@ -247,6 +248,14 @@ const normalizeCwd = (cwd: string) =>
 
 /** @public */
 export const make = Effect.gen(function* () {
+  const backgroundGitEnabled = yield* BackgroundGitEnabled;
+  const backgroundDisabled = (cwd: string) =>
+    new GitManagerError({
+      cwd,
+      operation: "backgroundGit",
+      detail:
+        "Background Git is disabled (T3CODE_BACKGROUND_GIT=0). Use an explicit Git action or status refresh.",
+    });
   const automaticFetchInterval = yield* VcsAutomaticFetchInterval;
   const autoPullPolicy = yield* VcsAutoPullPolicy;
   const workflow = yield* GitWorkflowService.GitWorkflowService;
@@ -536,6 +545,7 @@ export const make = Effect.gen(function* () {
   const refreshStatus: VcsStatusBroadcaster["Service"]["refreshStatus"] = Effect.fn(
     "VcsStatusBroadcaster.refreshStatus",
   )(function* (rawCwd, options) {
+    if (!backgroundGitEnabled && options?.background) return yield* backgroundDisabled(rawCwd);
     const cwd = yield* withFileSystem(normalizeCwd(rawCwd));
     const previous = options?.localOnly ? yield* getCachedStatus(cwd) : null;
     const local = yield* refreshLocalStatusCore(cwd);
@@ -559,7 +569,8 @@ export const make = Effect.gen(function* () {
     return yield* withRemoteWriteLock(
       cwd,
       Effect.gen(function* () {
-        const refreshUpstream = !Duration.isZero(yield* automaticFetchInterval);
+        const refreshUpstream =
+          backgroundGitEnabled && !Duration.isZero(yield* automaticFetchInterval);
         // Bump the PR lookup epoch after earlier remote writers have finished.
         yield* workflow.invalidateStatus(cwd);
         const remoteRead = yield* readRemoteStatus(cwd, { refreshUpstream });
@@ -763,6 +774,7 @@ export const make = Effect.gen(function* () {
   const streamStatus: VcsStatusBroadcaster["Service"]["streamStatus"] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
+        if (!backgroundGitEnabled) return yield* backgroundDisabled(input.cwd);
         const cwd = yield* withFileSystem(normalizeCwd(input.cwd));
         yield* Effect.acquireRelease(
           Effect.sync(() => {
@@ -838,6 +850,7 @@ export const make = Effect.gen(function* () {
   const refreshBranchStatus: VcsStatusBroadcaster["Service"]["refreshBranchStatus"] = Effect.fn(
     "VcsStatusBroadcaster.refreshBranchStatus",
   )(function* (input) {
+    if (!backgroundGitEnabled) return yield* backgroundDisabled(input.cwd);
     const { refName } = yield* refreshBranchStatusCore(
       yield* withFileSystem(normalizeCwd(input.cwd)),
     );
@@ -847,6 +860,7 @@ export const make = Effect.gen(function* () {
   const streamBranchStatus: VcsStatusBroadcaster["Service"]["streamBranchStatus"] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
+        if (!backgroundGitEnabled) return yield* backgroundDisabled(input.cwd);
         const cwd = yield* withFileSystem(normalizeCwd(input.cwd));
         const subscription = yield* PubSub.subscribe(branchChangesPubSub);
         const branch = yield* refreshBranchStatusCore(cwd);

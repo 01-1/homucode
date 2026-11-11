@@ -1,3 +1,4 @@
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   CommandId,
   type OrchestrationProjectShell,
@@ -385,6 +386,7 @@ export const make = Effect.gen(function* () {
   const start: ThreadPullRequestServiceV2["Service"]["start"] = Effect.fn(
     "ThreadPullRequestServiceV2.start",
   )(function* () {
+    if (!(yield* BackgroundGitEnabled)) return;
     yield* forkParked(Stream.runForEach(orchestrator.streamDomainEvents, processEvent));
     yield* forkParked(
       Effect.gen(function* () {
