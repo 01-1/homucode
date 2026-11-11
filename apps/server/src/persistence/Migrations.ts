@@ -220,6 +220,27 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
 
 const run = Migrator.make({});
 
+const schemaIsCurrent = Effect.fn("schemaIsCurrent")(function* (throughId?: number) {
+  const sql = yield* SqlClient.SqlClient;
+  const tables = yield* sql`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+  `;
+  if (tables.length === 0) return false;
+  const rows = yield* sql<{
+    readonly latest: number | null;
+    readonly legacy: number;
+  }>`SELECT MAX(migration_id) AS latest,
+       SUM(name = 'OrchestrationV2' AND migration_id IN (53, 54)) AS legacy
+     FROM effect_sql_migrations`;
+  const target = Math.max(
+    ...migrationEntries
+      .filter(([id]) => throughId === undefined || id <= throughId)
+      .map(([id]) => id),
+  );
+  const row = rows[0];
+  return row !== undefined && (row.legacy ?? 0) === 0 && (row.latest ?? 0) >= target;
+});
+
 export interface RunMigrationsOptions {
   readonly toMigrationInclusive?: number | undefined;
 }
@@ -229,14 +250,17 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
 }: RunMigrationsOptions = {}) {
   const includesV2 =
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
-  const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
+  // Both the preview reconcile and the migrator open BEGIN IMMEDIATE. Every CLI process runs this
+  // setup against the live database, so skip the write lock when a plain read proves no work:
+  // the migrator itself only runs ids above the highest recorded id.
+  const current = yield* schemaIsCurrent(toMigrationInclusive);
+  const previewMigrations = includesV2 && !current ? yield* reconcileV2PreviewMigration() : [];
   if (includesV2) {
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }
-  const executedMigrations = [
-    ...previewMigrations,
-    ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
-  ];
+  const executedMigrations = current
+    ? []
+    : [...previewMigrations, ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) }))];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
