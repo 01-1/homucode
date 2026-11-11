@@ -31,6 +31,7 @@ import type { UnsequencedProjectEvent } from "../persistence/OrchestrationEventS
 import { projectStoredEventForWire } from "./WireProjection.ts";
 import { makeRunOutcomeRecorder, type RunOutcome } from "./RunMetrics.ts";
 
+import * as WorkAssistance from "./WorkAssistance.ts";
 import * as CompletionOutbox from "./CompletionOutbox.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
@@ -165,6 +166,7 @@ export interface EventSinkV2Shape {
     EventSinkV2Error
   >;
   readonly commitCommand: (input: {
+    readonly assistanceRunId?: RunId;
     readonly commandId: CommandId;
     readonly threadId: ThreadId;
     readonly commandType: string;
@@ -243,6 +245,10 @@ const layerBase: Layer.Layer<
   EventSinkV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    yield* WorkAssistance.resetContinuity().pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+      Effect.orDie,
+    );
     const commandReceipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
     const effectOutbox = yield* EffectOutbox.EffectOutboxV2;
     const eventStore = yield* EventStore.EventStoreV2;
@@ -384,9 +390,22 @@ const layerBase: Layer.Layer<
     const applyStoredEvents =
       /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
       Effect.fnUntraced(function* (storedEvents: ReadonlyArray<OrchestrationV2StoredEvent>) {
-        yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
-          concurrency: 1,
-        });
+        yield* Effect.forEach(
+          storedEvents,
+          (stored) =>
+            projectionStore
+              .apply(stored.event)
+              .pipe(
+                Effect.andThen(
+                  WorkAssistance.observe(stored.event).pipe(
+                    Effect.provideService(SqlClient.SqlClient, sql),
+                  ),
+                ),
+              ),
+          {
+            concurrency: 1,
+          },
+        );
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {
           const now = DateTime.formatIso(yield* DateTime.now);
@@ -685,6 +704,16 @@ const layerBase: Layer.Layer<
             return { ...existing, committed: false as const, cancelledEffectIds: [] };
           }
 
+          if (input.assistanceRunId !== undefined) {
+            const state = yield* WorkAssistance.readActivity(input.threadId).pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
+            const item = state.threads[0];
+            if (!item?.eligible || item.activeRunId !== input.assistanceRunId)
+              return yield* Effect.fail(
+                `assistance_ineligible:${item?.activeRunId !== input.assistanceRunId ? "stale_run" : item?.reason}`,
+              );
+          }
           const runId = input.updateDelegatedCompletionOnlyRunId;
           const normalized = yield* normalizeEvents(
             runId === undefined
@@ -705,6 +734,18 @@ const layerBase: Layer.Layer<
             return yield* Effect.die(
               new Error(`Command ${input.commandId} produced no orchestration events.`),
             );
+          }
+          if (input.assistanceRunId !== undefined) {
+            const task = storedEvents.find((stored) => stored.event.type === "subagent.updated");
+            const childRun = storedEvents.find((stored) => stored.event.type === "run.created");
+            if (
+              task?.event.type !== "subagent.updated" ||
+              task.event.payload.childThreadId === null ||
+              childRun?.event.type !== "run.created"
+            )
+              return yield* Effect.fail("Missing native assistance child.");
+            yield* sql`INSERT INTO work_assistance_launches(target_thread_id, target_run_id, origin, task_id, child_thread_id, child_run_id)
+              VALUES (${input.threadId}, ${input.assistanceRunId}, 'pace-v1', ${task.event.payload.id}, ${task.event.payload.childThreadId}, ${childRun.event.payload.id})`;
           }
           const outcomes = yield* applyStoredEvents(storedEvents);
           yield* effectOutbox.enqueue(input.effects);

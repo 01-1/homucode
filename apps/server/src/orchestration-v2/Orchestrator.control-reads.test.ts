@@ -1,3 +1,4 @@
+import * as WorkAssistance from "./WorkAssistance.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -1666,4 +1667,312 @@ it.effect("dispatch records the command outcome and its duration", () =>
     assert.strictEqual((yield* successes).count - successesBefore, 1);
     assert.strictEqual((yield* durations).count - durationsBefore, 1);
   }).pipe(Effect.provide(layerTest)),
+);
+
+const seedAssistanceWork = Effect.fn("test.seedAssistanceWork")(function* () {
+  const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const sink = yield* EventSink.EventSinkV2;
+  const threadId = ThreadId.make("thread:assistance-target");
+  yield* orchestrator.dispatch({
+    type: "thread.create",
+    commandId: CommandId.make("assistance-create"),
+    threadId,
+    projectId: WorkAssistance.MAIN_PROJECT,
+    title: "Work",
+    modelSelection,
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+    branch: null,
+    worktreePath: null,
+    createdBy: "user",
+    creationSource: "web",
+  });
+  yield* orchestrator.dispatch({
+    type: "message.dispatch",
+    commandId: CommandId.make("assistance-start"),
+    threadId,
+    messageId: MessageId.make("assistance-message"),
+    text: "Keep working",
+    attachments: [],
+    dispatchMode: { type: "start_immediately" },
+    createdBy: "user",
+    creationSource: "web",
+  });
+  const projection = yield* projections.getThreadProjection(threadId);
+  const run = projection.runs[0]!;
+  const root = projection.nodes.find((n) => n.id === run.rootNodeId)!;
+  const providerThread = projection.providerThreads[0]!;
+  const now = yield* DateTime.now;
+  const sessionId = ProviderSessionId.make("assistance-session");
+  const running = { ...run, status: "running" as const, startedAt: now };
+  yield* sink.write({
+    events: [
+      {
+        id: EventId.make("assistance-session"),
+        threadId,
+        occurredAt: now,
+        type: "provider-session.attached",
+        payload: {
+          id: sessionId,
+          driver: adapter.driver,
+          providerInstanceId: instanceId,
+          status: "running",
+          cwd: "/repo",
+          model: modelSelection.model,
+          capabilities: CodexProviderCapabilitiesV2,
+          createdAt: now,
+          updatedAt: now,
+          lastError: null,
+        },
+      },
+      {
+        id: EventId.make("assistance-provider"),
+        threadId,
+        occurredAt: now,
+        type: "provider-thread.updated",
+        payload: { ...providerThread, status: "active", providerSessionId: sessionId },
+      },
+      {
+        id: EventId.make("assistance-run"),
+        threadId,
+        runId: run.id,
+        occurredAt: now,
+        type: "run.updated",
+        payload: running,
+      },
+      {
+        id: EventId.make("assistance-root"),
+        threadId,
+        runId: run.id,
+        occurredAt: now,
+        type: "node.updated",
+        payload: { ...root, status: "running", startedAt: now },
+      },
+      {
+        id: EventId.make("assistance-turn"),
+        threadId,
+        runId: run.id,
+        occurredAt: now,
+        type: "provider-turn.updated",
+        payload: {
+          id: ProviderTurnId.make("assistance-turn"),
+          providerThreadId: providerThread.id,
+          nodeId: root.id,
+          runAttemptId: run.activeAttemptId,
+          nativeTurnRef: null,
+          ordinal: 1,
+          status: "running",
+          startedAt: now,
+          completedAt: null,
+        },
+      },
+    ],
+  });
+  const command = {
+    type: "delegated_task.request",
+    assistance: "pace-v1",
+    commandId: WorkAssistance.assistanceCommandId(threadId, run.id),
+    parentThreadId: threadId,
+    parentRunId: run.id,
+    parentNodeId: root.id,
+    task: WorkAssistance.HELPER_BRIEF,
+    modelSelection: {
+      instanceId,
+      model: "gpt-6.1-sol",
+      options: [{ id: "reasoningEffort", value: "low" }],
+    },
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+    completionWake: "always",
+    createdBy: "system",
+    creationSource: "server",
+  } as const;
+  return { orchestrator, projections, sink, threadId, run: running, root, command };
+});
+
+it.effect(
+  "assistance continuity resets across waits, native child waits and restart with a strict threshold",
+  () =>
+    Effect.gen(function* () {
+      const { sink, threadId, run, root } = yield* seedAssistanceWork();
+      const read = WorkAssistance.readActivity(threadId).pipe(Effect.map((s) => s.threads[0]!));
+      assert.equal((yield* read).reason, "under_threshold");
+      yield* TestClock.adjust(300_000);
+      assert.isFalse((yield* read).eligible);
+      yield* TestClock.adjust(1);
+      assert.isTrue((yield* read).eligible);
+      const writeRun = (status: "waiting" | "running", id: string) =>
+        DateTime.now.pipe(
+          Effect.flatMap((now) =>
+            sink.write({
+              events: [
+                {
+                  id: EventId.make(id),
+                  type: "run.updated",
+                  threadId,
+                  runId: run.id,
+                  occurredAt: now,
+                  payload: { ...run, status },
+                },
+              ],
+            }),
+          ),
+        );
+      yield* writeRun("waiting", "assistance-waiting");
+      assert.isNull((yield* read).continuousWorkingSince);
+      yield* TestClock.adjust(600_000);
+      yield* writeRun("running", "assistance-resumed");
+      assert.equal((yield* read).reason, "under_threshold");
+      const now = yield* DateTime.now;
+      const wait = {
+        id: TurnItemId.make("assistance-native-wait"),
+        threadId,
+        runId: run.id,
+        nodeId: root.id,
+        providerThreadId: run.providerThreadId,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 25,
+        status: "running",
+        title: null,
+        startedAt: now,
+        completedAt: null,
+        updatedAt: now,
+        type: "dynamic_tool",
+        toolName: "mcp__t3_code__t3_thread_wait",
+        input: { threadId: "child" },
+      } as const;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-wait-tool"),
+            threadId,
+            occurredAt: now,
+            type: "turn-item.updated",
+            payload: wait,
+          },
+        ],
+      });
+      assert.equal((yield* read).reason, "thread_wait");
+      yield* TestClock.adjust(600_000);
+      const resumed = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-wait-result"),
+            threadId,
+            occurredAt: resumed,
+            type: "turn-item.updated",
+            payload: { ...wait, status: "completed", completedAt: resumed, updatedAt: resumed },
+          },
+        ],
+      });
+      assert.equal((yield* read).continuousWorkingSince, DateTime.formatIso(resumed));
+      yield* WorkAssistance.resetContinuity();
+      assert.equal((yield* read).reason, "unknown_continuity");
+      assert.isNull((yield* read).continuousWorkingSince);
+    }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "assistance deduplicates concurrent requests and replays after completion without provider work",
+  () =>
+    Effect.gen(function* () {
+      const { orchestrator, projections, sink, threadId, run, command } =
+        yield* seedAssistanceWork();
+      yield* TestClock.adjust(300_001);
+      const [first, second] = yield* Effect.all(
+        [orchestrator.dispatch(command), orchestrator.dispatch(command)],
+        { concurrency: 2 },
+      );
+      assert.equal(first.sequence, second.sequence);
+      assert.equal(Number(first.replayed === true) + Number(second.replayed === true), 1);
+      const parent = yield* projections.getThreadProjection(threadId);
+      assert.lengthOf(parent.subagents, 1);
+      const childId = parent.subagents[0]!.childThreadId!;
+      const child = yield* projections.getThreadProjection(childId);
+      assert.equal(child.thread.automationOrigin, "pace-v1");
+      assert.equal(child.thread.lineage.parentThreadId, threadId);
+      assert.deepEqual(child.thread.modelSelection, command.modelSelection);
+      const recursive = yield* orchestrator
+        .dispatch({
+          ...command,
+          assistance: undefined,
+          commandId: CommandId.make("assistance-recursion"),
+          parentThreadId: childId,
+          parentRunId: child.runs[0]!.id,
+          parentNodeId: child.runs[0]!.rootNodeId!,
+        })
+        .pipe(Effect.result);
+      assert.isTrue(Result.isFailure(recursive));
+      const now = yield* DateTime.now;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("assistance-ended"),
+            type: "run.updated",
+            threadId,
+            runId: run.id,
+            occurredAt: now,
+            payload: { ...run, status: "completed", completedAt: now },
+          },
+        ],
+      });
+      const replay = yield* orchestrator.dispatch(command);
+      assert.isTrue(replay.replayed);
+      assert.equal(replay.sequence, first.sequence);
+      assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 1);
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`DELETE FROM orchestration_command_receipts WHERE command_id = ${command.commandId}`;
+      const durableReplay = yield* WorkAssistance.readAssistanceReceipt(threadId, run.id);
+      assert.equal(durableReplay?.childThreadId, childId);
+      assert.isTrue(durableReplay?.replayed);
+    }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "assistance rejects mode escalation and stale-run commit races without receipts or children",
+  () =>
+    Effect.gen(function* () {
+      const { orchestrator, sink, projections, threadId, run, command } =
+        yield* seedAssistanceWork();
+      yield* TestClock.adjust(300_001);
+      const escalated = yield* orchestrator
+        .dispatch({ ...command, runtimeMode: "full-access" })
+        .pipe(Effect.result);
+      assert.isTrue(Result.isFailure(escalated));
+      assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 0);
+      const now = yield* DateTime.now;
+      const rejectedId = CommandId.make("assistance-stale-transaction");
+      const stale = yield* sink
+        .commitCommand({
+          commandId: rejectedId,
+          threadId,
+          commandType: "delegated_task.request",
+          assistanceRunId: RunId.make("other-run"),
+          acceptedAt: now,
+          events: [
+            {
+              id: EventId.make("assistance-must-rollback"),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", completedAt: now },
+            },
+          ],
+          effects: [],
+        })
+        .pipe(Effect.result);
+      assert.isTrue(Result.isFailure(stale));
+      const sql = yield* SqlClient.SqlClient;
+      assert.deepEqual(
+        yield* sql`SELECT command_id FROM orchestration_command_receipts WHERE command_id = ${rejectedId}`,
+        [],
+      );
+      assert.equal((yield* projections.getThreadProjection(threadId)).runs[0]!.status, "running");
+      assert.lengthOf((yield* projections.getThreadProjection(threadId)).subagents, 0);
+    }).pipe(Effect.provide(layerTest)),
 );

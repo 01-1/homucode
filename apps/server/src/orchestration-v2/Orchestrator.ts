@@ -1,3 +1,4 @@
+import * as WorkAssistance from "./WorkAssistance.ts";
 import { withOriginalSentFrom, withoutNonUserSentFrom } from "./MessageSentFrom.ts";
 import { isAutoreviewFindingsMessageId } from "./autoreviewBatch.ts";
 import type {
@@ -8440,6 +8441,47 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               }),
           ),
         );
+      if (parentProjection.thread.automationOrigin !== undefined) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automation helpers cannot delegate more work.",
+        });
+      }
+      if (command.assistance !== undefined) {
+        const state = yield* projectionStore.readWorkActivity(command.parentThreadId).pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestratorDispatchError({
+                commandId: command.commandId,
+                commandType: command.type,
+                cause,
+              }),
+          ),
+        );
+        const item = state.threads[0];
+        if (
+          item === undefined ||
+          !item.eligible ||
+          item.activeRunId !== command.parentRunId ||
+          command.commandId !==
+            WorkAssistance.assistanceCommandId(command.parentThreadId, command.parentRunId) ||
+          isRuntimeModeAbove(command.runtimeMode, parentProjection.thread.runtimeMode) ||
+          (parentProjection.thread.interactionMode === "plan" &&
+            command.interactionMode !== "plan") ||
+          command.modelSelection.instanceId !== "codex" ||
+          command.modelSelection.model !== "gpt-6.1-sol" ||
+          command.modelSelection.options?.length !== 1 ||
+          command.modelSelection.options[0]?.id !== "reasoningEffort" ||
+          command.modelSelection.options[0]?.value !== "low"
+        ) {
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: `assistance_ineligible:${item?.activeRunId !== command.parentRunId ? "stale_run" : (item?.reason ?? "invalid_request")}`,
+          });
+        }
+      }
       const parentRun = parentProjection.runs.find(
         (candidate) => candidate.id === command.parentRunId,
       );
@@ -8515,6 +8557,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           createdBy: command.createdBy,
           creationSource: command.creationSource,
         }),
+        ...(command.assistance === undefined ? {} : { automationOrigin: command.assistance }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
         ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),
@@ -14461,6 +14504,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         threadId: commandThreadId(command),
         commandType: command.type,
         acceptedAt,
+        ...(command.type === "delegated_task.request" && command.assistance !== undefined
+          ? { assistanceRunId: command.parentRunId }
+          : {}),
         events: plan.events,
         effects: plan.effects,
         ...(plan.cancelUnsettledEffects === undefined

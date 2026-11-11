@@ -1,4 +1,11 @@
 import {
+  ThreadActivityResult,
+  type ThreadAssistInput,
+  type ThreadAssistResult,
+} from "@t3tools/contracts";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as WorkAssistance from "../orchestration-v2/WorkAssistance.ts";
+import {
   CommandId,
   type RunId,
   isProviderAvailable,
@@ -179,6 +186,15 @@ export interface PreparedAutoreview {
 }
 
 export interface OrchestratorMcpServiceShape {
+  readonly threadActivity: (
+    scope: McpInvocationScope,
+    projectId: ProjectId,
+  ) => Effect.Effect<ThreadActivityResult, OrchestratorMcpFailure, SqlClient.SqlClient>;
+  readonly assistThread: (
+    scope: McpInvocationScope,
+    input: ThreadAssistInput,
+  ) => Effect.Effect<ThreadAssistResult, OrchestratorMcpFailure, SqlClient.SqlClient>;
+
   readonly capabilities: (
     scope: McpInvocationScope,
     input?: OrchestratorMcpCapabilitiesInput,
@@ -1091,6 +1107,30 @@ const make = Effect.gen(function* () {
           ),
         );
 
+  const assertAssistanceClient = (
+    scope: McpInvocationScope,
+    projectId: ProjectId,
+    writing: boolean,
+  ) =>
+    requireCapability(scope).pipe(
+      Effect.andThen(
+        scope.thread !== undefined ||
+          scope.client === undefined ||
+          scope.requestNamespace !== "local-cli" ||
+          scope.client.linked === true ||
+          scope.environmentId !== WorkAssistance.MAIN_ENVIRONMENT ||
+          projectId !== WorkAssistance.MAIN_PROJECT ||
+          (writing && scope.client.access === "read-only")
+          ? Effect.fail(
+              failure(
+                "capability_denied",
+                "Assistance control requires an authenticated local MAIN client.",
+              ),
+            )
+          : Effect.void,
+      ),
+    );
+
   const loadThreadRecords = <K extends ProjectionRecordField>(
     threadId: ThreadId,
     fields: ReadonlyArray<K>,
@@ -1194,6 +1234,11 @@ const make = Effect.gen(function* () {
     yield* requireCapability(scope);
     const threadScope = yield* requireThreadScope(scope, operation);
     const parent = yield* loadProjection(threadScope.thread.threadId);
+    if (
+      parent.thread.automationOrigin !== undefined &&
+      ["delegate_task", "create_threads", "autoreview"].includes(operation)
+    )
+      return yield* failure("capability_denied", "Automation helpers cannot create agents.");
     return { scope: threadScope, parent } as const;
   });
 
@@ -2423,6 +2468,140 @@ const make = Effect.gen(function* () {
         },
       };
     }),
+    threadActivity: Effect.fn("OrchestratorMcpService.threadActivity")(
+      function* (scope, projectId) {
+        yield* assertAssistanceClient(scope, projectId, false);
+        const state = yield* WorkAssistance.readActivity().pipe(
+          Effect.mapError(() =>
+            failure("orchestration_error", "Unable to read activity metadata."),
+          ),
+        );
+        return {
+          environmentId: scope.environmentId,
+          projectId,
+          observedAt: DateTime.formatIso(state.now),
+          threads: state.threads,
+        };
+      },
+    ),
+    assistThread: Effect.fn("OrchestratorMcpService.assistThread")(function* (scope, input) {
+      yield* assertAssistanceClient(scope, input.projectId, true);
+      if (
+        input.providerInstanceId !== "codex" ||
+        input.model !== "gpt-6.1-sol" ||
+        input.options.length !== 1 ||
+        input.options[0]?.id !== "reasoningEffort" ||
+        input.options[0]?.value !== "low"
+      )
+        return yield* failure(
+          "invalid_request",
+          "Assistance requires explicit codex/gpt-6.1-sol with reasoningEffort=low; no fallback.",
+        );
+      const durableReceipt = yield* WorkAssistance.readAssistanceReceipt(
+        input.threadId,
+        input.runId,
+      ).pipe(
+        Effect.mapError(() => failure("orchestration_error", "Unable to read assistance receipt.")),
+      );
+      if (durableReceipt !== null) return durableReceipt;
+      const commandId = WorkAssistance.assistanceCommandId(input.threadId, input.runId);
+      const accepted = yield* threadManagement.hasReceipt(commandId);
+      const parent = yield* loadThreadRecords(input.threadId, ["runs"]);
+      if (
+        parent.thread.projectId !== WorkAssistance.MAIN_PROJECT ||
+        parent.thread.linkOrigin !== undefined
+      )
+        return yield* failure("capability_denied", "Assistance is restricted to local MAIN work.");
+      const run = parent.runs.find((candidate) => candidate.id === input.runId);
+      if (run?.rootNodeId == null)
+        return yield* failure("invalid_request", "assistance_ineligible:stale_run");
+      let modelSelection: ModelSelection = {
+        instanceId: input.providerInstanceId,
+        model: input.model,
+        options: input.options,
+      };
+      if (!accepted) {
+        const state = yield* WorkAssistance.readActivity(input.threadId).pipe(
+          Effect.mapError(() =>
+            failure("orchestration_error", "Unable to read activity metadata."),
+          ),
+        );
+        const item = state.threads[0];
+        if (item?.activeRunId !== input.runId || !item.eligible)
+          return yield* failure(
+            "invalid_request",
+            `assistance_ineligible:${item?.activeRunId !== input.runId ? "stale_run" : item.reason}`,
+          );
+        const providers = yield* loadProviders;
+        if (
+          !providers
+            .find((provider) => provider.instanceId === input.providerInstanceId)
+            ?.models.some((model) => model.slug === input.model)
+        )
+          return yield* failure(
+            "model_unavailable",
+            "The explicitly configured assistance model is not advertised; no fallback.",
+          );
+        const resolved = yield* resolveTargetRechecking({
+          parent: {
+            thread: {
+              ...parent.thread,
+              modelSelection: { ...parent.thread.modelSelection, options: [] },
+            },
+          },
+          target: {
+            providerInstanceId: input.providerInstanceId,
+            model: TrimmedNonEmptyString.make(input.model),
+            options: input.options,
+          },
+          providers,
+        });
+        modelSelection = resolved.modelSelection;
+        yield* resolveRuntimeMode(parent.thread.runtimeMode, parent.thread.runtimeMode, resolved);
+      }
+      const result = yield* threadManagement
+        .dispatch({
+          type: "delegated_task.request",
+          assistance: "pace-v1",
+          commandId,
+          createdBy: "system",
+          creationSource: "server",
+          parentThreadId: input.threadId,
+          parentRunId: input.runId,
+          parentNodeId: run.rootNodeId,
+          task: `${WorkAssistance.HELPER_BRIEF}\nTarget thread: ${input.threadId}\nTarget run: ${input.runId}`,
+          title: "Making faster / unblocking",
+          modelSelection,
+          runtimeMode: parent.thread.runtimeMode,
+          interactionMode: parent.thread.interactionMode,
+          completionWake: "always",
+        })
+        .pipe(
+          Effect.mapError((error) =>
+            failure(
+              "invalid_request",
+              userFacingDispatchErrorMessage(error) ?? "Assistance dispatch failed.",
+            ),
+          ),
+        );
+      const task = result.storedEvents.find((stored) => stored.event.type === "subagent.updated");
+      const childRun = result.storedEvents.find((stored) => stored.event.type === "run.created");
+      if (
+        task?.event.type !== "subagent.updated" ||
+        task.event.payload.childThreadId === null ||
+        childRun?.event.type !== "run.created"
+      )
+        return yield* failure(
+          "orchestration_error",
+          "Assistance receipt is missing its native child.",
+        );
+      return {
+        taskId: task.event.payload.id,
+        childThreadId: task.event.payload.childThreadId,
+        childRunId: childRun.event.payload.id,
+        replayed: result.replayed === true,
+      };
+    }),
     delegateTask: Effect.fn("OrchestratorMcpService.delegateTask")(function* (callerScope, input) {
       const environmentId =
         input.target === undefined
@@ -2430,7 +2609,7 @@ const make = Effect.gen(function* () {
           : PeerForwarding.remoteTarget(callerScope, input.target.environmentId);
       if (input.target !== undefined && environmentId !== undefined) {
         yield* requireCapability(callerScope);
-        const scope = yield* requireThreadScope(callerScope, "delegate_task");
+        const { scope } = yield* loadThreadCaller(callerScope, "delegate_task");
         // The task's child runs as an ordinary thread there; this thread keeps the task.
         const { taskId } = yield* remoteDelegation.delegate(scope, {
           ...input,

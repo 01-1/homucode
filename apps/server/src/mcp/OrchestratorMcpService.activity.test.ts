@@ -1,3 +1,4 @@
+import * as SqlClient from "effect/sql/SqlClient";
 import {
   EnvironmentId,
   NodeId,
@@ -840,4 +841,63 @@ it("requestSecret returns the unsaved note for a declined, cancelled or timed-ou
     { status: "cancelled", note: SECRET_REQUEST_UNSAVED_NOTE.cancelled },
     { status: "timed_out", note: SECRET_REQUEST_UNSAVED_NOTE.timed_out },
   ]);
+});
+
+it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN clients before reading content", async () => {
+  const main = EnvironmentId.make("00000000-0000-4000-8000-0000000000e1");
+  const project = ProjectId.make("00000000-0000-4000-8000-0000000000a1");
+  const client = {
+    ...makeScope(),
+    environmentId: main,
+    thread: undefined,
+    requestNamespace: "local-cli",
+    client: { sessionId: "cli-1", label: "CLI", access: "full-access" as const },
+  };
+  const layer = layerOrchestratorService.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({}),
+        Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        ServerSettings.layerTest(),
+        NodeCrypto.layer,
+      ),
+    ),
+  );
+  await Effect.gen(function* () {
+    const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+    for (const scope of [
+      makeScope(),
+      { ...client, requestNamespace: "client:oauth" },
+      { ...client, client: { ...client.client, linked: true } },
+      { ...client, environmentId },
+      { ...client, thread: makeScope().thread },
+    ]) {
+      const error = yield* service.threadActivity(scope, project).pipe(Effect.flip);
+      expect(error.code).toBe("capability_denied");
+    }
+    const denied = yield* service
+      .assistThread(
+        { ...client, client: { ...client.client, access: "read-only" } },
+        {
+          projectId: project,
+          threadId: parentThreadId,
+          runId: activeRunId,
+          origin: "pace-v1",
+          providerInstanceId: parentInstanceId,
+          model: "gpt-6.1-sol",
+          options: [{ id: "reasoningEffort", value: "low" }],
+        },
+      )
+      .pipe(Effect.flip);
+    expect(denied.code).toBe("capability_denied");
+  }).pipe(
+    Effect.provide(layer),
+    Effect.provide(Layer.mock(SqlClient.SqlClient)({})),
+    Effect.runPromise,
+  );
 });

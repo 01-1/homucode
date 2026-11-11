@@ -488,6 +488,7 @@ export const OrchestrationV2Autoreviewer = Schema.Struct({
 export type OrchestrationV2Autoreviewer = typeof OrchestrationV2Autoreviewer.Type;
 
 export const OrchestrationV2AppThread = Schema.Struct({
+  automationOrigin: Schema.optional(Schema.Literal("pace-v1")),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
   projectId: ProjectId,
@@ -2148,6 +2149,7 @@ export type OrchestrationV2LatestVisibleMessageSummary =
   typeof OrchestrationV2LatestVisibleMessageSummary.Type;
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
+  automationOrigin: Schema.optional(Schema.Literal("pace-v1")),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
   projectId: ProjectId,
@@ -3438,6 +3440,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("delegated_task.request"),
+    assistance: Schema.optional(Schema.Literal("pace-v1")),
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
     parentThreadId: ThreadId,

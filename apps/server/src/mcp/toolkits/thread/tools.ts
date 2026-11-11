@@ -1,4 +1,12 @@
 import {
+  ThreadActivityInput,
+  ThreadActivityResult,
+  ThreadAssistInput,
+  ThreadAssistResult,
+} from "@t3tools/contracts";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
+import {
   OrchestratorMcpEnvironmentTarget,
   ScheduledTaskId,
   ScheduledTask,
@@ -244,7 +252,36 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const ThreadActivityTool = Tool.make("t3_thread_activity", {
+  ...commandTool,
+  parameters: ThreadActivityInput,
+  success: ThreadActivityResult,
+  description:
+    "Local authenticated MAIN automation inventory. Metadata only; includes subagents and verified continuous working time.",
+  dependencies: [
+    ...commandTool.dependencies,
+    SqlClient.SqlClient,
+    OrchestratorMcpService.OrchestratorMcpService,
+  ],
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+const ThreadAssistTool = Tool.make("t3_thread_assist", {
+  ...commandTool,
+  parameters: ThreadAssistInput,
+  success: ThreadAssistResult,
+  description:
+    "Local authenticated MAIN automation control. Start or replay the single native making-faster child for this exact eligible run.",
+  dependencies: [
+    ...commandTool.dependencies,
+    SqlClient.SqlClient,
+    OrchestratorMcpService.OrchestratorMcpService,
+  ],
+}).annotate(Tool.Destructive, true);
+
 export const ThreadToolkit = Toolkit.make(
+  ThreadActivityTool,
+  ThreadAssistTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadConfigureTool,

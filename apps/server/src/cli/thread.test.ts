@@ -540,3 +540,110 @@ it.effect(
       ),
     ),
 );
+
+it.effect(
+  "assistance CLI uses metadata and exact-run native control without reading messages",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-assistance-cli-" });
+      const projectId = ProjectId.make("00000000-0000-4000-8000-0000000000a1");
+      yield* persistServerRuntimeState({
+        path: path.join(baseDir, "userdata", "server-runtime.json"),
+        state: yield* makePersistedServerRuntimeState({
+          config: { host: "127.0.0.1", devUrl: undefined },
+          port: 3773,
+        }),
+      });
+      const calls: Array<{ tool: string; args: Readonly<Record<string, unknown>> }> = [];
+      using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
+        Effect.succeed({
+          call: (tool, args) => {
+            calls.push({ tool, args });
+            if (tool === "t3_project_list")
+              return Effect.succeed({
+                structuredContent: {
+                  projects: [{ id: projectId, title: "MAIN", workspaceRoot: "/repo" }],
+                  nextCursor: null,
+                },
+              });
+            if (tool === "t3_thread_activity")
+              return Effect.succeed({
+                structuredContent: {
+                  environmentId: "00000000-0000-4000-8000-0000000000e1",
+                  projectId,
+                  observedAt: "2026-11-11T06:13:00.000Z",
+                  threads: [],
+                },
+              });
+            if (tool === "t3_thread_assist")
+              return Effect.succeed({
+                structuredContent: {
+                  taskId: "task-1",
+                  childThreadId: "child-1",
+                  childRunId: "child-run-1",
+                  replayed: false,
+                },
+              });
+            return Effect.die(`Unexpected content or other tool: ${tool}`);
+          },
+        }),
+      );
+      yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+        "activity",
+        "--project",
+        projectId,
+        "--json",
+        "--base-dir",
+        baseDir,
+      ]);
+      yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+        "assist",
+        threadId,
+        "--run",
+        runId,
+        "--project",
+        projectId,
+        "--origin",
+        "pace-v1",
+        "--provider",
+        "codex",
+        "--model",
+        "gpt-6.1-sol",
+        "--option",
+        "reasoningEffort=low",
+        "--json",
+        "--base-dir",
+        baseDir,
+      ]);
+      assert.deepEqual(
+        calls.filter((call) => call.tool !== "t3_project_list"),
+        [
+          { tool: "t3_thread_activity", args: { projectId } },
+          {
+            tool: "t3_thread_assist",
+            args: {
+              projectId,
+              threadId,
+              runId,
+              origin: "pace-v1",
+              providerInstanceId: "codex",
+              model: "gpt-6.1-sol",
+              options: [{ id: "reasoningEffort", value: "low" }],
+            },
+          },
+        ],
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          NetService.layer,
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+        ),
+      ),
+    ),
+);

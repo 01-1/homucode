@@ -1,3 +1,4 @@
+import { ThreadActivityResult, ThreadAssistResult } from "@t3tools/contracts";
 import {
   OrchestratorMcpFailure,
   OrchestratorMcpCapabilitiesResult,
@@ -1024,10 +1025,78 @@ export const pendingRequestCommand = Command.make("pending-request").pipe(
   Command.withSubcommands([pendingListCommand, pendingReadCommand, pendingRespondCommand]),
 );
 
+const threadActivityCommand = Command.make("activity", {
+  ...projectLocationFlags,
+  project: Flag.String("project"),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription(
+    "Read MAIN activity metadata, including subagents; never reads messages.",
+  ),
+  Command.withHandler((flags) =>
+    withThreadTools(
+      flags,
+      Effect.fn("cli.thread.activity")(function* (tools) {
+        const project = yield* resolveProject(tools, flags.project);
+        const result = yield* tools.call(
+          "t3_thread_activity",
+          { projectId: project.id },
+          ThreadActivityResult,
+        );
+        yield* printJson(result);
+      }),
+    ).pipe(reportThreadErrors),
+  ),
+);
+
+const threadAssistCommand = Command.make("assist", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  run: Flag.String("run"),
+  project: Flag.String("project"),
+  origin: Flag.Literals("origin", ["pace-v1"]),
+  provider: Flag.String("provider"),
+  model: Flag.String("model"),
+  option: Flag.String("option").pipe(Flag.atLeast(0)),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription(
+    "Start or replay one native making-faster child for an exact eligible MAIN run.",
+  ),
+  Command.withHandler((flags) =>
+    withThreadTools(
+      flags,
+      Effect.fn("cli.thread.assist")(function* (tools) {
+        const project = yield* resolveProject(tools, flags.project);
+        const threadId = yield* decodeThreadId(flags.thread);
+        const options = yield* parseLaunchOptions(flags.option);
+        const result = yield* tools.call(
+          "t3_thread_assist",
+          {
+            projectId: project.id,
+            threadId,
+            runId: yield* Schema.decodeUnknownEffect(RunId)(flags.run).pipe(
+              Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --run id." })),
+            ),
+            origin: flags.origin,
+            providerInstanceId: flags.provider,
+            model: flags.model,
+            options,
+          },
+          ThreadAssistResult,
+        );
+        yield* printJson(result);
+      }),
+    ).pipe(reportThreadErrors),
+  ),
+);
+
 export const threadCommand = Command.make("thread").pipe(
   Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
     threadListCommand,
+    threadActivityCommand,
+    threadAssistCommand,
     threadStartCommand,
     threadCapabilitiesCommand,
     threadSendCommand,

@@ -237,6 +237,11 @@ export const startsThreads = <P, A, E, R>(
   linked: "stamped" | { readonly refused: string },
 ) => {
   const started = Effect.fn("McpToolAccess.started")(function* (caller: Caller, params: P) {
+    if (caller.caller?.automationOrigin !== undefined)
+      return yield* new OrchestratorMcpFailure({
+        code: "capability_denied",
+        message: "Automation helpers cannot create agents.",
+      });
     const requested = modes(params);
     return {
       runtimeMode: yield* resolveRuntimeMode(caller.limits.runtimeMode, requested.runtimeMode),
@@ -251,6 +256,11 @@ export const startsThreads = <P, A, E, R>(
     (params: P) =>
       Effect.gen(function* () {
         const caller = yield* writingCaller;
+        if (caller.caller?.automationOrigin !== undefined)
+          return yield* new OrchestratorMcpFailure({
+            code: "capability_denied",
+            message: "Automation helpers cannot create agents.",
+          });
         if (linked !== "stamped") yield* assertNotLinked(caller, linked.refused);
         return yield* handle(params, yield* started(caller, params));
       }),
