@@ -9,6 +9,7 @@ import {
   OrchestratorMcpThreadWaitResult,
   ProjectId,
   RunId,
+  MessageId,
   RuntimeRequestId,
   ProviderUserInputAnswers,
   OrchestrationV2DispatchCommandResult,
@@ -165,6 +166,7 @@ const ProjectListResult = Schema.Struct({
 });
 
 const ThreadLaunchResult = Schema.Struct({
+  messageId: Schema.optional(Schema.NullOr(MessageId)),
   threadId: ThreadId,
   projectId: ProjectId,
   runId: Schema.NullOr(RunId),

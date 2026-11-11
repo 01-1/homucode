@@ -140,7 +140,15 @@ const clientLaunchHarness = (input: {
               title: launch.title,
               modelSelection: launch.modelSelection,
             },
-            runs: [],
+            runs: launch.initialMessage
+              ? [
+                  {
+                    id: `run:${launch.threadId}`,
+                    userMessageId: launch.initialMessage.messageId,
+                    status: "queued",
+                  },
+                ]
+              : [],
           },
           resumed: false,
         } as unknown as ThreadLaunch.ThreadLaunchResult);
@@ -354,8 +362,13 @@ it.effect("a launch retried with the same clientRequestId replays the first one"
         })
         .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
-    yield* launch("fix-1");
-    yield* launch("fix-1");
+    const first = yield* launch("fix-1");
+    const retry = yield* launch("fix-1");
+    expect(first.at(-1)?.result).toMatchObject({
+      messageId: launched[0]?.initialMessage?.messageId,
+      runId: `run:${launched[0]?.threadId}`,
+    });
+    expect(retry.at(-1)?.result).toEqual(first.at(-1)?.result);
     yield* launch("fix-2");
     yield* launch(undefined);
     yield* launch(undefined);
@@ -388,7 +401,8 @@ it.effect("a launch key of any length or content gives a short id and never a de
         .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
     // Percent-encoding would grow this six times; scratch folders are named from the id.
-    yield* launch("\u00e9".repeat(256));
+    const idle = yield* launch("\u00e9".repeat(256));
+    expect(idle.at(-1)?.result).toMatchObject({ messageId: null, runId: null });
     expect(launched.map((input) => input.commandId)).toEqual([
       expect.stringMatching(/^mcp:launch:[0-9a-f]{64}$/),
     ]);

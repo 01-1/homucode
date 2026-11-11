@@ -95,7 +95,12 @@ it.effect(
                 });
                 assert.equal(args.clientRequestId, "launch-retry-1");
                 return Effect.succeed({
-                  structuredContent: { threadId, projectId: args.projectId, runId: null },
+                  structuredContent: {
+                    threadId,
+                    projectId: args.projectId,
+                    messageId: "native-message",
+                    runId: "native-run",
+                  },
                 });
               default:
                 return Effect.die(`unexpected ${tool} call`);
@@ -136,9 +141,14 @@ it.effect(
           Effect.provideService(HostProcess.HomeDirectory, home),
           Effect.provideService(HostProcess.WorkingDirectory, cwd),
         );
-        assert.strictEqual(
-          (yield* TestConsole.logLines).at(-1),
-          JSON.stringify({ threadId, projectId: expectedProjectId, runId: null }),
+        assert.deepStrictEqual(
+          JSON.parse((yield* TestConsole.logLines).at(-1)!),
+          {
+            messageId: "native-message",
+            threadId,
+            projectId: expectedProjectId,
+            runId: "native-run",
+          },
           identifier,
         );
       }
