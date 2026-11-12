@@ -122,7 +122,7 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* (
   );
   const storedProject = Atom.make<EnvironmentProject | null>(null);
   const commands = createProjectEnvironmentAtoms(runtime, {
-    devicePins,
+    ...(devicePins === undefined ? {} : { devicePins }),
     projectAtom: (ref: ScopedProjectRef) =>
       ref.environmentId === ENVIRONMENT_ID && ref.projectId === PROJECT_ID
         ? storedProject

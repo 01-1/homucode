@@ -109,26 +109,28 @@ export function createDevicePins(
       key: (target: { environmentId: EnvironmentId; projectId: ProjectId; pinned: boolean }) =>
         target.environmentId,
     },
-    execute: (target, registry) =>
-      Effect.gen(function* () {
-        const loaded = yield* AtomRegistry.getResult(registry, storedAtom(target.environmentId), {
-          suspendOnWaiting: true,
-        });
-        const current = registry.get(confirmedAtom(target.environmentId)) ?? loaded;
-        const next = {
-          projects: {
-            ...current.projects,
-            [target.projectId]: target.pinned
-              ? (current.projects[target.projectId] ?? DateTime.formatIso(DateTime.nowUnsafe()))
-              : null,
-          },
-        };
-        yield* Effect.tryPromise({
-          try: () => storage.save(target.environmentId, next),
-          catch: (cause) => new DevicePinsPersistenceError({ cause }),
-        });
-        registry.set(confirmedAtom(target.environmentId), next);
-      }),
+    execute: Effect.fn("DevicePins.setProject")(function* (
+      target: { environmentId: EnvironmentId; projectId: ProjectId; pinned: boolean },
+      registry: AtomRegistry.AtomRegistry,
+    ) {
+      const loaded = yield* AtomRegistry.getResult(registry, storedAtom(target.environmentId), {
+        suspendOnWaiting: true,
+      });
+      const current = registry.get(confirmedAtom(target.environmentId)) ?? loaded;
+      const next = {
+        projects: {
+          ...current.projects,
+          [target.projectId]: target.pinned
+            ? (current.projects[target.projectId] ?? DateTime.formatIso(DateTime.nowUnsafe()))
+            : null,
+        },
+      };
+      yield* Effect.tryPromise({
+        try: () => storage.save(target.environmentId, next),
+        catch: (cause) => new DevicePinsPersistenceError({ cause }),
+      });
+      registry.set(confirmedAtom(target.environmentId), next);
+    }),
   });
   const wrapSnapshot = (source: typeof sourceSnapshotAtom) =>
     Atom.family((environmentId: EnvironmentId) => {

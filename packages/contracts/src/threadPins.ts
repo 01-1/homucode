@@ -11,10 +11,10 @@ export type ThreadPin = typeof ThreadPin.Type;
 export const DeviceThreadPins = Schema.Record(Schema.String, Schema.NullOr(ThreadPin));
 
 interface ThreadPins {
-  readonly pinnedAt?: DateTime.Utc | null;
-  readonly pinOrderKey?: string | null;
-  readonly legacyPin?: ThreadPin | null;
-  readonly devicePins?: typeof DeviceThreadPins.Type;
+  readonly pinnedAt?: DateTime.Utc | null | undefined;
+  readonly pinOrderKey?: string | null | undefined;
+  readonly legacyPin?: ThreadPin | null | undefined;
+  readonly devicePins?: typeof DeviceThreadPins.Type | undefined;
 }
 
 export function legacyThreadPin(thread: ThreadPins): ThreadPin | null {

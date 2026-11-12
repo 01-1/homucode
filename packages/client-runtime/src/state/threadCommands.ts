@@ -3,7 +3,7 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
-import type { DevicePins } from "./devicePins.ts";
+import { DevicePinsPersistenceError, type DevicePins } from "./devicePins.ts";
 import {
   WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
@@ -197,7 +197,10 @@ export function createThreadEnvironmentAtoms<R, E>(
           ? pinThread(input)
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
-            }).pipe(Effect.flatMap((deviceId) => pinThread({ ...input, deviceId }))),
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => pinThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -208,7 +211,10 @@ export function createThreadEnvironmentAtoms<R, E>(
           ? unpinThread(input)
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
-            }).pipe(Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId }))),
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -231,7 +237,10 @@ export function createThreadEnvironmentAtoms<R, E>(
           ? reorderPinnedThread(input)
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
-            }).pipe(Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId }))),
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -248,7 +257,10 @@ export function createThreadEnvironmentAtoms<R, E>(
           ? reorderActiveThread(input)
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
-            }).pipe(Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId }))),
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
