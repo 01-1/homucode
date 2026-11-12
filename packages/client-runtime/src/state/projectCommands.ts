@@ -74,10 +74,10 @@ export class ScratchProjectNotLoadedError extends Schema.TaggedError<ScratchProj
   }
 }
 
-export function createProjectEnvironmentAtoms<R, E>(
+export function createProjectEnvironmentAtoms<R, E, IdentityError = never>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   options: {
-    readonly devicePins?: DevicePins;
+    readonly devicePins?: DevicePins<IdentityError>;
     readonly projectAtom: (ref: ScopedProjectRef) => Atom.Atom<EnvironmentProject | null>;
   },
 ) {

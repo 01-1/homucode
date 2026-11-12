@@ -52,11 +52,11 @@ export function createDeviceIdentityAtom<R, E>(runtime: Atom.AtomRuntime<R, E>) 
     .pipe(Atom.keepAlive);
 }
 
-export function createDevicePins(
+export function createDevicePins<IdentityError>(
   sourceSnapshotAtom: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
-  deviceIdAtom: Atom.Atom<AsyncResult.AsyncResult<string, unknown>>,
+  deviceIdAtom: Atom.Atom<AsyncResult.AsyncResult<string, IdentityError>>,
   storage: DevicePinsStorage,
 ) {
   const runtime = Atom.runtime(Layer.empty);
@@ -179,4 +179,4 @@ export function createDevicePins(
   return { stateAtom, deviceIdAtom, wrapSnapshot, setProject };
 }
 
-export type DevicePins = ReturnType<typeof createDevicePins>;
+export type DevicePins<IdentityError = never> = ReturnType<typeof createDevicePins<IdentityError>>;

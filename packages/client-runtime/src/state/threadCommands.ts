@@ -72,10 +72,10 @@ export type LoadEarlierThreadHistoryInput = {
   readonly workAnchorId?: string;
 };
 
-export function createThreadEnvironmentAtoms<R, E>(
+export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
-  devicePins?: DevicePins,
+  devicePins?: DevicePins<IdentityError>,
 ) {
   const scheduler = createAtomCommandScheduler();
   const concurrency = {
