@@ -211,7 +211,7 @@ const recordEvent = Effect.fn("WorkAssistance.recordEvent")(function* (
       "subagent",
     ].includes(event.payload.type)
   )
-    return "none" as const;
+    return { type: "none" } as const;
   if (
     !event.type.startsWith("thread.") &&
     !event.type.startsWith("provider-session.") &&
@@ -225,7 +225,7 @@ const recordEvent = Effect.fn("WorkAssistance.recordEvent")(function* (
       "turn-item.updated",
     ].includes(event.type)
   )
-    return "none" as const;
+    return { type: "none" } as const;
   const sql = yield* SqlClient.SqlClient;
   // A session can own multiple native child threads. Re-evaluate them together on
   // attachment changes; a retained session record alone does not prove liveness.
@@ -244,7 +244,9 @@ const recordEvent = Effect.fn("WorkAssistance.recordEvent")(function* (
     yield* sql`UPDATE work_assistance_continuity SET continuous_working_since = NULL
       WHERE provider_session_id = ${event.type === "provider-session.detached" ? event.payload.providerSessionId : event.payload.id}`;
   }
-  return sessionEvent ? ("all" as const) : event.threadId;
+  return sessionEvent
+    ? ({ type: "all" } as const)
+    : ({ type: "thread", threadId: event.threadId } as const);
 });
 
 const refreshActivity = Effect.fn("WorkAssistance.refreshActivity")(function* (
@@ -285,8 +287,8 @@ export const observeBatch = Effect.fn("WorkAssistance.observeBatch")(function* (
   const threadIds = new Set<ThreadId>();
   for (const event of events) {
     const scope = yield* recordEvent(event);
-    if (scope === "all") all = true;
-    else if (scope !== "none") threadIds.add(scope);
+    if (scope.type === "all") all = true;
+    else if (scope.type === "thread") threadIds.add(scope.threadId);
   }
   if (all) {
     yield* refreshActivity(undefined);
