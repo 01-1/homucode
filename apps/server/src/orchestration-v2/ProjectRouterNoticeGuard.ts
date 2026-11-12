@@ -29,8 +29,6 @@ export const validate = Effect.fn("ProjectRouterNoticeGuard.validate")(function*
     WHERE thread_id = ${target.threadId}
       AND json_extract(payload_json, '$.projectId') = ${target.projectId}
       AND json_extract(payload_json, '$.deletedAt') IS NULL
-      AND json_extract(payload_json, '$.archivedAt') IS NULL
-      AND json_extract(payload_json, '$.settledAt') IS NULL
-      AND COALESCE(json_extract(payload_json, '$.settledOverride'), '') <> 'settled'`;
+      AND json_extract(payload_json, '$.archivedAt') IS NULL`;
   if (rows.length !== 1) return yield* new TargetChanged({});
 });

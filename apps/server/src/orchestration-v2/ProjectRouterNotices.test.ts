@@ -344,7 +344,65 @@ it.effect("v1 history and actual native import command are excluded while genuin
   assert.strictEqual(yield* f.store.cursor, genuine.sequence);
 }).pipe(Effect.provide(testLayer)));
 
-for (const field of ["projectId", "archivedAt", "deletedAt", "settledAt"] as const) {
+for (const settlement of ["before preflight", "at receipt reservation"] as const) {
+  it.effect(`registered Router settled ${settlement} accepts one original notice through real normal send`, () => Effect.gen(function* () {
+    const f = yield* fixture;
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    yield* f.service.tick;
+    const created = yield* createThread(ThreadId.make(`settled-${settlement}`));
+    yield* f.service.capture(created);
+    const beforeState = yield* f.sql`SELECT * FROM project_router_notice_state`;
+    if (settlement === "before preflight") {
+      yield* orchestrator.dispatch({
+        type: "thread.settle", commandId: CommandId.make("settle-registered-router"), threadId: router,
+      });
+      const target = yield* f.native.getTarget(router);
+      assert.isTrue(target !== null && target.settledAt !== null);
+      assert.strictEqual(target?.settledOverride, "settled");
+    } else {
+      // After both service and sendToThread preflight, inside the normal SQL
+      // transaction. Only the initial receipt reservation injects settlement.
+      yield* f.sql`CREATE TABLE fixture_router_settlement (id INTEGER PRIMARY KEY)`;
+      yield* f.sql.unsafe(`CREATE TRIGGER router_settlement BEFORE INSERT ON orchestration_command_receipts
+        WHEN NEW.command_id LIKE 'project-router-notice:v1:%'
+          AND NOT EXISTS (SELECT 1 FROM orchestration_command_receipts WHERE command_id = NEW.command_id)
+        BEGIN INSERT INTO fixture_router_settlement(id) VALUES (1);
+          UPDATE orchestration_v2_projection_threads
+          SET payload_json = json_set(payload_json, '$.settledAt', '2026-11-12T07:06:05.914Z', '$.settledOverride', 'settled')
+          WHERE thread_id = 'router-p'; END`);
+    }
+    yield* f.service.tick;
+    const notice = (yield* f.rows)[0]!;
+    assert.strictEqual(notice.accepted, 1);
+    assert.isNull(notice.last_error);
+    assert.isTrue(Store.isBound(notice));
+    if (!Store.isBound(notice)) return yield* Effect.die("Missing pinned notice");
+    const ids = Store.identities(created.event.id, router);
+    assert.strictEqual(notice.event_id, created.event.id);
+    assert.strictEqual(notice.router_thread_id, router);
+    assert.strictEqual(notice.command_id, ids.commandId);
+    assert.strictEqual(notice.message_id, ids.messageId);
+    assert.strictEqual(yield* f.native.reconcile(notice), "accepted");
+    if (settlement === "at receipt reservation") {
+      assert.strictEqual((yield* f.sql`SELECT id FROM fixture_router_settlement`).length, 1);
+    }
+    const projection = yield* orchestrator.getThreadProjection(router);
+    if (settlement === "before preflight") {
+      assert.isNull(projection.thread.settledOverride);
+      assert.isNull(projection.thread.settledAt);
+    }
+    const messages = projection.messages.filter((message) => message.id === notice.message_id);
+    assert.strictEqual(messages.length, 1);
+    assert.strictEqual(messages[0]?.text, notice.body);
+    assert.strictEqual(projection.runs.filter((run) => run.userMessageId === notice.message_id).length, 1);
+    yield* f.service.capture(created);
+    yield* f.service.tick;
+    assert.deepStrictEqual(yield* f.rows, [notice]);
+    assert.deepStrictEqual(yield* f.sql`SELECT * FROM project_router_notice_state`, beforeState);
+  }).pipe(Effect.provide(testLayer)));
+}
+
+for (const field of ["projectId", "archivedAt", "deletedAt"] as const) {
   it.effect(`real normal send propagates transaction guard; ${field} race rolls back receipt/events/effects/state`, () => Effect.gen(function* () {
     const f = yield* fixture;
     yield* f.service.tick;
