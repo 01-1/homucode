@@ -192,13 +192,23 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     pin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:pin",
-      execute: (input: Parameters<typeof pinThread>[0], registry) => devicePins === undefined ? pinThread(input) : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, { suspendOnWaiting: true }).pipe(Effect.flatMap((deviceId) => pinThread({ ...input, deviceId }))),
+      execute: (input: Parameters<typeof pinThread>[0], registry) =>
+        devicePins === undefined
+          ? pinThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(Effect.flatMap((deviceId) => pinThread({ ...input, deviceId }))),
       scheduler,
       concurrency,
     }),
     unpin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:unpin",
-      execute: (input: Parameters<typeof unpinThread>[0], registry) => devicePins === undefined ? unpinThread(input) : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, { suspendOnWaiting: true }).pipe(Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId }))),
+      execute: (input: Parameters<typeof unpinThread>[0], registry) =>
+        devicePins === undefined
+          ? unpinThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId }))),
       scheduler,
       concurrency,
     }),
@@ -216,7 +226,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     reorderPin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:reorder-pin",
-      execute: (input: Parameters<typeof reorderPinnedThread>[0], registry) => devicePins === undefined ? reorderPinnedThread(input) : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, { suspendOnWaiting: true }).pipe(Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId }))),
+      execute: (input: Parameters<typeof reorderPinnedThread>[0], registry) =>
+        devicePins === undefined
+          ? reorderPinnedThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId }))),
       scheduler,
       concurrency,
     }),
@@ -228,7 +243,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     reorderActive: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:reorder-active",
-      execute: (input: Parameters<typeof reorderActiveThread>[0], registry) => devicePins === undefined ? reorderActiveThread(input) : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, { suspendOnWaiting: true }).pipe(Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId }))),
+      execute: (input: Parameters<typeof reorderActiveThread>[0], registry) =>
+        devicePins === undefined
+          ? reorderActiveThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId }))),
       scheduler,
       concurrency,
     }),
@@ -397,7 +417,9 @@ export function createThreadEnvironmentAtoms<R, E>(
       concurrency,
     }),
   };
-  const optimistic = createOptimisticThreadLifecycle(devicePins?.wrapSnapshot(snapshotAtom) ?? snapshotAtom);
+  const optimistic = createOptimisticThreadLifecycle(
+    devicePins?.wrapSnapshot(snapshotAtom) ?? snapshotAtom,
+  );
   return {
     ...commands,
     snapshotAtom: optimistic.snapshotAtom,

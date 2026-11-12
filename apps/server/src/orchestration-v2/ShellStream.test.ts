@@ -5,7 +5,12 @@ import type {
   OrchestrationV2ShellStreamItem,
   OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
-import { ProjectId, ProviderInstanceId, ThreadId, updateThreadPinMembership } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  updateThreadPinMembership,
+} from "@t3tools/contracts";
 import type * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -183,7 +188,11 @@ describe("omitIdleSubagentShells", () => {
       row("grandchild", "middle"),
       // Idle, but pinned children get a sidebar row.
       row("pinned", "root", { pinnedAt: DateTime.makeUnsafe(0) }),
-      row("device-pinned", "root", updateThreadPinMembership({}, "pin", DateTime.makeUnsafe(0), "phone", "a")),
+      row(
+        "device-pinned",
+        "root",
+        updateThreadPinMembership({}, "pin", DateTime.makeUnsafe(0), "phone", "a"),
+      ),
     ];
     expect(omitIdleSubagentShells(threads).map((thread) => thread.id)).toEqual([
       "root",

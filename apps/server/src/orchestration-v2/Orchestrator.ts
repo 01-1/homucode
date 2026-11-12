@@ -3539,8 +3539,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
     // Reject reorder after unpin so a raced request cannot restore a cleared pin.
-    if (command.type === "thread.pin.reorder" &&
-      (command.deviceId === undefined ? legacyThreadPin(thread) : threadPinForDevice(thread, command.deviceId)) === null) {
+    if (
+      command.type === "thread.pin.reorder" &&
+      (command.deviceId === undefined
+        ? legacyThreadPin(thread)
+        : threadPinForDevice(thread, command.deviceId)) === null
+    ) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
         commandType: command.type,
@@ -3549,7 +3553,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     if (
       command.type === "thread.active.reorder" &&
-      ((command.deviceId === undefined ? thread.pinnedAt != null : threadPinForDevice(thread, command.deviceId) !== null) || thread.settledOverride === "settled")
+      ((command.deviceId === undefined
+        ? thread.pinnedAt != null
+        : threadPinForDevice(thread, command.deviceId) !== null) ||
+        thread.settledOverride === "settled")
     ) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
@@ -3899,7 +3906,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.pin": {
-          const currentPin = command.deviceId === undefined ? legacyThreadPin(thread) : threadPinForDevice(thread, command.deviceId);
+          const currentPin =
+            command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId);
           const alreadyPinned = currentPin !== null;
           const promotes = thread.settledOverride === "settled" || thread.snoozedUntil != null;
           return {
@@ -3916,7 +3926,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.unpin": {
-          const alreadyUnpinned = (command.deviceId === undefined ? legacyThreadPin(thread) : threadPinForDevice(thread, command.deviceId)) === null;
+          const alreadyUnpinned =
+            (command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId)) === null;
           return {
             ...thread,
             ...updateThreadPinMembership(thread, "unpin", now, command.deviceId),
@@ -3924,11 +3937,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.pin.reorder": {
-          const currentPin = command.deviceId === undefined ? legacyThreadPin(thread) : threadPinForDevice(thread, command.deviceId);
+          const currentPin =
+            command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId);
           const keyUnchanged = currentPin?.orderKey === command.orderKey;
           return {
             ...thread,
-            ...updateThreadPinMembership(thread, "reorder", now, command.deviceId, command.orderKey),
+            ...updateThreadPinMembership(
+              thread,
+              "reorder",
+              now,
+              command.deviceId,
+              command.orderKey,
+            ),
             updatedAt: keyUnchanged ? thread.updatedAt : now,
           };
         }
@@ -10324,15 +10346,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // before cancelling/reassigning a queued message or interrupting compaction.
     if (String(command.commandId).startsWith("server:auto-steer:")) {
       if (queuedRunsInDeliveryOrder(projection)[0]?.id !== queuedRun.id)
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion no longer targets the queue head." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion no longer targets the queue head.",
+        });
       if (projection.runs.some((run) => run.status === "queued" && run.queueHeld === true))
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion cannot consume a held queue." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion cannot consume a held queue.",
+        });
       // Optional on214; Sid's producer persists this opt-in when composed.
       if ((queuedRun as typeof queuedRun & { readonly autoSteer?: boolean }).autoSteer !== true)
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion requires the queued message's auto-steer opt-in." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion requires the queued message's auto-steer opt-in.",
+        });
     }
     const queuedRootNode =
       queuedRun.rootNodeId === null

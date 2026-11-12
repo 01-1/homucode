@@ -2259,48 +2259,112 @@ it.effect("assistance transient locked refusal permits the same identity after w
   }).pipe(Effect.provide(layerTest)),
 );
 
-it.effect("persists device pin memberships and union protection through shell reads and global settle", () =>
-  Effect.gen(function* () {
-    const orchestrator = yield* Orchestrator.OrchestratorV2;
-    const projections = yield* ProjectionStore.ProjectionStoreV2;
-    const threadId = ThreadId.make("thread:device-pins");
-    yield* orchestrator.dispatch({
-      type: "thread.create",
-      commandId: CommandId.make("create-device-pins"),
-      threadId,
-      projectId: ProjectId.make("project:device-pins"),
-      title: "Device pins",
-      modelSelection,
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      branch: null,
-      worktreePath: null,
-      createdBy: "user",
-      creationSource: "web",
-    });
-    for (const deviceId of ["phone", "desktop"]) {
-      yield* orchestrator.dispatch({ type: "thread.pin", commandId: CommandId.make(`pin-${deviceId}`), threadId, deviceId, orderKey: deviceId === "phone" ? "a" : "z" });
-    }
-    yield* orchestrator.dispatch({ type: "thread.pin.reorder", commandId: CommandId.make("reorder-phone"), threadId, deviceId: "phone", orderKey: "b" });
-    yield* orchestrator.dispatch({ type: "thread.unpin", commandId: CommandId.make("unpin-phone"), threadId, deviceId: "phone" });
-    const shell = yield* projections.getThreadShell(threadId);
-    assert.equal(shell?.devicePins?.phone, null);
-    assert.equal(shell?.devicePins?.desktop?.orderKey, "z");
-    assert.isNotNull(shell?.pinnedAt);
-    assert.equal(shell?.pinOrderKey, "z");
-    const racedReorder = yield* orchestrator.dispatch({ type: "thread.pin.reorder", commandId: CommandId.make("raced-reorder-phone"), threadId, deviceId: "phone", orderKey: "c" }).pipe(Effect.result);
-    assert.isTrue(Result.isFailure(racedReorder));
-    yield* orchestrator.dispatch({ type: "thread.active.reorder", commandId: CommandId.make("active-reorder-phone"), threadId, deviceId: "phone", orderKey: "c" });
-    assert.equal((yield* projections.getThread(threadId)).activeOrderKey, "c");
-    assert.deepEqual((yield* projections.getThreadProjection(threadId)).thread.devicePins, shell?.devicePins);
-    const snapshot = yield* projections.getShellSnapshot();
-    assert.deepEqual(snapshot.threads.find((thread) => thread.id === threadId)?.devicePins, shell?.devicePins);
-    yield* orchestrator.dispatch({ type: "thread.unpin", commandId: CommandId.make("unpin-desktop"), threadId, deviceId: "desktop" });
-    assert.isNull((yield* projections.getThread(threadId)).pinnedAt);
-    yield* orchestrator.dispatch({ type: "thread.pin", commandId: CommandId.make("pin-again-phone"), threadId, deviceId: "phone" });
-    yield* orchestrator.dispatch({ type: "thread.pin", commandId: CommandId.make("pin-again-desktop"), threadId, deviceId: "desktop" });
-    yield* orchestrator.dispatch({ type: "thread.settle", commandId: CommandId.make("settle-device-pins"), threadId });
-    const settled = yield* projections.getThread(threadId);
-    assert.deepInclude(settled, { pinnedAt: null, pinOrderKey: null, legacyPin: null, devicePins: {}, settledOverride: "settled" });
-  }).pipe(Effect.provide(layerTest)),
+it.effect(
+  "persists device pin memberships and union protection through shell reads and global settle",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:device-pins");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-device-pins"),
+        threadId,
+        projectId: ProjectId.make("project:device-pins"),
+        title: "Device pins",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      for (const deviceId of ["phone", "desktop"]) {
+        yield* orchestrator.dispatch({
+          type: "thread.pin",
+          commandId: CommandId.make(`pin-${deviceId}`),
+          threadId,
+          deviceId,
+          orderKey: deviceId === "phone" ? "a" : "z",
+        });
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.pin.reorder",
+        commandId: CommandId.make("reorder-phone"),
+        threadId,
+        deviceId: "phone",
+        orderKey: "b",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.unpin",
+        commandId: CommandId.make("unpin-phone"),
+        threadId,
+        deviceId: "phone",
+      });
+      const shell = yield* projections.getThreadShell(threadId);
+      assert.equal(shell?.devicePins?.phone, null);
+      assert.equal(shell?.devicePins?.desktop?.orderKey, "z");
+      assert.isNotNull(shell?.pinnedAt);
+      assert.equal(shell?.pinOrderKey, "z");
+      const racedReorder = yield* orchestrator
+        .dispatch({
+          type: "thread.pin.reorder",
+          commandId: CommandId.make("raced-reorder-phone"),
+          threadId,
+          deviceId: "phone",
+          orderKey: "c",
+        })
+        .pipe(Effect.result);
+      assert.isTrue(Result.isFailure(racedReorder));
+      yield* orchestrator.dispatch({
+        type: "thread.active.reorder",
+        commandId: CommandId.make("active-reorder-phone"),
+        threadId,
+        deviceId: "phone",
+        orderKey: "c",
+      });
+      assert.equal((yield* projections.getThread(threadId)).activeOrderKey, "c");
+      assert.deepEqual(
+        (yield* projections.getThreadProjection(threadId)).thread.devicePins,
+        shell?.devicePins,
+      );
+      const snapshot = yield* projections.getShellSnapshot();
+      assert.deepEqual(
+        snapshot.threads.find((thread) => thread.id === threadId)?.devicePins,
+        shell?.devicePins,
+      );
+      yield* orchestrator.dispatch({
+        type: "thread.unpin",
+        commandId: CommandId.make("unpin-desktop"),
+        threadId,
+        deviceId: "desktop",
+      });
+      assert.isNull((yield* projections.getThread(threadId)).pinnedAt);
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("pin-again-phone"),
+        threadId,
+        deviceId: "phone",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("pin-again-desktop"),
+        threadId,
+        deviceId: "desktop",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("settle-device-pins"),
+        threadId,
+      });
+      const settled = yield* projections.getThread(threadId);
+      assert.deepInclude(settled, {
+        pinnedAt: null,
+        pinOrderKey: null,
+        legacyPin: null,
+        devicePins: {},
+        settledOverride: "settled",
+      });
+    }).pipe(Effect.provide(layerTest)),
 );

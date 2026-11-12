@@ -589,7 +589,12 @@ export const moveThread = Effect.fn("EnvironmentCommands.moveThread")(function* 
 export const unpinThread = Effect.fn("EnvironmentCommands.unpinThread")(function* (
   input: UnpinThreadInput,
 ) {
-  return yield* dispatch({ type: "thread.unpin", commandId: yield* allocateCommandId(input), threadId: input.threadId, ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }) });
+  return yield* dispatch({
+    type: "thread.unpin",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }),
+  });
 });
 
 export const unsettleThread = Effect.fn("EnvironmentCommands.unsettleThread")(function* (

@@ -160,27 +160,39 @@ export function createProjectEnvironmentAtoms<R, E>(
     }),
     update: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:project:update",
-      execute: (input: UpdateProjectInput, registry, environmentId) => Effect.gen(function* () {
-        const devicePins = options.devicePins;
-        if (devicePins === undefined || input.pinned === undefined) return yield* updateProject(input);
-        const { pinned, projectId, commandId, createdAt, creationSource, ...fields } = input;
-        const updated = Object.keys(fields).length === 0 ? null : yield* updateProject({
-          projectId,
-          ...fields,
-          ...(commandId === undefined ? {} : { commandId }),
-          ...(createdAt === undefined ? {} : { createdAt }),
-          ...(creationSource === undefined ? {} : { creationSource }),
-        });
-        const current = updated ?? registry.get(options.projectAtom({ environmentId, projectId }));
-        if (current === null) return yield* new DevicePinsPersistenceError({ cause: "The project has not reached this device yet." });
-        const result = yield* Effect.promise(() => devicePins.setProject.run(registry, { environmentId, projectId, pinned }));
-        if (result._tag === "Failure") return yield* Effect.failCause(result.cause);
-        return {
-          ...current,
-          pinnedAt: registry.get(devicePins.stateAtom(environmentId))?.projects[projectId] ?? null,
-          deletedAt: updated?.deletedAt ?? null,
-        };
-      }),
+      execute: (input: UpdateProjectInput, registry, environmentId) =>
+        Effect.gen(function* () {
+          const devicePins = options.devicePins;
+          if (devicePins === undefined || input.pinned === undefined)
+            return yield* updateProject(input);
+          const { pinned, projectId, commandId, createdAt, creationSource, ...fields } = input;
+          const updated =
+            Object.keys(fields).length === 0
+              ? null
+              : yield* updateProject({
+                  projectId,
+                  ...fields,
+                  ...(commandId === undefined ? {} : { commandId }),
+                  ...(createdAt === undefined ? {} : { createdAt }),
+                  ...(creationSource === undefined ? {} : { creationSource }),
+                });
+          const current =
+            updated ?? registry.get(options.projectAtom({ environmentId, projectId }));
+          if (current === null)
+            return yield* new DevicePinsPersistenceError({
+              cause: "The project has not reached this device yet.",
+            });
+          const result = yield* Effect.promise(() =>
+            devicePins.setProject.run(registry, { environmentId, projectId, pinned }),
+          );
+          if (result._tag === "Failure") return yield* Effect.failCause(result.cause);
+          return {
+            ...current,
+            pinnedAt:
+              registry.get(devicePins.stateAtom(environmentId))?.projects[projectId] ?? null,
+            deletedAt: updated?.deletedAt ?? null,
+          };
+        }),
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),

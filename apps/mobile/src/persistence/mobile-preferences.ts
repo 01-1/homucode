@@ -216,7 +216,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     workspaceSelections?: WorkspaceSelections;
   } = {};
 
-  if (Schema.is(Schema.Record(Schema.String, DevicePinsState))(parsed.devicePins)) preferences.devicePins = parsed.devicePins;
+  if (Schema.is(Schema.Record(Schema.String, DevicePinsState))(parsed.devicePins))
+    preferences.devicePins = parsed.devicePins;
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {
     preferences.hiddenNavigationTabs = parsed.hiddenNavigationTabs.filter(

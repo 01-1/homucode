@@ -18,14 +18,20 @@ interface ThreadPins {
 }
 
 export function legacyThreadPin(thread: ThreadPins): ThreadPin | null {
-  return thread.legacyPin !== undefined ? thread.legacyPin : thread.pinnedAt == null ? null : {
-    pinnedAt: DateTime.formatIso(thread.pinnedAt),
-    orderKey: thread.pinOrderKey ?? null,
-  };
+  return thread.legacyPin !== undefined
+    ? thread.legacyPin
+    : thread.pinnedAt == null
+      ? null
+      : {
+          pinnedAt: DateTime.formatIso(thread.pinnedAt),
+          orderKey: thread.pinOrderKey ?? null,
+        };
 }
 
 export function threadPinForDevice(thread: ThreadPins, deviceId: string): ThreadPin | null {
-  return thread.devicePins?.[deviceId] !== undefined ? thread.devicePins[deviceId]! : legacyThreadPin(thread);
+  return thread.devicePins?.[deviceId] !== undefined
+    ? thread.devicePins[deviceId]!
+    : legacyThreadPin(thread);
 }
 
 export function updateThreadPinMembership(
@@ -39,9 +45,14 @@ export function updateThreadPinMembership(
   let legacyPin = legacyThreadPin(thread);
   const devicePins = { ...thread.devicePins };
   const current = deviceId === undefined ? legacyPin : threadPinForDevice(thread, deviceId);
-  const next = action === "unpin" ? null : action === "reorder"
-    ? current === null ? null : { ...current, orderKey: orderKey ?? current.orderKey }
-    : current ?? { pinnedAt: DateTime.formatIso(now), orderKey: orderKey ?? null };
+  const next =
+    action === "unpin"
+      ? null
+      : action === "reorder"
+        ? current === null
+          ? null
+          : { ...current, orderKey: orderKey ?? current.orderKey }
+        : (current ?? { pinnedAt: DateTime.formatIso(now), orderKey: orderKey ?? null });
   if (deviceId === undefined) legacyPin = next;
   else devicePins[deviceId] = next;
   const aggregate = legacyPin ?? Object.values(devicePins).find((pin) => pin !== null) ?? null;

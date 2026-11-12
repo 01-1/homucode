@@ -1709,8 +1709,12 @@ export function threadShellFromProjection(
     snoozedUntil: projection.thread.snoozedUntil ?? null,
     snoozedAt: projection.thread.snoozedAt ?? null,
     pinnedAt: projection.thread.pinnedAt ?? null,
-    ...(projection.thread.devicePins === undefined ? {} : { devicePins: projection.thread.devicePins }),
-    ...(projection.thread.legacyPin === undefined ? {} : { legacyPin: projection.thread.legacyPin }),
+    ...(projection.thread.devicePins === undefined
+      ? {}
+      : { devicePins: projection.thread.devicePins }),
+    ...(projection.thread.legacyPin === undefined
+      ? {}
+      : { legacyPin: projection.thread.legacyPin }),
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
     pinOrderKey: projection.thread.pinOrderKey ?? null,
@@ -1981,8 +1985,12 @@ function shellFromState(input: {
     snoozedUntil: input.state.thread.snoozedUntil ?? null,
     snoozedAt: input.state.thread.snoozedAt ?? null,
     pinnedAt: input.state.thread.pinnedAt ?? null,
-    ...(input.state.thread.devicePins === undefined ? {} : { devicePins: input.state.thread.devicePins }),
-    ...(input.state.thread.legacyPin === undefined ? {} : { legacyPin: input.state.thread.legacyPin }),
+    ...(input.state.thread.devicePins === undefined
+      ? {}
+      : { devicePins: input.state.thread.devicePins }),
+    ...(input.state.thread.legacyPin === undefined
+      ? {}
+      : { legacyPin: input.state.thread.legacyPin }),
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
