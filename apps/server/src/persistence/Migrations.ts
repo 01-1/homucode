@@ -83,6 +83,7 @@ import Migration0077 from "./Migrations/077_RepairBooleanSettledOverride.ts";
 import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
 import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
 import Migration0083 from "./Migrations/083_WorkAssistanceContinuity.ts";
+import Migration0084 from "./Migrations/084_ProjectRouterNotices.ts";
 import Migration0082 from "./Migrations/082_ThreadCompletionOutbox.ts";
 import Migration0080 from "./Migrations/080_ScheduledTaskThreadMode.ts";
 
@@ -170,6 +171,7 @@ const migrationEntries = [
   [80, "ScheduledTaskThreadMode", Migration0080],
   [82, "ThreadCompletionOutbox", Migration0082],
   [83, "WorkAssistanceContinuity", Migration0083],
+  [84, "ProjectRouterNotices", Migration0084],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
