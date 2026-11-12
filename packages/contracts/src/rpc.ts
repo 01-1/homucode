@@ -225,6 +225,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
   OrchestrationV2GetNativeChildWorkError,
+  OrchestrationV2StopAutoreviewerError,
   OrchestrationV2StopWorkflowError,
   OrchestrationV2ForceStopThreadError,
   OrchestrationV2DispatchCommandError,
@@ -1865,6 +1866,12 @@ const WsOrchestrationV2GetThreadProjectionRpc = Rpc.make(
   },
 );
 
+const WsOrchestrationV2StopAutoreviewerRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer, {
+  payload: OrchestrationV2RpcSchemas.stopAutoreviewer.input,
+  success: OrchestrationV2RpcSchemas.stopAutoreviewer.output,
+  error: Schema.Union([OrchestrationV2StopAutoreviewerError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.stopWorkflow, {
   payload: OrchestrationV2RpcSchemas.stopWorkflow.input,
   success: OrchestrationV2RpcSchemas.stopWorkflow.output,
@@ -2259,6 +2266,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
   WsOrchestrationV2GetNativeChildWorkRpc,
+  WsOrchestrationV2StopAutoreviewerRpc,
   WsOrchestrationV2StopWorkflowRpc,
   WsOrchestrationV2ForceStopThreadRpc,
   WsOrchestrationV2GetTurnItemRpc,

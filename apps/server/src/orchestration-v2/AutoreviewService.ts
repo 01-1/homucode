@@ -7,6 +7,7 @@ import {
   type OrchestrationV2Autoreviewer,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2Run,
+  type OrchestrationV2StopAutoreviewerInput,
   type OrchestrationV2TurnItem,
   type ProviderInteractionMode,
   type RunId,
@@ -23,6 +24,7 @@ import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
+import { stopAutoreviewerWork, type StopAutoreviewerWorkError } from "./stopAutoreviewerWork.ts";
 import { forkParked } from "../serverActivation.ts";
 import {
   AUTOREVIEW_BATCH_MESSAGE_PREFIX,
@@ -109,6 +111,8 @@ export class AutoreviewService extends Context.Service<
       { readonly reviewerThreadId: ThreadId; readonly taskId: NodeId },
       AutoreviewError
     >;
+    /** Native human stop: cancel work before removing the attachment. */
+    readonly stop: (input: OrchestrationV2StopAutoreviewerInput) => Effect.Effect<void, AutoreviewError>;
     readonly detach: (input: {
       readonly commandId: CommandId;
       readonly threadId: ThreadId;
@@ -181,6 +185,11 @@ type PortError =
   | ThreadManagementService.ThreadManagementProviderInstanceDisabledError;
 
 export interface AutoreviewPort {
+  readonly stopReviewerWork?: (input: {
+    readonly commandId: CommandId;
+    readonly threadId: ThreadId;
+    readonly reviewer: OrchestrationV2Autoreviewer;
+  }) => Effect.Effect<void, StopAutoreviewerWorkError>;
   readonly dispatch: (
     command: Parameters<Orchestrator.OrchestratorV2["Service"]["dispatch"]>[0],
   ) => Effect.Effect<Orchestrator.OrchestratorV2DispatchResult, PortError>;
@@ -910,6 +919,35 @@ export const make = (port: AutoreviewPort) => {
       }),
     );
 
+  const stop: AutoreviewService["Service"]["stop"] = (input) =>
+    lock.withPermits(1)(Effect.uninterruptible(Effect.gen(function* () {
+      const thread = yield* projections.getThread(input.threadId).pipe(
+        Effect.mapError(failed("Unable to load the reviewed thread")),
+      );
+      const current = thread.autoreviewers ?? [];
+      const reviewer = current.find((entry) => entry.threadId === input.reviewerThreadId);
+      if (reviewer === undefined) {
+        return yield* new AutoreviewError({
+          reason: "not_found",
+          detail: "This autoreviewer is no longer attached. Refresh the thread.",
+        });
+      }
+      if (port.stopReviewerWork === undefined) {
+        return yield* new AutoreviewError({ reason: "failed", detail: "Human reviewer control is unavailable." });
+      }
+      // Keep the attachment on failure so the same selected reviewer can be retried.
+      // Holding the shared reactor lock prevents new batches between cancellation and detach.
+      yield* port.stopReviewerWork({ commandId: input.commandId, threadId: input.threadId, reviewer }).pipe(
+        Effect.mapError(failed("Unable to stop the autoreviewer")),
+      );
+      yield* dropPendingFindings(input.commandId, input.threadId, [reviewer]).pipe(
+        Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
+      );
+      yield* setReviewers(input.commandId, input.threadId, current.filter((entry) => entry !== reviewer)).pipe(
+        Effect.mapError(failed("Unable to detach the stopped autoreviewer")),
+      );
+    })));
+
   const list: AutoreviewService["Service"]["list"] = Effect.fn("AutoreviewService.list")(
     function* (threadId) {
       const reviewed = yield* readReviewable(threadId).pipe(
@@ -1014,6 +1052,7 @@ export const make = (port: AutoreviewPort) => {
     start,
     handle,
     attach,
+    stop,
     detach,
     update,
     list,
@@ -1035,6 +1074,7 @@ export const layerFromThreadManagement = Layer.effect(
   Effect.gen(function* () {
     const threads = yield* ThreadManagementService.ThreadManagementService;
     return make({
+      stopReviewerWork: (input) => stopAutoreviewerWork(threads, input),
       dispatch: threads.dispatch,
       getThreadRecords: threads.getThreadRecords,
       listActiveSubagentThreadIds: threads.listActiveSubagentThreadIds,

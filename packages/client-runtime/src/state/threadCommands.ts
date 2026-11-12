@@ -5,6 +5,7 @@ import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
 import {
   WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
 } from "@t3tools/contracts";
@@ -121,6 +122,12 @@ export function createThreadEnvironmentAtoms<R, E>(
   });
 
   const commands = {
+    stopAutoreviewer: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:stop-autoreviewer",
+      tag: ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer,
+      scheduler,
+      concurrency,
+    }),
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: createThread,

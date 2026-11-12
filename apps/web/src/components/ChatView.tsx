@@ -1,3 +1,4 @@
+import { AutoreviewerControls } from "./chat/AutoreviewerControls";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -3522,6 +3523,10 @@ export default function ChatView(props: ChatViewProps) {
                         : undefined
                     }
                   >
+                    <AutoreviewerControls
+                      threadRef={activeThreadRef}
+                      reviewers={serverProjection?.thread.autoreviewers ?? []}
+                    />
                     <ChildThreadApprovals threadRef={activeThreadRef} />
                     <div className="relative">
                       <ComposerSurface.Shell contextRow={showComposerContextStrip}>

@@ -58,6 +58,7 @@ import {
   CLIENT_CAPABILITIES_QUERY_PARAM,
   SETTINGS_SECRET_REFERENCES_CAPABILITY,
   ORCHESTRATION_PROTOCOL_VERSION,
+  OrchestrationV2StopAutoreviewerError,
   OrchestrationV2DispatchCommandError,
   OrchestrationV2GetShellSnapshotError,
   OrchestrationV2GetThreadProjectionError,
@@ -240,6 +241,8 @@ import * as DefectReporter from "./observability/DefectReporter.ts";
 import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as AutoreviewService from "./orchestration-v2/AutoreviewService.ts";
+import { stopAutoreviewerWork } from "./orchestration-v2/stopAutoreviewerWork.ts";
 import { requiredScopeForDeviceList, rpcAuthorizationError } from "./auth/RpcAuthorization.ts";
 import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
 import { RpcInstrumentation, rpcInstrumentationLayer } from "./observability/RpcInstrumentation.ts";
@@ -1415,6 +1418,12 @@ export const layerWsRpc = (
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+      const autoreviewControl = AutoreviewService.make({
+        dispatch: threadManagement.dispatch,
+        getThreadRecords: threadManagement.getThreadRecords,
+        listActiveSubagentThreadIds: threadManagement.listActiveSubagentThreadIds,
+        stopReviewerWork: (input) => stopAutoreviewerWork(threadManagement, input),
+      });
       const intakeContext = yield* Effect.context<
         | ThreadManagementService.ThreadManagementService
         | ThreadLaunchService.ThreadLaunchService
@@ -2128,6 +2137,10 @@ export const layerWsRpc = (
                   }),
                 ),
             ),
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer]: (input) =>
+          autoreviewControl.stop(input).pipe(
+            Effect.mapError((cause) => new OrchestrationV2StopAutoreviewerError({ message: cause.message })),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>

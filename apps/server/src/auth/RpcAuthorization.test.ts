@@ -1,4 +1,5 @@
 import {
+  CommandId,
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
@@ -15,6 +16,7 @@ import {
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
   WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
@@ -33,6 +35,10 @@ import * as RpcAuthorization from "./RpcAuthorization.ts";
 describe("RPC authorization scopes", () => {
   it("declares exactly one scope for every RPC in the server group", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
+  });
+
+  it("requires thread operation authority to stop an attached autoreviewer", () => {
+    expect(requiredScopeForRpcMethod(ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer)).toBe(AuthOrchestrationOperateScope);
   });
 
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
@@ -466,5 +472,31 @@ it.effect("denies manual cleanup before the handler without settings permission"
       requiredPermission: AuthSettingsWriteScope,
     });
     expect(handled).toBe(false);
+  }).pipe(Effect.scoped),
+);
+
+
+it.effect("refuses autoreviewer stop before its handler without destination operate scope", () =>
+  Effect.gen(function* () {
+    const method = ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer;
+    const group = WsRpcGroup.omit(...[...WsRpcGroup.requests.keys()].filter(
+      (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> => tag !== method,
+    ));
+    let handled = 0;
+    const handlers = group.toLayerHandler(method, () => Effect.sync(() => { handled += 1; }));
+    const input = { commandId: CommandId.make("stop-reviewer"), threadId: ThreadId.make("parent"),
+      reviewerThreadId: ThreadId.make("reviewer") };
+    const denied = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationReadScope]))),
+    );
+    expect(yield* denied[method](input).pipe(Effect.flip)).toMatchObject({
+      _tag: "EnvironmentAuthorizationError", requiredPermission: AuthOrchestrationOperateScope,
+    });
+    expect(handled).toBe(0);
+    const granted = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationOperateScope]))),
+    );
+    yield* granted[method](input);
+    expect(handled).toBe(1);
   }).pipe(Effect.scoped),
 );

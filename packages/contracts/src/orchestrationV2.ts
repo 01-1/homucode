@@ -3720,6 +3720,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getThreadProjection: "orchestration.getThreadProjection",
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
+  stopAutoreviewer: "orchestration.stopAutoreviewer",
   stopWorkflow: "orchestration.stopWorkflow",
   forceStopThread: "orchestration.forceStopThread",
   getTurnItem: "orchestration.getTurnItem",
@@ -4110,6 +4111,19 @@ export class OrchestrationV2ThreadLaunchError extends Schema.TaggedError<Orchest
   },
 ) {}
 
+/** A native human action, separate from agent attachment/removal tools. */
+export const OrchestrationV2StopAutoreviewerInput = Schema.Struct({
+  commandId: CommandId,
+  threadId: ThreadId,
+  reviewerThreadId: ThreadId,
+});
+export type OrchestrationV2StopAutoreviewerInput = typeof OrchestrationV2StopAutoreviewerInput.Type;
+
+export class OrchestrationV2StopAutoreviewerError extends Schema.TaggedError<OrchestrationV2StopAutoreviewerError>()(
+  "OrchestrationV2StopAutoreviewerError",
+  { message: Schema.String },
+) {}
+
 export const OrchestrationV2StopWorkflowInput = Schema.Struct({
   threadId: ThreadId,
   subagentId: NodeId,
@@ -4410,6 +4424,10 @@ export const OrchestrationV2RpcSchemas = {
   getThreadProjection: {
     input: OrchestrationV2GetThreadProjectionInput,
     output: OrchestrationV2ThreadProjection,
+  },
+  stopAutoreviewer: {
+    input: OrchestrationV2StopAutoreviewerInput,
+    output: Schema.Void,
   },
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,
