@@ -64,6 +64,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
     });
   };
   return {
+    threadFamily: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:thread-family-for-delete",
+      tag: ORCHESTRATION_V2_WS_METHODS.getThreadFamily,
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+    }),
     threadTitles: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:thread-titles",
       tag: ORCHESTRATION_V2_WS_METHODS.getThreadTitles,

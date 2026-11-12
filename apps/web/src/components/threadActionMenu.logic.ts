@@ -5,6 +5,8 @@ import {
 } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
+import type { ThreadFolderMenuId } from "../hooks/threadFolderMenu";
+
 export type ThreadActionMenuId =
   | "find"
   | "new-thread-on-branch"
@@ -38,7 +40,8 @@ export type ThreadActionMenuId =
   | "move-under"
   | `move-under:${string}`
   | "archive"
-  | "delete";
+  | "delete"
+  | ThreadFolderMenuId;
 
 export type DraftActionMenuId =
   | "copy"
@@ -104,6 +107,7 @@ export interface ThreadActionMenuState {
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
   readonly canShareWithGuest?: boolean;
+  readonly folderMenu?: ContextMenuItem<ThreadFolderMenuId> | null;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
   /** Where the thread can be re-parented to, or null when it cannot move. */
@@ -288,6 +292,7 @@ export function buildThreadActionMenuItems(
               },
         ]
       : []),
+    ...(state.folderMenu ? [state.folderMenu] : []),
     { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
     ...(state.supports.titleRegeneration
       ? [

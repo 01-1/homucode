@@ -545,6 +545,11 @@ type SidebarThreadRowProps = {
   pinningSupported: boolean;
   isPinned: boolean;
   sortable?: SortableThreadRowBag | undefined;
+  // Thread folder members carry the folder's tint; the last one closes the card.
+  folderTintClassName?: string | undefined;
+  folderCardEnd?: boolean | undefined;
+  /** The thread folder whose card this row closes; the row is part of that folder's drop zone. */
+  folderDropKey?: string | undefined;
   dropVerb: SidebarDropVerb | null;
   dragOverPinned: boolean;
   sweepAction: SidebarSweepAction | null;
@@ -985,6 +990,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     props.sortable?.isDragging &&
       "bg-sidebar bg-linear-to-b from-sidebar-row-active to-sidebar-row-active text-sidebar-foreground opacity-100 shadow-lg",
   );
+  const folderCardClassName = cn(
+    props.folderTintClassName,
+    props.folderCardEnd && "rounded-b-lg pb-1",
+  );
   const sortable = props.sortable;
   const sortableRootProps = sortable
     ? {
@@ -1218,11 +1227,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return (
       <li
         data-thread-item={threadKey}
+        data-thread-folder-drop={props.folderDropKey}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_--spacing(9)]",
           metaLine !== null && multiline && "[contain-intrinsic-size:auto_--spacing(13.5)]",
+          folderCardClassName,
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1414,11 +1425,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   return (
     <li
       data-thread-item={threadKey}
+      data-thread-folder-drop={props.folderDropKey}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
+        folderCardClassName,
         sortable?.isDragging && "relative z-20",
       )}
     >

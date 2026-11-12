@@ -86,6 +86,8 @@ import Migration0083 from "./Migrations/083_WorkAssistanceContinuity.ts";
 import Migration0084 from "./Migrations/084_ProjectRouterNotices.ts";
 import Migration0082 from "./Migrations/082_ThreadCompletionOutbox.ts";
 import Migration0080 from "./Migrations/080_ScheduledTaskThreadMode.ts";
+import Migration0085 from "./Migrations/085_ThreadFolders.ts";
+import Migration0086 from "./Migrations/086_ThreadFolderRules.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -172,6 +174,8 @@ const migrationEntries = [
   [82, "ThreadCompletionOutbox", Migration0082],
   [83, "WorkAssistanceContinuity", Migration0083],
   [84, "ProjectRouterNotices", Migration0084],
+  [85, "ThreadFolders", Migration0085],
+  [86, "ThreadFolderRules", Migration0086],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
