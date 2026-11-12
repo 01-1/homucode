@@ -390,21 +390,12 @@ const layerBase: Layer.Layer<
     const applyStoredEvents =
       /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
       Effect.fnUntraced(function* (storedEvents: ReadonlyArray<OrchestrationV2StoredEvent>) {
-        yield* Effect.forEach(
-          storedEvents,
-          (stored) =>
-            projectionStore
-              .apply(stored.event)
-              .pipe(
-                Effect.andThen(
-                  WorkAssistance.observe(stored.event).pipe(
-                    Effect.provideService(SqlClient.SqlClient, sql),
-                  ),
-                ),
-              ),
-          {
-            concurrency: 1,
-          },
+        yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
+          concurrency: 1,
+        });
+        // Same transaction: continuity is evaluated once against the batch's final projection.
+        yield* WorkAssistance.observeBatch(storedEvents.map((stored) => stored.event)).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
         );
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {

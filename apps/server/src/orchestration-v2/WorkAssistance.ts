@@ -195,7 +195,8 @@ export const readActivity = Effect.fn("WorkAssistance.readActivity")(function* (
   };
 });
 
-export const observe = Effect.fn("WorkAssistance.observe")(function* (
+// Applies an event's continuity writes and returns which activity it invalidates.
+const recordEvent = Effect.fn("WorkAssistance.recordEvent")(function* (
   event: OrchestrationV2DomainEvent,
 ) {
   if (
@@ -210,7 +211,7 @@ export const observe = Effect.fn("WorkAssistance.observe")(function* (
       "subagent",
     ].includes(event.payload.type)
   )
-    return;
+    return "none" as const;
   if (
     !event.type.startsWith("thread.") &&
     !event.type.startsWith("provider-session.") &&
@@ -224,7 +225,7 @@ export const observe = Effect.fn("WorkAssistance.observe")(function* (
       "turn-item.updated",
     ].includes(event.type)
   )
-    return;
+    return "none" as const;
   const sql = yield* SqlClient.SqlClient;
   // A session can own multiple native child threads. Re-evaluate them together on
   // attachment changes; a retained session record alone does not prove liveness.
@@ -243,7 +244,14 @@ export const observe = Effect.fn("WorkAssistance.observe")(function* (
     yield* sql`UPDATE work_assistance_continuity SET continuous_working_since = NULL
       WHERE provider_session_id = ${event.type === "provider-session.detached" ? event.payload.providerSessionId : event.payload.id}`;
   }
-  const { now, threads, sessions } = yield* readActivity(sessionEvent ? undefined : event.threadId);
+  return sessionEvent ? ("all" as const) : event.threadId;
+});
+
+const refreshActivity = Effect.fn("WorkAssistance.refreshActivity")(function* (
+  threadId: ThreadId | undefined,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const { now, threads, sessions } = yield* readActivity(threadId);
   for (const item of threads) {
     const working =
       item.reason === null ||
@@ -259,6 +267,32 @@ export const observe = Effect.fn("WorkAssistance.observe")(function* (
           THEN COALESCE(work_assistance_continuity.continuous_working_since, excluded.continuous_working_since)
           ELSE excluded.continuous_working_since END`;
   }
+});
+
+export const observe = Effect.fn("WorkAssistance.observe")(function* (
+  event: OrchestrationV2DomainEvent,
+) {
+  yield* observeBatch([event]);
+});
+
+// One projection transaction applies many events; only its final state is ever committed.
+// Re-reading every MAIN thread per event made provider-thread bursts re-run the activity
+// query hundreds of times per commit, so record per-event writes, then read once per batch.
+export const observeBatch = Effect.fn("WorkAssistance.observeBatch")(function* (
+  events: ReadonlyArray<OrchestrationV2DomainEvent>,
+) {
+  let all = false;
+  const threadIds = new Set<ThreadId>();
+  for (const event of events) {
+    const scope = yield* recordEvent(event);
+    if (scope === "all") all = true;
+    else if (scope !== "none") threadIds.add(scope);
+  }
+  if (all) {
+    yield* refreshActivity(undefined);
+    return;
+  }
+  for (const threadId of threadIds) yield* refreshActivity(threadId);
 });
 
 export const HELPER_BRIEF = `Help the exact parent task make progress faster and unblock it. Read only the parent task context you need. Give a concrete diagnosis or a small, explicitly handed-off improvement. The target retains ownership of mutable files unless it explicitly gives you a narrow handoff. Do not create helpers, delegates or other agents. Honor the host's next/children wait and completion protocol; do not poll task_status. No authority to uncap, stop, restart, load, spend, access credentials, or change any target's provider/model/options. Remain inside MAIN and this task; do not access entrant/cloud projects. Return your result through normal native child completion to this exact parent task.`;
