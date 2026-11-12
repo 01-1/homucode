@@ -1,3 +1,4 @@
+import * as ProjectRouterNoticeGuard from "./ProjectRouterNoticeGuard.ts";
 import {
   CommandId,
   type OrchestrationV2Run,
@@ -694,6 +695,10 @@ const layerBase: Layer.Layer<
             const existing = yield* existingCommandResult(input.commandId);
             return { ...existing, committed: false as const, cancelledEffectIds: [] };
           }
+
+          yield* ProjectRouterNoticeGuard.validate(input).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
 
           if (input.assistanceRunId !== undefined) {
             const state = yield* WorkAssistance.readActivity(input.threadId).pipe(

@@ -1,3 +1,4 @@
+import * as ProjectRouterNoticeService from "./ProjectRouterNoticeService.ts";
 import * as CompletionSink from "./CompletionSink.ts";
 import * as CompletionProcessRunner from "../processRunner.ts";
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
@@ -371,6 +372,9 @@ export const layer = Layer.mergeAll(
 );
 
 export const layerProduction = Layer.mergeAll(
+  ProjectRouterNoticeService.layer.pipe(
+    Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerEventSink, layerCommandReceiptStoreProvided)),
+  ),
   WorktreeBranchSync.layer.pipe(
     Layer.provide(Layer.merge(layerThreadManagementProvided, ProjectionStore.layer)),
   ),
