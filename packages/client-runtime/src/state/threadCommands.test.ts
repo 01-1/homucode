@@ -23,12 +23,13 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Scope from "effect/Scope";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import { BearerConnectionTarget } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type { RpcSession } from "../rpc/session.ts";
+import { createDevicePins } from "./devicePins.ts";
 import { createThreadEnvironmentAtoms } from "./threadCommands.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
 
@@ -88,6 +89,7 @@ const SNAPSHOT: OrchestrationV2ShellSnapshot = {
 };
 
 const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (options?: {
+  readonly deviceId?: string;
   readonly loadEarlier?: () => Effect.Effect<ThreadHistoryController.ThreadHistoryLoadEarlierResult>;
   readonly reconcilePendingWork?: (threadId: ThreadId) => Effect.Effect<void>;
 }) {
@@ -138,7 +140,8 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (optio
     ),
   );
   const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
-  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom);
+  const pins = options?.deviceId === undefined ? undefined : createDevicePins(snapshotAtom, Atom.make(AsyncResult.success(options.deviceId)), { load: async () => null, save: async () => {} });
+  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom, pins);
   const registry = AtomRegistry.make();
   yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
   const visibleAtom = commands.snapshotAtom(ENVIRONMENT_ID);
@@ -581,3 +584,17 @@ describe("remote thread lifecycle commands", () => {
     }),
   );
 });
+
+
+it.effect.each(["pin", "unpin", "reorderPin", "reorderActive"] as const)("scopes %s and its optimistic rollback to this device", (action) =>
+  Effect.gen(function* () {
+    const h = yield* makeHarness({ deviceId: "phone" });
+    const result = h.commands[action].run(h.registry, { environmentId: ENVIRONMENT_ID, input: { threadId: THREAD_ID, orderKey: "b" } });
+    const request = yield* Queue.take(h.requests);
+    expect(request.command).toMatchObject({ deviceId: "phone", threadId: THREAD_ID });
+    yield* Deferred.fail(request.reply, new Error("Rejected"));
+    expect((yield* Effect.promise(() => result))._tag).toBe("Failure");
+    expect(h.registry.get(h.visibleAtom)?.threads[0]?.pinnedAt).toBeNull();
+    expect(h.registry.get(h.snapshotAtom(ENVIRONMENT_ID))).toBe(SNAPSHOT);
+  }),
+);

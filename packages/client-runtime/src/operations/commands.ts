@@ -97,9 +97,12 @@ export interface UnsettleThreadInput extends ThreadCommandInput {
 }
 
 export interface PinThreadInput extends ThreadCommandInput {
+  readonly deviceId?: string;
   readonly orderKey?: string;
 }
-export type UnpinThreadInput = ThreadCommandInput;
+export interface UnpinThreadInput extends ThreadCommandInput {
+  readonly deviceId?: string;
+}
 
 export interface MoveThreadInput extends ThreadCommandInput {
   /** The thread to move under, or `null` to make it top-level. */
@@ -107,10 +110,12 @@ export interface MoveThreadInput extends ThreadCommandInput {
 }
 
 export interface ReorderPinnedThreadInput extends ThreadCommandInput {
+  readonly deviceId?: string;
   readonly orderKey: string;
 }
 
 export interface ReorderActiveThreadInput extends ThreadCommandInput {
+  readonly deviceId?: string;
   readonly orderKey: string;
 }
 
@@ -513,6 +518,7 @@ export const pinThread = Effect.fn("EnvironmentCommands.pinThread")(function* (
   const commandId = yield* allocateCommandId(input);
   return yield* dispatch({
     type: "thread.pin",
+    ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }),
     commandId,
     threadId: input.threadId,
     ...(input.orderKey === undefined ? {} : { orderKey: input.orderKey }),
@@ -539,6 +545,7 @@ export const reorderPinnedThread = Effect.fn("EnvironmentCommands.reorderPinnedT
   const commandId = yield* allocateCommandId(input);
   return yield* dispatch({
     type: "thread.pin.reorder",
+    ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }),
     commandId,
     threadId: input.threadId,
     orderKey: input.orderKey,
@@ -550,6 +557,7 @@ export const reorderActiveThread = Effect.fn("EnvironmentCommands.reorderActiveT
 ) {
   return yield* dispatch({
     type: "thread.active.reorder",
+    ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }),
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
     orderKey: input.orderKey,
@@ -581,7 +589,7 @@ export const moveThread = Effect.fn("EnvironmentCommands.moveThread")(function* 
 export const unpinThread = Effect.fn("EnvironmentCommands.unpinThread")(function* (
   input: UnpinThreadInput,
 ) {
-  return yield* simpleThreadCommand("thread.unpin", input);
+  return yield* dispatch({ type: "thread.unpin", commandId: yield* allocateCommandId(input), threadId: input.threadId, ...(input.deviceId === undefined ? {} : { deviceId: input.deviceId }) });
 });
 
 export const unsettleThread = Effect.fn("EnvironmentCommands.unsettleThread")(function* (

@@ -1,3 +1,4 @@
+import { DeviceThreadPins, ThreadPin } from "./threadPins.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
@@ -535,6 +536,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
   guestShare: Schema.optional(Schema.NullOr(ThreadGuestShare)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  devicePins: Schema.optional(DeviceThreadPins),
+  legacyPin: Schema.optional(Schema.NullOr(ThreadPin)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -2215,6 +2218,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  devicePins: Schema.optional(DeviceThreadPins),
+  legacyPin: Schema.optional(Schema.NullOr(ThreadPin)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -3104,12 +3109,14 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pin"),
+    deviceId: Schema.optional(TrimmedNonEmptyString),
     commandId: CommandId,
     threadId: ThreadId,
     orderKey: Schema.optional(TrimmedNonEmptyString),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.unpin"),
+    deviceId: Schema.optional(TrimmedNonEmptyString),
     commandId: CommandId,
     threadId: ThreadId,
   }),
@@ -3132,12 +3139,14 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pin.reorder"),
+    deviceId: Schema.optional(TrimmedNonEmptyString),
     commandId: CommandId,
     threadId: ThreadId,
     orderKey: TrimmedNonEmptyString,
   }),
   Schema.Struct({
     type: Schema.Literal("thread.active.reorder"),
+    deviceId: Schema.optional(TrimmedNonEmptyString),
     commandId: CommandId,
     threadId: ThreadId,
     orderKey: TrimmedNonEmptyString,
