@@ -285,6 +285,7 @@ it.effect("updates a device-local project pin without dispatching a shared proje
       save: async () => {},
     });
     const h = yield* makeHarness(pins);
+    h.registry.set(h.storedProject, PROJECT);
     const result = yield* Effect.promise(() =>
       h.commands.update.run(h.registry, {
         environmentId: ENVIRONMENT_ID,
