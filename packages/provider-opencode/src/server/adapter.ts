@@ -1064,9 +1064,11 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
 
         const mcpSession = yield* mcpSessions.read(input.threadId);
         const hasT3Mcp = mcpSession !== undefined && !connection.external;
-        const orchestrationSystemPrompt = t3OrchestrationSystemPrompt(
+        const deviceToolsAvailable = mcpSession?.capabilities?.has("device") === true;
+        // The session outlives settings changes; startTurn refreshes the subagent guidance.
+        let orchestrationSystemPrompt = t3OrchestrationSystemPrompt(
           hasT3Mcp,
-          mcpSession?.capabilities?.has("device") === true,
+          deviceToolsAvailable,
           mcpSession?.preferNativeSubagents ?? false,
         );
         if (hasT3Mcp) {
@@ -3717,6 +3719,11 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 );
               }
               yield* applyPermissionRules(state, turnInput.runtimePolicy);
+              orchestrationSystemPrompt = t3OrchestrationSystemPrompt(
+                hasT3Mcp,
+                deviceToolsAvailable,
+                (yield* mcpSessions.read(input.threadId))?.preferNativeSubagents ?? false,
+              );
               // A continuation admits a wake OpenCode is already running, so it sends no prompt.
               const isCompaction =
                 !continuation &&

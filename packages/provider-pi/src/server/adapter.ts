@@ -78,7 +78,11 @@ import {
   materializePiT3McpExtension,
   resolvePiLaunchArgs,
 } from "./mcpInjection.ts";
-import { PI_FILE_CHANGE_TOOLS, PI_T3_SERVICE_TIER_COMMAND } from "./mcpExtensionSource.ts";
+import {
+  PI_FILE_CHANGE_TOOLS,
+  PI_T3_SERVICE_TIER_COMMAND,
+  PI_T3_SUBAGENTS_COMMAND,
+} from "./mcpExtensionSource.ts";
 import { PI_STANDARD_SERVICE_TIER } from "./modelCapabilities.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
@@ -657,6 +661,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       // Pi reloads extensions (resetting the tier) on paths the adapter cannot see, so a chosen tier
       // is resent every turn; Standard sends a clear only when an earlier tier may still be set.
       let serviceTierMayBeSet = false;
+      // Launched with the setting in the environment; resent every turn once it differs, since
+      // an extension reload falls back to the launch value.
+      const launchPreferNativeSubagents = mcpSession?.preferNativeSubagents ?? false;
+      let subagentGuidanceMayDiffer = false;
       let appliedSessionName: string | null = null;
       const outOfTurnExtensionErrors: Array<PiRpcRecord> = [];
       let lastKnownLeaf: string | null = null;
@@ -3115,6 +3123,25 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             return yield* protocolError("T3 Code's Pi extension did not apply the service tier");
           }
           serviceTierMayBeSet = serviceTier !== null;
+        }
+        if (mcpSession !== undefined) {
+          const preferNativeSubagents =
+            (yield* mcpSessions.read(input.threadId))?.preferNativeSubagents ?? false;
+          const differs = preferNativeSubagents !== launchPreferNativeSubagents;
+          if (differs || subagentGuidanceMayDiffer) {
+            subagentGuidanceMayDiffer = true;
+            const result = yield* request({
+              type: "prompt",
+              message: `/${PI_T3_SUBAGENTS_COMMAND} ${preferNativeSubagents ? "native" : "delegate"}`,
+            });
+            const disposition = recordString(result, "disposition");
+            if (disposition !== undefined && disposition !== "handled") {
+              return yield* protocolError(
+                "T3 Code's Pi extension did not apply the subagent setting",
+              );
+            }
+            subagentGuidanceMayDiffer = differs;
+          }
         }
       });
 

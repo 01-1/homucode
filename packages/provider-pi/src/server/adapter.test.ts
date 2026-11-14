@@ -56,7 +56,7 @@ import {
 } from "./adapter.ts";
 import { makePiRpcConnection, type PiRpcRecord } from "./rpc.ts";
 import { loadMcpBridge } from "./mcpBridge.testkit.ts";
-import { PI_T3_SERVICE_TIER_COMMAND } from "./mcpExtensionSource.ts";
+import { PI_T3_SERVICE_TIER_COMMAND, PI_T3_SUBAGENTS_COMMAND } from "./mcpExtensionSource.ts";
 import { turnItemOutputText } from "../../../client-runtime/src/work-log/itemDetail.ts";
 
 const layerTest = Layer.mergeAll(
@@ -2758,6 +2758,71 @@ describe("PiAdapterV2", () => {
           `/${PI_T3_SERVICE_TIER_COMMAND} priority`,
           `/${PI_T3_SERVICE_TIER_COMMAND} ultrafast`,
           `/${PI_T3_SERVICE_TIER_COMMAND}`,
+        ],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("resends the subagent setting once it differs from the launch value", () =>
+    Effect.gen(function* () {
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const session = {
+        environmentId: EnvironmentId.make("environment-pi-subagents"),
+        threadId: THREAD_ID,
+        providerSessionId: "mcp-session-pi-subagents",
+        providerInstanceId: PI_INSTANCE_ID,
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer secret-pi-token",
+        preferNativeSubagents: true,
+      };
+      yield* sessions.set(session);
+      const fake = yield* makeFakePi;
+      const { runtime, takeEvent } = yield* openRuntime(fake);
+      assert.equal(fake.lastSpawn().env.T3_PI_PREFER_NATIVE_SUBAGENTS, "true");
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      const turn = (text: string, ordinal: number) =>
+        Effect.gen(function* () {
+          yield* startTurn(
+            runtime,
+            providerThread,
+            "default",
+            [],
+            text,
+            modelSelection("default"),
+            ordinal,
+          );
+          while (String((yield* fake.takeRequest("prompt"))["message"]).startsWith("/")) {}
+          yield* fake.emit({ type: "agent_start" });
+          yield* fake.emit({ type: "agent_end", messages: [], willRetry: false });
+          yield* fake.emit({ type: "agent_settled" });
+          yield* takeEvent((event) => event.type === "turn.terminal");
+        });
+
+      yield* turn("Launch value", 1);
+      yield* sessions.set({ ...session, preferNativeSubagents: false });
+      yield* turn("Switched", 2);
+      fake.reloadExtensions();
+      yield* turn("After reload", 3);
+      yield* sessions.set(session);
+      yield* turn("Back", 4);
+      yield* turn("Unchanged", 5);
+
+      assert.deepEqual(
+        fake
+          .allRequests()
+          .flatMap((request) =>
+            String(request["message"]).startsWith(`/${PI_T3_SUBAGENTS_COMMAND}`)
+              ? [request["message"]]
+              : [],
+          ),
+        [
+          `/${PI_T3_SUBAGENTS_COMMAND} delegate`,
+          `/${PI_T3_SUBAGENTS_COMMAND} delegate`,
+          `/${PI_T3_SUBAGENTS_COMMAND} native`,
         ],
       );
     }).pipe(Effect.scoped, Effect.provide(layerTest)),

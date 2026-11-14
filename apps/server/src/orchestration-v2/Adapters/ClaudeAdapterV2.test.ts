@@ -21511,6 +21511,144 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ),
   );
 
+  it.effect("reopens Claude with fresh subagent guidance after the setting changes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const processQueues: Array<Queue.Queue<SDKMessage>> = [];
+        const appends: Array<string> = [];
+        let closes = 0;
+        const terminals = yield* Queue.unbounded<void>();
+        const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({
+          instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
+          settings: DEFAULT_CLAUDE_SETTINGS,
+          environment: {},
+          attachmentsDir: yield* fileSystem.makeTempDirectoryScoped({
+            prefix: "t3-claude-subagent-guidance-",
+          }),
+          fileSystem,
+          path: yield* Path.Path,
+          random: yield* SecureRandom.SecureRandom,
+          idAllocator: yield* IdAllocator.IdAllocatorV2,
+          continuationRequests: { offer: () => Effect.void },
+          queryRunner: {
+            allocateSessionId: Effect.succeed(WAKE_NATIVE_SESSION),
+            open: (input) =>
+              Effect.gen(function* () {
+                appends.push(
+                  (input.options.systemPrompt as { readonly append?: string }).append ?? "",
+                );
+                const sdkMessages = yield* Queue.unbounded<SDKMessage>();
+                processQueues.push(sdkMessages);
+                return {
+                  messages: Stream.fromQueue(sdkMessages),
+                  offer: () => Effect.void,
+                  setModel: () => Effect.void,
+                  applyFlagSettings: () => Effect.void,
+                  setPermissionMode: () => Effect.void,
+                  backgroundTasks: () => Effect.succeed(false),
+                  mcpServerStatus: Effect.succeed([
+                    { name: "t3-code", status: "connected", tools: [] },
+                  ] as never),
+                  readMcpResource: () => Effect.die("unexpected MCP resource read"),
+                  callMcpTool: () => Effect.die("unexpected MCP tool call"),
+                  listPermissionRules: Effect.die("unexpected permission rules read"),
+                  stopTask: () => Effect.void,
+                  interrupt: Effect.void,
+                  close: Effect.sync(() => {
+                    closes += 1;
+                  }).pipe(Effect.andThen(Queue.shutdown(sdkMessages))),
+                };
+              }),
+            forkSession: () => Effect.die("unused forkSession"),
+            subagentLaunchToolUseId: () => Effect.succeed(null),
+            assertComplete: Effect.void,
+          },
+        });
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: "/workspace",
+        });
+        const threadId = ThreadId.make("thread-claude-subagent-guidance");
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        const session = {
+          environmentId: EnvironmentId.make("environment-claude-subagent-guidance"),
+          threadId,
+          providerSessionId: "mcp-session-claude-subagent-guidance",
+          providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer secret-claude-token",
+          preferNativeSubagents: true,
+        };
+        yield* sessions.set(session);
+        const runtime = yield* adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("provider-session-claude-subagent-guidance"),
+          modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+          runtimePolicy,
+        });
+        const providerThread = yield* runtime.ensureThread({
+          threadId,
+          modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+          runtimePolicy,
+        });
+        yield* runtime.events.pipe(
+          Stream.runForEach((event) =>
+            event.type === "turn.terminal" ? Queue.offer(terminals, undefined) : Effect.void,
+          ),
+          Effect.forkScoped,
+        );
+        const now = yield* DateTime.now;
+        const turn = (ordinal: number) =>
+          Effect.gen(function* () {
+            yield* runtime.startTurn(
+              makeClaudeTestTurnInput({
+                threadId,
+                providerThread:
+                  ordinal === 1 ? providerThread : { ...providerThread, status: "active" },
+                now,
+                attemptId: RunAttemptId.make(`attempt-claude-subagent-guidance-${ordinal}`),
+                text: `Turn ${ordinal}`,
+                attachments: [],
+                providerTurnOrdinal: ordinal,
+                runtimePolicy,
+              }),
+            );
+            yield* Queue.offer(
+              processQueues.at(-1)!,
+              makeResultFrame({
+                uuid: `00000000-0000-4000-8000-00000000b0${ordinal}0`,
+                result: "done",
+              }),
+            );
+            yield* Queue.take(terminals);
+          });
+
+        yield* turn(1);
+        yield* turn(2);
+        assert.lengthOf(appends, 1);
+        yield* sessions.set({ ...session, preferNativeSubagents: false });
+        yield* turn(3);
+
+        assert.lengthOf(appends, 2);
+        assert.equal(closes, 1);
+        assert.include(appends[0]!, "use your native tool");
+        assert.include(appends[1]!, "use `delegate_task` for every subagent");
+        assert.notInclude(appends[1]!, "use your native tool");
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+    ),
+  );
+
   // regression: #26082 a killed Claude process names its signal on the failed turn
   it.effect("names the signal that killed the Claude process on the failed turn", () =>
     Effect.gen(function* () {

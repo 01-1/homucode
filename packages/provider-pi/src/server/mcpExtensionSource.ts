@@ -9,6 +9,7 @@ export const T3_PI_PREFER_NATIVE_SUBAGENTS_ENV = "T3_PI_PREFER_NATIVE_SUBAGENTS"
 export const T3_PI_RUNTIME_MODE_ENV = "T3_PI_RUNTIME_MODE";
 export const T3_PI_MCP_EXTENSION_PATH_ENV = "T3_PI_MCP_EXTENSION_PATH";
 export const PI_T3_SERVICE_TIER_COMMAND = "t3-service-tier";
+export const PI_T3_SUBAGENTS_COMMAND = "t3-subagents";
 
 // These tools trigger file-change approvals, bypassed by Auto-accept edits.
 export const PI_FILE_CHANGE_TOOLS = ["edit", "write"] as const;
@@ -25,10 +26,10 @@ const TOKEN_ENV = ${JSON.stringify(T3_MCP_BEARER_ENV)};
 const RUNTIME_MODE_ENV = ${JSON.stringify(T3_PI_RUNTIME_MODE_ENV)};
 const EXTENSION_PATH_ENV = ${JSON.stringify(T3_PI_MCP_EXTENSION_PATH_ENV)};
 const PREFER_NATIVE_SUBAGENTS_ENV = ${JSON.stringify(T3_PI_PREFER_NATIVE_SUBAGENTS_ENV)};
-const ORCHESTRATION_INSTRUCTIONS = process.env[PREFER_NATIVE_SUBAGENTS_ENV] === "true"
-  ? ${JSON.stringify(t3CodeOrchestrationInstructions(true).trim())}
-  : ${JSON.stringify(t3CodeOrchestrationInstructions().trim())};
+const NATIVE_SUBAGENT_INSTRUCTIONS = ${JSON.stringify(t3CodeOrchestrationInstructions(true).trim())};
+const DELEGATE_SUBAGENT_INSTRUCTIONS = ${JSON.stringify(t3CodeOrchestrationInstructions().trim())};
 const SERVICE_TIER_COMMAND = ${JSON.stringify(PI_T3_SERVICE_TIER_COMMAND)};
+const SUBAGENTS_COMMAND = ${JSON.stringify(PI_T3_SUBAGENTS_COMMAND)};
 const PROTOCOL = "2025-06-18";
 const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
 const FILE_CHANGE_TOOLS = new Set(${JSON.stringify(PI_FILE_CHANGE_TOOLS)});
@@ -301,6 +302,17 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     };
   });
 
+  // The launch value can go stale while Pi runs; T3 resends the current setting through this command.
+  let preferNativeSubagents = process.env[PREFER_NATIVE_SUBAGENTS_ENV] === "true";
+  pi.registerCommand(SUBAGENTS_COMMAND, {
+    description: "Set whether T3 Code's guidance allows native subagents (native) or delegate_task only (delegate)",
+    handler: async (args) => {
+      preferNativeSubagents = args.trim() === "native";
+    },
+  });
+  const orchestrationInstructions = () =>
+    preferNativeSubagents ? NATIVE_SUBAGENT_INSTRUCTIONS : DELEGATE_SUBAGENT_INSTRUCTIONS;
+
   // Pi has no service tier setting, so T3 sets one through this command before each turn.
   // Only a tier the active model advertises is sent; Standard sends none.
   let serviceTier: string | undefined;
@@ -504,10 +516,10 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     const sections = event.systemPromptOptions?.sections;
     if (sections && typeof sections === "object" && event.systemPromptOptions?.forceSystemPrompt === undefined) {
       // A full prompt override bypasses Pi's later section rendering.
-      sections.t3_code_orchestration = ORCHESTRATION_INSTRUCTIONS;
+      sections.t3_code_orchestration = orchestrationInstructions();
       return undefined;
     }
-    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS };
+    return { systemPrompt: event.systemPrompt + "\\n\\n" + orchestrationInstructions() };
   });
 }
 `;

@@ -9,6 +9,7 @@ import type { OpencodeClient, ToolPart } from "@opencode-ai/sdk/v2";
 import { toolOutputImages } from "@t3tools/shared/toolOutput";
 import {
   CheckpointId,
+  EnvironmentId,
   NodeId,
   ProjectId,
   ProviderInstanceId,
@@ -161,6 +162,7 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
     readonly exitCode?: Effect.Effect<number>;
     readonly options?: ReadonlyArray<ProviderOptionSelection>;
     readonly interactionMode?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["interactionMode"];
+    readonly managedServer?: boolean;
   } = {},
 ) {
   const instanceId = ProviderInstanceId.make(`opencode-${suffix}`);
@@ -183,7 +185,7 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
       connectToOpenCodeServer: () =>
         Effect.succeed({
           url: "http://test.invalid",
-          external: turnSettings.exitCode === undefined,
+          external: turnSettings.exitCode === undefined && turnSettings.managedServer !== true,
           exitCode: turnSettings.exitCode ?? null,
         }),
       createOpenCodeSdkClient: () => client,
@@ -3599,6 +3601,53 @@ describe("OpenCodeAdapterV2", () => {
       );
       assert.equal(snapshot.providerThread.nativeConversationHeadRef?.nativeId, "user-kept");
     }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer))),
+  );
+
+  it.effect("reads the subagent setting when each turn starts, not when the session opens", () =>
+    Effect.gen(function* () {
+      const nativeEvents = asyncEventStream();
+      const systems: Array<string | undefined> = [];
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const session = {
+        environmentId: EnvironmentId.make("environment-opencode-subagents"),
+        threadId: ThreadId.make("thread-opencode-subagent-setting"),
+        providerSessionId: "mcp-session-opencode-subagents",
+        providerInstanceId: ProviderInstanceId.make("opencode-subagent-setting"),
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer opencode-token",
+        preferNativeSubagents: true,
+      };
+      yield* sessions.set(session);
+      const harness = yield* makeOpenCodeRuntimeHarness(
+        "subagent-setting",
+        "root",
+        {
+          event: { subscribe: async () => ({ stream: nativeEvents.stream }) },
+          mcp: { add: async () => ({ data: true }) },
+          session: {
+            create: async () => ({ data: { id: "root", time: { created: 1, updated: 1 } } }),
+            get: async () => ({ data: { id: "root", time: { created: 1, updated: 1 } } }),
+            messages: async () => ({ data: [] }),
+            promptAsync: async (input: { system?: string }) => {
+              systems.push(input.system);
+              return { data: true };
+            },
+            abort: async () => ({ data: true }),
+            children: async () => ({ data: [] }),
+          },
+        },
+        {},
+        { managedServer: true },
+      );
+      yield* sessions.set({ ...session, preferNativeSubagents: false });
+      yield* harness.startTurn();
+
+      assert.include(systems[0] ?? "", "use `delegate_task` for every subagent");
+      assert.notInclude(systems[0] ?? "", "use your native tool");
+    }).pipe(
+      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),
+      Effect.scoped,
+    ),
   );
 
   it.effect("steers with the turn's agent, reasoning variant and system instructions", () =>

@@ -6,7 +6,11 @@ import * as NodeModule from "node:module";
 import * as NodeVM from "node:vm";
 import { assert, describe, it } from "@effect/vitest";
 
-import { PI_T3_MCP_EXTENSION_SOURCE, PI_T3_SERVICE_TIER_COMMAND } from "./mcpExtensionSource.ts";
+import {
+  PI_T3_MCP_EXTENSION_SOURCE,
+  PI_T3_SERVICE_TIER_COMMAND,
+  PI_T3_SUBAGENTS_COMMAND,
+} from "./mcpExtensionSource.ts";
 import { loadMcpBridge } from "./mcpBridge.testkit.ts";
 
 type RequestHook = (
@@ -80,6 +84,30 @@ describe("Pi orchestration prompt section", () => {
       assert.isTrue(result!.systemPrompt.startsWith(`${event.systemPrompt}\n\n`));
       assert.include(result!.systemPrompt, "orchestrator_capabilities");
     }
+  });
+});
+
+describe("Pi subagent guidance", () => {
+  it("starts from the launch setting and follows later setting changes", async () => {
+    const bridge = await loadMcpBridge({ preferNativeSubagents: "true" });
+    const hook = bridge.handlers.get("before_agent_start")!;
+    const ctx = { ui: { notify: assert.fail } };
+    const prompt = async () => {
+      const sections: Record<string, string> = {};
+      const appended = await hook({ systemPrompt: "base" }, ctx);
+      await hook({ systemPrompt: "base", systemPromptOptions: { sections } }, ctx);
+      assert.include(appended!.systemPrompt, sections.t3_code_orchestration!);
+      return sections.t3_code_orchestration!;
+    };
+    const setSubagents = bridge.commands.get(PI_T3_SUBAGENTS_COMMAND)!;
+
+    assert.include(await prompt(), "use your native tool");
+    await setSubagents("delegate");
+    const delegated = await prompt();
+    assert.include(delegated, "use `delegate_task` for every subagent");
+    assert.notInclude(delegated, "use your native tool");
+    await setSubagents("native");
+    assert.include(await prompt(), "use your native tool");
   });
 });
 
