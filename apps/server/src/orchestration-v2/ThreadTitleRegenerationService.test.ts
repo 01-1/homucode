@@ -39,6 +39,7 @@ import * as ThreadTitleRegeneration from "./ThreadTitleRegenerationService.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import { placeholderThreadTitle } from "./placeholderThreadTitle.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 const projectId = ProjectId.make("project:title-regeneration");
 const modelSelection = {
@@ -121,7 +122,9 @@ function makeHarness(
     ),
   );
   const layerTitleIdReconciler = ThreadTitleIdReconciler.layer.pipe(
-    Layer.provide(Layer.mergeAll(layerThreadManagement, layerServerSettings)),
+    Layer.provide(
+      Layer.mergeAll(layerThreadManagement, layerServerSettings, SecureRandom.layerWebCrypto),
+    ),
   );
   return {
     layer: Layer.mergeAll(

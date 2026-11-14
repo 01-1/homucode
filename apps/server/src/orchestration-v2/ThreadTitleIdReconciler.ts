@@ -7,10 +7,9 @@ import {
   type ServerSettingsError,
   type ThreadId,
 } from "@t3tools/contracts";
-import * as NodeCrypto from "node:crypto";
-
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -64,7 +63,7 @@ const make = Effect.gen(function* () {
   // One project pass at a time, so two threads can never pick the same free ID.
   const lock = yield* Semaphore.make(1);
   // Command receipts outlive the process, so each run gets its own command IDs.
-  const runId = NodeCrypto.randomUUID();
+  const runId = yield* (yield* SecureRandom.SecureRandom).uuidV4();
   let sequence = 0;
   // What each pending ID write was based on, so its own event is not reconciled again.
   const ownWrites = new Map<
