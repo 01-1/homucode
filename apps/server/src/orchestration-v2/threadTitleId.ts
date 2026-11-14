@@ -1,8 +1,6 @@
-// Thread title IDs are short handles shown before a title, stored in the thread's `titleId`.
-// Active threads get the title's first letter, then a base-10 number when another thread has it:
-// "F", "F1", "F2". Settling adds letters ("F1" -> "F1a") so the number is free for active threads
-// again; unsettling goes back to the thread's own number when it is free, otherwise to the lowest
-// free one. The initial always comes from the title, so a digit initial ("7", "71") stays unambiguous.
+// Title IDs: the title's first letter, plus a base-10 number on a collision (F, F1, F2).
+// Settled threads add letters (F1a); unsettling returns to their own number if free, else the lowest
+// free one. The initial comes from the title, so digit initials ("7", "71") stay unambiguous.
 
 const FIRST_CHARACTER = /[\p{L}\p{N}]/u;
 const ID_REST = /^(\d*)([a-z]*)$/;
