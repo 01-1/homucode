@@ -1833,6 +1833,44 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
+  it.effect("refuses to add an autoreviewer while autoreviewers are off", () =>
+    Effect.gen(function* () {
+      const layerDependencies = (autoreviewEnabled: boolean) =>
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            hasReceipt: () => Effect.succeed(false),
+            getThreadRecords: () => Effect.succeed(parentProjection([])),
+          }),
+          ServerSettings.layerTest({ autoreviewEnabled }),
+          providerRegistryLayer([]),
+          adapterRegistryLayer([]),
+          Layer.mock(ProjectService.ProjectService)({}),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        );
+      const add = (autoreviewEnabled: boolean) =>
+        Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          return yield* service
+            .prepareAutoreview(scope, { action: "add", clientRequestId: "autoreview-off" })
+            .pipe(Effect.flip);
+        }).pipe(
+          Effect.provide(
+            layerOrchestratorService.pipe(Layer.provide(layerDependencies(autoreviewEnabled))),
+          ),
+        );
+
+      const off = yield* add(false);
+      assert.equal(off.code, "capability_denied");
+      assert.include(off.message, "Settings → Threads → Autoreviewers");
+      // On, the same call goes on to resolve the reviewer's provider, which is missing here.
+      assert.notEqual((yield* add(true)).code, "capability_denied");
+    }),
+  );
+
   it.effect("driver-only delegation skips an instance the project turned off", () =>
     Effect.gen(function* () {
       const altInstanceId = ProviderInstanceId.make("codex-alt");

@@ -119,6 +119,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as AutoreviewService from "../orchestration-v2/AutoreviewService.ts";
 import {
   clientModeCeiling,
   type McpInvocationScope,
@@ -2843,6 +2844,15 @@ const make = Effect.gen(function* () {
         });
         if (input.action === "remove" || input.action === "list") {
           return { callerThreadId, threadId, commandId };
+        }
+        if (
+          input.action === "add" &&
+          !(yield* serverSettings.getSettings.pipe(
+            Effect.map((settings) => settings.autoreviewEnabled),
+            Effect.orElseSucceed(() => false),
+          ))
+        ) {
+          return yield* failure("capability_denied", AutoreviewService.AUTOREVIEW_OFF_MESSAGE);
         }
         if (input.action === "update" && input.reviewerThreadId === undefined) {
           return yield* failure("invalid_request", "`update` needs `reviewerThreadId`.");

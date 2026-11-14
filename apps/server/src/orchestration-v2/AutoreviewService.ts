@@ -48,6 +48,7 @@ import {
   renderAutoreviewBatch,
 } from "./autoreviewBatch.ts";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
+import * as ServerSettings from "../serverSettings.ts";
 import { visibleConversationItems } from "./ContextHandoffService.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import type {
@@ -58,7 +59,7 @@ import type {
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 
 export class AutoreviewError extends Schema.TaggedError<AutoreviewError>()("AutoreviewError", {
-  reason: Schema.Literals(["not_found", "not_active", "invalid", "failed"]),
+  reason: Schema.Literals(["not_found", "not_active", "invalid", "off", "failed"]),
   detail: Schema.String,
 }) {
   override get message(): string {
@@ -185,6 +186,8 @@ type PortError =
   | ThreadManagementService.ThreadManagementProviderInstanceDisabledError;
 
 export interface AutoreviewPort {
+  /** The `autoreviewEnabled` setting, read live; absent means on. */
+  readonly enabled?: Effect.Effect<boolean>;
   readonly stopReviewerWork?: (input: {
     readonly commandId: CommandId;
     readonly threadId: ThreadId;
@@ -229,9 +232,13 @@ const withOwnSections = (
   return { ...rest, ownSections: sections.slice(-MAX_OWN_SECTIONS) };
 };
 
+export const AUTOREVIEW_OFF_MESSAGE =
+  "Autoreviewers are off on this machine. Turn them on in Settings → Threads → Autoreviewers.";
+
 export const make = (port: AutoreviewPort) => {
   const engine = port;
   const lock = autoreviewLock;
+  const enabled = port.enabled ?? Effect.succeed(true);
   const projections = {
     getThread: (threadId: ThreadId) =>
       port.getThreadRecords(threadId, []).pipe(Effect.map((records) => records.thread)),
@@ -393,6 +400,8 @@ export const make = (port: AutoreviewPort) => {
 
   /** Sends each idle reviewer its buffer; must run under `lock`. */
   const flushUnlocked = Effect.fnUntraced(function* (threadId: ThreadId) {
+    // Off pauses attached reviewers; the next flush after it is back on sends what built up.
+    if (!(yield* enabled)) return;
     const thread = yield* projections.getThread(threadId);
     const reviewers = thread.autoreviewers ?? [];
     if (reviewers.length === 0 || isGone(thread)) return;
@@ -643,6 +652,9 @@ export const make = (port: AutoreviewPort) => {
   const attach: AutoreviewService["Service"]["attach"] = (input) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
+        if (!(yield* enabled)) {
+          return yield* new AutoreviewError({ reason: "off", detail: AUTOREVIEW_OFF_MESSAGE });
+        }
         const reviewed = yield* readReviewable(input.threadId).pipe(
           Effect.mapError(
             () =>
@@ -1060,11 +1072,21 @@ export const make = (port: AutoreviewPort) => {
   } satisfies AutoreviewService["Service"];
 };
 
+// Unreadable settings keep autoreviewers off.
+const readEnabled = Effect.gen(function* () {
+  const settings = yield* ServerSettings.ServerSettingsService;
+  return settings.getSettings.pipe(
+    Effect.map((current) => current.autoreviewEnabled),
+    Effect.orElseSucceed(() => false),
+  );
+});
+
 /** The reactor: follows orchestration events and feeds reviewers. */
 export const layer = Layer.effect(
   AutoreviewService,
   Effect.gen(function* () {
-    return make(yield* Orchestrator.OrchestratorV2);
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    return make({ ...orchestrator, enabled: yield* readEnabled });
   }),
 );
 
@@ -1074,6 +1096,7 @@ export const layerFromThreadManagement = Layer.effect(
   Effect.gen(function* () {
     const threads = yield* ThreadManagementService.ThreadManagementService;
     return make({
+      enabled: yield* readEnabled,
       stopReviewerWork: (input) => stopAutoreviewerWork(threads, input),
       dispatch: threads.dispatch,
       getThreadRecords: threads.getThreadRecords,
