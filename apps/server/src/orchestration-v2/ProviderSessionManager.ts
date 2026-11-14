@@ -2495,7 +2495,24 @@ export const layerWithOptions = (
                     ),
                   ),
                   () =>
-                    runtime.startTurn(input).pipe(turnMetrics("send", input.modelSelection.model)),
+                    Effect.gen(function* () {
+                      // An attached runtime survives settings changes; refresh guidance before the adapter reads it.
+                      if (yield* mcpSessions.read(input.threadId)) {
+                        const { preferNativeSubagents } = yield* agentAccessSettings(
+                          input.threadId,
+                        );
+                        const current = yield* mcpSessions.read(input.threadId);
+                        if (
+                          current !== undefined &&
+                          current.preferNativeSubagents !== preferNativeSubagents
+                        ) {
+                          yield* mcpSessions.set({ ...current, preferNativeSubagents });
+                        }
+                      }
+                      yield* runtime
+                        .startTurn(input)
+                        .pipe(turnMetrics("send", input.modelSelection.model));
+                    }),
                   (_, exit) =>
                     Exit.isFailure(exit)
                       ? observeActivity(

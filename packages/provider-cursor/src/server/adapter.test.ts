@@ -760,7 +760,7 @@ describe("CursorAdapterV2", () => {
       const instanceId = ProviderInstanceId.make("cursor");
       const threadId = ThreadId.make("cursor-device-thread");
       const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
-      const setDeviceAccess = (device: boolean) =>
+      const setDeviceAccess = (device: boolean, preferNativeSubagents = false) =>
         mcpSessions.set({
           environmentId: EnvironmentId.make("cursor-device-environment"),
           threadId,
@@ -770,6 +770,7 @@ describe("CursorAdapterV2", () => {
           authorizationHeader: "Bearer synthetic-cursor-token",
           browserToolsAvailable: true,
           capabilities: new Set(device ? ["device"] : []),
+          preferNativeSubagents,
         });
       const modelSelection = { instanceId, model: "composer-2.5" };
       const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
@@ -883,7 +884,7 @@ describe("CursorAdapterV2", () => {
       const told = (orchestration: boolean, devices: boolean) => ({ orchestration, devices });
 
       yield* setDeviceAccess(true);
-      assert.deepEqual(yield* send(), told(false, true));
+      assert.deepEqual(yield* send(), told(true, true));
       assert.deepEqual(yield* send(), told(false, false));
       yield* send(true);
       assert.deepEqual(
@@ -896,6 +897,12 @@ describe("CursorAdapterV2", () => {
       yield* setDeviceAccess(true);
       assert.deepEqual(yield* send(), told(false, true), "device access turned on later");
       assert.deepEqual(yield* send(), told(false, false));
+      yield* setDeviceAccess(true, true);
+      assert.deepEqual(yield* send(), told(true, true));
+      assert.include(sentMessages.at(-1)!, "use your native tool");
+      yield* setDeviceAccess(true, false);
+      assert.deepEqual(yield* send(), told(true, true));
+      assert.include(sentMessages.at(-1)!, "use `delegate_task` for every subagent");
     }).pipe(
       Effect.scoped,
       Effect.provide(
