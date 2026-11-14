@@ -754,6 +754,32 @@ function hasTitleSetBeforeFirstMessage(
   );
 }
 
+function isTitleIdOnlyUpdate(
+  command: Extract<OrchestrationV2Command, { readonly type: "thread.metadata.update" }>,
+): boolean {
+  return (
+    command.titleId !== undefined &&
+    command.title === undefined &&
+    command.regenerateTitle === undefined &&
+    command.branch === undefined &&
+    command.worktreePath === undefined &&
+    command.limitRecovery === undefined &&
+    command.linkedPullRequest === undefined
+  );
+}
+
+function threadTitleIdSyncEffect(
+  commandId: CommandId,
+  threadId: ThreadId,
+): PendingOrchestrationEffectV2 {
+  return {
+    id: `effect:${commandId}:thread-title-id.sync`,
+    commandId,
+    threadId,
+    request: { type: "thread-title-id.sync" },
+  };
+}
+
 function delegatedTasksStopEffect(command: {
   readonly commandId: CommandId;
   readonly threadId: ThreadId;
@@ -4916,6 +4942,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return {
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title }),
+            ...(command.titleId === undefined ? {} : { titleId: command.titleId }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
@@ -4966,7 +4993,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : command.regenerateTitle === false || command.title !== undefined
                 ? { titleRegeneration: null }
                 : {}),
-            updatedAt: now,
+            // A title ID change alone is bookkeeping and must not reorder or wake the thread.
+            updatedAt: isTitleIdOnlyUpdate(command) ? thread.updatedAt : now,
           };
         }
         case "thread.pull-request.link":
@@ -5223,6 +5251,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                         completedAt: now,
                       },
                     }),
+                ...(command.titleId === undefined ? {} : { titleId: command.titleId }),
                 titleRegeneration: null,
                 updatedAt: now,
               }
@@ -5396,6 +5425,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ]);
     }
 
+    // Settled threads carry a letter on their title ID; the sync adds or removes it.
+    if (
+      (command.type === "thread.settle" ||
+        command.type === "thread.unsettle" ||
+        command.type === "thread.unarchive") &&
+      updatedThread.titleId != null
+    ) {
+      yield* Ref.update(effects, (existing) => [
+        ...existing,
+        threadTitleIdSyncEffect(command.commandId, command.threadId),
+      ]);
+    }
     if (command.type === "thread.metadata.update" && command.regenerateTitle === true) {
       yield* Ref.update(effects, (existing) => [
         ...existing,
@@ -7464,6 +7505,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: thread,
       });
       projection = applyToProjection(projection, event);
+      if (thread.titleId != null) {
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          threadTitleIdSyncEffect(command.commandId, command.threadId),
+        ]);
+      }
     }
     // Background wakes and delegated completions continue work the user already snoozed, so
     // only a message someone actually sent ends the snooze.

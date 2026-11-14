@@ -560,6 +560,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   devicePins: Schema.optional(DeviceThreadPins),
   legacyPin: Schema.optional(Schema.NullOr(ThreadPin)),
+  /** Short project-unique handle shown before the title, such as "F1"; settled threads add letters ("F1a"). */
+  titleId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -2323,6 +2325,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   devicePins: Schema.optional(DeviceThreadPins),
   legacyPin: Schema.optional(Schema.NullOr(ThreadPin)),
+  /** Short project-unique handle shown before the title, such as "F1"; settled threads add letters ("F1a"). */
+  titleId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -3342,6 +3346,8 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     title: Schema.optional(TrimmedNonEmptyString),
+    /** Absent keeps the thread's title ID; null removes it. */
+    titleId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
     regenerateTitle: Schema.optional(Schema.Boolean),
     branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
     worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -3415,6 +3421,8 @@ export const OrchestrationV2Command = Schema.Union([
     requestId: CommandId,
     title: Schema.optional(TrimmedNonEmptyString),
     outcome: Schema.optional(ThreadTitleRegenerationOutcome),
+    /** Absent keeps the thread's ID; null removes it. */
+    titleId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.runtime-mode.set"),

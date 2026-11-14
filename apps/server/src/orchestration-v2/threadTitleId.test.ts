@@ -1,27 +1,51 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { assignThreadTitleId, splitThreadTitleId, threadTitleInitials } from "./threadTitleId.ts";
+import {
+  assignThreadTitleId,
+  syncThreadTitleId,
+  threadTitleIdMatchesInitial,
+  threadTitleInitial,
+} from "./threadTitleId.ts";
+
+const taken = (...ids: string[]) => new Set(ids);
 
 describe("thread title IDs", () => {
-  it("takes the first letter of the first three words", () => {
-    expect(threadTitleInitials("Fix login bug on mobile")).toBe("FLB");
-    expect(threadTitleInitials("titler: (project) name")).toBe("TPN");
-    expect(threadTitleInitials("Backup — B2 check")).toBe("BBC");
-    expect(threadTitleInitials("Fix")).toBe("F");
+  it("uses the title's first letter or digit", () => {
+    expect(threadTitleInitial("fix login bug")).toBe("F");
+    expect(threadTitleInitial("(beta) rollout")).toBe("B");
+    expect(threadTitleInitial("修复 登录")).toBe("修");
+    expect(threadTitleInitial("—")).toBeUndefined();
   });
 
-  it("adds a base-36 counter from 0 only on a collision", () => {
-    expect(assignThreadTitleId("Fix login bug", ["Other thread"])).toBe("FLB");
-    expect(assignThreadTitleId("Fix login bug", ["FLB Find lost backups"])).toBe("FLB0");
-    const taken = ["FLB a", ...Array.from({ length: 10 }, (_, n) => `FLB${n} b`)];
-    expect(assignThreadTitleId("Fix login bug", taken)).toBe("FLBa");
-    expect(assignThreadTitleId("Fix login bug", ["FLB0 a"])).toBe("FLB");
-    expect(assignThreadTitleId("—", [])).toBeUndefined();
+  it("numbers active IDs in base 10 only on a collision", () => {
+    expect(assignThreadTitleId({ initial: "F", settled: false, taken: taken() })).toBe("F");
+    expect(assignThreadTitleId({ initial: "F", settled: false, taken: taken("F") })).toBe("F1");
+    expect(
+      assignThreadTitleId({ initial: "F", settled: false, taken: taken("F", "F1", "F2") }),
+    ).toBe("F3");
+    // Settled IDs carry letters, so they never block an active one.
+    expect(assignThreadTitleId({ initial: "F", settled: false, taken: taken("Fa", "F1a") })).toBe(
+      "F",
+    );
   });
 
-  it("splits an ID word off a title and leaves ordinary first words alone", () => {
-    expect(splitThreadTitleId("FLB0 Fix login bug")).toEqual({ id: "FLB0", rest: "Fix login bug" });
-    expect(splitThreadTitleId("Fix login bug")).toEqual({ id: undefined, rest: "Fix login bug" });
-    expect(splitThreadTitleId("FLB")).toEqual({ id: undefined, rest: "FLB" });
+  it("adds letters when a thread settles and drops them when it unsettles", () => {
+    expect(syncThreadTitleId({ id: "F1", settled: true, taken: taken() })).toBe("F1a");
+    expect(syncThreadTitleId({ id: "F1", settled: true, taken: taken("F1a") })).toBe("F1b");
+    expect(syncThreadTitleId({ id: "F1a", settled: true, taken: taken() })).toBe("F1a");
+    expect(syncThreadTitleId({ id: "F1a", settled: false, taken: taken() })).toBe("F1");
+    // An active thread took F1 while this one was settled: take the next free number.
+    expect(syncThreadTitleId({ id: "F1a", settled: false, taken: taken("F", "F1") })).toBe("F2");
+    expect(syncThreadTitleId({ id: "F", settled: false, taken: taken() })).toBe("F");
+    // A restored duplicate gets a fresh number.
+    expect(syncThreadTitleId({ id: "F", settled: false, taken: taken("F") })).toBe("F1");
+    const many = taken(...Array.from({ length: 26 }, (_, n) => `F${String.fromCharCode(97 + n)}`));
+    expect(syncThreadTitleId({ id: "F", settled: true, taken: many })).toBe("Faa");
+  });
+
+  it("keeps an ID while the title keeps its first letter", () => {
+    expect(threadTitleIdMatchesInitial("F12b", "F")).toBe(true);
+    expect(threadTitleIdMatchesInitial("F12", "G")).toBe(false);
+    expect(threadTitleIdMatchesInitial("修1", "修")).toBe(true);
   });
 });

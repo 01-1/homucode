@@ -1888,6 +1888,7 @@ export function threadShellFromProjection(
     ...(projection.thread.legacyPin === undefined
       ? {}
       : { legacyPin: projection.thread.legacyPin }),
+    ...(projection.thread.titleId == null ? {} : { titleId: projection.thread.titleId }),
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
     pinOrderKey: projection.thread.pinOrderKey ?? null,
@@ -2195,6 +2196,7 @@ function shellFromState(input: {
     ...(input.state.thread.legacyPin === undefined
       ? {}
       : { legacyPin: input.state.thread.legacyPin }),
+    ...(input.state.thread.titleId == null ? {} : { titleId: input.state.thread.titleId }),
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
     pinOrderKey: input.state.thread.pinOrderKey ?? null,

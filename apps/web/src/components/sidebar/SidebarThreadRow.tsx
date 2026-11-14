@@ -77,6 +77,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import type { SidebarThreadSummary } from "../../types";
+import { ThreadTitleIdBadge } from "./ThreadTitleIdBadge";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
@@ -1087,6 +1088,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       )}
       dir={textDirection(thread.title)}
     >
+      <ThreadTitleIdBadge titleId={thread.titleId} />
       {thread.title}
     </span>
   );
@@ -1818,6 +1820,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
                   thread.titleRegeneration != null && "opacity-55",
                 )}
               >
+                <ThreadTitleIdBadge titleId={thread.titleId} />
                 {thread.title}
               </span>
               <span id={`${props.resultId}-pr`} className="contents">

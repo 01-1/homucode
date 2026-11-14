@@ -1,48 +1,83 @@
-// Thread title IDs: the first letter of each of the title's first three words, plus a
-// base-36 counter (0, 1, ... 9, a, ...) when another thread in the project already uses it.
-// They live in the title itself, as its first word: "FLB Fix login bug", "FLB0 Find lost backups".
+// Thread title IDs are short handles shown before a title, stored in the thread's `titleId`.
+// Active threads get the title's first letter, then a base-10 number when another thread has it:
+// "F", "F1", "F2". Settling adds letters ("F1" -> "F1a") so the number is free for active threads
+// again; unsettling drops them, or takes the next free number if an active thread took it meanwhile.
 
-const ID_TOKEN = /^(?:[\p{Lu}\p{Nd}]|[\p{Lu}\p{Nd}]{2,3}[0-9a-z]*)$/u;
-const WORD_START = /[\p{L}\p{N}]/u;
+const FIRST_CHARACTER = /[\p{L}\p{N}]/u;
+const SETTLED_SUFFIX = /[a-z]+$/;
+const NUMBER_SUFFIX = /\d+$/;
 
-/** The initials of the title's first three words that contain a letter or digit. */
-export function threadTitleInitials(title: string): string {
-  return title
-    .split(/\s+/)
-    .map((word) => word.match(WORD_START)?.[0])
-    .filter((char): char is string => char !== undefined)
-    .slice(0, 3)
-    .map((char) => char.toLocaleUpperCase())
-    .join("");
+/** The title's first letter or digit, upper-cased; undefined when it has none. */
+export function threadTitleInitial(title: string): string | undefined {
+  return title.match(FIRST_CHARACTER)?.[0]?.toLocaleUpperCase();
 }
 
-/** Splits a leading ID word off a title. Titles without one come back with `id: undefined`. */
-export function splitThreadTitleId(title: string): { id: string | undefined; rest: string } {
-  const trimmed = title.trim();
-  const space = trimmed.indexOf(" ");
-  if (space <= 0) return { id: undefined, rest: trimmed };
-  const token = trimmed.slice(0, space);
-  const rest = trimmed.slice(space + 1).trim();
-  return ID_TOKEN.test(token) && rest.length > 0
-    ? { id: token, rest }
-    : { id: undefined, rest: trimmed };
+function splitSettledSuffix(id: string): { stem: string; letters: string } {
+  const letters = id.match(SETTLED_SUFFIX)?.[0] ?? "";
+  // A lower-case initial with no upper-case form is part of the stem, not a suffix.
+  return letters.length === id.length
+    ? { stem: id, letters: "" }
+    : { stem: id.slice(0, id.length - letters.length), letters };
 }
 
-/** The ID for `title`: its initials, or the initials plus the lowest free base-36 counter. */
-export function assignThreadTitleId(
-  title: string,
-  otherTitles: Iterable<string>,
-): string | undefined {
-  const base = threadTitleInitials(title);
-  if (base.length === 0) return undefined;
-  const taken = new Set<string>();
-  for (const other of otherTitles) {
-    const { id } = splitThreadTitleId(other);
-    if (id !== undefined) taken.add(id);
+function initialOfStem(stem: string): string {
+  return stem.replace(NUMBER_SUFFIX, "") || stem;
+}
+
+/** a, b, ... z, aa, ab, ... */
+function letters(index: number): string {
+  let value = index + 1;
+  let out = "";
+  while (value > 0) {
+    value -= 1;
+    out = String.fromCharCode(97 + (value % 26)) + out;
+    value = Math.floor(value / 26);
   }
-  if (!taken.has(base)) return base;
-  for (let counter = 0; ; counter += 1) {
-    const candidate = `${base}${counter.toString(36)}`;
-    if (!taken.has(candidate)) return candidate;
+  return out;
+}
+
+/** The active ID for `initial`: bare if free, otherwise the lowest free number from 1. */
+function nextActiveThreadTitleId(initial: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(initial)) return initial;
+  for (let number = 1; ; number += 1) {
+    if (!taken.has(`${initial}${number}`)) return `${initial}${number}`;
   }
+}
+
+function nextSettledThreadTitleId(stem: string, taken: ReadonlySet<string>): string {
+  for (let index = 0; ; index += 1) {
+    if (!taken.has(`${stem}${letters(index)}`)) return `${stem}${letters(index)}`;
+  }
+}
+
+/** Whether `id` still fits a thread whose title starts with `initial`. */
+export function threadTitleIdMatchesInitial(id: string, initial: string): boolean {
+  return initialOfStem(splitSettledSuffix(id).stem) === initial;
+}
+
+/** A fresh ID for a thread in the given state. */
+export function assignThreadTitleId(input: {
+  readonly initial: string;
+  readonly settled: boolean;
+  readonly taken: ReadonlySet<string>;
+}): string {
+  return input.settled
+    ? nextSettledThreadTitleId(input.initial, input.taken)
+    : nextActiveThreadTitleId(input.initial, input.taken);
+}
+
+/** The ID a thread should have after settling or unsettling; returns `id` when it already fits. */
+export function syncThreadTitleId(input: {
+  readonly id: string;
+  readonly settled: boolean;
+  readonly taken: ReadonlySet<string>;
+}): string {
+  const { stem, letters: suffix } = splitSettledSuffix(input.id);
+  if (input.settled) {
+    return suffix.length > 0 && !input.taken.has(input.id)
+      ? input.id
+      : nextSettledThreadTitleId(stem, input.taken);
+  }
+  if (suffix.length === 0 && !input.taken.has(input.id)) return input.id;
+  return input.taken.has(stem) ? nextActiveThreadTitleId(initialOfStem(stem), input.taken) : stem;
 }

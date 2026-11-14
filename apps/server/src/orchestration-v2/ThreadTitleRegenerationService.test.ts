@@ -567,7 +567,7 @@ describe("ThreadTitleRegenerationService", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("prefixes titles with a project-unique ID and keeps it on regenerate", () =>
+  it.effect("gives threads project-unique title IDs that follow their settled state", () =>
     Effect.gen(function* () {
       const harness = makeHarness({
         generateTitle: () => Effect.succeed({ title: "Fix login bug" }),
@@ -576,34 +576,66 @@ describe("ThreadTitleRegenerationService", () => {
       yield* Effect.gen(function* () {
         const threads = yield* ThreadManagement.ThreadManagementService;
         const titleRegeneration = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const threadId = (name: string) => ThreadId.make(`thread:title:id:${name}`);
+        const shown = Effect.fn(function* (name: string) {
+          const { thread } = yield* threads.getThreadProjection(threadId(name));
+          return `${thread.titleId ?? "-"} ${thread.title}`;
+        });
         const regenerate = Effect.fn(function* (name: string, round: number) {
-          const threadId = ThreadId.make(`thread:title:id:${name}`);
           const requestId = yield* armRegeneration({
             command: `command:title:id:${name}:${round}`,
-            threadId,
+            threadId: threadId(name),
           });
-          yield* titleRegeneration.execute({ threadId, requestId, kind: { type: "regenerate" } });
-          return (yield* threads.getThreadProjection(threadId)).thread.title;
+          yield* titleRegeneration.execute({
+            threadId: threadId(name),
+            requestId,
+            kind: { type: "regenerate" },
+          });
+          return yield* shown(name);
         });
-        for (const name of ["first", "second"]) {
-          const threadId = yield* createThread({
+        const setSettled = Effect.fn(function* (name: string, settled: boolean) {
+          const commandId = CommandId.make(
+            `command:title:id:${name}:${settled ? "settle" : "unsettle"}`,
+          );
+          yield* threads.dispatch({
+            type: settled ? "thread.settle" : "thread.unsettle",
+            commandId,
+            threadId: threadId(name),
+          });
+          // The effect worker is off in this harness; run the sync the settle queued.
+          yield* titleRegeneration.syncTitleId({ threadId: threadId(name), commandId });
+          return yield* shown(name);
+        });
+        for (const name of ["first", "second", "third", "fourth", "fifth"]) {
+          yield* createThread({
             command: `command:title:id:${name}:create`,
             thread: `thread:title:id:${name}`,
           });
           yield* dispatchUserMessage({
             command: `command:title:id:${name}:message`,
-            threadId,
+            threadId: threadId(name),
             text: "The login button does nothing",
           });
         }
 
-        assert.equal(yield* regenerate("first", 1), "FLB Fix login bug");
-        assert.equal(yield* regenerate("second", 1), "FLB0 Fix login bug");
-        assert.equal(yield* regenerate("first", 2), "FLB Fix login bug");
+        assert.equal(yield* regenerate("first", 1), "F Fix login bug");
+        assert.equal(yield* regenerate("second", 1), "F1 Fix login bug");
+        assert.equal(yield* regenerate("first", 2), "F Fix login bug");
         const last = harness.generateThreadTitle.mock.calls.at(-1)?.[0];
         assert.equal(last?.previousTitle, "Fix login bug");
         assert.isUndefined(last?.projectName);
         assert.isUndefined(last?.folderContext?.projectName);
+
+        assert.equal(yield* setSettled("second", true), "F1a Fix login bug");
+        assert.equal(yield* regenerate("third", 1), "F1 Fix login bug");
+        // F1 was taken while "second" was settled, so it comes back with the next free number.
+        assert.equal(yield* setSettled("second", false), "F2 Fix login bug");
+
+        // Generation runs in parallel, but choosing and saving an ID happen one thread at a time.
+        const concurrent = yield* Effect.all([regenerate("fourth", 1), regenerate("fifth", 1)], {
+          concurrency: "unbounded",
+        });
+        assert.sameMembers(concurrent, ["F3 Fix login bug", "F4 Fix login bug"]);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

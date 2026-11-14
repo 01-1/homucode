@@ -92,7 +92,7 @@ export function ThreadTitleInstructionsSettings() {
         settingKeys={["threadTitleIdPrefix"]}
         mixed={mixedIdPrefix}
         {...searchableSetting("thread-title-id-prefix")}
-        description='Start generated titles with the first letters of their first three words, as in "FLB Fix login bug". If another thread in the project has that ID, add a base-36 counter: FLB0, FLB1.'
+        description="Show a short ID before each generated title: its first letter, plus a number when another active thread has it (F, F1, F2). Settled threads add a letter (F1a)."
         resetAction={
           mixedIdPrefix || settings.threadTitleIdPrefix ? (
             <SettingResetButton
