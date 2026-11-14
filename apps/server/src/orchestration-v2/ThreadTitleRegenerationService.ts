@@ -67,7 +67,10 @@ export class ThreadTitleRegenerationService extends Context.Service<
 >()("t3/orchestration-v2/ThreadTitleRegenerationService") {}
 
 function takenTitleIds(
-  projectThreads: ReadonlyArray<{ readonly id: ThreadId; readonly titleId?: string | null }>,
+  projectThreads: ReadonlyArray<{
+    readonly id: ThreadId;
+    readonly titleId?: string | null | undefined;
+  }>,
   threadId: ThreadId,
 ): ReadonlySet<string> {
   return new Set(

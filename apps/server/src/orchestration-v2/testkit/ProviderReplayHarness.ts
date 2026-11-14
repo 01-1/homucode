@@ -494,6 +494,7 @@ export function layerWithRegistry<Error>(
       execute: Effect.fn("ThreadTitleRegenerationService.execute")(function () {
         return Effect.void;
       }),
+      syncTitleId: () => Effect.void,
     }),
   );
   const layerOrchestratorProvided = Orchestrator.layer.pipe(
