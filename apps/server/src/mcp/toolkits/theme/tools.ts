@@ -61,7 +61,7 @@ const ThemeSetTool = Tool.make("t3_theme_set", {
     backgroundImage: Schema.optionalKey(
       Schema.NullOr(Schema.String).annotate({
         description:
-          "Absolute path of a JPEG, PNG, or WebP file on this machine, up to 16 MB. It is copied beside the theme. null removes it. Needs `themeId` of a theme that is not built in.",
+          "Absolute path of a JPEG, PNG, or WebP file on this machine, up to 16 MB. Copied beside the theme. null removes it.",
       }),
     ),
     appearance: Schema.optionalKey(Appearance),
