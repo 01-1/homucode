@@ -2773,6 +2773,7 @@ describe("PiAdapterV2", () => {
         providerInstanceId: PI_INSTANCE_ID,
         endpoint: "http://127.0.0.1:43123/mcp",
         authorizationHeader: "Bearer secret-pi-token",
+        browserToolsAvailable: false,
         preferNativeSubagents: true,
       };
       yield* sessions.set(session);

@@ -3615,6 +3615,7 @@ describe("OpenCodeAdapterV2", () => {
         providerInstanceId: ProviderInstanceId.make("opencode-subagent-setting"),
         endpoint: "http://127.0.0.1:43123/mcp",
         authorizationHeader: "Bearer opencode-token",
+        browserToolsAvailable: false,
         preferNativeSubagents: true,
       };
       yield* sessions.set(session);

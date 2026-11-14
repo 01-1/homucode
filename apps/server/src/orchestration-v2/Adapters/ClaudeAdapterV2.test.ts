@@ -21579,6 +21579,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           providerInstanceId: ProviderInstanceId.make("claudeAgent"),
           endpoint: "http://127.0.0.1:43123/mcp",
           authorizationHeader: "Bearer secret-claude-token",
+          browserToolsAvailable: false,
           preferNativeSubagents: true,
         };
         yield* sessions.set(session);
