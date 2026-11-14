@@ -746,7 +746,7 @@ export const OrchestrationV2Run = Schema.Struct({
   ordinal: PositiveInt,
   providerInstanceId: ProviderInstanceId,
   modelSelection: ModelSelection,
-  /** The run's model applies to this run only; the thread keeps its saved model (`/q`). */
+  /** The run's model applies to this run only; the thread then goes back to its saved model (`/q`). */
   turnOnlyModelSelection: Schema.optional(Schema.Boolean),
   providerThreadId: Schema.NullOr(ProviderThreadId),
   userMessageId: MessageId,

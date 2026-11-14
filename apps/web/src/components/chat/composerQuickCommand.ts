@@ -8,7 +8,7 @@ export type QuickCommandSend =
 
 /**
  * What a send does with a `/q` message. It sends only the question, on the quick model, for one
- * turn: the thread keeps its own model, so the next message goes back to it. On another provider
+ * turn: the thread switches to it for that answer, then back to its own model. On another provider
  * the turn gets the usual provider-switch handoff, and the return resumes the thread's own native
  * conversation with just the turns it missed.
  */
