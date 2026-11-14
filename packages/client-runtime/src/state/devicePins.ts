@@ -116,7 +116,15 @@ export function createDevicePins<IdentityError>(
       const loaded = yield* AtomRegistry.getResult(registry, storedAtom(target.environmentId), {
         suspendOnWaiting: true,
       });
-      const current = registry.get(confirmedAtom(target.environmentId)) ?? loaded;
+      // Another tab or window on this device may have saved since this one loaded: merge onto
+      // what is stored now so its pins are not overwritten.
+      const stored = yield* Effect.tryPromise({
+        try: () => storage.load(target.environmentId),
+        catch: (cause) => new DevicePinsPersistenceError({ cause }),
+      }).pipe(Effect.orElseSucceed(() => null));
+      const current = isDevicePinsState(stored)
+        ? stored
+        : (registry.get(confirmedAtom(target.environmentId)) ?? loaded);
       const next = {
         projects: {
           ...current.projects,

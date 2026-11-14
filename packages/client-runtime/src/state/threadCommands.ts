@@ -3,7 +3,7 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
-import { DevicePinsPersistenceError, type DevicePins } from "./devicePins.ts";
+import type { DevicePins } from "./devicePins.ts";
 import {
   WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
@@ -198,8 +198,11 @@ export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
             }).pipe(
-              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
-              Effect.flatMap((deviceId) => pinThread({ ...input, deviceId })),
+              // With no device identity, fall back to a pin shared by every device.
+              Effect.matchEffect({
+                onFailure: () => pinThread(input),
+                onSuccess: (deviceId) => pinThread({ ...input, deviceId }),
+              }),
             ),
       scheduler,
       concurrency,
@@ -212,8 +215,11 @@ export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
             }).pipe(
-              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
-              Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId })),
+              // With no device identity, fall back to a pin shared by every device.
+              Effect.matchEffect({
+                onFailure: () => unpinThread(input),
+                onSuccess: (deviceId) => unpinThread({ ...input, deviceId }),
+              }),
             ),
       scheduler,
       concurrency,
@@ -238,8 +244,11 @@ export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
             }).pipe(
-              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
-              Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId })),
+              // With no device identity, fall back to a pin shared by every device.
+              Effect.matchEffect({
+                onFailure: () => reorderPinnedThread(input),
+                onSuccess: (deviceId) => reorderPinnedThread({ ...input, deviceId }),
+              }),
             ),
       scheduler,
       concurrency,
@@ -258,8 +267,11 @@ export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
           : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
               suspendOnWaiting: true,
             }).pipe(
-              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
-              Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId })),
+              // With no device identity, fall back to a pin shared by every device.
+              Effect.matchEffect({
+                onFailure: () => reorderActiveThread(input),
+                onSuccess: (deviceId) => reorderActiveThread({ ...input, deviceId }),
+              }),
             ),
       scheduler,
       concurrency,

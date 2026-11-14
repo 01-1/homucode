@@ -3926,10 +3926,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.unpin": {
+          // An unpin with no device clears every device's pin, so it is a no-op only when none is left.
           const alreadyUnpinned =
-            (command.deviceId === undefined
-              ? legacyThreadPin(thread)
-              : threadPinForDevice(thread, command.deviceId)) === null;
+            command.deviceId === undefined
+              ? thread.pinnedAt == null
+              : threadPinForDevice(thread, command.deviceId) === null;
           return {
             ...thread,
             ...updateThreadPinMembership(thread, "unpin", now, command.deviceId),

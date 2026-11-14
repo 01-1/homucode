@@ -92,8 +92,12 @@ settling a thread clears its pins on every device.
 Pins saved before device-specific pins were introduced remain a shared compatibility
 membership. Each device initially shows those pins and can hide them independently.
 The old shared membership continues to protect the thread from automatic settlement
-until a shared unpin command or explicit settlement clears it. Agent pin commands
-that do not specify a device continue to use the shared membership.
+until a shared unpin command or explicit settlement clears it.
+
+Pin commands that do not name a device, such as an agent's `t3_thread_organize`, the
+`t3` CLI and older app versions, apply to every device: a shared pin shows on every
+device again, including ones that had hidden the thread, and a shared unpin removes
+the thread's pins on every device.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active

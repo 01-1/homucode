@@ -43,7 +43,7 @@ export function updateThreadPinMembership(
 ) {
   // Preserve old shared pins as a separate membership; aggregate fields keep server lifecycle checks unchanged.
   let legacyPin = legacyThreadPin(thread);
-  const devicePins = { ...thread.devicePins };
+  let devicePins: Record<string, ThreadPin | null> = { ...thread.devicePins };
   const current = deviceId === undefined ? legacyPin : threadPinForDevice(thread, deviceId);
   const next =
     action === "unpin"
@@ -53,8 +53,16 @@ export function updateThreadPinMembership(
           ? null
           : { ...current, orderKey: orderKey ?? current.orderKey }
         : (current ?? { pinnedAt: DateTime.formatIso(now), orderKey: orderKey ?? null });
-  if (deviceId === undefined) legacyPin = next;
-  else devicePins[deviceId] = next;
+  if (deviceId === undefined) {
+    legacyPin = next;
+    // A pin or unpin with no device (agents, the CLI, older clients) applies to every device.
+    if (action === "pin")
+      devicePins = Object.fromEntries(Object.entries(devicePins).filter(([, pin]) => pin !== null));
+    else if (action === "unpin") devicePins = {};
+  } else if (next === null && legacyPin === null) {
+    // With no shared pin to hide, leave no marker: it would hide a later shared pin.
+    devicePins = Object.fromEntries(Object.entries(devicePins).filter(([id]) => id !== deviceId));
+  } else devicePins[deviceId] = next;
   const aggregate = legacyPin ?? Object.values(devicePins).find((pin) => pin !== null) ?? null;
   return {
     legacyPin,

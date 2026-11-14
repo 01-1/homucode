@@ -2368,3 +2368,64 @@ it.effect(
       });
     }).pipe(Effect.provide(layerTest)),
 );
+
+it.effect(
+  "applies a pin or unpin sent without a device, as agents and older clients send, to every device",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:shared-pins");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-shared-pins"),
+        threadId,
+        projectId: ProjectId.make("project:shared-pins"),
+        title: "Shared pins",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("shared-pins-desktop"),
+        threadId,
+        deviceId: "desktop",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.unpin",
+        commandId: CommandId.make("shared-pins-agent-unpin"),
+        threadId,
+      });
+      assert.deepInclude(yield* projections.getThread(threadId), {
+        pinnedAt: null,
+        legacyPin: null,
+        devicePins: {},
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("shared-pins-agent-pin"),
+        threadId,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.unpin",
+        commandId: CommandId.make("shared-pins-phone-hide"),
+        threadId,
+        deviceId: "phone",
+      });
+      assert.equal((yield* projections.getThread(threadId)).devicePins?.phone, null);
+      assert.isNotNull((yield* projections.getThread(threadId)).pinnedAt);
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("shared-pins-agent-pin-again"),
+        threadId,
+      });
+      const pinnedEverywhere = yield* projections.getThread(threadId);
+      assert.deepEqual(pinnedEverywhere.devicePins, {});
+      assert.isNotNull(pinnedEverywhere.legacyPin);
+    }).pipe(Effect.provide(layerTest)),
+);
