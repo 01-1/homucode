@@ -947,9 +947,7 @@ export const make = Effect.gen(function* () {
         repository: repositoryNameWithOwner,
         ...pullRequestHostOptions(pullRequest.url),
       });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url", {
-        fresh: true,
-      });
+      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
       const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
       const preferredRemoteName =
         pullRequest.headRepositoryOwnerLogin?.trim() ||
@@ -1034,9 +1032,7 @@ export const make = Effect.gen(function* () {
               ? Effect.fail(cause)
               : Effect.gen(function* () {
                   const remoteName = yield* gitCore.resolvePrimaryRemoteName(cwd);
-                  const remoteUrl = yield* gitCore.readConfigValue(cwd, `remote.${remoteName}.url`, {
-                    fresh: true,
-                  });
+                  const remoteUrl = yield* gitCore.readConfigValue(cwd, `remote.${remoteName}.url`);
                   const pullRequestKey = pullRequestRepositoryKey(pullRequest.url);
                   if (
                     remoteUrl === null ||
@@ -1065,9 +1061,7 @@ export const make = Effect.gen(function* () {
         repository: repositoryNameWithOwner,
         ...pullRequestHostOptions(pullRequest.url),
       });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url", {
-        fresh: true,
-      });
+      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
       const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
       const preferredRemoteName =
         pullRequest.headRepositoryOwnerLogin?.trim() ||
@@ -3380,8 +3374,15 @@ export const make = Effect.gen(function* () {
     invalidateRemoteStatus,
     invalidateStatus,
     resolvePullRequest,
-    preparePullRequestThread,
-    runStackedAction,
+    // User actions that open or check out PRs: config an agent just changed must count.
+    preparePullRequestThread: (...args) =>
+      preparePullRequestThread(...args).pipe(
+        Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
+      ),
+    runStackedAction: (...args) =>
+      runStackedAction(...args).pipe(
+        Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
+      ),
     subscribePullRequestStateChanges: PubSub.subscribe(pullRequestStateChanges).pipe(
       Effect.map((subscription) => Stream.fromSubscription(subscription)),
     ),

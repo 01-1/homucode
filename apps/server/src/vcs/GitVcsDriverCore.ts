@@ -3835,13 +3835,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   )(function* (cwd, key, options) {
     if (options?.fresh === true || (yield* GitVcsDriver.FreshGitConfigReads)) {
       return yield* readConfigValueFresh(cwd, key).pipe(
-        // A later cached read must not return a value older than this one.
-        Effect.ensuring(
-          Effect.all([
-            Cache.invalidate(configReadsCache, configReadsCacheKey(cwd, key, false)),
-            Cache.invalidate(configReadsCache, configReadsCacheKey(cwd, key, true)),
-          ]),
-        ),
+        // A later cached read must not return a value older than this one, under any spelling
+        // of the path or from another worktree sharing the config.
+        Effect.ensuring(Cache.invalidateAll(configReadsCache)),
       );
     }
     const background = yield* GitVcsDriver.BackgroundGitWork;
