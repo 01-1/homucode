@@ -594,6 +594,46 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
+  it.effect("off refuses new reviewers and pauses attached ones until it is on again", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      let on = false;
+      const service = AutoreviewService.make({ ...orchestrator, enabled: Effect.sync(() => on) });
+      const { threadId, runId } = yield* seedReviewedThread("off");
+
+      const refused = yield* attachReviewer(service, threadId, "off").pipe(Effect.flip);
+      assert.equal(refused.reason, "off");
+      assert.include(refused.message, "Settings → Threads → Autoreviewers");
+      assert.isUndefined((yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers);
+
+      on = true;
+      const { reviewerThreadId } = yield* attachReviewer(service, threadId, "off");
+      const lgtm = yield* finishReview(reviewerThreadId, "LGTM", "off-lgtm");
+      yield* service.handle(lgtm.ended);
+
+      on = false;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const now = yield* DateTime.now;
+      const more = assistantItem({
+        threadId,
+        runId,
+        id: "off:more",
+        ordinal: 4,
+        now,
+        text: "Done.",
+      });
+      yield* eventSink.write({ events: [itemEvent(more)] });
+      yield* service.handle(itemEvent(more));
+      assert.lengthOf(yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX), 0);
+
+      on = true;
+      yield* service.handle(itemEvent(more));
+      const batches = yield* messagesTo(reviewerThreadId, AUTOREVIEW_BATCH_MESSAGE_PREFIX);
+      assert.lengthOf(batches, 1);
+      assert.include(batches[0]!.text, "Done.");
+    }),
+  );
+
   it.effect(
     "findings go to the live turn without being refused; an LGTM review stays with the reviewer",
     () =>

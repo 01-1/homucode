@@ -52,7 +52,12 @@ const handlers = {
         const prepared = yield* service.prepareAutoreview(scope, input);
         const toFailure = (error: AutoreviewService.AutoreviewError) =>
           new OrchestratorMcpFailure({
-            code: error.reason === "failed" ? "orchestration_error" : "invalid_request",
+            code:
+              error.reason === "failed"
+                ? "orchestration_error"
+                : error.reason === "off"
+                  ? "capability_denied"
+                  : "invalid_request",
             message: error.message,
           });
         let added: { readonly reviewerThreadId: ThreadId; readonly taskId: NodeId } | undefined;

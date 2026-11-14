@@ -510,6 +510,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? ["Snooze until limits reset"]
       : []),
+    ...(settings.autoreviewEnabled !== DEFAULT_UNIFIED_SETTINGS.autoreviewEnabled
+      ? ["Autoreviewers"]
+      : []),
     ...(!Equal.equals(settings.snoozePresets, DEFAULT_UNIFIED_SETTINGS.snoozePresets)
       ? ["Snooze options"]
       : []),
@@ -669,6 +672,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
+      autoreviewEnabled: DEFAULT_UNIFIED_SETTINGS.autoreviewEnabled,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -1723,6 +1727,23 @@ export function ThreadsSettingsPanel() {
                 updateSettings({ snoozeLimitedThreads: Boolean(checked) })
               }
               aria-label="Snooze until limits reset"
+            />
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection id="autoreview" title="Autoreviewers">
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("autoreviewers")}
+          description="Let agents attach reviewer subagents that watch a thread while it works. Turning this off pauses reviewers already attached until it is back on."
+          settingKeys={["autoreviewEnabled"]}
+          control={
+            <ScopedSwitch
+              settingKeys={["autoreviewEnabled"]}
+              checked={settings.autoreviewEnabled}
+              onCheckedChange={(checked) => updateSettings({ autoreviewEnabled: Boolean(checked) })}
+              aria-label="Autoreviewers"
             />
           }
         />
