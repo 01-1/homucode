@@ -6,19 +6,20 @@ import {
   type MessageId,
   type OrchestrationV2AppThread,
   type OrchestrationV2ConversationMessage,
-  type ProjectId,
   type RunId,
   type ServerSettingsError,
+  TextGenerationError,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
-import * as Semaphore from "effect/Semaphore";
+import * as Schema from "effect/Schema";
 
 import * as ThreadFolderService from "../threadFolders/ThreadFolderService.ts";
 import { visibleThreadPullRequests } from "../sourceControl/threadPullRequests.ts";
@@ -26,13 +27,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import type { OrchestratorV2Error } from "./Orchestrator.ts";
 import * as ProjectStore from "./ProjectStore.ts";
+import { forkInheritedRunOrdinals, ProjectionStoreThreadNotFoundError } from "./ProjectionStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
-import {
-  assignThreadTitleId,
-  syncThreadTitleId,
-  threadTitleIdMatchesInitial,
-  threadTitleInitial,
-} from "./threadTitleId.ts";
 
 import { formatThreadTitleContext } from "@t3tools/provider-core/server/threadTitleContext";
 export { formatThreadTitleContext } from "@t3tools/provider-core/server/threadTitleContext";
@@ -53,31 +49,31 @@ export class ThreadTitleRegenerationService extends Context.Service<
       | ServerSettingsError
       | ThreadManagementService.ThreadManagementProviderInstanceDisabledError
     >;
-    /** Adds or drops a settled thread's ID letters after it settles, unsettles, or is restored. */
-    readonly syncTitleId: (input: {
-      readonly threadId: ThreadId;
-      readonly commandId: CommandId;
-    }) => Effect.Effect<
-      void,
-      | OrchestratorV2Error
-      | ServerSettingsError
-      | ThreadManagementService.ThreadManagementProviderInstanceDisabledError
-    >;
   }
 >()("t3/orchestration-v2/ThreadTitleRegenerationService") {}
 
-function takenTitleIds(
-  projectThreads: ReadonlyArray<{
-    readonly id: ThreadId;
-    readonly titleId?: string | null | undefined;
-  }>,
-  threadId: ThreadId,
-): ReadonlySet<string> {
-  return new Set(
-    projectThreads.flatMap((thread) =>
-      thread.id !== threadId && thread.titleId != null ? [thread.titleId] : [],
-    ),
-  );
+type Outcome =
+  | { readonly status: "renamed"; readonly title: string }
+  | { readonly status: "unchanged" }
+  | { readonly status: "failed"; readonly message: string };
+
+const MAX_FAILURE_MESSAGE_LENGTH = 300;
+const isTextGenerationError = Schema.is(TextGenerationError);
+const isProjectionStoreThreadNotFoundError = Schema.is(ProjectionStoreThreadNotFoundError);
+
+function failureMessage(cause: Cause.Cause<unknown>): string {
+  const error = Cause.squash(cause);
+  const lines = isTextGenerationError(error)
+    ? error.detail
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    : [];
+  const detail = lines.at(-1);
+  if (detail === undefined) return "Title generation failed.";
+  return detail.length > MAX_FAILURE_MESSAGE_LENGTH
+    ? `${detail.slice(0, MAX_FAILURE_MESSAGE_LENGTH - 1)}…`
+    : detail;
 }
 
 const make = Effect.gen(function* () {
@@ -87,14 +83,13 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration.TextGeneration;
   const folders = yield* ThreadFolderService.ThreadFolderService;
   const fileSystem = yield* FileSystem.FileSystem;
-  const idLock = yield* Semaphore.make(1);
 
   // True when this request was still current; a replaced or cancelled one records no event.
   const complete = (input: {
     readonly threadId: ThreadId;
     readonly requestId: CommandId;
-    readonly title?: string;
-    readonly titleId?: string | null;
+    readonly kind: { readonly type: "initial" | "regenerate" };
+    readonly outcome: Outcome;
   }) =>
     threads
       .dispatch({
@@ -102,22 +97,26 @@ const make = Effect.gen(function* () {
         commandId: CommandId.make(`${input.requestId}:title-complete`),
         threadId: input.threadId,
         requestId: input.requestId,
-        ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.titleId === undefined ? {} : { titleId: input.titleId }),
+        ...(input.outcome.status === "renamed" ? { title: input.outcome.title } : {}),
+        ...(input.kind.type === "regenerate"
+          ? {
+              outcome: {
+                status: input.outcome.status,
+                ...(input.outcome.status === "failed" ? { message: input.outcome.message } : {}),
+              },
+            }
+          : {}),
       })
       .pipe(Effect.map((result) => result.storedEvents.length > 0));
 
   const messagesThroughRun = Effect.fn("ThreadTitleRegenerationService.messagesThroughRun")(
-    function* (threadId: ThreadId, runId: RunId) {
+    function* (threadId: ThreadId, runId: RunId, forkCreatedAt: DateTime.Utc) {
       const source = yield* threads.getThreadRecords(threadId, ["messages", "runs"], {
         messageRoles: ["user", "assistant"],
       });
-      const ordinals = new Map(
-        source.runs
-          .filter((run) => run.status !== "rolled_back")
-          .map((run) => [run.id, run.ordinal]),
-      );
-      const forkOrdinal = ordinals.get(runId) ?? -1;
+      const ordinals = forkInheritedRunOrdinals(source.runs, forkCreatedAt);
+      const forkOrdinal = ordinals.get(runId);
+      if (forkOrdinal === undefined) return undefined;
       const messages = source.messages.filter((message) => {
         if (message.streaming) return false;
         if (message.runId === null) return source.thread.historyOrigin === "v1_import";
@@ -133,12 +132,20 @@ const make = Effect.gen(function* () {
   ) {
     let title: string | undefined;
     const history: Array<ReadonlyArray<OrchestrationV2ConversationMessage>> = [];
-    let forkedFrom = thread.forkedFrom;
-    while (forkedFrom?.type === "run") {
-      const source = yield* messagesThroughRun(forkedFrom.threadId, forkedFrom.runId);
+    const seen = new Set([thread.id]);
+    let current = thread;
+    while (
+      current.forkedFrom?.type === "run" &&
+      current.lineage.sideChat !== true &&
+      !seen.has(current.forkedFrom.threadId)
+    ) {
+      const { threadId, runId } = current.forkedFrom;
+      seen.add(threadId);
+      const source = yield* messagesThroughRun(threadId, runId, current.createdAt);
+      if (source === undefined) break;
       history.push(source.messages);
       title ??= source.thread.title;
-      forkedFrom = source.thread.forkedFrom;
+      current = source.thread;
     }
     const context = formatThreadTitleContext(history.reverse().flat());
     return title === undefined || context.message.length === 0
@@ -149,211 +156,136 @@ const make = Effect.gen(function* () {
   const execute: ThreadTitleRegenerationService["Service"]["execute"] = Effect.fn(
     "ThreadTitleRegenerationService.execute",
   )(function* (input) {
-    const outcome:
-      | { readonly type: "stale" }
-      | {
-          readonly type: "complete";
-          readonly title?: string;
-          readonly folderId?: string;
-          /** Set when the title ID may need to change: the title it should follow. */
-          readonly idFor?: {
-            readonly title: string;
-            readonly projectId: ProjectId;
-            readonly enabled: boolean;
+    const outcome: (Outcome & { readonly folderId?: string }) | { readonly status: "stale" } =
+      yield* Effect.gen(function* () {
+        const projection = yield* threads.getThreadRecords(
+          input.threadId,
+          ["messages"],
+          input.kind.type === "initial"
+            ? { messageIds: [input.kind.messageId] }
+            : { messageRoles: ["user", "assistant"] },
+        );
+        if (projection.thread.titleRegeneration?.requestId !== input.requestId) {
+          return { status: "stale" as const };
+        }
+
+        const project = yield* projects.get(projection.thread.projectId);
+        if (Option.isNone(project)) {
+          return { status: "failed" as const, message: "This thread's project no longer exists." };
+        }
+
+        let context: {
+          readonly message: string;
+          readonly attachments: ReadonlyArray<ChatAttachment>;
+        };
+        if (input.kind.type === "initial") {
+          const messageId = input.kind.messageId;
+          const message = projection.messages.find(
+            (candidate) => candidate.id === messageId && !candidate.streaming,
+          );
+          context =
+            message === undefined
+              ? { message: "", attachments: [] }
+              : {
+                  message: isAttachmentOnlyBootstrapPrompt(message.text) ? "" : message.text,
+                  attachments: message.attachments,
+                };
+        } else {
+          context = formatThreadTitleContext(
+            projection.messages.filter((message) => !message.streaming),
+          );
+        }
+        // A deleted source should not cost the fork its title.
+        const inherited = yield* forkSource(projection.thread).pipe(
+          Effect.catchTags({
+            OrchestratorProjectionError: (error) =>
+              isProjectionStoreThreadNotFoundError(error.cause)
+                ? Effect.undefined
+                : Effect.fail(error),
+          }),
+        );
+        if (
+          context.message.length === 0 &&
+          context.attachments.length === 0 &&
+          inherited === undefined
+        ) {
+          return {
+            status: "failed" as const,
+            message: "This thread has no messages to title yet.",
           };
-        } = yield* Effect.gen(function* () {
-      const projection = yield* threads.getThreadRecords(
-        input.threadId,
-        ["messages"],
-        input.kind.type === "initial"
-          ? { messageIds: [input.kind.messageId] }
-          : { messageRoles: ["user", "assistant"] },
-      );
-      if (projection.thread.titleRegeneration?.requestId !== input.requestId) {
-        return { type: "stale" as const };
-      }
-
-      const project = yield* projects.get(projection.thread.projectId);
-      if (Option.isNone(project)) {
-        return { type: "complete" as const };
-      }
-
-      let context: {
-        readonly message: string;
-        readonly attachments: ReadonlyArray<ChatAttachment>;
-      };
-      if (input.kind.type === "initial") {
-        const messageId = input.kind.messageId;
-        const message = projection.messages.find(
-          (candidate) => candidate.id === messageId && !candidate.streaming,
-        );
-        context =
-          message === undefined
-            ? { message: "", attachments: [] }
-            : {
-                message: isAttachmentOnlyBootstrapPrompt(message.text) ? "" : message.text,
-                attachments: message.attachments,
-              };
-      } else {
-        context = formatThreadTitleContext(
-          projection.messages.filter((message) => !message.streaming),
-        );
-      }
-      if (context.message.length === 0 && context.attachments.length === 0) {
-        return { type: "complete" as const };
-      }
-
-      // A deleted source should not cost the fork its title.
-      const inherited = yield* forkSource(projection.thread).pipe(
-        Effect.orElseSucceed(() => undefined),
-      );
-      const settings = resolveProjectSettings(
-        yield* serverSettings.getSettings,
-        projection.thread.projectId,
-      ).settings;
-      // Storage cleanup removes worktrees but keeps the path; CLIs cannot spawn in a missing cwd.
-      const worktreePath = projection.thread.worktreePath;
-      const worktreeExists =
-        worktreePath !== null &&
-        (yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => false)));
-      const candidates = yield* folders
-        .smartCandidates(input.threadId)
-        .pipe(Effect.orElseSucceed(() => []));
-      const result = yield* textGeneration.generateThreadTitle({
-        folders: candidates,
-        folderContext: {
-          branch: projection.thread.branch,
-          worktreeName: projection.thread.worktreePath?.split(/[\\/]/).findLast(Boolean) ?? null,
+        }
+        const settings = resolveProjectSettings(
+          yield* serverSettings.getSettings,
+          projection.thread.projectId,
+        ).settings;
+        // Storage cleanup removes worktrees but keeps the path; CLIs cannot spawn in a missing cwd.
+        const worktreePath = projection.thread.worktreePath;
+        const worktreeExists =
+          worktreePath !== null &&
+          (yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => false)));
+        const candidates = yield* folders
+          .smartCandidates(input.threadId)
+          .pipe(Effect.orElseSucceed(() => []));
+        const result = yield* textGeneration.generateThreadTitle({
+          folders: candidates,
+          folderContext: {
+            branch: projection.thread.branch,
+            worktreeName: projection.thread.worktreePath?.split(/[\\/]/).findLast(Boolean) ?? null,
+            ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
+            hasPullRequest:
+              visibleThreadPullRequests(projection.thread.pullRequests ?? []).length > 0,
+          },
+          cwd: worktreeExists
+            ? worktreePath
+            : (projection.thread.workspaceRoot ?? project.value.workspaceRoot),
           ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
-          hasPullRequest:
-            visibleThreadPullRequests(projection.thread.pullRequests ?? []).length > 0,
-        },
-        cwd: worktreeExists
-          ? worktreePath
-          : (projection.thread.workspaceRoot ?? project.value.workspaceRoot),
-        ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
-        message: context.message,
-        attachments: context.attachments,
-        ...(input.kind.type === "regenerate" ? { previousTitle: projection.thread.title } : {}),
-        ...(inherited === undefined ? {} : { forkSource: inherited }),
-        instructions: settings.threadTitleInstructions,
-        modelSelection: settings.textGenerationModelSelection,
-      });
-      const placement =
-        result.folderId && candidates.some((folder) => folder.id === result.folderId)
-          ? { folderId: result.folderId }
-          : {};
-      const generatedTitle = result.title.trim();
-      const idFor = (title: string) => ({
-        title,
-        projectId: projection.thread.projectId,
-        enabled: settings.threadTitleIdPrefix,
-      });
-      if (generatedTitle === "New thread") {
-        return { type: "complete" as const, ...placement };
-      }
-      if (input.kind.type === "regenerate" && generatedTitle === projection.thread.title.trim()) {
-        return { type: "complete" as const, idFor: idFor(generatedTitle), ...placement };
-      }
-      return {
-        type: "complete" as const,
-        title: result.title,
-        idFor: idFor(generatedTitle),
-        ...placement,
-      };
-    }).pipe(
-      Effect.retry({
-        times: input.kind.type === "initial" ? 2 : 0,
-        schedule: Schedule.exponential("2 seconds"),
-      }),
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.interrupt
-          : Effect.logWarning("Thread title generation failed", {
-              threadId: input.threadId,
-              requestId: input.requestId,
-              cause,
-            }).pipe(Effect.as({ type: "complete" as const })),
-      ),
-    );
+          message: context.message,
+          projectTitle: project.value.title,
+          attachments: context.attachments,
+          ...(input.kind.type === "regenerate" ? { previousTitle: projection.thread.title } : {}),
+          ...(inherited === undefined ? {} : { forkSource: inherited }),
+          instructions: settings.threadTitleInstructions,
+          modelSelection: settings.textGenerationModelSelection,
+          projectId: projection.thread.projectId,
+        });
+        const placement =
+          result.folderId && candidates.some((folder) => folder.id === result.folderId)
+            ? { folderId: result.folderId }
+            : {};
+        const generatedTitle = result.title.trim();
+        return generatedTitle === "New thread" ||
+          (input.kind.type === "regenerate" && generatedTitle === projection.thread.title.trim())
+          ? { status: "unchanged" as const, ...placement }
+          : { status: "renamed" as const, title: result.title, ...placement };
+      }).pipe(
+        Effect.retry({
+          times: input.kind.type === "initial" ? 2 : 0,
+          schedule: Schedule.exponential("2 seconds"),
+        }),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.logWarning("Thread title generation failed", {
+                threadId: input.threadId,
+                requestId: input.requestId,
+                cause,
+              }).pipe(Effect.as({ status: "failed" as const, message: failureMessage(cause) })),
+        ),
+      );
 
-    if (outcome.type === "stale") {
+    if (outcome.status === "stale") {
       return;
     }
-    // A replaced or cancelled request must not file the thread, even if its title was ignored.
-    const idFor = outcome.idFor;
-    const titleUpdate = outcome.title === undefined ? {} : { title: outcome.title };
-    const accepted =
-      idFor === undefined
-        ? yield* complete({ ...input, ...titleUpdate })
-        : // Choosing a free ID and saving it are one step, or two threads could take the same ID.
-          yield* idLock.withPermits(1)(
-            Effect.gen(function* () {
-              const projectThreads = yield* threads
-                .listProjectThreads({ projectId: idFor.projectId, includeSubagents: true })
-                .pipe(Effect.orElseSucceed(() => []));
-              const current = (yield* threads.getThreadRecords(input.threadId, [])).thread;
-              const currentId = current.titleId ?? null;
-              const initial = threadTitleInitial(idFor.title);
-              const titleId =
-                !idFor.enabled || initial === undefined
-                  ? null
-                  : currentId !== null && threadTitleIdMatchesInitial(currentId, initial)
-                    ? currentId
-                    : assignThreadTitleId({
-                        initial,
-                        settled: current.settledOverride === "settled",
-                        taken: takenTitleIds(projectThreads, input.threadId),
-                      });
-              return yield* complete({
-                ...input,
-                ...titleUpdate,
-                ...(titleId === currentId ? {} : { titleId }),
-              });
-            }),
-          );
-    if (outcome.folderId && accepted) {
+    const accepted = yield* complete({ ...input, outcome });
+    if (outcome.folderId && accepted)
       yield* folders
         .applySmartPick(input.threadId, outcome.folderId)
         .pipe(
           Effect.catch((cause) => Effect.logWarning("Smart folder placement failed", { cause })),
         );
-    }
   });
 
-  const syncTitleId: ThreadTitleRegenerationService["Service"]["syncTitleId"] = Effect.fn(
-    "ThreadTitleRegenerationService.syncTitleId",
-  )(function* (input) {
-    yield* idLock.withPermits(1)(
-      Effect.gen(function* () {
-        const thread = (yield* threads.getThreadRecords(input.threadId, [])).thread;
-        const id = thread.titleId ?? null;
-        if (id === null || thread.archivedAt !== null) return;
-        const settings = resolveProjectSettings(
-          yield* serverSettings.getSettings,
-          thread.projectId,
-        ).settings;
-        if (!settings.threadTitleIdPrefix) return;
-        const projectThreads = yield* threads
-          .listProjectThreads({ projectId: thread.projectId, includeSubagents: true })
-          .pipe(Effect.orElseSucceed(() => []));
-        const next = syncThreadTitleId({
-          id,
-          settled: thread.settledOverride === "settled",
-          taken: takenTitleIds(projectThreads, input.threadId),
-        });
-        if (next === id) return;
-        yield* threads.dispatch({
-          type: "thread.metadata.update",
-          commandId: CommandId.make(`${input.commandId}:title-id-sync`),
-          threadId: input.threadId,
-          titleId: next,
-        });
-      }),
-    );
-  });
-
-  return ThreadTitleRegenerationService.of({ execute, syncTitleId });
+  return ThreadTitleRegenerationService.of({ execute });
 });
 
 export const layer = Layer.effect(ThreadTitleRegenerationService, make);

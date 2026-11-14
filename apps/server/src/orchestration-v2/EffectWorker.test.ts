@@ -166,7 +166,6 @@ function layerExecutorFor(input: {
       ThreadTitleRegenerationService.ThreadTitleRegenerationService,
       ThreadTitleRegenerationService.ThreadTitleRegenerationService.of({
         execute: () => Effect.void,
-        syncTitleId: () => Effect.void,
       }),
     ),
   );

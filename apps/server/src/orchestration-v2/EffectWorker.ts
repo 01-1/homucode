@@ -695,19 +695,6 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
-          case "thread-title-id.sync":
-            return threadTitleRegeneration
-              .syncTitleId({ threadId: effect.threadId, commandId: effect.commandId })
-              .pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new OrchestrationEffectExecutionError({
-                      effectId: effect.id,
-                      effectType: effect.request.type,
-                      cause,
-                    }),
-                ),
-              );
           case "delegated-tasks.stop":
             return threads
               .stopDelegatedTasks({

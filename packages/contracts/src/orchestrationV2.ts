@@ -3421,8 +3421,6 @@ export const OrchestrationV2Command = Schema.Union([
     requestId: CommandId,
     title: Schema.optional(TrimmedNonEmptyString),
     outcome: Schema.optional(ThreadTitleRegenerationOutcome),
-    /** Absent keeps the thread's ID; null removes it. */
-    titleId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.runtime-mode.set"),

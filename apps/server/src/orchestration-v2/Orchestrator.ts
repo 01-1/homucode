@@ -768,18 +768,6 @@ function isTitleIdOnlyUpdate(
   );
 }
 
-function threadTitleIdSyncEffect(
-  commandId: CommandId,
-  threadId: ThreadId,
-): PendingOrchestrationEffectV2 {
-  return {
-    id: `effect:${commandId}:thread-title-id.sync`,
-    commandId,
-    threadId,
-    request: { type: "thread-title-id.sync" },
-  };
-}
-
 function delegatedTasksStopEffect(command: {
   readonly commandId: CommandId;
   readonly threadId: ThreadId;
@@ -5251,7 +5239,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                         completedAt: now,
                       },
                     }),
-                ...(command.titleId === undefined ? {} : { titleId: command.titleId }),
                 titleRegeneration: null,
                 updatedAt: now,
               }
@@ -5425,18 +5412,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ]);
     }
 
-    // Settled threads carry a letter on their title ID; the sync adds or removes it.
-    if (
-      (command.type === "thread.settle" ||
-        command.type === "thread.unsettle" ||
-        command.type === "thread.unarchive") &&
-      updatedThread.titleId != null
-    ) {
-      yield* Ref.update(effects, (existing) => [
-        ...existing,
-        threadTitleIdSyncEffect(command.commandId, command.threadId),
-      ]);
-    }
     if (command.type === "thread.metadata.update" && command.regenerateTitle === true) {
       yield* Ref.update(effects, (existing) => [
         ...existing,
@@ -7505,12 +7480,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: thread,
       });
       projection = applyToProjection(projection, event);
-      if (thread.titleId != null) {
-        yield* Ref.update(effects, (existing) => [
-          ...existing,
-          threadTitleIdSyncEffect(command.commandId, command.threadId),
-        ]);
-      }
     }
     // Background wakes and delegated completions continue work the user already snoozed, so
     // only a message someone actually sent ends the snooze.

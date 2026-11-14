@@ -34,6 +34,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
+import * as ThreadTitleIdReconciler from "./ThreadTitleIdReconciler.ts";
 import * as ThreadTitleRegeneration from "./ThreadTitleRegenerationService.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import { placeholderThreadTitle } from "./placeholderThreadTitle.ts";
@@ -119,11 +120,15 @@ function makeHarness(
       ),
     ),
   );
+  const layerTitleIdReconciler = ThreadTitleIdReconciler.layer.pipe(
+    Layer.provide(Layer.mergeAll(layerThreadManagement, layerServerSettings)),
+  );
   return {
     layer: Layer.mergeAll(
       layerOrchestrator,
       layerThreadManagement,
       layerTitleRegeneration,
+      layerTitleIdReconciler,
       layerOutbox,
       layerDatabase,
     ),
@@ -567,7 +572,7 @@ describe("ThreadTitleRegenerationService", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("gives threads project-unique title IDs that follow their settled state", () =>
+  it.effect("keeps title IDs unique per project as threads settle, unsettle and rename", () =>
     Effect.gen(function* () {
       const harness = makeHarness({
         generateTitle: () => Effect.succeed({ title: "Fix login bug" }),
@@ -576,8 +581,11 @@ describe("ThreadTitleRegenerationService", () => {
       yield* Effect.gen(function* () {
         const threads = yield* ThreadManagement.ThreadManagementService;
         const titleRegeneration = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const reconciler = yield* ThreadTitleIdReconciler.ThreadTitleIdReconciler;
         const threadId = (name: string) => ThreadId.make(`thread:title:id:${name}`);
+        // The event reactor is not running in this harness; reconcile as it would after each event.
         const shown = Effect.fn(function* (name: string) {
+          yield* reconciler.reconcile(threadId(name));
           const { thread } = yield* threads.getThreadProjection(threadId(name));
           return `${thread.titleId ?? "-"} ${thread.title}`;
         });
@@ -607,8 +615,6 @@ describe("ThreadTitleRegenerationService", () => {
               reason: "user",
             });
           }
-          // The effect worker is off in this harness; run the sync the settle queued.
-          yield* titleRegeneration.syncTitleId({ threadId: threadId(name), commandId });
           return yield* shown(name);
         });
         for (const name of ["first", "second", "third", "fourth", "fifth"]) {
@@ -633,14 +639,29 @@ describe("ThreadTitleRegenerationService", () => {
 
         assert.equal(yield* setSettled("second", true), "F1a Fix login bug");
         assert.equal(yield* regenerate("third", 1), "F1 Fix login bug");
-        // F1 was taken while "second" was settled, so it comes back with the next free number.
+        // F1 was taken while "second" was settled, so it comes back with the lowest free ID.
         assert.equal(yield* setSettled("second", false), "F2 Fix login bug");
 
-        // Generation runs in parallel, but choosing and saving an ID happen one thread at a time.
-        const concurrent = yield* Effect.all([regenerate("fourth", 1), regenerate("fifth", 1)], {
+        // A rename to another letter gets a fresh ID, and the ID alone keeps updatedAt.
+        yield* threads.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("command:title:id:third:rename"),
+          threadId: threadId("third"),
+          title: "Cache tuning",
+        });
+        const before = (yield* threads.getThreadProjection(threadId("third"))).thread.updatedAt;
+        assert.equal(yield* shown("third"), "C Cache tuning");
+        const after = (yield* threads.getThreadProjection(threadId("third"))).thread.updatedAt;
+        assert.equal(DateTime.toEpochMillis(after), DateTime.toEpochMillis(before));
+
+        // Reconciles run one at a time, so concurrent ones never share an ID.
+        yield* Effect.all([regenerate("fourth", 1), regenerate("fifth", 1)], {
           concurrency: "unbounded",
         });
-        assert.sameMembers(concurrent, ["F3 Fix login bug", "F4 Fix login bug"]);
+        const ids = yield* Effect.forEach(["fourth", "fifth"], (name) =>
+          threads.getThreadProjection(threadId(name)).pipe(Effect.map((p) => p.thread.titleId)),
+        );
+        assert.sameMembers(ids, ["F1", "F3"]);
       }).pipe(Effect.provide(harness.layer));
     }),
   );
