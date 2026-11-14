@@ -23,6 +23,7 @@ import {
 } from "./pending-thread-creation";
 import { serverEnvironment } from "./server";
 import { environmentShell } from "./shell";
+import { devicePins } from "./devicePins";
 import { threadOutboxManager } from "./thread-outbox";
 
 export const threadFamilies = createThreadFamilyAtoms(
@@ -36,6 +37,7 @@ export const olderSettledThreads = createOlderSettledThreadAtoms(
 export const threadEnvironment = createThreadEnvironmentAtoms(
   connectionAtomRuntime,
   threadFamilies.snapshotAtom,
+  devicePins,
 );
 export const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(

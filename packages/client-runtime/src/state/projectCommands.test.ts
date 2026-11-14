@@ -27,6 +27,8 @@ import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import type { EnvironmentProject } from "./models.ts";
+import { createDevicePins, type DevicePins } from "./devicePins.ts";
+import { v2ShellSnapshot, v2Project } from "./orchestrationV2TestFixtures.ts";
 import { createProjectEnvironmentAtoms } from "./projectCommands.ts";
 
 const decodeReadFileInput = Schema.decodeUnknownSync(ProjectReadFileInput);
@@ -45,7 +47,9 @@ const PROJECT = {
   workspaceRoot: "/scratch",
 } as EnvironmentProject;
 
-const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
+const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* (
+  devicePins?: DevicePins,
+) {
   const metadataRequests: string[][] = [];
   const file = { byteLength: 5 };
   const readResponse = {
@@ -118,6 +122,7 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
   );
   const storedProject = Atom.make<EnvironmentProject | null>(null);
   const commands = createProjectEnvironmentAtoms(runtime, {
+    ...(devicePins === undefined ? {} : { devicePins }),
     projectAtom: (ref: ScopedProjectRef) =>
       ref.environmentId === ENVIRONMENT_ID && ref.projectId === PROJECT_ID
         ? storedProject
@@ -270,3 +275,27 @@ describe("openScratch", () => {
     }).pipe(Effect.scoped),
   );
 });
+
+it.effect("updates a device-local project pin without dispatching a shared project mutation", () =>
+  Effect.gen(function* () {
+    const shared = { ...v2ShellSnapshot, projects: [{ ...v2Project, id: PROJECT_ID }] };
+    const source = Atom.family((_id: EnvironmentId) => Atom.make(shared));
+    const pins = createDevicePins(source, Atom.make(AsyncResult.success("phone")), {
+      load: async () => null,
+      save: async () => {},
+    });
+    const h = yield* makeHarness(pins);
+    h.registry.set(h.storedProject, PROJECT);
+    const result = yield* Effect.promise(() =>
+      h.commands.update.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { projectId: PROJECT_ID, pinned: true },
+      }),
+    );
+    expect(result._tag).toBe("Success");
+    expect(
+      h.registry.get(pins.wrapSnapshot(source)(ENVIRONMENT_ID))?.projects[0]?.pinnedAt,
+    ).toEqual(expect.any(String));
+    expect(h.registry.get(source(ENVIRONMENT_ID))).toBe(shared);
+  }),
+);

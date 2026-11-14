@@ -24,6 +24,9 @@ import {
 } from "../sourceControl/threadPullRequests.ts";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
+  threadPinForDevice,
+  legacyThreadPin,
+  updateThreadPinMembership,
   type ChatAttachment,
   CommandId,
   type GuestMessageId,
@@ -3536,7 +3539,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
     // Reject reorder after unpin so a raced request cannot restore a cleared pin.
-    if (command.type === "thread.pin.reorder" && thread.pinnedAt == null) {
+    if (
+      command.type === "thread.pin.reorder" &&
+      (command.deviceId === undefined
+        ? legacyThreadPin(thread)
+        : threadPinForDevice(thread, command.deviceId)) === null
+    ) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
         commandType: command.type,
@@ -3545,7 +3553,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     if (
       command.type === "thread.active.reorder" &&
-      (thread.pinnedAt != null || thread.settledOverride === "settled")
+      ((command.deviceId === undefined
+        ? thread.pinnedAt != null
+        : threadPinForDevice(thread, command.deviceId) !== null) ||
+        thread.settledOverride === "settled")
     ) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
@@ -3845,6 +3856,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             unsettledAt: null,
             pinnedAt: null,
             pinOrderKey: null,
+            devicePins: {},
+            legacyPin: null,
             activeOrderKey: null,
             snoozedUntil: null,
             snoozedAt: null,
@@ -3893,14 +3906,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.pin": {
-          const alreadyPinned = thread.pinnedAt != null;
+          const currentPin =
+            command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId);
+          const alreadyPinned = currentPin !== null;
           const promotes = thread.settledOverride === "settled" || thread.snoozedUntil != null;
           return {
             ...thread,
-            pinnedAt: alreadyPinned ? thread.pinnedAt : now,
-            ...(alreadyPinned || command.orderKey === undefined
-              ? {}
-              : { pinOrderKey: command.orderKey }),
+            ...updateThreadPinMembership(thread, "pin", now, command.deviceId, command.orderKey),
             settledOverride:
               thread.settledOverride === "settled" ? "active" : thread.settledOverride,
             settledAt: thread.settledOverride === "settled" ? null : thread.settledAt,
@@ -3912,19 +3926,31 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           };
         }
         case "thread.unpin": {
-          const alreadyUnpinned = thread.pinnedAt == null;
+          const alreadyUnpinned =
+            (command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId)) === null;
           return {
             ...thread,
-            pinnedAt: null,
-            pinOrderKey: null,
+            ...updateThreadPinMembership(thread, "unpin", now, command.deviceId),
             updatedAt: alreadyUnpinned ? thread.updatedAt : now,
           };
         }
         case "thread.pin.reorder": {
-          const keyUnchanged = thread.pinOrderKey === command.orderKey;
+          const currentPin =
+            command.deviceId === undefined
+              ? legacyThreadPin(thread)
+              : threadPinForDevice(thread, command.deviceId);
+          const keyUnchanged = currentPin?.orderKey === command.orderKey;
           return {
             ...thread,
-            pinOrderKey: command.orderKey,
+            ...updateThreadPinMembership(
+              thread,
+              "reorder",
+              now,
+              command.deviceId,
+              command.orderKey,
+            ),
             updatedAt: keyUnchanged ? thread.updatedAt : now,
           };
         }
@@ -10321,15 +10347,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // before cancelling/reassigning a queued message or interrupting compaction.
     if (String(command.commandId).startsWith("server:auto-steer:")) {
       if (queuedRunsInDeliveryOrder(projection)[0]?.id !== queuedRun.id)
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion no longer targets the queue head." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion no longer targets the queue head.",
+        });
       if (projection.runs.some((run) => run.status === "queued" && run.queueHeld === true))
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion cannot consume a held queue." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion cannot consume a held queue.",
+        });
       // Optional on214; Sid's producer persists this opt-in when composed.
       if ((queuedRun as typeof queuedRun & { readonly autoSteer?: boolean }).autoSteer !== true)
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type,
-          cause: "Automatic promotion requires the queued message's auto-steer opt-in." });
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion requires the queued message's auto-steer opt-in.",
+        });
     }
     const queuedRootNode =
       queuedRun.rootNodeId === null

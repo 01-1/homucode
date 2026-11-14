@@ -2,7 +2,8 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
+import { DevicePinsPersistenceError, type DevicePins } from "./devicePins.ts";
 import {
   WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
@@ -71,9 +72,10 @@ export type LoadEarlierThreadHistoryInput = {
   readonly workAnchorId?: string;
 };
 
-export function createThreadEnvironmentAtoms<R, E>(
+export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
+  devicePins?: DevicePins<IdentityError>,
 ) {
   const scheduler = createAtomCommandScheduler();
   const concurrency = {
@@ -190,13 +192,29 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     pin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:pin",
-      execute: pinThread,
+      execute: (input: Parameters<typeof pinThread>[0], registry) =>
+        devicePins === undefined
+          ? pinThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => pinThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
     unpin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:unpin",
-      execute: unpinThread,
+      execute: (input: Parameters<typeof unpinThread>[0], registry) =>
+        devicePins === undefined
+          ? unpinThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => unpinThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -214,7 +232,15 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     reorderPin: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:reorder-pin",
-      execute: reorderPinnedThread,
+      execute: (input: Parameters<typeof reorderPinnedThread>[0], registry) =>
+        devicePins === undefined
+          ? reorderPinnedThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => reorderPinnedThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -226,7 +252,15 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     reorderActive: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:reorder-active",
-      execute: reorderActiveThread,
+      execute: (input: Parameters<typeof reorderActiveThread>[0], registry) =>
+        devicePins === undefined
+          ? reorderActiveThread(input)
+          : AtomRegistry.getResult(registry, devicePins.deviceIdAtom, {
+              suspendOnWaiting: true,
+            }).pipe(
+              Effect.mapError((cause) => new DevicePinsPersistenceError({ cause })),
+              Effect.flatMap((deviceId) => reorderActiveThread({ ...input, deviceId })),
+            ),
       scheduler,
       concurrency,
     }),
@@ -395,7 +429,9 @@ export function createThreadEnvironmentAtoms<R, E>(
       concurrency,
     }),
   };
-  const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
+  const optimistic = createOptimisticThreadLifecycle(
+    devicePins?.wrapSnapshot(snapshotAtom) ?? snapshotAtom,
+  );
   return {
     ...commands,
     snapshotAtom: optimistic.snapshotAtom,

@@ -137,11 +137,15 @@ const planFork = (
 it.effect("resets a fork's pin, snooze, settle and delegation state but keeps its origin", () =>
   Effect.gen(function* () {
     const linkOrigin = { sessionId: "mcp-session:fork-source", label: "Linked laptop" };
+    const legacyPin = { pinnedAt: DateTime.formatIso(snoozedAt), orderKey: "a0" };
+    const devicePins = { laptop: legacyPin, phone: null };
     const sourceThread: OrchestrationV2AppThread = {
       ...makeSourceThread(),
       lastSnoozeWakeAt: snoozedAt,
       pinnedAt: snoozedAt,
       pinOrderKey: "a0",
+      legacyPin,
+      devicePins,
       activeOrderKey: "a1",
       autoSettleDisabledAt: snoozedAt,
       delegatedFrom: {
@@ -164,6 +168,10 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
     assert.isNull(result.targetThread.lastSnoozeWakeAt);
     assert.isNull(result.targetThread.pinnedAt);
     assert.isNull(result.targetThread.pinOrderKey);
+    assert.deepEqual(result.targetThread.devicePins, {});
+    assert.isNull(result.targetThread.legacyPin);
+    assert.deepEqual(sourceThread.devicePins, devicePins);
+    assert.deepEqual(sourceThread.legacyPin, legacyPin);
     assert.isNull(result.targetThread.activeOrderKey);
     assert.isNull(result.targetThread.autoSettleDisabledAt);
     assert.isUndefined(result.targetThread.delegatedFrom);

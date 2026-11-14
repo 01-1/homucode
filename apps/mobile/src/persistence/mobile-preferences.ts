@@ -1,3 +1,4 @@
+import { DevicePinsState } from "@t3tools/client-runtime/state/device-pins";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -89,6 +90,7 @@ const ThreadProject = Schema.Struct({
 const isThreadProject = Schema.is(ThreadProject);
 
 export interface Preferences {
+  readonly devicePins?: Readonly<Record<string, DevicePinsState>>;
   readonly navigationTabOrder?: readonly string[];
   readonly hiddenNavigationTabs?: readonly string[];
   readonly pullRequestHideTestFiles?: boolean;
@@ -175,6 +177,7 @@ const isToolCallVisibility = Schema.is(ToolCallVisibility);
 
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
+    devicePins?: Readonly<Record<string, DevicePinsState>>;
     navigationTabOrder?: readonly string[];
     hiddenNavigationTabs?: readonly string[];
     pullRequestHideTestFiles?: boolean;
@@ -212,6 +215,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
   } = {};
+
+  if (Schema.is(Schema.Record(Schema.String, DevicePinsState))(parsed.devicePins))
+    preferences.devicePins = parsed.devicePins;
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {
     preferences.hiddenNavigationTabs = parsed.hiddenNavigationTabs.filter(
