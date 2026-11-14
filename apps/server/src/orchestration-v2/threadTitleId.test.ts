@@ -36,6 +36,10 @@ describe("thread title IDs", () => {
     expect(syncThreadTitleId({ id: "F1a", settled: false, taken: taken() })).toBe("F1");
     // An active thread took F1 while this one was settled: take the next free number.
     expect(syncThreadTitleId({ id: "F1a", settled: false, taken: taken("F", "F1") })).toBe("F2");
+    // Back to its own number when free, even with lower numbers open; otherwise the lowest free.
+    expect(syncThreadTitleId({ id: "F20a", settled: false, taken: taken("F", "F2") })).toBe("F20");
+    expect(syncThreadTitleId({ id: "F20a", settled: false, taken: taken("F", "F20") })).toBe("F1");
+    expect(syncThreadTitleId({ id: "F20a", settled: false, taken: taken("F1", "F20") })).toBe("F");
     expect(syncThreadTitleId({ id: "F", settled: false, taken: taken() })).toBe("F");
     // A restored duplicate gets a fresh number.
     expect(syncThreadTitleId({ id: "F", settled: false, taken: taken("F") })).toBe("F1");

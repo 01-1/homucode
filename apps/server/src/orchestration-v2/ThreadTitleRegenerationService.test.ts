@@ -597,11 +597,15 @@ describe("ThreadTitleRegenerationService", () => {
           const commandId = CommandId.make(
             `command:title:id:${name}:${settled ? "settle" : "unsettle"}`,
           );
-          yield* threads.dispatch(
-            settled
-              ? { type: "thread.settle", commandId, threadId: threadId(name) }
-              : { type: "thread.unsettle", commandId, threadId: threadId(name) },
-          );
+          if (settled) {
+            yield* threads.dispatch({ type: "thread.settle", commandId, threadId: threadId(name) });
+          } else {
+            yield* threads.dispatch({
+              type: "thread.unsettle",
+              commandId,
+              threadId: threadId(name),
+            });
+          }
           // The effect worker is off in this harness; run the sync the settle queued.
           yield* titleRegeneration.syncTitleId({ threadId: threadId(name), commandId });
           return yield* shown(name);
