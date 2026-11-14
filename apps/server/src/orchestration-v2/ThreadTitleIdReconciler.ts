@@ -87,11 +87,15 @@ const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(ThreadTitleIdReconciler, make);
 
-const logSkipped = (threadId: ThreadId | undefined) =>
-  Effect.catchCauseIf(
-    (cause: Cause.Cause<unknown>) => !Cause.hasInterruptsOnly(cause),
-    (cause) => Effect.logWarning("thread title ID reconcile skipped", { threadId, cause }),
-  );
+const logSkipped =
+  (threadId: ThreadId | undefined) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>) =>
+    self.pipe(
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logWarning("thread title ID reconcile skipped", { threadId, cause }),
+      ),
+    );
 
 /** Reconciles a thread after each of its events, and every thread when settings change. */
 export const layerReactor = Layer.effectDiscard(
