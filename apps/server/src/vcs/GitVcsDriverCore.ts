@@ -1141,14 +1141,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       }),
       // Outside the process permit: resolving the repository may itself need one.
       (execution) =>
-        input.writesSharedConfig
-          ? withSharedConfigLock(
-              input.cwd,
-              execution.pipe(
-                Effect.ensuring(Effect.suspend(() => Cache.invalidateAll(configReadsCache))),
-              ),
-            )
-          : execution,
+        input.writesSharedConfig ? withSharedConfigLock(input.cwd, execution) : execution,
     );
 
   const checkoutCache = yield* makeWorktreeCheckoutCache({
@@ -3806,24 +3799,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     return { oldContents, newContents };
   });
 
-  const configReadsCache = yield* Cache.makeWith(
-    (cacheKey: string) => {
-      const [cwd, key] = JSON.parse(cacheKey) as [string, string];
-      return runGitStdout("GitVcsDriver.readConfigValue", cwd, ["config", "--get", key], true).pipe(
-        Effect.map((stdout) => stdout.trim()),
-        Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
-      );
-    },
-    {
-      capacity: 1024,
-      timeToLive: Exit.match({
-        onSuccess: () => Duration.seconds(1),
-        onFailure: () => Duration.zero,
-      }),
-    },
-  );
   const readConfigValue: GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"] = (cwd, key) =>
-    Cache.get(configReadsCache, JSON.stringify([path.resolve(cwd), key]));
+    runGitStdout("GitVcsDriver.readConfigValue", cwd, ["config", "--get", key], true).pipe(
+      Effect.map((stdout) => stdout.trim()),
+      Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
+    );
 
   // Git never waits for .git/config.lock, and git run outside T3, such as an agent's, can hold it.
   // Only writes that are safe to repeat retry.
