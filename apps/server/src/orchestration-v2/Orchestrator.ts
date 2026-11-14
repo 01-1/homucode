@@ -4932,7 +4932,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return {
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title }),
-            ...(command.titleId === undefined ? {} : { titleId: command.titleId }),
+            // Archives hold no title ID, even when an ID write raced the archive.
+            ...(command.titleId === undefined
+              ? {}
+              : { titleId: thread.archivedAt === null ? command.titleId : null }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&

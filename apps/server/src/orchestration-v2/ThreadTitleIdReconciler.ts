@@ -12,6 +12,7 @@ import * as NodeCrypto from "node:crypto";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Semaphore from "effect/Semaphore";
@@ -193,12 +194,17 @@ export const layerReactor = Layer.effectDiscard(
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const reconciler = yield* ThreadTitleIdReconciler;
+    // Events wait for the startup pass, so it decides which of two threads sharing an ID keeps it.
+    const startupDone = yield* Deferred.make<void>();
     yield* forkParked(
       Stream.runForEach(engine.streamDomainEvents, (event) =>
         event.type.startsWith("thread.") &&
         event.type !== "thread.deleted" &&
         !reconciler.isOwnWrite(event)
-          ? reconciler.reconcile(event.threadId).pipe(logSkipped(event.threadId))
+          ? Deferred.await(startupDone).pipe(
+              Effect.andThen(reconciler.reconcile(event.threadId)),
+              logSkipped(event.threadId),
+            )
           : Effect.void,
       ).pipe(logSkipped(undefined)),
     );
@@ -233,7 +239,7 @@ export const layerReactor = Layer.effectDiscard(
           snapshot.threads.map((thread) => thread.projectId),
         );
         yield* reconciler.reconcileAll();
-      }).pipe(logSkipped(undefined)),
+      }).pipe(logSkipped(undefined), Effect.ensuring(Deferred.succeed(startupDone, undefined))),
     );
   }),
 ).pipe(Layer.provide(layer));
