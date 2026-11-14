@@ -604,6 +604,7 @@ describe("ThreadTitleRegenerationService", () => {
               type: "thread.unsettle",
               commandId,
               threadId: threadId(name),
+              reason: "user",
             });
           }
           // The effect worker is off in this harness; run the sync the settle queued.
