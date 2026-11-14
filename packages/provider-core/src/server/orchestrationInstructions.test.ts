@@ -5,6 +5,7 @@ import {
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
   T3_CODE_ORCHESTRATION_INSTRUCTIONS,
   t3AcpPromptWithInstructions,
+  t3CodeOrchestrationInstructions,
   t3OrchestrationPrompt,
   t3OrchestrationSystemPrompt,
 } from "./orchestrationInstructions.ts";
@@ -102,4 +103,57 @@ it("keeps agent timestamps outside ACP and Cursor instruction wrappers", () => {
     assert.include(formatted, "<user_request>\nCheck the login screen.\n</user_request>");
   }
   assert.equal(t3AcpPromptWithInstructions({ prompt, state, previousState: state }), prompt);
+});
+
+describe("subagent routing preference", () => {
+  it.each([false, true])(
+    "selects routing across prompt transports with native=%s",
+    (preferNativeSubagents) => {
+      const state = {
+        interactionMode: "default",
+        hasT3Mcp: true,
+        hasDeviceTools: false,
+        preferNativeSubagents,
+      } as const;
+      const instructions = [
+        t3CodeOrchestrationInstructions(preferNativeSubagents),
+        t3OrchestrationSystemPrompt(true, false, preferNativeSubagents),
+        t3AcpPromptWithInstructions({ prompt: "Review it.", state }),
+        t3OrchestrationPrompt({
+          prompt: "Review it.",
+          hasT3Mcp: true,
+          hasDeviceTools: false,
+          orchestrationDelivered: false,
+          deviceInstructionsDelivered: false,
+          preferNativeSubagents,
+        }),
+      ];
+      for (const text of instructions) {
+        assert.include(
+          text,
+          preferNativeSubagents ? "use your native tool" : "use `delegate_task` for every subagent",
+        );
+        if (!preferNativeSubagents) {
+          assert.include(
+            text,
+            "Do not use native subagent tools (Claude `Agent` or Codex `spawn_agent`)",
+          );
+          assert.notInclude(text, "use your native tool");
+          assert.notInclude(text, "run_in_background:false");
+        }
+      }
+      assert.include(
+        t3AcpPromptWithInstructions({
+          prompt: "Again.",
+          state,
+          previousState: { ...state, preferNativeSubagents: !preferNativeSubagents },
+        }),
+        "## T3 Code orchestration",
+      );
+    },
+  );
+
+  it("defaults to T3 delegation", () => {
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "use `delegate_task` for every subagent");
+  });
 });

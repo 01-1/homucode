@@ -1188,6 +1188,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "defaultProjectScripts",
   "enableAgentBrowserAccess",
   "enableAgentDeviceAccess",
+  "preferNativeSubagents",
   "textGenerationModelSelection",
   "threadTitleInstructions",
   "threadTitleIncludeProjectName",
@@ -1228,6 +1229,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enableAgentDeviceAccess: Schema.optionalKey(Schema.Boolean),
+  preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   threadTitleIncludeProjectName: Schema.optionalKey(Schema.Boolean),
@@ -1494,6 +1496,8 @@ export const ServerSettings = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Off refuses new autoreviewers and pauses attached ones: no new batches, no findings. */
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
+  preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Beta: Claude and Codex predict the next prompt after completed turns. Codex follows a change at once; open Claude threads after they restart. */
   promptSuggestionsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1935,6 +1939,7 @@ export const ServerSettingsPatch = Schema.Struct({
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   autoreviewEnabled: Schema.optionalKey(Schema.Boolean),
+  preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({

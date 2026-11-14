@@ -544,3 +544,14 @@ describe("server model preferences", () => {
     expect(decodeServerSettingsPatch(input)).toEqual(input);
   });
 });
+
+it("defaults native subagents off and persists environment and project choices", () => {
+  expect(decodeServerSettings({}).preferNativeSubagents).toBe(false);
+  const projectId = ProjectId.make("project-a");
+  const input = {
+    preferNativeSubagents: true,
+    projectSettingsOverrides: { [projectId]: { preferNativeSubagents: false } },
+  };
+  expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
+  expect(decodeServerSettingsPatch(input)).toEqual(input);
+});

@@ -2,12 +2,18 @@ import type { ProviderInteractionMode } from "@t3tools/contracts";
 import { preserveMessageTimestamp } from "@t3tools/shared/messageTimestamp";
 
 // Codex truncates entries over 4,000 bytes; keep each section self-contained and below that limit.
-export const T3_CODE_ORCHESTRATION_SECTIONS: ReadonlyArray<string> = [
+export const t3CodeOrchestrationSections = (
+  preferNativeSubagents = false,
+): ReadonlyArray<string> => [
   `## T3 Code orchestration
 
 Ordinary coding tasks need no T3 tools.
 
-- Subagents: use your native tool when the child uses your provider, a model it offers and no settings beyond yours (Claude \`Agent\`, \`run_in_background:false\`; Codex \`spawn_agent\`, then wait). Use \`delegate_task\` for another provider's model, user-asked settings, a separate checkout (\`isolation:"worktree"\`), or \`delegate_task\` by name. A native type on another provider's model counts too. Background agent: \`delegate_task\`, never a background \`Agent\`. Workflow only when asked.
+${
+  preferNativeSubagents
+    ? "- Subagents: use your native tool when the child uses your provider, a model it offers, and no settings beyond yours (Claude `Agent`, `run_in_background:false`; Codex `spawn_agent`, then wait). Use `delegate_task` for another provider's model, user-asked settings, a separate checkout (`isolation:\"worktree\"`), or `delegate_task` by name. A native type on another provider's model counts too. Background agent: `delegate_task`, never a background `Agent`. Workflow only when asked."
+    : '- Subagents: use `delegate_task` for every subagent, including same-provider and same-model work. Do not use native subagent tools (Claude `Agent` or Codex `spawn_agent`), including background agents. For a separate checkout, set `isolation:"worktree"`. Workflow only when asked.'
+}
 - Call \`orchestrator_capabilities\` once per thread, before the first \`delegate_task\`. Again only after an error or a user-named provider change. Settings go in \`target.options\`. Provider or model unavailable: say so. Never switch unasked or fall back to native tools, Workflow or CLIs. Never make a child's checkout in the shell or in \`task\`.
 - Every new delegate review or re-check is a new \`delegate_task\` (brief, findings, objections), never a \`t3_thread_send\`. Fix small review findings yourself; start no delegate for them. When told to proceed without a delegate, or to run fewer, \`task_cancel\` the extras. Start no replacement.
 - Follow a running delegate's \`next\`. Don't poll it (\`task_status\`, \`sleep\`, watchers, Monitor, ScheduleWakeup). Stop a delegate run you replace or no longer need with \`task_cancel\`, never \`t3_thread_interrupt\` on a \`childThreadId\`.
@@ -25,10 +31,10 @@ Ordinary coding tasks need no T3 tools.
 - Never use \`preview_*\` unasked to verify or show your own edit. Use them when the current request asks for browser work, including recording edits, or names a page or tab. Don't repeat preview calls from an earlier turn. Public pages: web fetch or search unless browser work was asked; then preview tools only, no web fetch. Close a tab you opened before you reply, unless the user asked for it or uses it.`,
 ];
 
-export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = `
+export const t3CodeOrchestrationInstructions = (preferNativeSubagents = false) =>
+  `\n\n${t3CodeOrchestrationSections(preferNativeSubagents).join("\n\n")}\n`;
 
-${T3_CODE_ORCHESTRATION_SECTIONS.join("\n\n")}
-`;
+export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = t3CodeOrchestrationInstructions();
 
 export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
 
@@ -72,6 +78,7 @@ export interface T3AcpInstructionState {
   readonly interactionMode: ProviderInteractionMode;
   readonly hasT3Mcp: boolean;
   readonly hasDeviceTools: boolean;
+  readonly preferNativeSubagents?: boolean;
 }
 
 /** ACP lacks system/developer fields; inject context on first prompt and tool/mode changes. */
@@ -85,7 +92,9 @@ export function t3AcpPromptWithInstructions(input: {
   if (
     input.previousState?.interactionMode === input.state.interactionMode &&
     input.previousState.hasT3Mcp === input.state.hasT3Mcp &&
-    input.previousState.hasDeviceTools === input.state.hasDeviceTools
+    input.previousState.hasDeviceTools === input.state.hasDeviceTools &&
+    (input.previousState.preferNativeSubagents ?? false) ===
+      (input.state.preferNativeSubagents ?? false)
   ) {
     return input.prompt;
   }
@@ -97,7 +106,7 @@ export function t3AcpPromptWithInstructions(input: {
       ? [
           T3_CODE_BROWSER_TOOL_INSTRUCTIONS.trim(),
           ...(input.state.hasDeviceTools ? [T3_CODE_DEVICE_TOOL_INSTRUCTIONS] : []),
-          T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim(),
+          t3CodeOrchestrationInstructions(input.state.preferNativeSubagents).trim(),
           T3_CODE_ACP_MCP_FALLBACK_INSTRUCTIONS,
         ]
       : []),
@@ -109,10 +118,10 @@ export function t3AcpPromptWithInstructions(input: {
   );
 }
 
-const orchestrationInstructions = (hasDeviceTools: boolean) =>
-  hasDeviceTools
-    ? `${T3_CODE_ORCHESTRATION_INSTRUCTIONS}\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS}\n`
-    : T3_CODE_ORCHESTRATION_INSTRUCTIONS;
+const orchestrationInstructions = (hasDeviceTools: boolean, preferNativeSubagents = false) => {
+  const instructions = t3CodeOrchestrationInstructions(preferNativeSubagents);
+  return hasDeviceTools ? `${instructions}\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS}\n` : instructions;
+};
 
 function prependT3OrchestrationInstructions(prompt: string, instructions: string): string {
   return preserveMessageTimestamp(
@@ -128,13 +137,14 @@ export function t3OrchestrationPrompt(input: {
   readonly hasT3Mcp: boolean;
   readonly hasDeviceTools: boolean;
   readonly orchestrationDelivered: boolean;
+  readonly preferNativeSubagents?: boolean;
   readonly deviceInstructionsDelivered: boolean;
 }): string {
   if (!input.hasT3Mcp) return input.prompt;
   if (!input.orchestrationDelivered) {
     return prependT3OrchestrationInstructions(
       input.prompt,
-      orchestrationInstructions(input.hasDeviceTools),
+      orchestrationInstructions(input.hasDeviceTools, input.preferNativeSubagents),
     );
   }
   return input.hasDeviceTools && !input.deviceInstructionsDelivered
@@ -145,6 +155,7 @@ export function t3OrchestrationPrompt(input: {
 export function t3OrchestrationSystemPrompt(
   hasT3Mcp: boolean,
   hasDeviceTools: boolean,
+  preferNativeSubagents = false,
 ): string | undefined {
-  return hasT3Mcp ? orchestrationInstructions(hasDeviceTools) : undefined;
+  return hasT3Mcp ? orchestrationInstructions(hasDeviceTools, preferNativeSubagents) : undefined;
 }

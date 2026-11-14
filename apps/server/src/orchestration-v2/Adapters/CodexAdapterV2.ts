@@ -811,6 +811,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
     readonly modelSelection: ModelSelection;
     readonly hasT3Mcp?: boolean;
+    readonly preferNativeSubagents?: boolean;
     readonly browserToolsAvailable?: boolean;
     readonly deviceToolsAvailable?: boolean;
     /** ChatGPT token sharing does not accept service tiers. */
@@ -862,6 +863,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
               browser: input.browserToolsAvailable ?? true,
               device: input.deviceToolsAvailable ?? false,
             },
+            input.preferNativeSubagents,
           )
         : undefined;
     const additionalContext =
@@ -7625,6 +7627,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               runtimePolicy: turnInput.runtimePolicy,
               modelSelection: turnInput.modelSelection,
               hasT3Mcp: mcpSession !== undefined,
+              preferNativeSubagents: mcpSession?.preferNativeSubagents ?? false,
               browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,

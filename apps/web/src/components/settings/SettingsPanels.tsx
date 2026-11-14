@@ -1328,6 +1328,24 @@ export function ChatSettingsPanel() {
         </AdvancedSettings>
       </SettingsSection>
 
+      <SettingsSection id="subagents" title="Subagents">
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("prefer-native-subagents")}
+          settingKeys={["preferNativeSubagents"]}
+          description="Use provider-native subagents for same-provider work. Off routes every subagent through T3 Code. Applies next turn; providers that load instructions at startup need a thread restart."
+          control={
+            <ScopedSwitch
+              settingKeys={["preferNativeSubagents"]}
+              checked={settings.preferNativeSubagents}
+              onCheckedChange={(checked) =>
+                updateSettings({ preferNativeSubagents: Boolean(checked) })
+              }
+              aria-label="Prefer native subagents"
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow
           {...searchableSetting("follow-up-behavior")}

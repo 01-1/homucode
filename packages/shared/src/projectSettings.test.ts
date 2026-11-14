@@ -55,13 +55,23 @@ describe("resolveProjectSettings", () => {
   it("applies overrides per key and reports their source", () => {
     const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       defaultAutoPull: true,
+      preferNativeSubagents: true,
       sidebarAutoSettleAfterDays: 3,
       projectSettingsOverrides: {
-        [projectId]: { defaultAutoPull: false, sidebarAutoSettleAfterDays: null },
+        [projectId]: {
+          defaultAutoPull: false,
+          sidebarAutoSettleAfterDays: null,
+          preferNativeSubagents: false,
+        },
       },
     });
     const resolved = resolveProjectSettings(settings, projectId);
     expect(resolved.settings.defaultAutoPull).toBe(false);
+    expect(resolved.settings.preferNativeSubagents).toBe(false);
+    expect(resolved.sources.preferNativeSubagents).toBe("project");
+    expect(resolveProjectSettings(settings, otherProjectId).settings.preferNativeSubagents).toBe(
+      true,
+    );
     expect(resolved.settings.sidebarAutoSettleAfterDays).toBeNull();
     expect(resolved.settings.defaultThreadEnvMode).toBe(settings.defaultThreadEnvMode);
     expect(resolved.sources.defaultAutoPull).toBe("project");

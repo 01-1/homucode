@@ -9,6 +9,7 @@ import {
   T3_MCP_BEARER_ENV,
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
+  T3_PI_PREFER_NATIVE_SUBAGENTS_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
 } from "./mcpExtensionSource.ts";
 
@@ -314,6 +315,9 @@ export function buildPiRpcLaunch(input: {
       ...(hasT3Mcp && input.mcpSession !== undefined
         ? {
             [T3_MCP_URL_ENV]: input.mcpSession.endpoint,
+            [T3_PI_PREFER_NATIVE_SUBAGENTS_ENV]: String(
+              input.mcpSession.preferNativeSubagents ?? false,
+            ),
             [T3_MCP_BEARER_ENV]: bearerTokenFromAuthorizationHeader(
               input.mcpSession.authorizationHeader,
             ),

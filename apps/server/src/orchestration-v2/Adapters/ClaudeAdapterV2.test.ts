@@ -842,7 +842,27 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
     };
     assert.equal(systemPrompt.type, "preset");
     assert.equal(systemPrompt.preset, "claude_code");
-    assert.include(systemPrompt.append ?? "", "Use `delegate_task`");
+    assert.include(systemPrompt.append ?? "", "use `delegate_task` for every subagent");
+    assert.notInclude(systemPrompt.append ?? "", "use your native tool");
+    const nativeOptions = ClaudeAdapterV2.makeClaudeQueryOptions({
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
+      nativeThreadId: "native-thread-claude-mcp",
+      resume: false,
+      cwd: "/workspace",
+      mcpServers: overrides.mcpServers ?? {},
+      preferNativeSubagents: true,
+    });
+    assert.include(
+      (nativeOptions.systemPrompt as { append: string }).append,
+      "use your native tool",
+    );
+    assert.include(
+      (nativeOptions.systemPrompt as { append: string }).append,
+      "Background agent: `delegate_task`, never a background `Agent`.",
+    );
     assert.include(systemPrompt.append ?? "", "call `t3_background_wait`");
     assert.notInclude(systemPrompt.append ?? "", "## T3 Code devices");
     const logged = ClaudeAdapterV2.loggedClaudeQueryOptions(options);

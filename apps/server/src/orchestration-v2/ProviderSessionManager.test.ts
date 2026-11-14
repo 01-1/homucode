@@ -815,6 +815,8 @@ function runBrowserAccessScenario(input: {
   readonly deviceOverride?: boolean;
   readonly enableAgentDeviceAccess?: boolean;
   readonly enableDeviceSupport?: boolean;
+  readonly preferNativeSubagents?: boolean;
+  readonly nativeSubagentsOverride?: boolean;
   readonly createThread?: boolean;
   readonly projectExists?: boolean;
   readonly delegatedBy?: ThreadId;
@@ -875,9 +877,13 @@ function runBrowserAccessScenario(input: {
             ...(input.enableDeviceSupport === undefined
               ? {}
               : { enableDeviceSupport: input.enableDeviceSupport }),
+            preferNativeSubagents: input.preferNativeSubagents ?? false,
             projectSettingsOverrides: {
               [projectId]: {
                 enableAgentBrowserAccess: input.projectOverride,
+                ...(input.nativeSubagentsOverride === undefined
+                  ? {}
+                  : { preferNativeSubagents: input.nativeSubagentsOverride }),
                 ...(input.deviceOverride === undefined
                   ? {}
                   : { enableAgentDeviceAccess: input.deviceOverride }),
@@ -5640,4 +5646,26 @@ it.effect("ProviderSessionManagerV2 gives a delegated child its project's device
     });
     assert.isTrue(child?.capabilities?.has("device"));
   }),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 carries the project native subagent preference into MCP sessions",
+  () =>
+    Effect.gen(function* () {
+      for (const preference of [false, true]) {
+        const inherited = yield* runBrowserAccessScenario({
+          enableAgentBrowserAccess: true,
+          projectOverride: true,
+          preferNativeSubagents: preference,
+        });
+        assert.equal(inherited?.preferNativeSubagents, preference);
+        const overridden = yield* runBrowserAccessScenario({
+          enableAgentBrowserAccess: true,
+          projectOverride: true,
+          preferNativeSubagents: preference,
+          nativeSubagentsOverride: !preference,
+        });
+        assert.equal(overridden?.preferNativeSubagents, !preference);
+      }
+    }),
 );

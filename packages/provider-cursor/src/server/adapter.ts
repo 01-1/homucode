@@ -1053,6 +1053,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
         const told = yield* Ref.make<{
           readonly agent: string;
           readonly orchestration: boolean;
+          readonly preferNativeSubagents: boolean;
           readonly device: boolean;
         } | null>(null);
         // Cursor drops a run cancelled before its first checkpoint, so the next message carries its prompt.
@@ -2613,6 +2614,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
           turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
           mcpServers: Record<string, McpServerConfig> | undefined,
           hasDeviceTools: boolean,
+          preferNativeSubagents: boolean,
           delivered: { readonly orchestration: boolean; readonly device: boolean },
           interrupted: string | undefined,
         ) {
@@ -2631,6 +2633,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               resolveExtractedTextPath: host.resolveExtractedTextPath,
             }),
             hasT3Mcp: mcpServers !== undefined,
+            preferNativeSubagents,
             hasDeviceTools,
             orchestrationDelivered: delivered.orchestration,
             deviceInstructionsDelivered: delivered.device,
@@ -2704,12 +2707,14 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
             const mcpServers = cursorMcpServers(mcpSession);
             const hasDeviceTools =
               mcpServers !== undefined && mcpSession?.capabilities?.has("device") === true;
+            const preferNativeSubagents = mcpSession?.preferNativeSubagents ?? false;
             const known = yield* Ref.get(told);
             // A conversation this process has not sent to was told on its first run.
             const delivered =
-              known?.agent === agent.nativeThreadId
+              known?.agent === agent.nativeThreadId &&
+              known.preferNativeSubagents === preferNativeSubagents
                 ? known
-                : { orchestration: turnInput.runOrdinal > 1, device: false };
+                : { orchestration: known?.agent !== agent.nativeThreadId && turnInput.runOrdinal > 1, device: false };
             const interrupted = yield* Ref.get(interruptedPrompt);
             const runCheckpointed = (runId?: string) =>
               agent.session.runCheckpointed?.(runId) ?? Effect.succeed(false);
@@ -2745,6 +2750,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                       turnInput,
                       mcpServers,
                       hasDeviceTools,
+                      preferNativeSubagents,
                       delivered,
                       dropped?.text,
                     );
@@ -2786,6 +2792,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
             if (resume === undefined) {
               yield* Ref.set(told, {
                 agent: agent.nativeThreadId,
+                preferNativeSubagents,
                 orchestration: !compacted && (delivered.orchestration || mcpServers !== undefined),
                 device: !compacted && hasDeviceTools,
               });

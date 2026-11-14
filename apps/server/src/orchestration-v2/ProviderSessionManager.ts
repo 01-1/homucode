@@ -451,7 +451,8 @@ export const layerWithOptions = (
           );
       const agentAccessSettings = Effect.fn("ProviderSessionManagerV2.agentAccessSettings")(
         function* (threadId: ThreadId) {
-          if (Option.isNone(serverSettings)) return { browser: true, device: false };
+          if (Option.isNone(serverSettings))
+            return { browser: true, device: false, preferNativeSubagents: false };
           return yield* Effect.gen(function* () {
             const settings = yield* serverSettings.value.getSettings;
             const thread = yield* projectionStore.getThread(threadId);
@@ -473,19 +474,21 @@ export const layerWithOptions = (
                     settings.enableDeviceSupport &&
                     !deviceOverridden &&
                     settings.enableAgentDeviceAccess,
+                  preferNativeSubagents: resolveProjectSettings(settings, thread.projectId).settings.preferNativeSubagents,
                 };
             }
             const effective = resolveProjectSettings(settings, thread.projectId).settings;
             return {
               browser: effective.enableAgentBrowserAccess,
               device: settings.enableDeviceSupport && effective.enableAgentDeviceAccess,
+              preferNativeSubagents: effective.preferNativeSubagents,
             };
           }).pipe(
             Effect.catch((cause) =>
               Effect.logWarning(
                 "Could not resolve agent access; withholding browser and device tools.",
                 { threadId, cause },
-              ).pipe(Effect.as({ browser: false, device: false })),
+              ).pipe(Effect.as({ browser: false, device: false, preferNativeSubagents: false })),
             ),
           );
         },
@@ -563,8 +566,11 @@ export const layerWithOptions = (
               threadId,
               Effect.gen(function* () {
                 // Live providers build MCP clients once; reuse credentials across workspace handoffs.
-                const { browser: browserToolsAvailable, device: deviceToolsAvailable } =
-                  yield* agentAccessSettings(threadId);
+                const {
+                  browser: browserToolsAvailable,
+                  device: deviceToolsAvailable,
+                  preferNativeSubagents,
+                } = yield* agentAccessSettings(threadId);
                 const capabilities = new Set<
                   import("../mcp/McpInvocationContext.ts").McpCapability
                 >(["orchestration", "worktree", "pull-requests"]);
@@ -598,6 +604,7 @@ export const layerWithOptions = (
                     // A credential issued while the lineage read failed is replaced once it works.
                     (resolved.thread.subagent === true) === subagent
                   ) {
+                    yield* mcpSessions.set({ ...existing, preferNativeSubagents });
                     return { mcpCredentialId: existing.providerSessionId, issued: false };
                   }
                   dropMcpCredentialReservation(threadId, existing.providerSessionId);
@@ -612,6 +619,7 @@ export const layerWithOptions = (
                 });
                 yield* mcpSessions.set({
                   ...credential.config,
+                  preferNativeSubagents,
                   hasPendingWake: projectionStore
                     .getThreadRecords(threadId, ["runs", "subagents"])
                     .pipe(

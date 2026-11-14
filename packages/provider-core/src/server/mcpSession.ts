@@ -16,6 +16,8 @@ export interface McpProviderSessionConfig {
   readonly authorizationHeader: string;
   /** Omit preview_* instructions when the user withholds agent browser access. */
   readonly browserToolsAvailable: boolean;
+  /** Resolved environment/project preference for injected orchestration guidance. */
+  readonly preferNativeSubagents?: boolean;
   readonly capabilities?: ReadonlySet<string>;
   readonly agentDeviceEnvironment?: Readonly<Record<string, string>>;
   /** True while a delegated task this thread started will wake it with its result. */

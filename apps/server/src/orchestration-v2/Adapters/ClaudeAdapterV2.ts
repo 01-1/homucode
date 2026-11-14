@@ -215,7 +215,7 @@ import {
 import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapshot";
 import {
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
-  T3_CODE_ORCHESTRATION_INSTRUCTIONS,
+  t3CodeOrchestrationInstructions,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import {
@@ -2145,6 +2145,7 @@ export function makeClaudeQueryOptions(input: {
   readonly attachmentsDir?: string;
   readonly settings?: ClaudeSettings;
   readonly promptSuggestions?: boolean;
+  readonly preferNativeSubagents?: boolean;
   readonly sdkSettings?: string | ClaudeSdkSettings;
   readonly environment?: NodeJS.ProcessEnv;
   readonly mcpServers?: ClaudeQueryOptions["mcpServers"];
@@ -2303,7 +2304,7 @@ export function makeClaudeQueryOptions(input: {
         buildRuntimeInstructions({ harness: "Claude Code" }) +
           (input.mcpServers === undefined
             ? ""
-            : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
+            : t3CodeOrchestrationInstructions(input.preferNativeSubagents) +
               CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +
               CLAUDE_SEND_TO_USER_INSTRUCTIONS +
               (deviceInstructions
@@ -12734,6 +12735,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { mcpServers: mcpOverrides.mcpServers }),
             deviceToolsAvailable: mcpSession?.capabilities?.has("device") === true,
+            preferNativeSubagents: mcpSession?.preferNativeSubagents ?? false,
             permissionMode: queryPolicy.permissionMode,
             ...(queryPolicy.allowDangerouslySkipPermissions === undefined
               ? {}
