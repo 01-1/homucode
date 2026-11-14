@@ -7,7 +7,7 @@ Homu Code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed f
 - **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.
 - **Stop.** Stop stops only the current thread. Shift-click, the background-work Stop or `/stopall` also stops its subagents.
 - **Message context.** Each user message records which device it came from, and the agent sees a `[T3] Sent from: ...` line. Optional names come from `device-names.json` in the state folder.
-- **`/q`.** Asks one question on a "Quick model" (a new setting) in the same thread, without changing the thread's model.
+- **`/q`.** Asks one question in the same thread on a "Quick model" (a new setting): the thread switches to the quick model for that one answer, then switches back to its own model.
 - **Autoreviewers.** An `autoreview` tool attaches reviewer subagents to a thread. They read its activity in batches and send back findings, which steer into the running turn or wait in one queued message. Options cover batch size, pacing, waking on each tool call or each user message, and a custom preamble. Findings that arrive after a Stop wait for the user's next turn.
 - **Queue and steering.** Messages sent with delivery mode auto or steer are steered in as soon as the turn can take them. `t3 thread send` takes `--mode queue|auto|steer|restart`, and `t3 thread configure` sets permission and interaction modes.
 - **Completions and CLI.** A durable local completion sink and native CLI task controls. Launch receipts and the AppImage runtime are reused across CLI calls.
