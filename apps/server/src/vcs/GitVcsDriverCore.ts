@@ -1889,7 +1889,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       readonly knownOriginDefaultBranch?: string | null;
     },
   ) {
-    const configuredBaseRef = yield* readConfigValue(cwd, `branch.${refName}.t3-merge-base-ref`);
+    const configuredBaseRef = yield* readConfigValueFresh(cwd, `branch.${refName}.t3-merge-base-ref`);
     if (
       configuredBaseRef?.startsWith("refs/heads/") ||
       configuredBaseRef?.startsWith("refs/remotes/")
@@ -2657,7 +2657,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       });
       yield* writeConfigValue({ cwd, key: `branch.${branch}.remote`, value: remoteName });
       // Matches what `push -u` sets for a remote upstream.
-      const autoSetupRebase = yield* readConfigValue(cwd, "branch.autoSetupRebase");
+      const autoSetupRebase = yield* readConfigValueFresh(cwd, "branch.autoSetupRebase");
       if (autoSetupRebase === "always" || autoSetupRebase === "remote") {
         yield* writeConfigValue({ cwd, key: `branch.${branch}.rebase`, value: "true" });
       }
@@ -2801,7 +2801,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             key: branchBaseConfigKey(branch),
             value: currentUpstream.branchName,
           });
-          if (!(yield* readConfigValue(cwd, `branch.${branch}.t3-merge-base-ref`))) {
+          if (!(yield* readConfigValueFresh(cwd, `branch.${branch}.t3-merge-base-ref`))) {
             yield* writeConfigValue({
               cwd,
               key: `branch.${branch}.t3-merge-base-ref`,
@@ -2871,7 +2871,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         detail: "Current branch has no upstream configured. Push with upstream first.",
       });
     }
-    const remote = yield* readConfigValue(cwd, `branch.${refName}.remote`);
+    const remote = yield* readConfigValueFresh(cwd, `branch.${refName}.remote`);
     if (remote) {
       const gitCommonDir = yield* resolveGitCommonDir(cwd);
       const pending = statusFetches.get(`${gitCommonDir}\0${remote}`);
@@ -2902,7 +2902,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     );
     if (result.exitCode !== 0 && isRefLockFailure(result.stderr)) {
       const [remote, mergeRefs, currentBranch, currentSha] = yield* Effect.all([
-        readConfigValue(cwd, `branch.${refName}.remote`),
+        readConfigValueFresh(cwd, `branch.${refName}.remote`),
         runGitStdout(
           "GitVcsDriver.pullCurrentBranch.mergeRefs",
           cwd,
@@ -3806,12 +3806,18 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     return { oldContents, newContents };
   });
 
+  const readConfigValueFresh = (cwd: string, key: string) =>
+    runGitStdout("GitVcsDriver.readConfigValue", cwd, ["config", "--get", key], true).pipe(
+      Effect.map((stdout) => stdout.trim()),
+      Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
+    );
+  // Coalesces the repeated reads of status and PR lookups. Keyed by lane too, so a foreground
+  // read never waits on a lookup queued in the background Git lane.
   const configReadsCache = yield* Cache.makeWith(
     (cacheKey: string) => {
-      const [cwd, key] = JSON.parse(cacheKey) as [string, string];
-      return runGitStdout("GitVcsDriver.readConfigValue", cwd, ["config", "--get", key], true).pipe(
-        Effect.map((stdout) => stdout.trim()),
-        Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
+      const [cwd, key, background] = JSON.parse(cacheKey) as [string, string, boolean];
+      return readConfigValueFresh(cwd, key).pipe(
+        Effect.provideService(GitVcsDriver.BackgroundGitWork, background),
       );
     },
     {
@@ -3822,8 +3828,27 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       }),
     },
   );
-  const readConfigValue: GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"] = (cwd, key) =>
-    Cache.get(configReadsCache, JSON.stringify([path.resolve(cwd), key]));
+  const configReadsCacheKey = (cwd: string, key: string, background: boolean) =>
+    JSON.stringify([path.resolve(cwd), key, background]);
+  const readConfigValue: GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"] = Effect.fn(
+    "readConfigValue",
+  )(function* (cwd, key, options) {
+    if (options?.fresh === true || (yield* GitVcsDriver.FreshGitConfigReads)) {
+      return yield* readConfigValueFresh(cwd, key).pipe(
+        // A later cached read must not return a value older than this one.
+        Effect.ensuring(
+          Effect.all([
+            Cache.invalidate(configReadsCache, configReadsCacheKey(cwd, key, false)),
+            Cache.invalidate(configReadsCache, configReadsCacheKey(cwd, key, true)),
+          ]),
+        ),
+      );
+    }
+    const background = yield* GitVcsDriver.BackgroundGitWork;
+    return yield* Cache.get(configReadsCache, configReadsCacheKey(cwd, key, background));
+  });
+  const invalidateConfigReads: GitVcsDriver.GitVcsDriver["Service"]["invalidateConfigReads"] = () =>
+    Cache.invalidateAll(configReadsCache);
 
   // Git never waits for .git/config.lock, and git run outside T3, such as an agent's, can hold it.
   // Only writes that are safe to repeat retry.
@@ -3892,8 +3917,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const readBranchBase: GitVcsDriver.GitVcsDriver["Service"]["readBranchBase"] = Effect.fn(
     "GitVcsDriver.readBranchBase",
   )(function* (cwd, branch) {
-    const base = yield* readConfigValue(cwd, branchBaseConfigKey(branch));
-    return base ?? (yield* readConfigValue(cwd, legacyBranchBaseConfigKey(branch)));
+    const base = yield* readConfigValueFresh(cwd, branchBaseConfigKey(branch));
+    return base ?? (yield* readConfigValueFresh(cwd, legacyBranchBaseConfigKey(branch)));
   });
 
   const resolveBranchBase = Effect.fn("GitVcsDriver.resolveBranchBase")(function* (
@@ -4292,7 +4317,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     // Both reads leave the repository alone, so they share one round trip before the checkout.
     const [configuredCheckoutWorkers, base] = yield* Effect.all(
       [
-        readConfigValue(input.cwd, "checkout.workers"),
+        readConfigValueFresh(input.cwd, "checkout.workers"),
         input.newRefName && input.baseRefName
           ? resolveBranchBase(input.cwd, input.baseRefName)
           : Effect.succeed(null),
@@ -5135,6 +5160,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     getReviewDiffPreview,
     getReviewDiffFileContents,
     readConfigValue,
+    invalidateConfigReads,
     readBranchBase,
     resolveBranchName,
     listRefs,

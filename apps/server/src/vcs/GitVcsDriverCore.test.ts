@@ -177,6 +177,65 @@ it.effect(
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
+it.effect("reads config fresh when asked, and keeps foreground and background reads apart", () =>
+  Effect.gen(function* () {
+    let reads = 0;
+    let value = "first";
+    const spawner = ChildProcessSpawner.make((command) =>
+      Effect.sync(() => {
+        if (!ChildProcess.isStandardCommand(command)) return makeNonRepositoryHandle();
+        const args = command.args.map(String);
+        if (args[0] !== "config" || args[1] !== "--get") return makeNonRepositoryHandle();
+        reads++;
+        return makeSuccessfulHandle(value);
+      }),
+    );
+    const driver = yield* makeGitVcsDriverCore().pipe(
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provide(layerServerConfig),
+    );
+    assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "first");
+    assert.equal(reads, 1);
+
+    // Written outside T3: a cached read can lag, a fresh one can't.
+    value = "external";
+    assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "first");
+    assert.equal(yield* driver.readConfigValue("/repo", "t3.test", { fresh: true }), "external");
+    assert.equal(reads, 2);
+    // A fresh read drops the older cached value instead of leaving it for the next caller.
+    assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "external");
+    assert.equal(reads, 3);
+
+    value = "referenced";
+    assert.equal(
+      yield* driver
+        .readConfigValue("/repo", "t3.test")
+        .pipe(Effect.provideService(GitVcsDriver.FreshGitConfigReads, true)),
+      "referenced",
+    );
+    assert.equal(reads, 4);
+
+    value = "invalidated";
+    yield* driver.invalidateConfigReads();
+    assert.equal(yield* driver.readConfigValue("/repo", "t3.test"), "invalidated");
+    assert.equal(reads, 5);
+
+    // A background read never answers a foreground caller from the background lane's queue.
+    assert.equal(
+      yield* driver
+        .readConfigValue("/repo", "t3.test")
+        .pipe(Effect.provideService(GitVcsDriver.BackgroundGitWork, true)),
+      "invalidated",
+    );
+    assert.equal(reads, 6);
+    yield* driver
+      .readConfigValue("/repo", "t3.test")
+      .pipe(Effect.provideService(GitVcsDriver.BackgroundGitWork, true));
+    yield* driver.readConfigValue("/repo", "t3.test");
+    assert.equal(reads, 6);
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
 it.effect("runs background Git in its own lane so user commands never queue behind it", () =>
   Effect.gen(function* () {
     const gate = yield* Deferred.make<void>();

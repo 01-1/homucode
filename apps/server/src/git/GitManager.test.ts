@@ -667,9 +667,9 @@ function makeManager(input?: {
           Effect.map((service) =>
             GitVcsDriver.GitVcsDriver.of({
               ...service,
-              readConfigValue: (cwd, key) =>
+              readConfigValue: (cwd, key, options) =>
                 Effect.sync(() => input.gitConfigReads?.push(key)).pipe(
-                  Effect.andThen(service.readConfigValue(cwd, key)),
+                  Effect.andThen(service.readConfigValue(cwd, key, options)),
                 ),
             }),
           ),
@@ -1025,6 +1025,26 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       yield* Fiber.join(inFlight);
 
       expect((yield* lookup)?.number).toBe(238);
+    }),
+  );
+
+  it.effect("status after an invalidation sees Git config changed outside T3", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      yield* runGit(repoDir, ["remote", "add", "origin", "https://github.com/acme/widgets.git"]);
+      const { manager } = yield* makeManager();
+      expect((yield* manager.localStatus({ cwd: repoDir })).sourceControlProvider?.kind).toBe(
+        "github",
+      );
+
+      // Within the config cache's lifetime, as when an agent changes the remote mid-turn.
+      yield* runGit(repoDir, ["remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git"]);
+      yield* manager.invalidateStatus(repoDir);
+
+      expect((yield* manager.localStatus({ cwd: repoDir })).sourceControlProvider?.kind).toBe(
+        "gitlab",
+      );
     }),
   );
 

@@ -947,7 +947,9 @@ export const make = Effect.gen(function* () {
         repository: repositoryNameWithOwner,
         ...pullRequestHostOptions(pullRequest.url),
       });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
+      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url", {
+        fresh: true,
+      });
       const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
       const preferredRemoteName =
         pullRequest.headRepositoryOwnerLogin?.trim() ||
@@ -1032,7 +1034,9 @@ export const make = Effect.gen(function* () {
               ? Effect.fail(cause)
               : Effect.gen(function* () {
                   const remoteName = yield* gitCore.resolvePrimaryRemoteName(cwd);
-                  const remoteUrl = yield* gitCore.readConfigValue(cwd, `remote.${remoteName}.url`);
+                  const remoteUrl = yield* gitCore.readConfigValue(cwd, `remote.${remoteName}.url`, {
+                    fresh: true,
+                  });
                   const pullRequestKey = pullRequestRepositoryKey(pullRequest.url);
                   if (
                     remoteUrl === null ||
@@ -1061,7 +1065,9 @@ export const make = Effect.gen(function* () {
         repository: repositoryNameWithOwner,
         ...pullRequestHostOptions(pullRequest.url),
       });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
+      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url", {
+        fresh: true,
+      });
       const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
       const preferredRemoteName =
         pullRequest.headRepositoryOwnerLogin?.trim() ||
@@ -2038,7 +2044,11 @@ export const make = Effect.gen(function* () {
     upstreamRef: string | null,
     headContext: Pick<BranchHeadContext, "isCrossRepository" | "remoteName">,
   ) {
-    const configuredRef = yield* gitCore.readConfigValue(cwd, `branch.${branch}.t3-merge-base-ref`);
+    const configuredRef = yield* gitCore.readConfigValue(
+      cwd,
+      `branch.${branch}.t3-merge-base-ref`,
+      { fresh: true },
+    );
     if (configuredRef?.startsWith("refs/heads/") || configuredRef?.startsWith("refs/remotes/")) {
       const configuredBranch = yield* gitCore.resolveBranchName(cwd, configuredRef);
       if (configuredBranch) return { baseBranch: configuredBranch, baseRef: configuredRef };
@@ -2428,7 +2438,10 @@ export const make = Effect.gen(function* () {
     function* (input, options) {
       const cacheKey = yield* normalizeStatusCacheKey(input.cwd);
       if (options?.refreshUpstream === false || options?.refreshMissingPullRequest) {
-        return yield* readRemoteStatus(cacheKey, options);
+        // These reads follow a pull or a finished turn, which may have changed Git config.
+        return yield* readRemoteStatus(cacheKey, options).pipe(
+          Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
+        );
       }
       return yield* Cache.get(remoteStatusResultCache, cacheKey);
     },
@@ -2501,7 +2514,7 @@ export const make = Effect.gen(function* () {
           cwd,
           `config\u0000${key}`,
           fresh,
-          gitCore.readConfigValue(cwd, key),
+          gitCore.readConfigValue(cwd, key, { fresh }),
         ).pipe(Effect.orElseSucceed(() => null));
       const readRemoteUrlKey = (remoteName: string | null) =>
         remoteName === null
@@ -2560,7 +2573,7 @@ export const make = Effect.gen(function* () {
       ],
       { concurrency: "unbounded" },
     ).pipe(Effect.map((parts) => parts.join("\u0000")));
-  const lookupBranchPullRequest = Effect.fn("lookupBranchPullRequest")(function* (
+  const lookupBranchPullRequestCore = Effect.fn("lookupBranchPullRequest")(function* (
     cacheCwd: string,
     branch: string,
     options: { readonly refresh: boolean; readonly freshGitState: boolean },
@@ -2723,6 +2736,17 @@ export const make = Effect.gen(function* () {
       repositoryKey: pullRequestRepositoryKey(latest.url),
     };
   });
+  // Fresh git state includes config, also when a host provider reads it.
+  const lookupBranchPullRequest = (
+    cacheCwd: string,
+    branch: string,
+    options: { readonly refresh: boolean; readonly freshGitState: boolean },
+  ) =>
+    options.freshGitState
+      ? lookupBranchPullRequestCore(cacheCwd, branch, options).pipe(
+          Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
+        )
+      : lookupBranchPullRequestCore(cacheCwd, branch, options);
   const branchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
     "branchPullRequest",
   )(function* ({ cwd, branch }, options) {
@@ -2770,15 +2794,18 @@ export const make = Effect.gen(function* () {
   const invalidateLocalStatus: GitManager["Service"]["invalidateLocalStatus"] = Effect.fn(
     "invalidateLocalStatus",
   )(function* (cwd) {
+    yield* gitCore.invalidateConfigReads();
     yield* invalidateLocalStatusResultCache(cwd);
   });
   const invalidateRemoteStatus: GitManager["Service"]["invalidateRemoteStatus"] = Effect.fn(
     "invalidateRemoteStatus",
   )(function* (cwd) {
+    yield* gitCore.invalidateConfigReads();
     yield* invalidateRemoteStatusResultCache(cwd);
   });
   const invalidateStatus: GitManager["Service"]["invalidateStatus"] = Effect.fn("invalidateStatus")(
     function* (cwd) {
+      yield* gitCore.invalidateConfigReads();
       yield* invalidateLocalStatusResultCache(cwd);
       yield* invalidateRemoteStatusResultCache(cwd);
       yield* bumpPrLookupEpoch(cwd);

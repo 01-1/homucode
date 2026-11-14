@@ -310,6 +310,14 @@ export const BackgroundGitWork = Context.Reference<boolean>("t3/vcs/BackgroundGi
   defaultValue: () => false,
 });
 
+/**
+ * Set where Git config written outside T3 must be seen at once, such as fresh status reads and
+ * the check before a closed PR result is persisted. readConfigValue then skips its short cache.
+ */
+export const FreshGitConfigReads = Context.Reference<boolean>("t3/vcs/FreshGitConfigReads", {
+  defaultValue: () => false,
+});
+
 export class GitVcsDriver extends Context.Service<
   GitVcsDriver,
   {
@@ -353,10 +361,18 @@ export class GitVcsDriver extends Context.Service<
     readonly getReviewDiffFileContents: (
       input: ReviewDiffFileContentsInput,
     ) => Effect.Effect<ReviewDiffFileContentsResult, GitCommandError>;
+    /**
+     * Concurrent reads of the same key share one git process, and a value can be up to 1 s old.
+     * T3's own config writes drop the cache. Pass fresh, or set FreshGitConfigReads, to read
+     * git now.
+     */
     readonly readConfigValue: (
       cwd: string,
       key: string,
+      options?: { readonly fresh?: boolean },
     ) => Effect.Effect<string | null, GitCommandError>;
+    /** Drops cached config reads, so the next read of every key runs git. */
+    readonly invalidateConfigReads: () => Effect.Effect<void>;
     /**
      * The branch, named as on the host, that T3 recorded `branch` was cut from. Null when none
      * was recorded.
