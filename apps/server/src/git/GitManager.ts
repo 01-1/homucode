@@ -2808,7 +2808,12 @@ export const make = Effect.gen(function* () {
   );
 
   // A user is waiting on these, so a host's background rate-limit pause must not refuse them.
-  const asUserAction = Effect.provideService(SourceControlRateLimit.Interactive, true);
+  // User actions also read Git config fresh, so config an agent just changed counts.
+  const asUserAction = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.provideService(SourceControlRateLimit.Interactive, true),
+      Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
+    );
 
   const resolvePullRequest: GitManager["Service"]["resolvePullRequest"] = Effect.fn(
     "resolvePullRequest",
@@ -3374,15 +3379,8 @@ export const make = Effect.gen(function* () {
     invalidateRemoteStatus,
     invalidateStatus,
     resolvePullRequest,
-    // User actions that open or check out PRs: config an agent just changed must count.
-    preparePullRequestThread: (...args) =>
-      preparePullRequestThread(...args).pipe(
-        Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
-      ),
-    runStackedAction: (...args) =>
-      runStackedAction(...args).pipe(
-        Effect.provideService(GitVcsDriver.FreshGitConfigReads, true),
-      ),
+    preparePullRequestThread,
+    runStackedAction,
     subscribePullRequestStateChanges: PubSub.subscribe(pullRequestStateChanges).pipe(
       Effect.map((subscription) => Stream.fromSubscription(subscription)),
     ),
