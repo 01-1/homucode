@@ -662,6 +662,28 @@ describe("ThreadTitleRegenerationService", () => {
           threads.getThreadProjection(threadId(name)).pipe(Effect.map((p) => p.thread.titleId)),
         );
         assert.sameMembers(ids, ["F1", "F3"]);
+
+        // A full pass repairs a duplicate, such as one left by a shutdown mid-reconcile.
+        yield* threads.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("command:title:id:fifth:duplicate"),
+          threadId: threadId("fifth"),
+          titleId: ids[0] ?? null,
+        });
+        yield* reconciler.reconcileAll();
+        const repaired = yield* Effect.forEach(["fourth", "fifth"], (name) =>
+          threads.getThreadProjection(threadId(name)).pipe(Effect.map((p) => p.thread.titleId)),
+        );
+        assert.sameMembers(repaired, ["F1", "F3"]);
+
+        // Archiving drops the ID, so unarchiving later cannot bring back a duplicate.
+        yield* threads.dispatch({
+          type: "thread.archive",
+          commandId: CommandId.make("command:title:id:fourth:archive"),
+          threadId: threadId("fourth"),
+        });
+        const archived = yield* threads.getThreadProjection(threadId("fourth"));
+        assert.isNull(archived.thread.titleId ?? null);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

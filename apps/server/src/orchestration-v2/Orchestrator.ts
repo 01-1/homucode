@@ -4750,6 +4750,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return {
             ...thread,
             archivedAt: now,
+            // Archives hold no title ID, so unarchiving can never bring back a duplicate.
+            titleId: null,
             titleRegeneration: null,
             guestShare: null,
             pullRequests: thread.pullRequests?.map((link) => withPullRequestWatch(link, undefined)),
@@ -5776,7 +5778,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           threadId: id,
           providerInstanceId: thread.providerInstanceId,
           occurredAt: now,
-          payload: { ...thread, projectId: command.projectId, workspaceRoot: cwd, updatedAt: now },
+          // The ID was unique only in the old project; a fresh one follows.
+          payload: {
+            ...thread,
+            projectId: command.projectId,
+            workspaceRoot: cwd,
+            titleId: null,
+            updatedAt: now,
+          },
         });
       }
     },
@@ -5836,6 +5845,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projectId: command.projectId,
         worktreePath: null,
         workspaceRoot: target.value.workspaceRoot,
+        titleId: null,
         updatedAt: now,
       },
     });
