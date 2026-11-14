@@ -76,11 +76,13 @@ export interface ThreadTitleGenerationInput {
     | {
         readonly branch: string | null;
         readonly worktreeName: string | null;
-        readonly projectName: string;
+        readonly projectName?: string | undefined;
         readonly hasPullRequest: boolean;
       }
     | undefined;
   linkedContext?: string | undefined;
+  /** Shown to the titler so titles can leave out what the project name already says. */
+  projectName?: string | undefined;
   cwd: string;
   message: string;
   projectTitle?: string | undefined;

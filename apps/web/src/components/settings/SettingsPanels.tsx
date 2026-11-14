@@ -604,6 +604,13 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? ["Thread title instructions"]
       : []),
+    ...(settings.threadTitleIncludeProjectName !==
+    DEFAULT_UNIFIED_SETTINGS.threadTitleIncludeProjectName
+      ? ["Project name in title prompt"]
+      : []),
+    ...(settings.threadTitleIdPrefix !== DEFAULT_UNIFIED_SETTINGS.threadTitleIdPrefix
+      ? ["Thread title IDs"]
+      : []),
     ...getChangedBrowserSettingLabels(settings),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
       ? ["Agent browser access"]
@@ -716,6 +723,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
+      threadTitleIncludeProjectName: DEFAULT_UNIFIED_SETTINGS.threadTitleIncludeProjectName,
+      threadTitleIdPrefix: DEFAULT_UNIFIED_SETTINGS.threadTitleIdPrefix,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
       fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
@@ -2162,6 +2171,8 @@ export function ThreadsSettingsPanel() {
         <AdvancedSettings
           targetIds={[
             searchableSetting("thread-title-instructions").id,
+            searchableSetting("thread-title-project-name").id,
+            searchableSetting("thread-title-id-prefix").id,
             searchableSetting("response-streaming").id,
           ]}
         >

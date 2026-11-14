@@ -888,6 +888,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["generated thread titles prompt custom style naming rename regenerate"],
   },
   {
+    id: "thread-title-project-name",
+    title: "Project name in title prompt",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["generated thread titles project name context titler"],
+  },
+  {
+    id: "thread-title-id-prefix",
+    title: "Thread title IDs",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["generated thread titles id prefix initials short code collision counter"],
+  },
+  {
     id: "app-version",
     title: "Version",
     to: "/settings/about",

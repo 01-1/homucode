@@ -170,6 +170,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
       ...buildThreadTitlePrompt({
         folders: input.folders,
         folderContext: input.folderContext,
+        projectName: input.projectName,
         message: input.message,
         projectTitle: input.projectTitle,
         previousTitle: input.previousTitle,

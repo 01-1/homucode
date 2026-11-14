@@ -1174,6 +1174,9 @@ export const WorktreeCleanup = Schema.NullOr(
 );
 export type WorktreeCleanup = typeof WorktreeCleanup.Type;
 
+const DEFAULT_THREAD_TITLE_INSTRUCTIONS =
+  "You are the titler, NOT the thread being titled, and your job is to write a title for the thread (NOT yourself). The first 15 characters (~3 words) should have enough information about the thread to both understand what it is and why it's different from other threads. MAXIMIZE information density: the first word should have the most information, the second the second most, and the third the third most; there is no need to make the title grammatical, it can just be three words. Do NOT include information that is already in the project name.";
+
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "worktreeCleanup",
   "defaultModelSelection",
@@ -1187,6 +1190,8 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "enableAgentDeviceAccess",
   "textGenerationModelSelection",
   "threadTitleInstructions",
+  "threadTitleIncludeProjectName",
+  "threadTitleIdPrefix",
   "sourceControlWriterModelSelection",
   "reviewGuideModelSelection",
   "reviewGuideInstructions",
@@ -1225,6 +1230,8 @@ export const ProjectSettingsOverrides = Schema.Struct({
   enableAgentDeviceAccess: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
+  threadTitleIncludeProjectName: Schema.optionalKey(Schema.Boolean),
+  threadTitleIdPrefix: Schema.optionalKey(Schema.Boolean),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   reviewGuideModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   reviewGuideInstructions: Schema.optionalKey(TrimmedString),
@@ -1548,7 +1555,15 @@ export const ServerSettings = Schema.Struct({
       }),
     ),
   ),
-  threadTitleInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  threadTitleInstructions: TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_TITLE_INSTRUCTIONS)),
+  ),
+  /** Show the titler the project name, so titles can leave out what it already says. */
+  threadTitleIncludeProjectName: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  /** Prefix generated titles with an ID from the first letters of their first three words. */
+  threadTitleIdPrefix: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   branchNamingMode: BranchNamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("static" as const)),
   ),
@@ -1944,6 +1959,8 @@ export const ServerSettingsPatch = Schema.Struct({
   ghqCloneLayout: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
+  threadTitleIncludeProjectName: Schema.optionalKey(Schema.Boolean),
+  threadTitleIdPrefix: Schema.optionalKey(Schema.Boolean),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
   branchNameInstructions: Schema.optionalKey(TrimmedString),

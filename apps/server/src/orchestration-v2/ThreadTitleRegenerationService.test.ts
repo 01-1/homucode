@@ -56,6 +56,7 @@ const adapter = {
 function makeHarness(
   options: {
     readonly generateTitle?: TextGeneration.TextGeneration["Service"]["generateThreadTitle"];
+    readonly settings?: Parameters<typeof ServerSettings.layerTest>[0];
   } = {},
 ) {
   const layerDatabase = SqlitePersistence.layerMemory;
@@ -65,7 +66,7 @@ function makeHarness(
     layerRegistry,
     { databaseLayer: layerDatabase, runEffectWorker: false },
   );
-  const layerServerSettings = ServerSettings.layerTest({});
+  const layerServerSettings = ServerSettings.layerTest(options.settings ?? {});
   const layerThreadManagement = ThreadManagement.layer.pipe(
     Layer.provide(layerOrchestrator),
     Layer.provide(layerServerSettings),
@@ -551,6 +552,7 @@ describe("ThreadTitleRegenerationService", () => {
             "folder:reviews",
           ]);
           assert.equal(call?.previousTitle, "Seed title");
+          assert.equal(call?.projectName, "Project");
           assert.equal(call?.cwd, testCase.cwd);
           assert.include(call?.message, "USER:\nInvestigate the flaky login test");
           const projection = yield* threads.getThreadProjection(threadId);
@@ -563,6 +565,47 @@ describe("ThreadTitleRegenerationService", () => {
         }
       }).pipe(Effect.provide(harness.layer));
     }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("prefixes titles with a project-unique ID and keeps it on regenerate", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        generateTitle: () => Effect.succeed({ title: "Fix login bug" }),
+        settings: { threadTitleIdPrefix: true, threadTitleIncludeProjectName: false },
+      });
+      yield* Effect.gen(function* () {
+        const threads = yield* ThreadManagement.ThreadManagementService;
+        const titleRegeneration = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const regenerate = Effect.fn(function* (name: string, round: number) {
+          const threadId = ThreadId.make(`thread:title:id:${name}`);
+          const requestId = yield* armRegeneration({
+            command: `command:title:id:${name}:${round}`,
+            threadId,
+          });
+          yield* titleRegeneration.execute({ threadId, requestId, kind: { type: "regenerate" } });
+          return (yield* threads.getThreadProjection(threadId)).thread.title;
+        });
+        for (const name of ["first", "second"]) {
+          const threadId = yield* createThread({
+            command: `command:title:id:${name}:create`,
+            thread: `thread:title:id:${name}`,
+          });
+          yield* dispatchUserMessage({
+            command: `command:title:id:${name}:message`,
+            threadId,
+            text: "The login button does nothing",
+          });
+        }
+
+        assert.equal(yield* regenerate("first", 1), "FLB Fix login bug");
+        assert.equal(yield* regenerate("second", 1), "FLB0 Fix login bug");
+        assert.equal(yield* regenerate("first", 2), "FLB Fix login bug");
+        const last = harness.generateThreadTitle.mock.calls.at(-1)?.[0];
+        assert.equal(last?.previousTitle, "Fix login bug");
+        assert.isUndefined(last?.projectName);
+        assert.isUndefined(last?.folderContext?.projectName);
+      }).pipe(Effect.provide(harness.layer));
+    }),
   );
 
   it.effect("drops the folder pick of a request replaced or cancelled while the model ran", () =>

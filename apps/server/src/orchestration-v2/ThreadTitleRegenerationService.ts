@@ -29,6 +29,7 @@ import type { OrchestratorV2Error } from "./Orchestrator.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import { forkInheritedRunOrdinals, ProjectionStoreThreadNotFoundError } from "./ProjectionStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import { assignThreadTitleId, splitThreadTitleId } from "./threadTitleId.ts";
 
 import { formatThreadTitleContext } from "@t3tools/provider-core/server/threadTitleContext";
 export { formatThreadTitleContext } from "@t3tools/provider-core/server/threadTitleContext";
@@ -223,6 +224,11 @@ const make = Effect.gen(function* () {
         const worktreeExists =
           worktreePath !== null &&
           (yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => false)));
+        // With title IDs on, the titler sees and replaces only the words after the ID.
+        const previous =
+          input.kind.type === "regenerate" && settings.threadTitleIdPrefix
+            ? splitThreadTitleId(projection.thread.title)
+            : { id: undefined, rest: projection.thread.title };
         const candidates = yield* folders
           .smartCandidates(input.threadId)
           .pipe(Effect.orElseSucceed(() => []));
@@ -231,17 +237,18 @@ const make = Effect.gen(function* () {
           folderContext: {
             branch: projection.thread.branch,
             worktreeName: projection.thread.worktreePath?.split(/[\\/]/).findLast(Boolean) ?? null,
-            projectName: project.value.title,
+            ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
             hasPullRequest:
               visibleThreadPullRequests(projection.thread.pullRequests ?? []).length > 0,
           },
           cwd: worktreeExists
             ? worktreePath
             : (projection.thread.workspaceRoot ?? project.value.workspaceRoot),
+          ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
           message: context.message,
           projectTitle: project.value.title,
           attachments: context.attachments,
-          ...(input.kind.type === "regenerate" ? { previousTitle: projection.thread.title } : {}),
+          ...(input.kind.type === "regenerate" ? { previousTitle: previous.rest } : {}),
           ...(inherited === undefined ? {} : { forkSource: inherited }),
           instructions: settings.threadTitleInstructions,
           modelSelection: settings.textGenerationModelSelection,
@@ -252,10 +259,35 @@ const make = Effect.gen(function* () {
             ? { folderId: result.folderId }
             : {};
         const generatedTitle = result.title.trim();
-        return generatedTitle === "New thread" ||
-          (input.kind.type === "regenerate" && generatedTitle === projection.thread.title.trim())
-          ? { status: "unchanged" as const, ...placement }
-          : { status: "renamed" as const, title: result.title, ...placement };
+        if (
+          generatedTitle === "New thread" ||
+          (input.kind.type === "regenerate" &&
+            generatedTitle === previous.rest.trim() &&
+            (previous.id !== undefined || !settings.threadTitleIdPrefix))
+        ) {
+          return { status: "unchanged" as const, ...placement };
+        }
+        if (!settings.threadTitleIdPrefix) {
+          return { status: "renamed" as const, title: result.title, ...placement };
+        }
+        const id =
+          previous.id ??
+          assignThreadTitleId(
+            generatedTitle,
+            (yield* threads
+              .listProjectThreads({
+                projectId: projection.thread.projectId,
+                includeSubagents: true,
+              })
+              .pipe(Effect.orElseSucceed(() => [])))
+              .filter((thread) => thread.id !== input.threadId)
+              .map((thread) => thread.title),
+          );
+        return {
+          status: "renamed" as const,
+          title: id === undefined ? generatedTitle : `${id} ${generatedTitle}`,
+          ...placement,
+        };
       }).pipe(
         Effect.retry({
           times: input.kind.type === "initial" ? 2 : 0,
