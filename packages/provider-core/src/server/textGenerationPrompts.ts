@@ -475,7 +475,6 @@ ${limitTitleMessage(forkSource.history, 8_000)}`;
 
 function threadTitlePromptSuffix(input: ThreadTitlePromptInput): string {
   const trimmedInstructions = input.instructions?.trim();
-  // The user's title scheme wins over the generic editorial rules, including word and length limits.
   const additionalInstructions = trimmedInstructions
     ? [
         "",
