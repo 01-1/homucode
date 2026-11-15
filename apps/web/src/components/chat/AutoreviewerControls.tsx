@@ -66,9 +66,8 @@ function ReviewerControl({
             }
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Could not stop the autoreviewer.");
-          } finally {
-            setStopping(false);
           }
+          setStopping(false);
         }}
       >
         {stopping ? "Stopping…" : "Stop autoreviewer"}
