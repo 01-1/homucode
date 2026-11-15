@@ -24,6 +24,7 @@ export const capture = Effect.fn("CompletionOutbox.capture")(function* (
             WHERE m.thread_id = t.thread_id AND m.run_id = ${run.id} AND m.role = 'assistant'
             ORDER BY COALESCE((SELECT MIN(i.ordinal) FROM orchestration_v2_projection_turn_items i
               WHERE i.thread_id = m.thread_id AND i.type = 'assistant_message'
+                AND i.type IN ('user_message', 'assistant_message') AND json_valid(i.payload_json)
                 AND json_extract(i.payload_json, '$.messageId') = m.message_id), 9223372036854775807) DESC,
               m.created_at DESC, m.message_id DESC LIMIT 1), ''))
       FROM orchestration_v2_projection_threads t

@@ -46,13 +46,14 @@ const instanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId, model: "test-model" };
 
 // TestClock starts at the Unix epoch; slash commands retain their native prompt.
-const timestamped = (text: string) => {
-  const sent = DateTime.makeUnsafe(0);
+const timestampedAt = (text: string, sentAt: number) => {
+  const sent = DateTime.makeUnsafe(sentAt);
   const local = DateTime.formatIso(
     DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
   ).slice(0, 19);
   return text.trimStart().startsWith("/") ? text : `${local}: ${text}`;
 };
+const timestamped = (text: string) => timestampedAt(text, 0);
 
 it.effect.each(
   (
@@ -796,7 +797,7 @@ it.effect.each([
         const after = yield* orchestrator.getThreadProjection(threadId);
         assert.deepEqual(
           steered,
-          steers ? [`${notification.summary}\nexit 0: built 12 files`] : [],
+          steers ? [timestamped(`${notification.summary}\nexit 0: built 12 files`)] : [],
         );
         assert.lengthOf(started, 1);
         assert.equal(
@@ -1108,10 +1109,10 @@ it.effect.each(
         yield* worker.drain();
         assert.deepEqual(
           started.map((turn) => turn.message.text),
-          ["first", "steer after setup", "second steer"],
+          ["first", "steer after setup", "second steer"].map(timestamped),
         );
       } else {
-        assert.deepEqual(steered, ["steer after setup"]);
+        assert.deepEqual(steered, [timestamped("steer after setup")]);
         assert.lengthOf(started, 1);
       }
       const after = yield* orchestrator.getThreadProjection(threadId);
@@ -1361,7 +1362,7 @@ it.effect("restarts the turn for an image when native steering takes text only",
         started.map((turn) => [turn.message.text, turn.message.attachments.length]),
         [
           [timestamped("first"), 0],
-          [timestamped("look at this"), 1],
+          [timestampedAt("look at this", 10_000), 1],
         ],
       );
     }).pipe(Effect.provide(layer));
@@ -2295,7 +2296,7 @@ it.effect("steers a promoted scheduled delivery with the thread's current select
         yield* worker.drain();
 
         const projection = yield* orchestrator.getThreadProjection(threadId);
-        assert.deepEqual(steered, ["scheduled"]);
+        assert.deepEqual(steered, [timestamped("scheduled")]);
         assert.deepEqual(projection.thread.modelSelection, composerSelection);
       }).pipe(Effect.provide(layer));
     }),
@@ -2619,7 +2620,7 @@ it.effect.each([false, true])(
         assert.deepEqual(steered, []);
         assert.deepEqual(
           started.map((turn) => turn.message.text),
-          ["first", "restart"],
+          ["first", "restart"].map(timestamped),
         );
       }).pipe(Effect.provide(layer));
     }),
@@ -2722,7 +2723,7 @@ it.effect.each([
         assert.deepEqual(steered, []);
         assert.deepEqual(
           started.map((turn) => turn.message.text),
-          ["first", "restart"],
+          ["first", "restart"].map(timestamped),
         );
       }).pipe(Effect.provide(layer));
     }),
@@ -2917,7 +2918,9 @@ it.effect.each([undefined, false, true])(
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued"],
-          started: nativeGoals === false ? ["first"] : ["first", "/goal all tests pass"],
+          started: (nativeGoals === false ? ["first"] : ["first", "/goal all tests pass"]).map(
+            timestamped,
+          ),
           stopRequested: nativeGoals !== false,
         });
       }).pipe(Effect.provide(layer));
@@ -2989,7 +2992,7 @@ it.effect("restarts by stopping the running turn when the provider cannot interr
       assert.deepEqual(steered, []);
       assert.deepEqual(yield* read(threadId), {
         queue: ["queued"],
-        started: ["first", "do this instead"],
+        started: ["first", "do this instead"].map(timestamped),
         stopRequested: true,
       });
     }).pipe(Effect.provide(layer));
@@ -3048,7 +3051,7 @@ it.effect("starts a restart that stops the running turn ahead of an older held q
       const { queue, started: startedTexts } = yield* read(threadId);
       assert.deepEqual(
         { queue, started: startedTexts },
-        { queue: ["queued"], started: ["first", "second", "do this instead"] },
+        { queue: ["queued"], started: ["first", "second", "do this instead"].map(timestamped) },
       );
     }).pipe(Effect.provide(layer));
   }),

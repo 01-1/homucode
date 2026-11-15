@@ -2115,7 +2115,15 @@ effectIt.effect("sends new steering text when restarting a manual continuation",
       sideChat: { contextRun: "delivered" },
     });
     yield* harness.start;
-    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe("New steering instruction");
+    const sent = harness
+      .projection()
+      .messages.find((message) => message.text === "New steering instruction")!.createdAt;
+    const timestamp = DateTime.formatIso(
+      DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
+    ).slice(0, 19);
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe(
+      `${timestamp}: New steering instruction`,
+    );
     expect(harness.startRootRun.mock.calls[0]?.[0].resume).toBe(false);
   }),
 );

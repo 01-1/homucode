@@ -2986,8 +2986,10 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
         yield* fileSystem.makeDirectory(worktreeGitDir, { recursive: true });
         yield* makeOpenGate(path.join(worktreeGitDir, "commondir"));
         yield* fileSystem.makeDirectory(worktree);
-        const readablePointer = path.join(worktree, ".git");
-        yield* fileSystem.writeFileString(readablePointer, `gitdir: ${worktreeGitDir}\n`);
+        yield* fileSystem.writeFileString(
+          path.join(worktree, ".git"),
+          `gitdir: ${worktreeGitDir}\n`,
+        );
         for (const [index, cwd] of [pointerCheckout, worktree].entries()) {
           yield* writeTranscript({
             filePath: path.join(claudeHomePath, "projects", `-slug-${index}`, "a.jsonl"),
@@ -3009,7 +3011,6 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
             Effect.map(({ candidates }) => candidates.map(({ path }) => path)),
           );
           const first = yield* Effect.forkChild(scanPaths);
-          yield* Queue.take(finishedPointerReads);
           // Pointer files are read first, then the commondir files they lead to.
           yield* Effect.scoped(
             Effect.gen(function* () {
@@ -3030,7 +3031,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
           }
         }).pipe(Effect.provide(layerScannerTest({ claudeHomePath, codexHomePath, processRunner })));
         // Hangs if the scans left libuv pool threads stuck in open().
-        yield* fileSystem.readFileString(readablePointer);
+        yield* fileSystem.readFileString(path.join(worktree, ".git"));
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
     );
 
