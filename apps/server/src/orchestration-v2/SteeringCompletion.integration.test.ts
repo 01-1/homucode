@@ -332,7 +332,9 @@ it.effect.each(
             }
           : {}),
       });
+      const originalSentAt = yield* DateTime.now;
       if (timing !== "before dispatch") yield* dispatchSteer;
+      if (timing === "during delivery") yield* TestClock.adjust("1 minute");
       if (timing === "during continuation") {
         const projection = yield* orchestrator.getThreadProjection(threadId);
         const turn = projection.providerTurns[0]!;
@@ -408,6 +410,15 @@ it.effect.each(
       yield* worker.drain();
       yield* orchestrator.resumeQueuedRuns;
       yield* worker.drain();
+      if (timing === "during delivery") {
+        const fallback = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(
+          DateTime.toEpochMillis(
+            fallback.messages.find((message) => message.id === messageId)!.createdAt,
+          ),
+          DateTime.toEpochMillis(originalSentAt),
+        );
+      }
       if (timing === "after delivery") {
         assert.equal(steerCalls, 1);
         assert.equal(started.length, 1);

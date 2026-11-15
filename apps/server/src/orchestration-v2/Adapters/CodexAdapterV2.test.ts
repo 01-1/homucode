@@ -90,6 +90,14 @@ const isProviderAdapterEventStreamError = Schema.is(
 );
 const encodeUnknownJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
+const timestampedPrompt = (text: string) => {
+  const sent = DateTime.makeUnsafe(0);
+  const local = DateTime.formatIso(
+    DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
+  ).slice(0, 19);
+  return `${local}: ${text}`;
+};
+
 describe("CodexAdapterV2 context usage", () => {
   it("uses the current context rather than cumulative processed tokens", () => {
     const usage = CodexAdapterV2.codexProviderTurnTokenUsage(
@@ -4536,9 +4544,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const fs = yield* FileSystem.FileSystem;
         const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-capacity-retry-" });
         const localTranscript = yield* decodeReplayTranscriptJson(
-          (yield* encodeReplayTranscriptJson(
-            makeCodexReplayTranscript({ scenario, entries }),
-          )).replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd)),
+          (yield* encodeReplayTranscriptJson(makeCodexReplayTranscript({ scenario, entries })))
+            .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
+            .replaceAll(
+              yield* encodeStringJson(prompt),
+              yield* encodeStringJson(timestampedPrompt(prompt)),
+            ),
         );
         const driver = yield* CodexReplay.makeReplayDriver(withConfigReads(localTranscript));
         yield* Effect.gen(function* () {
@@ -6237,10 +6248,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       const fs = yield* FileSystem.FileSystem;
       const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-bg-stop-workspace-" });
       const localTranscript = yield* decodeReplayTranscriptJson(
-        (yield* encodeReplayTranscriptJson(transcript)).replaceAll(
-          yield* encodeStringJson("/workspace"),
-          yield* encodeStringJson(cwd),
-        ),
+        (yield* encodeReplayTranscriptJson(transcript))
+          .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
+          .replaceAll(
+            yield* encodeStringJson(BG_PROMPT),
+            yield* encodeStringJson(timestampedPrompt(BG_PROMPT)),
+          ),
       );
       const replayDriver = yield* CodexReplay.makeReplayDriver(withConfigReads(localTranscript));
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -6369,10 +6382,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         ],
       });
       const localTranscript = yield* decodeReplayTranscriptJson(
-        (yield* encodeReplayTranscriptJson(staleTranscript)).replaceAll(
-          yield* encodeStringJson("/workspace"),
-          yield* encodeStringJson(cwd),
-        ),
+        (yield* encodeReplayTranscriptJson(staleTranscript))
+          .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
+          .replaceAll(
+            yield* encodeStringJson(BG_PROMPT),
+            yield* encodeStringJson(timestampedPrompt(BG_PROMPT)),
+          ),
       );
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       for (const args of [
