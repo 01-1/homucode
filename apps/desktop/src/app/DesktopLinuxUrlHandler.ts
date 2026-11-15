@@ -92,6 +92,7 @@ export function renderUrlHandlerDesktopEntry(input: {
     ...(input.iconPath === undefined ? [] : [`Icon=${escapeDesktopEntryString(input.iconPath)}`]),
     "Terminal=false",
     "NoDisplay=true",
+    // GLib launch contexts only mint a Wayland activation token when this is true.
     "StartupNotify=true",
     `MimeType=x-scheme-handler/${input.scheme};`,
     "",
