@@ -45,7 +45,7 @@ interface State {
   continuous_working_since: string | null;
 }
 
-export function activityItem(row: State, now: DateTime.Utc): ThreadActivityItem {
+function activityItem(row: State, now: DateTime.Utc): ThreadActivityItem {
   const invalid: ThreadActivityItem["reason"] = row.archived
     ? "archived"
     : row.settled
@@ -269,12 +269,6 @@ const refreshActivity = Effect.fn("WorkAssistance.refreshActivity")(function* (
           THEN COALESCE(work_assistance_continuity.continuous_working_since, excluded.continuous_working_since)
           ELSE excluded.continuous_working_since END`;
   }
-});
-
-export const observe = Effect.fn("WorkAssistance.observe")(function* (
-  event: OrchestrationV2DomainEvent,
-) {
-  yield* observeBatch([event]);
 });
 
 // One projection transaction applies many events; only its final state is ever committed.

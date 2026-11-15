@@ -26,7 +26,7 @@ export interface AutoSteerPromotion {
   readonly skipsCompaction: boolean;
 }
 
-export function nextAutoSteerPromotion(projection: {
+function nextAutoSteerPromotion(projection: {
   readonly thread?: object;
   readonly runs: ReadonlyArray<OrchestrationV2Run>;
   readonly messages: Parameters<typeof resolveMessageDispatchIntent>[0]["messages"];

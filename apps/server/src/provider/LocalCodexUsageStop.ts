@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 
 export const LOCAL_CODEX_USAGE_STOP_CODE = "local_category_usage_stop";
-export const LOCAL_CODEX_USAGE_STOP_MESSAGE =
+const LOCAL_CODEX_USAGE_STOP_MESSAGE =
   "The local Codex category is paused by its usage limit. Retry after the category becomes available.";
 
 // Advisory correlation only. Never writes/takes the usage guard's lock, changes

@@ -54,7 +54,7 @@ const shortTitle = (title: string) =>
     .join("");
 
 /** No parent ancestry, prompt, attachment, transcript, model or raw event enters the body. */
-export function noticeBody(notice: Store.Notice, environmentId: EnvironmentId): string {
+function noticeBody(notice: Store.Notice, environmentId: EnvironmentId): string {
   const metadata = JSON.stringify({
     projectId: notice.project_id,
     threadId: notice.thread_id,
@@ -67,7 +67,7 @@ export function noticeBody(notice: Store.Notice, environmentId: EnvironmentId): 
 
 // Presentation settlement does not revoke an explicit Router registration.
 // Ordinary sendToThread owns the target's run/queue and presentation lifecycle.
-export const eligibleTarget = (target: RouterTarget | null, projectId: string) =>
+const eligibleTarget = (target: RouterTarget | null, projectId: string) =>
   target !== null &&
   target.projectId === projectId &&
   target.deletedAt === null &&
@@ -288,7 +288,7 @@ export const makeDelivery = Effect.gen(function* () {
   return { getTarget: threads.getThreadShell, reconcile, send };
 });
 
-export const makeNative = Effect.gen(function* () {
+const makeNative = Effect.gen(function* () {
   const events = yield* EventSink.EventSinkV2;
   const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
   const config = yield* Config.makeReader;

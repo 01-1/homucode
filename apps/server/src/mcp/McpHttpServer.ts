@@ -1266,7 +1266,7 @@ export const layerOrchestratorToolkit = toolkitRegistration(
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
 
-export const layerAssistanceToolkit = toolkitRegistration(
+const layerAssistanceToolkit = toolkitRegistration(
   AssistanceToolkit,
   ThreadHandlers.layerAssistance,
 ).pipe(Layer.provide(OrchestratorMcpService.layer));
