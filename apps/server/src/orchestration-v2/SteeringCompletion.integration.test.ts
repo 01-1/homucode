@@ -1,5 +1,4 @@
 import { assert, it } from "@effect/vitest";
-import * as TestClock from "effect/testing/TestClock";
 import {
   ChatAttachmentId,
   CommandId,
@@ -1286,7 +1285,10 @@ it.effect(
         });
         yield* steer("steer-back", runSelection);
         const back = yield* orchestrator.getThreadProjection(threadId);
-        assert.deepEqual(steered, ["steer-changed", "steer-reverted", "steer-back"]);
+        assert.deepEqual(
+          steered,
+          ["steer-changed", "steer-reverted", "steer-back"].map(timestamped),
+        );
         // The adapter gets each steer's selection so it can switch the live turn, and back.
         assert.deepEqual(steeredSelections, [composerSelection, runSelection, runSelection]);
         assert.equal(back.thread.providerInstanceId, instanceId);

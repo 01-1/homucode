@@ -73,9 +73,6 @@ const SLOW_SERVER = [
   "",
 ].join("\n");
 
-// The launcher mounts only under setsid, which stock macOS and Windows lack; there it extracts instead.
-const hasSetsid = NodeChildProcess.spawnSync("setsid", ["true"]).status === 0;
-
 const lines = (stream: NodeJS.ReadableStream) => {
   const seen: Array<string> = [];
   const waiters: Array<() => void> = [];
@@ -99,6 +96,38 @@ const lines = (stream: NodeJS.ReadableStream) => {
 };
 
 describe("renderCliShim", () => {
+  it.each(["SIGTERM", "SIGHUP"] as const)(
+    "keeps the cached runtime available until the server exits after %s to the process group",
+    async (signal) => {
+      const { image, shim } = fakeAppImage();
+      writeExecutable(NodePath.join(image, "t3code"), SLOW_SERVER);
+      const child = NodeChildProcess.spawn(shim, [], {
+        detached: true,
+        env: { PATH: process.env.PATH },
+        stdio: ["pipe", "pipe", "ignore", "pipe"],
+      });
+      let closed = false;
+      const exited = new Promise<number | null>((resolve) =>
+        child.on("close", (code) => {
+          closed = true;
+          resolve(code);
+        }),
+      );
+      try {
+        const stdout = lines(child.stdout!);
+        const events = lines(child.stdio[3] as NodeJS.ReadableStream);
+        await stdout.until((line) => line === "ready");
+        process.kill(-child.pid!, signal);
+        await events.until((line) => line === "stopping");
+        child.stdin!.end("go\n");
+        expect(await exited).toBe(0);
+        expect(events.seen).toEqual(["stopping", "stopped"]);
+      } finally {
+        if (!closed) process.kill(-child.pid!, "SIGKILL");
+      }
+    },
+  );
+
   it("extracts once per image hash and preserves arguments and exit status", () => {
     const { root, appImage, shim } = fakeAppImage();
     const first = run(shim, ["thread", "space and 'quote'"], { APPIMAGE_EXTRACT_AND_RUN: "1" });
@@ -165,8 +194,7 @@ describe("renderCliShim", () => {
     expect(NodeFS.readFileSync(NodePath.join(root, "extractions"), "utf8")).toBe("extract\n");
   });
 
-  // The server skips its compile cache only under APPIMAGE; each mount path is new.
-  it("tells the CLI it runs from the mounted AppImage", () => {
+  it("tells the cached CLI which AppImage launched it", () => {
     const { appImage, shim } = fakeAppImage();
     const result = run(shim, ["--version"]);
     expect(result.status).toBe(3);

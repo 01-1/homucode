@@ -288,28 +288,46 @@ export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* 
   return (row?.latestId ?? 0) < latestMigrationId || (row?.previewRows ?? 0) > 0;
 });
 
-const reconcileHomuMigrationHistory = Effect.fn("reconcileHomuMigrationHistory")(function* () {
-  const sql = yield* SqlClient.SqlClient;
-  const tables =
-    yield* sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
-  if (tables.length === 0) return;
-  const legacy = new Map([
+export function reconciledHomuMigrationHistory(
+  recorded: ReadonlyArray<{ readonly id: number; readonly name: string }>,
+) {
+  const legacy = [
     [82, "ThreadCompletionOutbox"],
     [83, "WorkAssistanceContinuity"],
     [84, "ProjectRouterNotices"],
     [85, "ThreadFolders"],
     [86, "ThreadFolderRules"],
-  ]);
-  const rows = yield* sql<{
-    readonly migration_id: number;
+  ] as const;
+  const suffix = recorded.filter(({ id }) => id > 80).toSorted((a, b) => a.id - b.id);
+  const prefix = recorded.filter(({ id }) => id <= 80);
+  if (
+    suffix.length === 0 ||
+    !suffix.every(
+      (row, index) => row.id === legacy[index]?.[0] && row.name === legacy[index]?.[1],
+    ) ||
+    !prefix.some(({ id }) => id === 80) ||
+    skippedV2Migrations(prefix).length > 0
+  )
+    return recorded;
+  return prefix;
+}
+
+const reconcileHomuMigrationHistory = Effect.fn("reconcileHomuMigrationHistory")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const tables =
+    yield* sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
+  if (tables.length === 0) return;
+  const history = sql<{
+    readonly id: number;
     readonly name: string;
-  }>`SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id > 80`;
-  if (rows.length === 0 || !rows.every((row) => legacy.get(row.migration_id) === row.name)) return;
+  }>`SELECT migration_id AS id, name FROM effect_sql_migrations`;
+  const rows = yield* history;
+  if (reconciledHomuMigrationHistory(rows) === rows) return;
   yield* sql.withTransaction(
     Effect.gen(function* () {
-      for (const row of rows) {
-        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = ${row.migration_id} AND name = ${row.name}`;
-      }
+      const current = yield* history;
+      if (reconciledHomuMigrationHistory(current) === current) return;
+      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id > 80`;
     }),
   );
 });

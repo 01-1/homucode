@@ -10,6 +10,8 @@ import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Cause from "effect/Cause";
 import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";

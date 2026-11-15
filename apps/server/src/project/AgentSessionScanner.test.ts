@@ -2986,10 +2986,8 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
         yield* fileSystem.makeDirectory(worktreeGitDir, { recursive: true });
         yield* makeOpenGate(path.join(worktreeGitDir, "commondir"));
         yield* fileSystem.makeDirectory(worktree);
-        yield* fileSystem.writeFileString(
-          path.join(worktree, ".git"),
-          `gitdir: ${worktreeGitDir}\n`,
-        );
+        const readablePointer = path.join(worktree, ".git");
+        yield* fileSystem.writeFileString(readablePointer, `gitdir: ${worktreeGitDir}\n`);
         for (const [index, cwd] of [pointerCheckout, worktree].entries()) {
           yield* writeTranscript({
             filePath: path.join(claudeHomePath, "projects", `-slug-${index}`, "a.jsonl"),

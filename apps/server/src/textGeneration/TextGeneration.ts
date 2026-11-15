@@ -207,8 +207,11 @@ export const make = Effect.gen(function* () {
       );
     }),
     classifyThreadFolder: Effect.fn("TextGeneration.classifyThreadFolder")(function (input) {
-      return generate("classifyThreadFolder", input.modelSelection, (service, modelSelection) =>
-        service.classifyThreadFolder({ ...input, modelSelection }),
+      return generate(
+        "classifyThreadFolder",
+        input.modelSelection,
+        null,
+        (service, modelSelection) => service.classifyThreadFolder({ ...input, modelSelection }),
       );
     }),
     generateThreadTitle: Effect.fn("TextGeneration.generateThreadTitle")(function (input) {

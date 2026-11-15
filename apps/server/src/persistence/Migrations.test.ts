@@ -111,6 +111,12 @@ describe("runMigrations", () => {
       }
       yield* sql`INSERT INTO thread_completion_outbox(thread_id, run_id, workspace_root, payload_json) VALUES ('thread:legacy', 'run:legacy', '/repo', '{}')`;
       yield* sql`INSERT INTO thread_folders(folder_id, name, created_at, updated_at, sort_key) VALUES ('legacy-folder', 'Kept folder', '2026-11-14', '2026-11-14', 23)`;
+      yield* sql`UPDATE effect_sql_migrations SET name = 'Unexpected' WHERE migration_id = 80`;
+      const invalidHistory = yield* history;
+      const rejected = yield* Effect.exit(runMigrations());
+      assert.isTrue(Exit.isFailure(rejected));
+      assert.deepStrictEqual(yield* history, invalidHistory);
+      yield* sql`UPDATE effect_sql_migrations SET name = 'ScheduledTaskThreadMode' WHERE migration_id = 80`;
       yield* runMigrations();
       assert.deepStrictEqual(yield* history, migrationManifest);
       const completions = yield* sql`SELECT thread_id FROM thread_completion_outbox`;

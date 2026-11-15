@@ -302,6 +302,7 @@ it.effect("background Git disabled preserves workspace refresh without Git or PR
   const layer = RunFinalization.layerObserver.pipe(
     Layer.provide(
       Layer.mergeAll(
+        layerNoProject,
         Layer.mock(WorkspaceEntries.WorkspaceEntries)({
           refresh: () =>
             Effect.sync(() => {

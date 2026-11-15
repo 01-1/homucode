@@ -331,7 +331,7 @@ export const make = Effect.gen(function* () {
               { cwd, branch: first.branch },
               { freshGitState: true },
             );
-            const currentIdentity = yield* repositoryIdentities.resolve(workspaceRoot, {
+            const currentIdentity = yield* repositoryIdentities.resolve(project.workspaceRoot, {
               refresh: true,
             });
             if (
@@ -355,7 +355,7 @@ export const make = Effect.gen(function* () {
               Effect.gen(function* () {
                 // Discovery yields to network I/O; recheck the project at commit to reject deleted projects or changed checkouts.
                 const currentProject = yield* projectStore.getShell(project.id);
-                if (!projectWorkspaceMatchesSnapshot(currentProject, storedProject.workspaceRoot)) {
+                if (!projectWorkspaceMatchesSnapshot(currentProject, project.workspaceRoot)) {
                   return failBackfill([thread]);
                 }
                 const uuid = yield* random.uuidV4();

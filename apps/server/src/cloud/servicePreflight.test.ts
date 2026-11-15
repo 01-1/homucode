@@ -67,6 +67,31 @@ it.layer(NodeServices.layer)("service preflight database", (it) => {
       expect(preflight().status).toBe("ready");
       expect(databaseMigrationHead(databasePath)).toBe(BUILD_MIGRATION_HEAD);
 
+      const homu = path.join(path.dirname(databasePath), "homu.sqlite");
+      const homuDb = new NodeSqlite.DatabaseSync(homu);
+      homuDb.exec(
+        "CREATE TABLE effect_sql_migrations (migration_id INTEGER PRIMARY KEY, name TEXT)",
+      );
+      const insertHomu = homuDb.prepare("INSERT INTO effect_sql_migrations VALUES (?, ?)");
+      for (const [id, name] of migrationManifest.filter(([id]) => id <= 80))
+        insertHomu.run(id, name);
+      for (const [id, name] of [
+        [82, "ThreadCompletionOutbox"],
+        [83, "WorkAssistanceContinuity"],
+        [84, "ProjectRouterNotices"],
+        [85, "ThreadFolders"],
+        [86, "ThreadFolderRules"],
+      ] as const)
+        insertHomu.run(id, name);
+      const homuPreflight = () =>
+        runServicePreflight({ databasePath: homu, launcherProtocol: SERVICE_LAUNCHER_PROTOCOL });
+      expect(homuPreflight().status).toBe("ready");
+      homuDb
+        .prepare("UPDATE effect_sql_migrations SET name = 'Unexpected' WHERE migration_id = 80")
+        .run();
+      expect(homuPreflight().status).toBe("blocked");
+      homuDb.close();
+
       db.prepare("UPDATE effect_sql_migrations SET name = ? WHERE migration_id = ?").run(
         "ForkMigration",
         BUILD_MIGRATION_HEAD,

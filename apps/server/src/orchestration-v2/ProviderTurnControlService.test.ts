@@ -483,7 +483,8 @@ it.effect.each(["human", "agent", "scheduled", "coalesced", "slash"] as const)(
       };
       const layer = ProviderTurnControlService.layer.pipe(
         Layer.provide(
-          Layer.merge(
+          Layer.mergeAll(
+            Layer.mock(EventSink.EventSinkV2)({}),
             Layer.mock(ProjectionStore.ProjectionStoreV2)({
               getProviderControlContext: () =>
                 Effect.succeed({
