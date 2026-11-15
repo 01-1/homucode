@@ -770,7 +770,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
     { state: "merged", sameBranch: true, workspaceRoot: null },
   ] as const)(
     "restores a $state automatic PR only for its own branch (sameBranch=$sameBranch)",
-    ({ state, sameBranch, workspaceRoot }) =>
+    ({ state, sameBranch }) =>
       Effect.gen(function* () {
         const savedReference = {
           projectId: ProjectId.make("project-1"),

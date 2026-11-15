@@ -279,8 +279,8 @@ it.effect("unknown send without acceptance retries original body and IDs; bindin
   assert.isFalse(original.body?.includes("RENAMED") ?? true);
 }).pipe(Effect.provide(testLayer)));
 
-for (const change of ["projectId", "archivedAt", "deletedAt"] as const) {
-  it.effect(`accepted original receipt reconciles after ${change} changes without another send`, () => Effect.gen(function* () {
+it.effect.each(["projectId", "archivedAt", "deletedAt"] as const)(
+  "accepted original receipt reconciles after %s changes without another send", (change) => Effect.gen(function* () {
     const f = yield* fixture;
     let sends = 0;
     const service = yield* Notices.make({ ...f.dependencies, send: (notice) => Effect.gen(function* () {
@@ -299,10 +299,9 @@ for (const change of ["projectId", "archivedAt", "deletedAt"] as const) {
     assert.strictEqual(sends, 1);
     assert.strictEqual((yield* f.rows)[0]?.accepted, 1);
   }).pipe(Effect.provide(testLayer)));
-}
 
-for (const receiptStatus of ["accepted", "rejected"] as const) {
-  it.effect(`${receiptStatus} receipt without original message proof holds rather than resending`, () => Effect.gen(function* () {
+it.effect.each(["accepted", "rejected"] as const)(
+  "%s receipt without original message proof holds rather than resending", (receiptStatus) => Effect.gen(function* () {
     const f = yield* fixture;
     const receipts = yield* Receipts.CommandReceiptStoreV2;
     let sends = 0;
@@ -325,8 +324,6 @@ for (const receiptStatus of ["accepted", "rejected"] as const) {
     assert.strictEqual((yield* f.rows)[0]?.accepted, 0);
   }).pipe(Effect.provide(testLayer)));
 
-}
-
 it.effect("v1 history and actual native import command are excluded while genuine creation remains", () => Effect.gen(function* () {
   const f = yield* fixture;
   yield* f.service.tick;
@@ -344,8 +341,8 @@ it.effect("v1 history and actual native import command are excluded while genuin
   assert.strictEqual(yield* f.store.cursor, genuine.sequence);
 }).pipe(Effect.provide(testLayer)));
 
-for (const settlement of ["before preflight", "at receipt reservation"] as const) {
-  it.effect(`registered Router settled ${settlement} accepts one original notice through real normal send`, () => Effect.gen(function* () {
+it.effect.each(["before preflight", "at receipt reservation"] as const)(
+  "registered Router settled %s accepts one original notice through real normal send", (settlement) => Effect.gen(function* () {
     const f = yield* fixture;
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* f.service.tick;
@@ -400,10 +397,9 @@ for (const settlement of ["before preflight", "at receipt reservation"] as const
     assert.deepStrictEqual(yield* f.rows, [notice]);
     assert.deepStrictEqual(yield* f.sql`SELECT * FROM project_router_notice_state`, beforeState);
   }).pipe(Effect.provide(testLayer)));
-}
 
-for (const field of ["projectId", "archivedAt", "deletedAt"] as const) {
-  it.effect(`real normal send propagates transaction guard; ${field} race rolls back receipt/events/effects/state`, () => Effect.gen(function* () {
+it.effect.each(["projectId", "archivedAt", "deletedAt"] as const)(
+  "real normal send propagates transaction guard; %s race rolls back receipt/events/effects/state", (field) => Effect.gen(function* () {
     const f = yield* fixture;
     yield* f.service.tick;
     yield* f.service.capture(yield* createThread(ThreadId.make(`race-${field}`)));
@@ -428,7 +424,6 @@ for (const field of ["projectId", "archivedAt", "deletedAt"] as const) {
     assert.deepStrictEqual(yield* f.sql`SELECT * FROM orchestration_v2_projection_threads WHERE thread_id = ${router}`, beforeThread);
     assert.strictEqual((yield* f.sql`SELECT 1 FROM orchestration_command_receipts WHERE command_id = ${notice.command_id}`).length, 0);
   }).pipe(Effect.provide(testLayer)));
-}
 
 it.effect("unbound capture survives service recreation and more than one delivery page without dropping IDs", () => Effect.gen(function* () {
   const f = yield* fixture;

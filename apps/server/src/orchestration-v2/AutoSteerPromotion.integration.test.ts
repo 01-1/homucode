@@ -50,6 +50,8 @@ const layer = Layer.mergeAll(Projections.layer.pipe(Layer.provide(database)), Ou
   Replay.layerWithRegistry({ name: "automatic-promotion-recheck" }, Registry.layerFromAdapters([adapter]),
     { databaseLayer: database, runEffectWorker: false }));
 
+const decodeEvent = Schema.decodeEffect(OrchestrationV2DomainEvent);
+
 const setup = Effect.gen(function* () {
   const engine = yield* Orchestrator.OrchestratorV2, store = yield* Projections.ProjectionStoreV2;
   const events = yield* Events.EventSinkV2;
@@ -88,7 +90,7 @@ const setup = Effect.gen(function* () {
       ordinal: 1, status: "running", startedAt: now, completedAt: null } }),
   ];
   // Validate each complete event before the production EventStore append.
-  const checkedEvents = yield* Effect.forEach(seededEvents, (event) => Schema.decodeEffect(OrchestrationV2DomainEvent)(event));
+  const checkedEvents = yield* Effect.forEach(seededEvents, decodeEvent);
   yield* events.writeWithEffects({ events: checkedEvents, effects: [] });
   const ready = yield* store.getThreadProjection(threadId);
   assert.equal(ready.providerSessions.find((row) => row.id === session.id)?.status, "ready");
@@ -98,8 +100,8 @@ const setup = Effect.gen(function* () {
   return { engine, store, events, threadId, active, first, second, event, base };
 });
 
-for (const scenario of ["reordered", "head-held", "tail-held", "no-opt-in"] as const) {
-  it.effect(`refuses automatic promotion after ${scenario} without consuming queued input`, () => Effect.gen(function* () {
+it.effect.each(["reordered", "head-held", "tail-held", "no-opt-in"] as const)(
+  "refuses automatic promotion after %s without consuming queued input", (scenario) => Effect.gen(function* () {
     const f = yield* setup;
     if (scenario === "reordered") yield* f.engine.dispatch({ type: "queued-run.reorder", commandId: CommandId.make("reorder:auto-promotion"),
       threadId: f.threadId, runId: f.second.id, beforeRunId: f.first.id });
@@ -119,7 +121,6 @@ for (const scenario of ["reordered", "head-held", "tail-held", "no-opt-in"] as c
     assert.deepEqual(after.nodes, before.nodes); assert.deepEqual(after.messages, before.messages);
     assert.deepEqual(yield* (yield* Outbox.EffectOutboxV2).listByCommandId(commandId), []);
   }).pipe(Effect.provide(layer)));
-}
 
 it.effect("manual promotion still consumes ordinary input without automatic opt-in", () => Effect.gen(function* () {
   const f = yield* setup;

@@ -90,8 +90,7 @@ const isProviderAdapterEventStreamError = Schema.is(
 );
 const encodeUnknownJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
-const timestampedPrompt = (text: string) => {
-  const sent = DateTime.makeUnsafe(0);
+const timestampedPrompt = (text: string, sent: DateTime.Utc) => {
   const local = DateTime.formatIso(
     DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
   ).slice(0, 19);
@@ -4548,7 +4547,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
             .replaceAll(
               yield* encodeStringJson(prompt),
-              yield* encodeStringJson(timestampedPrompt(prompt)),
+              yield* encodeStringJson(timestampedPrompt(prompt, yield* DateTime.now)),
             ),
         );
         const driver = yield* CodexReplay.makeReplayDriver(withConfigReads(localTranscript));
@@ -6252,7 +6251,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
           .replaceAll(
             yield* encodeStringJson(BG_PROMPT),
-            yield* encodeStringJson(timestampedPrompt(BG_PROMPT)),
+            yield* encodeStringJson(timestampedPrompt(BG_PROMPT, yield* DateTime.now)),
           ),
       );
       const replayDriver = yield* CodexReplay.makeReplayDriver(withConfigReads(localTranscript));
@@ -6386,7 +6385,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           .replaceAll(yield* encodeStringJson("/workspace"), yield* encodeStringJson(cwd))
           .replaceAll(
             yield* encodeStringJson(BG_PROMPT),
-            yield* encodeStringJson(timestampedPrompt(BG_PROMPT)),
+            yield* encodeStringJson(timestampedPrompt(BG_PROMPT, yield* DateTime.now)),
           ),
       );
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;

@@ -86,6 +86,7 @@ const PullRequestActivityVisibility = Schema.Struct({
 });
 export type PullRequestActivityVisibility = typeof PullRequestActivityVisibility.Type;
 
+const isDevicePins = Schema.is(Schema.Record(Schema.String, DevicePinsState));
 const isThreadListFilters = Schema.is(ThreadListFilters);
 const isPullRequestActivityVisibility = Schema.is(PullRequestActivityVisibility);
 const isWorkspaceSelections = Schema.is(WorkspaceSelections);
@@ -230,7 +231,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     workspaceSelections?: WorkspaceSelections;
   } = {};
 
-  if (Schema.is(Schema.Record(Schema.String, DevicePinsState))(parsed.devicePins))
+  if (isDevicePins(parsed.devicePins))
     preferences.devicePins = parsed.devicePins;
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {

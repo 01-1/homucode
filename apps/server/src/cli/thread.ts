@@ -742,6 +742,11 @@ const messageArgument = Argument.String("message").pipe(
 );
 const threadArgument = Argument.String("thread").pipe(Argument.withDescription("Thread id."));
 
+const decodeProviderOptions = Schema.decodeEffect(ProviderOptionSelections);
+const decodeClientRequestId = Schema.decodeEffect(OrchestratorMcpClientRequestId);
+const decodeRuntimeRequestId = Schema.decodeEffect(RuntimeRequestId);
+const decodeUserInputAnswers = Schema.decodeEffect(Schema.fromJsonString(ProviderUserInputAnswers));
+const decodeRunId = Schema.decodeEffect(RunId);
 const decodeThreadIdValue = Schema.decodeUnknownEffect(ThreadId);
 const decodeTitle = Schema.decodeUnknownEffect(TrimmedNonEmptyString);
 const decodeThreadId = (value: string) =>
@@ -802,7 +807,7 @@ export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(fun
     }
     options.push({ id, value: value === "true" ? true : value === "false" ? false : value });
   }
-  yield* Schema.decodeEffect(ProviderOptionSelections)(options).pipe(
+  yield* decodeProviderOptions(options).pipe(
     Effect.mapError(() => new ThreadUsageError({ detail: "Invalid model options." })),
   );
   return options;
@@ -890,7 +895,7 @@ const threadStartCommand = Command.make("start", {
       }
       const clientRequestId = Option.isNone(flags.clientRequestId)
         ? undefined
-        : yield* Schema.decodeEffect(OrchestratorMcpClientRequestId)(
+        : yield* decodeClientRequestId(
             flags.clientRequestId.value,
           ).pipe(
             Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --client-request-id." })),
@@ -1147,7 +1152,7 @@ const pendingReadCommand = Command.make("read", { ...pendingFlags, request: requ
       flags,
       Effect.fn("cli.pendingRequest.read")(function* (tools) {
         const threadId = yield* decodeThreadId(flags.thread);
-        const requestId = yield* Schema.decodeEffect(RuntimeRequestId)(flags.request);
+        const requestId = yield* decodeRuntimeRequestId(flags.request);
         const result = yield* tools.call(
           "t3_pending_request",
           { action: "read", threadId, requestId },
@@ -1170,7 +1175,7 @@ const pendingRespondCommand = Command.make("respond", {
       flags,
       Effect.fn("cli.pendingRequest.respond")(function* (tools) {
         const threadId = yield* decodeThreadId(flags.thread);
-        const requestId = yield* Schema.decodeEffect(RuntimeRequestId)(flags.request);
+        const requestId = yield* decodeRuntimeRequestId(flags.request);
         // The native read refuses stale requests, approvals, and secret cards before any answer is read.
         yield* tools.call(
           "t3_pending_request",
@@ -1188,7 +1193,7 @@ const pendingRespondCommand = Command.make("respond", {
           flags.answersFile === "-"
             ? yield* readMessageArgument("-")
             : yield* fs.readFileString(flags.answersFile);
-        const answers = yield* Schema.decodeEffect(Schema.fromJsonString(ProviderUserInputAnswers))(
+        const answers = yield* decodeUserInputAnswers(
           raw,
         ).pipe(
           Effect.mapError(() => new ThreadUsageError({ detail: "Answers must be a JSON object." })),
@@ -1260,7 +1265,7 @@ const threadAssistCommand = Command.make("assist", {
           {
             projectId: project.id,
             threadId,
-            runId: yield* Schema.decodeEffect(RunId)(flags.run).pipe(
+            runId: yield* decodeRunId(flags.run).pipe(
               Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --run id." })),
             ),
             origin: flags.origin,
