@@ -556,7 +556,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
 
   // Turn and attempt folds reveal later rows rather than growing their own row.
   const onToggleTurnFold = (runId: RunId) => {
-    suspendEndScrollMaintenanceForDisclosure(`turn-fold:${runId}`);
+    preserveDisclosurePosition(`turn-fold:${runId}`);
     setCollapsedRunIds((existing) => {
       const next = new Set(existing);
       if (next.has(runId)) {

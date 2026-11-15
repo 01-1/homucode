@@ -350,7 +350,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
       ...buildThreadTitlePrompt(input),
       modelSelection: input.modelSelection,
     });
-    return { title: yield* generatedThreadTitle(generated.title) };
+    return { title: yield* generatedThreadTitle(generated.title), ...validFolderPick(input, generated) };
   });
   const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
     Effect.fn("MuseTextGeneration.generateTranscriptionPostProcessing")(function* (input) {

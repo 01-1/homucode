@@ -24,6 +24,7 @@ import {
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
   SidebarThreadFolderStyle,
+  ScreenReaderAnnouncements,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";

@@ -816,7 +816,7 @@ export const OrchestratorMcpScheduleTaskInput = Schema.Struct({
   freshSession: Schema.optional(
     Schema.Boolean.annotate({
       description:
-        "Runs share one thread but each starts a fresh session. Unbound: the first run makes the thread.",
+        "Default false: continue the bound conversation. True starts each run fresh without earlier context. Unbound: the first run makes the thread.",
     }),
   ),
   clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
