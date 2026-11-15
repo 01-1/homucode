@@ -12,8 +12,8 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
-  type OrchestrationV2ProviderTurnTokenUsage,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ProviderTurnTokenUsage,
   ProjectId,
   ProviderInstanceId,
   ProviderSessionId,
@@ -69,6 +69,18 @@ import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+function timestamped(text: string, projection: OrchestrationV2ThreadProjection) {
+  const message = projection.messages.findLast(
+    (message) => message.role === "user" && message.text === text,
+  );
+  assert.isDefined(message);
+  const sent = message!.createdAt;
+  const local = DateTime.formatIso(
+    DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
+  ).slice(0, 19);
+  return `${local}: ${text}`;
+}
 
 const threadId = ThreadId.make("thread:provider-switch");
 const projectId = ProjectId.make("project:provider-switch");
@@ -955,7 +967,10 @@ describe("orchestration v2 provider switching", () => {
           assert.equal(yield* Ref.get(generation), 2);
           assert.equal(
             (yield* Ref.get(capturedTurns)).at(-1)!.text,
-            "Continue after automatic recovery",
+            timestamped(
+              "Continue after automatic recovery",
+              yield* orchestrator.getThreadProjection(threadId),
+            ),
           );
           assert.deepEqual(yield* Ref.get(injectedHistory), historyBeforeFollowup);
           if (scenario.includes("target-estimate")) {
@@ -1066,7 +1081,10 @@ describe("orchestration v2 provider switching", () => {
           );
         } else {
           assert.equal(handoff.delivery?.status, "injected");
-          assert.equal((yield* Ref.get(capturedTurns)).at(-1)!.text, current);
+          assert.equal(
+            (yield* Ref.get(capturedTurns)).at(-1)!.text,
+            timestamped(current, yield* orchestrator.getThreadProjection(threadId)),
+          );
           assert.include(
             yield* encodeJson(yield* Ref.get(injectedHistory)),
             "Original request with constraints",
@@ -1213,7 +1231,7 @@ describe("orchestration v2 provider switching", () => {
           yield* wait(3, "completed");
           const retried = yield* orchestrator.getThreadProjection(threadId);
           const lastTurn = (yield* Ref.get(capturedTurns)).at(-1)!;
-          assert.equal(lastTurn.text, retryText);
+          assert.equal(lastTurn.text, timestamped(retryText, retried));
           if (failure !== "injection" && failure !== "exhausted-target-retry") {
             const delta = yield* encodeJson(
               (yield* Ref.get(injectedHistory)).slice(historyBeforeRetry),
@@ -1247,7 +1265,10 @@ describe("orchestration v2 provider switching", () => {
           const followup = "z".repeat(6_000);
           yield* dispatch(4, followup, CLAUDE_MODEL_SELECTION);
           yield* wait(4, "completed");
-          assert.equal((yield* Ref.get(capturedTurns)).at(-1)!.text, followup);
+          assert.equal(
+            (yield* Ref.get(capturedTurns)).at(-1)!.text,
+            timestamped(followup, yield* orchestrator.getThreadProjection(threadId)),
+          );
           assert.deepEqual(yield* Ref.get(injectedHistory), beforeFollowup);
           assert.equal(
             (yield* orchestrator.getThreadProjection(threadId)).contextHandoffs.length,
@@ -1888,7 +1909,10 @@ describe("orchestration v2 provider switching", () => {
         assert.include(deliveredHistory, partialResponse);
         assert.include(deliveredHistory, `run-status=${status}`);
         if (native) {
-          assert.equal(delivered.text, "Continue");
+          assert.equal(
+            delivered.text,
+            timestamped("Continue", yield* orchestrator.getThreadProjection(threadId)),
+          );
           assert.notInclude(deliveredHistory, '"text":"Continue"');
           assert.include(deliveredHistory, '"role":"assistant"');
           assert.include(deliveredHistory, '"role":"user"');
@@ -2549,7 +2573,9 @@ describe("orchestration v2 provider switching", () => {
       assert.lengthOf(projection.contextHandoffs, 0);
       assert.deepEqual(
         (yield* Ref.get(capturedTurns)).map((turn) => turn.text),
-        ["First account turn", "Alternate account turn"],
+        ["First account turn", "Alternate account turn"].map((text) =>
+          timestamped(text, projection),
+        ),
       );
     }),
   );
@@ -3432,7 +3458,7 @@ describe("orchestration v2 provider switching", () => {
           );
           assert.notEqual(turnFor("beta").providerThreadId, turnFor("alpha").providerThreadId);
           assert.notEqual(turnFor("beta").nativeThreadId, turnFor("alpha").nativeThreadId);
-          assert.equal(turnFor("beta").text, "Prompt beta");
+          assert.equal(turnFor("beta").text, timestamped("Prompt beta", projection));
           if (queued) {
             assert.equal(turnFor("gamma").providerThreadId, turnFor("beta").providerThreadId);
           }
@@ -3775,7 +3801,10 @@ describe("orchestration v2 provider switching", () => {
         assert.notEqual(turnFor("gamma").providerThreadId, turnFor("zero").providerThreadId);
         assert.notEqual(turnFor("delta").providerThreadId, turnFor("gamma").providerThreadId);
         assert.notEqual(turnFor("delta").nativeThreadId, turnFor("gamma").nativeThreadId);
-        assert.equal(turnFor("delta").text, "Prompt delta");
+        assert.equal(
+          turnFor("delta").text,
+          timestamped("Prompt delta", yield* orchestrator.getThreadProjection(reservedThreadId)),
+        );
       }).pipe(
         Effect.provide(
           ProviderReplayHarness.layerWithRegistry(
@@ -4809,18 +4838,18 @@ describe("orchestration v2 provider switching", () => {
             yield* dispatch(3, "Back to work");
             yield* wait(3);
 
+            const projection = yield* orchestrator.getThreadProjection(threadId);
             const turns = yield* Ref.get(capturedTurns);
             assert.deepEqual(
               turns.map((turn) => [turn.text, turn.modelSelection.model]),
               [
-                ["First question", CODEX_MODEL_SELECTION.model],
-                ["Quick question", quick.model],
-                ["Back to work", CODEX_MODEL_SELECTION.model],
+                [timestamped("First question", projection), CODEX_MODEL_SELECTION.model],
+                [timestamped("Quick question", projection), quick.model],
+                [timestamped("Back to work", projection), CODEX_MODEL_SELECTION.model],
               ],
             );
             // One native conversation throughout, so nothing is summarized or handed off.
             assert.equal(new Set(turns.map((turn) => turn.providerThreadId)).size, 1);
-            const projection = yield* orchestrator.getThreadProjection(threadId);
             assert.lengthOf(projection.contextHandoffs, 0);
             assert.deepEqual(projection.thread.modelSelection, CODEX_MODEL_SELECTION);
             assert.deepEqual(
@@ -5047,14 +5076,14 @@ describe("orchestration v2 provider switching", () => {
           yield* waitForIdle(quickThreadId);
           yield* worker.drain();
 
+          const projection = yield* orchestrator.getThreadProjection(quickThreadId);
           assert.deepEqual(
             (yield* Ref.get(capturedTurns)).map((turn) => [turn.text, turn.modelSelection.model]),
             [
-              ["Long turn", CODEX_MODEL_SELECTION.model],
-              ["Quick question", quick.model],
+              [timestamped("Long turn", projection), CODEX_MODEL_SELECTION.model],
+              [timestamped("Quick question", projection), quick.model],
             ],
           );
-          const projection = yield* orchestrator.getThreadProjection(quickThreadId);
           assert.deepEqual(
             projection.runs.map((run) => run.status),
             ["completed", "completed"],
