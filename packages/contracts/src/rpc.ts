@@ -1920,11 +1920,14 @@ const WsOrchestrationV2GetThreadProjectionRpc = Rpc.make(
   },
 );
 
-const WsOrchestrationV2StopAutoreviewerRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer, {
-  payload: OrchestrationV2RpcSchemas.stopAutoreviewer.input,
-  success: OrchestrationV2RpcSchemas.stopAutoreviewer.output,
-  error: Schema.Union([OrchestrationV2StopAutoreviewerError, EnvironmentAuthorizationError]),
-});
+const WsOrchestrationV2StopAutoreviewerRpc = Rpc.make(
+  ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer,
+  {
+    payload: OrchestrationV2RpcSchemas.stopAutoreviewer.input,
+    success: OrchestrationV2RpcSchemas.stopAutoreviewer.output,
+    error: Schema.Union([OrchestrationV2StopAutoreviewerError, EnvironmentAuthorizationError]),
+  },
+);
 
 const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.stopWorkflow, {
   payload: OrchestrationV2RpcSchemas.stopWorkflow.input,

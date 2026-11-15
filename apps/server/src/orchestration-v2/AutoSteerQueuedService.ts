@@ -32,9 +32,7 @@ export function nextAutoSteerPromotion(projection: {
   readonly messages: Parameters<typeof resolveMessageDispatchIntent>[0]["messages"];
   readonly providerTurns: Parameters<typeof resolveMessageDispatchIntent>[0]["providerTurns"];
   readonly providerThreads: Parameters<typeof resolveMessageDispatchIntent>[0]["providerThreads"];
-  readonly providerSessions: Parameters<
-    typeof resolveMessageDispatchIntent
-  >[0]["providerSessions"];
+  readonly providerSessions: Parameters<typeof resolveMessageDispatchIntent>[0]["providerSessions"];
 }): AutoSteerPromotion | null {
   const head = queuedRunsInDeliveryOrder(
     projection as Parameters<typeof queuedRunsInDeliveryOrder>[0],
@@ -186,7 +184,11 @@ export const make = Effect.gen(function* () {
           ? Effect.sync(() => dirty.add(event.threadId)).pipe(
               Effect.andThen(FiberMap.has(passes, event.threadId)),
               Effect.flatMap((running) =>
-                running ? Effect.void : FiberMap.run(passes, event.threadId, promote(event.threadId)).pipe(Effect.asVoid),
+                running
+                  ? Effect.void
+                  : FiberMap.run(passes, event.threadId, promote(event.threadId)).pipe(
+                      Effect.asVoid,
+                    ),
               ),
             )
           : Effect.void,

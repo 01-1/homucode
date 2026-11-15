@@ -1118,7 +1118,12 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       );
 
       // Within the config cache's lifetime, as when an agent changes the remote mid-turn.
-      yield* runGit(repoDir, ["remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git"]);
+      yield* runGit(repoDir, [
+        "remote",
+        "set-url",
+        "origin",
+        "https://gitlab.com/acme/widgets.git",
+      ]);
       yield* manager.invalidateStatus(repoDir);
 
       expect((yield* manager.localStatus({ cwd: repoDir })).sourceControlProvider?.kind).toBe(

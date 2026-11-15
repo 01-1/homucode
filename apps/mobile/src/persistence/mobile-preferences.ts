@@ -231,8 +231,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     workspaceSelections?: WorkspaceSelections;
   } = {};
 
-  if (isDevicePins(parsed.devicePins))
-    preferences.devicePins = parsed.devicePins;
+  if (isDevicePins(parsed.devicePins)) preferences.devicePins = parsed.devicePins;
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {
     preferences.hiddenNavigationTabs = parsed.hiddenNavigationTabs.filter(

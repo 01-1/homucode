@@ -39,7 +39,9 @@ describe("RPC authorization scopes", () => {
   });
 
   it("requires thread operation authority to stop an attached autoreviewer", () => {
-    expect(requiredScopeForRpcMethod(ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer)).toBe(AuthOrchestrationOperateScope);
+    expect(requiredScopeForRpcMethod(ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer)).toBe(
+      AuthOrchestrationOperateScope,
+    );
   });
 
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
@@ -491,26 +493,37 @@ it.effect("denies manual cleanup before the handler without settings permission"
   }),
 );
 
-
 it.effect("refuses autoreviewer stop before its handler without destination operate scope", () =>
   Effect.gen(function* () {
     const method = ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer;
-    const group = WsRpcGroup.omit(...[...WsRpcGroup.requests.keys()].filter(
-      (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> => tag !== method,
-    ));
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> => tag !== method,
+      ),
+    );
     let handled = 0;
-    const handlers = group.toLayerHandler(method, () => Effect.sync(() => { handled += 1; }));
-    const input = { commandId: CommandId.make("stop-reviewer"), threadId: ThreadId.make("parent"),
-      reviewerThreadId: ThreadId.make("reviewer") };
+    const handlers = group.toLayerHandler(method, () =>
+      Effect.sync(() => {
+        handled += 1;
+      }),
+    );
+    const input = {
+      commandId: CommandId.make("stop-reviewer"),
+      threadId: ThreadId.make("parent"),
+      reviewerThreadId: ThreadId.make("reviewer"),
+    };
     const denied = yield* RpcTest.makeClient(group).pipe(
       Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationReadScope]))),
     );
     expect(yield* denied[method](input).pipe(Effect.flip)).toMatchObject({
-      _tag: "EnvironmentAuthorizationError", requiredPermission: AuthOrchestrationOperateScope,
+      _tag: "EnvironmentAuthorizationError",
+      requiredPermission: AuthOrchestrationOperateScope,
     });
     expect(handled).toBe(0);
     const granted = yield* RpcTest.makeClient(group).pipe(
-      Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationOperateScope]))),
+      Effect.provide(
+        Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationOperateScope])),
+      ),
     );
     yield* granted[method](input);
     expect(handled).toBe(1);

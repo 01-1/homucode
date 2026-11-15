@@ -895,9 +895,7 @@ const threadStartCommand = Command.make("start", {
       }
       const clientRequestId = Option.isNone(flags.clientRequestId)
         ? undefined
-        : yield* decodeClientRequestId(
-            flags.clientRequestId.value,
-          ).pipe(
+        : yield* decodeClientRequestId(flags.clientRequestId.value).pipe(
             Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --client-request-id." })),
           );
       const title = yield* decodeTitle(
@@ -1193,9 +1191,7 @@ const pendingRespondCommand = Command.make("respond", {
           flags.answersFile === "-"
             ? yield* readMessageArgument("-")
             : yield* fs.readFileString(flags.answersFile);
-        const answers = yield* decodeUserInputAnswers(
-          raw,
-        ).pipe(
+        const answers = yield* decodeUserInputAnswers(raw).pipe(
           Effect.mapError(() => new ThreadUsageError({ detail: "Answers must be a JSON object." })),
         );
         const result = yield* tools.call(

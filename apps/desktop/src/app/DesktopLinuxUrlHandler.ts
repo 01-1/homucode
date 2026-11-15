@@ -187,7 +187,8 @@ export const make = Effect.gen(function* () {
       });
       const installed = yield* Effect.gen(function* () {
         const current = yield* fileSystem.readFileString(launcher).pipe(Effect.option);
-        if (Option.isSome(current) && !current.value.includes(APPIMAGE_LAUNCHER_MARKER)) return appImage;
+        if (Option.isSome(current) && !current.value.includes(APPIMAGE_LAUNCHER_MARKER))
+          return appImage;
         if (Option.getOrUndefined(current) !== script) {
           yield* fileSystem.makeDirectory(environment.path.dirname(launcher), { recursive: true });
           const staging = `${launcher}.${process.pid}.${yield* Random.nextIntBetween(0, 0xffffff)}.tmp`;

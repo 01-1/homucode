@@ -37,13 +37,15 @@ const harness = (heads: ReadonlyArray<AutoSteerPromotion | null>, refuse: Readon
 };
 
 describe("runAutoSteerPass", () => {
-  it.effect("rereads after a refused stale head when a trigger arrived, and steers the new head", () =>
-    Effect.gen(function* () {
-      const h = harness([promotion("run:A"), promotion("run:B"), null], new Set(["run:A"]));
-      yield* runAutoSteerPass(h.deps, threadId);
-      expect(h.dispatched).toEqual(["run:A", "run:B"]);
-      expect(h.dirty.has(threadId)).toBe(false);
-    }),
+  it.effect(
+    "rereads after a refused stale head when a trigger arrived, and steers the new head",
+    () =>
+      Effect.gen(function* () {
+        const h = harness([promotion("run:A"), promotion("run:B"), null], new Set(["run:A"]));
+        yield* runAutoSteerPass(h.deps, threadId);
+        expect(h.dispatched).toEqual(["run:A", "run:B"]);
+        expect(h.dirty.has(threadId)).toBe(false);
+      }),
   );
 
   it.effect("stops after a refusal when no new trigger arrived", () =>

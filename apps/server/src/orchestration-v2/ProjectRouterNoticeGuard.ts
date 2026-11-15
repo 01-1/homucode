@@ -5,13 +5,19 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 /** Host-only, fiber-local guard. Not a command field, provider tool or callback registry. */
-export class Target extends Context.Reference<{
-  readonly commandId: CommandId;
-  readonly threadId: ThreadId;
-  readonly projectId: ProjectId;
-} | undefined>("t3/ProjectRouterNoticeGuard", { defaultValue: () => undefined }) {}
+export class Target extends Context.Reference<
+  | {
+      readonly commandId: CommandId;
+      readonly threadId: ThreadId;
+      readonly projectId: ProjectId;
+    }
+  | undefined
+>("t3/ProjectRouterNoticeGuard", { defaultValue: () => undefined }) {}
 
-export class TargetChanged extends Schema.TaggedError<TargetChanged>()("ProjectRouterNoticeTargetChanged", {}) {}
+export class TargetChanged extends Schema.TaggedError<TargetChanged>()(
+  "ProjectRouterNoticeTargetChanged",
+  {},
+) {}
 
 /** Called only inside the existing command SQL transaction, after receipt replay. */
 export const validate = Effect.fn("ProjectRouterNoticeGuard.validate")(function* (input: {
