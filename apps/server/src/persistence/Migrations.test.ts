@@ -9,6 +9,12 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { migrationManifest, runMigrations } from "./Migrations.ts";
 
+import HomuCompletion from "./Migrations/096_ThreadCompletionOutbox.ts";
+import HomuAssistance from "./Migrations/097_WorkAssistanceContinuity.ts";
+import HomuRouter from "./Migrations/098_ProjectRouterNotices.ts";
+import HomuFolders from "./Migrations/099_ThreadFolders.ts";
+import HomuFolderRules from "./Migrations/100_ThreadFolderRules.ts";
+
 const v2Migrations = migrationManifest.filter(([id]) => id >= 55);
 const newerMigrationId = Math.max(...migrationManifest.map(([id]) => id)) + 1;
 
@@ -75,6 +81,38 @@ describe("runMigrations", () => {
       assert.deepStrictEqual(yield* runMigrations(), v2Migrations);
       assert.deepStrictEqual(yield* history, migrationManifest);
       assert.isAbove(yield* v2TableCount, 0);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("upgrades the legacy Homu migration ledger without losing fork data", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 80 });
+      for (const [id, name, migration] of [
+        [82, "ThreadCompletionOutbox", HomuCompletion],
+        [83, "WorkAssistanceContinuity", HomuAssistance],
+        [84, "ProjectRouterNotices", HomuRouter],
+        [85, "ThreadFolders", HomuFolders],
+        [86, "ThreadFolderRules", HomuFolderRules],
+      ] as const) {
+        yield* sql.withTransaction(
+          migration.pipe(
+            Effect.andThen(
+              sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (${id}, ${name})`,
+            ),
+          ),
+        );
+      }
+      yield* sql`INSERT INTO thread_completion_outbox(thread_id, run_id, workspace_root, payload_json) VALUES ('thread:legacy', 'run:legacy', '/repo', '{}')`;
+      yield* sql`INSERT INTO thread_folders(folder_id, name, created_at, updated_at, sort_key) VALUES ('legacy-folder', 'Kept folder', '2026-11-14', '2026-11-14', 23)`;
+      yield* runMigrations();
+      assert.deepStrictEqual(yield* history, migrationManifest);
+      const completions = yield* sql`SELECT thread_id FROM thread_completion_outbox`;
+      assert.deepStrictEqual(completions, [{ thread_id: "thread:legacy" }]);
+      const folders = yield* sql`SELECT name, sort_key FROM thread_folders`;
+      assert.deepStrictEqual(folders, [{ name: "Kept folder", sort_key: 23 }]);
+      yield* sql`PRAGMA query_only = ON`;
+      assert.deepStrictEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
@@ -162,6 +200,36 @@ describe("runMigrations", () => {
       );
       assert.notInclude(String(exit), "57_ScheduledTaskWebhooks");
       assert.deepStrictEqual(yield* history, before);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("keeps the migrations that finished before a later one failed", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 81 });
+      yield* sql`CREATE TABLE orchestration_v2_projection_turn_item_counts (thread_id TEXT)`;
+
+      const exit = yield* Effect.exit(runMigrations());
+
+      assert.isTrue(Exit.isFailure(exit));
+      assert.deepStrictEqual(
+        yield* history,
+        migrationManifest.filter(([id]) => id <= 84),
+      );
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("reapplies peer link migrations whose ledger rows are missing", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 72 });
+      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id BETWEEN 70 AND 72`;
+
+      assert.deepStrictEqual(
+        yield* runMigrations(),
+        migrationManifest.filter(([id]) => id >= 70),
+      );
+      assert.deepStrictEqual(yield* history, migrationManifest);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 

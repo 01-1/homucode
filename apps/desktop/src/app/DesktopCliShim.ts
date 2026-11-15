@@ -87,6 +87,7 @@ export const renderCliShim = (input: {
   return [
     ...header,
     ...renderAppImageRuntime(target.executableName),
+    'export APPIMAGE="$app"',
     `exec "$runtime/${target.executableName}" "$runtime/resources/app.asar/${SERVER_ENTRY}" "$@"`,
     "",
   ].join("\n");

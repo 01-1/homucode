@@ -1,6 +1,6 @@
 # Homu Code
 
-Homu Code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It starts from upstream commit `637507056c` (2026-11-08) and has no releases or installers of its own: build it from source. Inside the app and the `t3` command it is still called T3 Code.
+Homu Code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It starts from upstream commit `c5e6b24ff5` (2026-11-15) and has no releases or installers of its own: build it from source. Inside the app and the `t3` command it is still called T3 Code.
 
 ## Changes compared to T3 Code
 
