@@ -435,112 +435,206 @@ const queuedFindings = (threadId: ThreadId) =>
   });
 
 it.layer(layerTest)("autoreview", (it) => {
-  it.effect("human stop cancels only the selected reviewer queue, detaches and prevents later batches", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const service = AutoreviewService.make({
-        ...orchestrator,
-        stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
-      });
-      const { threadId, runId, now } = yield* seedReviewedThread("human-stop");
-      const first = yield* attachReviewer(service, threadId, "human-stop:first");
-      const second = yield* attachReviewer(service, threadId, "human-stop:second");
-      const parentBefore = yield* orchestrator.getThreadProjection(threadId);
-      const siblingBefore = yield* orchestrator.getThreadProjection(second.reviewerThreadId);
-      yield* orchestrator.dispatch({
-        type: "message.dispatch", commandId: CommandId.make("command:human-stop:queued"),
-        threadId: first.reviewerThreadId,
-        messageId: MessageId.make(`${AUTOREVIEW_BATCH_MESSAGE_PREFIX}human-stop`),
-        text: "Next review batch", attachments: [], dispatchMode: { type: "queue_after_active" },
-        createdBy: "agent", creationSource: "server",
-      });
-      const childBefore = yield* orchestrator.getThreadProjection(first.reviewerThreadId);
-      assert.isTrue(childBefore.runs.some((run) => run.status === "queued"));
-      yield* service.stop({ commandId: CommandId.make("command:human-stop"), threadId,
-        reviewerThreadId: first.reviewerThreadId });
-      const childAfter = yield* orchestrator.getThreadProjection(first.reviewerThreadId);
-      assert.isFalse(childAfter.runs.some((run) => run.status === "queued"));
-      assert.deepEqual(childAfter.messages, childBefore.messages);
-      assert.deepEqual((yield* orchestrator.getThreadProjection(second.reviewerThreadId)), siblingBefore);
-      const parentAfter = yield* orchestrator.getThreadProjection(threadId);
-      assert.deepEqual(parentAfter.runs.map((run) => [run.id, run.status]), parentBefore.runs.map((run) => [run.id, run.status]));
-      assert.deepEqual(parentAfter.messages, parentBefore.messages);
-      assert.deepEqual(parentAfter.thread.autoreviewers?.map((entry) => entry.threadId), [second.reviewerThreadId]);
-      const item = assistantItem({ threadId, runId, now, id: "human-stop:later", ordinal: 50, text: "More work." });
-      const eventSink = yield* EventSink.EventSinkV2;
-      yield* eventSink.write({ events: [itemEvent(item)] });
-      yield* service.handle(itemEvent(item));
-      yield* service.catchUp;
-      assert.deepEqual((yield* orchestrator.getThreadProjection(first.reviewerThreadId)).runs, childAfter.runs);
-    }),
+  it.effect(
+    "human stop cancels only the selected reviewer queue, detaches and prevents later batches",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const service = AutoreviewService.make({
+          ...orchestrator,
+          stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
+        });
+        const { threadId, runId, now } = yield* seedReviewedThread("human-stop");
+        const first = yield* attachReviewer(service, threadId, "human-stop:first");
+        const second = yield* attachReviewer(service, threadId, "human-stop:second");
+        const parentBefore = yield* orchestrator.getThreadProjection(threadId);
+        const siblingBefore = yield* orchestrator.getThreadProjection(second.reviewerThreadId);
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("command:human-stop:queued"),
+          threadId: first.reviewerThreadId,
+          messageId: MessageId.make(`${AUTOREVIEW_BATCH_MESSAGE_PREFIX}human-stop`),
+          text: "Next review batch",
+          attachments: [],
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: "agent",
+          creationSource: "server",
+        });
+        const childBefore = yield* orchestrator.getThreadProjection(first.reviewerThreadId);
+        assert.isTrue(childBefore.runs.some((run) => run.status === "queued"));
+        yield* service.stop({
+          commandId: CommandId.make("command:human-stop"),
+          threadId,
+          reviewerThreadId: first.reviewerThreadId,
+        });
+        const childAfter = yield* orchestrator.getThreadProjection(first.reviewerThreadId);
+        assert.isFalse(childAfter.runs.some((run) => run.status === "queued"));
+        assert.deepEqual(childAfter.messages, childBefore.messages);
+        assert.deepEqual(
+          yield* orchestrator.getThreadProjection(second.reviewerThreadId),
+          siblingBefore,
+        );
+        const parentAfter = yield* orchestrator.getThreadProjection(threadId);
+        assert.deepEqual(
+          parentAfter.runs.map((run) => [run.id, run.status]),
+          parentBefore.runs.map((run) => [run.id, run.status]),
+        );
+        assert.deepEqual(parentAfter.messages, parentBefore.messages);
+        assert.deepEqual(
+          parentAfter.thread.autoreviewers?.map((entry) => entry.threadId),
+          [second.reviewerThreadId],
+        );
+        const item = assistantItem({
+          threadId,
+          runId,
+          now,
+          id: "human-stop:later",
+          ordinal: 50,
+          text: "More work.",
+        });
+        const eventSink = yield* EventSink.EventSinkV2;
+        yield* eventSink.write({ events: [itemEvent(item)] });
+        yield* service.handle(itemEvent(item));
+        yield* service.catchUp;
+        assert.deepEqual(
+          (yield* orchestrator.getThreadProjection(first.reviewerThreadId)).runs,
+          childAfter.runs,
+        );
+      }),
   );
 
-  it.effect("human stop records an interrupt for a live reviewer and cancels its delegated queue", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const eventSink = yield* EventSink.EventSinkV2;
-      const service = AutoreviewService.make({ ...orchestrator,
-        stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
-      });
-      const { threadId, now } = yield* seedReviewedThread("human-stop-live");
-      const attached = yield* attachReviewer(service, threadId, "human-stop-live");
-      const reviewer = yield* orchestrator.getThreadProjection(attached.reviewerThreadId);
-      const firstRun = reviewer.runs[0]!;
-      const child = yield* seedReviewedThread("human-stop-delegate");
-      const parentTask = (yield* orchestrator.getThreadProjection(threadId)).subagents.find((task) => task.id === attached.taskId)!;
-      const taskId = NodeId.make("node:human-stop:delegate");
-      // A running reviewer with an app-owned task under it; use production records and commands.
-      yield* eventSink.write({ events: [{
-        id: EventId.make("event:human-stop:live"), type: "run.updated",
-        threadId: reviewer.thread.id, runId: firstRun.id, occurredAt: now,
-        payload: { ...firstRun, status: "running", startedAt: now },
-      }, {
-        id: EventId.make("event:human-stop:delegate"), type: "subagent.updated",
-        threadId: reviewer.thread.id, runId: firstRun.id, occurredAt: now,
-        payload: { ...parentTask, id: taskId, threadId: reviewer.thread.id,
-          runId: firstRun.id, childThreadId: child.threadId, completionDelivery: undefined },
-      }] });
-      yield* orchestrator.dispatch({ type: "message.dispatch",
-        commandId: CommandId.make("command:human-stop:delegate-queued"), threadId: child.threadId,
-        messageId: MessageId.make("message:human-stop:delegate-queued"), text: "Queued follow-up",
-        attachments: [], dispatchMode: { type: "queue_after_active" }, createdBy: "agent", creationSource: "mcp",
-      });
-      const queued = (yield* orchestrator.getThreadProjection(child.threadId)).runs.find((run) => run.status === "queued")!;
-      yield* eventSink.write({ events: [{ id: EventId.make("event:human-stop:queue-task"),
-        type: "run.updated", threadId: child.threadId, runId: queued.id, occurredAt: now,
-        payload: { ...queued, delegatedTaskId: taskId },
-      }] });
-      yield* service.stop({ commandId: CommandId.make("command:human-stop-live"), threadId,
-        reviewerThreadId: reviewer.thread.id });
-      const stopped = yield* orchestrator.getThreadProjection(reviewer.thread.id);
-      assert.isTrue(stopped.turnItems.some((item) => item.type === "run_interrupt_request" && item.runId === firstRun.id));
-      const descendant = yield* orchestrator.getThreadProjection(child.threadId);
-      assert.notEqual(descendant.runs.find((run) => run.id === queued.id)?.status, "queued");
-      assert.isTrue(descendant.turnItems.some((item) => item.type === "run_interrupt_request"));
-      assert.isTrue((yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers?.length === 0);
-    }),
+  it.effect(
+    "human stop records an interrupt for a live reviewer and cancels its delegated queue",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const service = AutoreviewService.make({
+          ...orchestrator,
+          stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
+        });
+        const { threadId, now } = yield* seedReviewedThread("human-stop-live");
+        const attached = yield* attachReviewer(service, threadId, "human-stop-live");
+        const reviewer = yield* orchestrator.getThreadProjection(attached.reviewerThreadId);
+        const firstRun = reviewer.runs[0]!;
+        const child = yield* seedReviewedThread("human-stop-delegate");
+        const parentTask = (yield* orchestrator.getThreadProjection(threadId)).subagents.find(
+          (task) => task.id === attached.taskId,
+        )!;
+        const taskId = NodeId.make("node:human-stop:delegate");
+        // A running reviewer with an app-owned task under it; use production records and commands.
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make("event:human-stop:live"),
+              type: "run.updated",
+              threadId: reviewer.thread.id,
+              runId: firstRun.id,
+              occurredAt: now,
+              payload: { ...firstRun, status: "running", startedAt: now },
+            },
+            {
+              id: EventId.make("event:human-stop:delegate"),
+              type: "subagent.updated",
+              threadId: reviewer.thread.id,
+              runId: firstRun.id,
+              occurredAt: now,
+              payload: {
+                ...parentTask,
+                id: taskId,
+                threadId: reviewer.thread.id,
+                runId: firstRun.id,
+                childThreadId: child.threadId,
+                completionDelivery: undefined,
+              },
+            },
+          ],
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("command:human-stop:delegate-queued"),
+          threadId: child.threadId,
+          messageId: MessageId.make("message:human-stop:delegate-queued"),
+          text: "Queued follow-up",
+          attachments: [],
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: "agent",
+          creationSource: "mcp",
+        });
+        const queued = (yield* orchestrator.getThreadProjection(child.threadId)).runs.find(
+          (run) => run.status === "queued",
+        )!;
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make("event:human-stop:queue-task"),
+              type: "run.updated",
+              threadId: child.threadId,
+              runId: queued.id,
+              occurredAt: now,
+              payload: { ...queued, delegatedTaskId: taskId },
+            },
+          ],
+        });
+        yield* service.stop({
+          commandId: CommandId.make("command:human-stop-live"),
+          threadId,
+          reviewerThreadId: reviewer.thread.id,
+        });
+        const stopped = yield* orchestrator.getThreadProjection(reviewer.thread.id);
+        assert.isTrue(
+          stopped.turnItems.some(
+            (item) => item.type === "run_interrupt_request" && item.runId === firstRun.id,
+          ),
+        );
+        const descendant = yield* orchestrator.getThreadProjection(child.threadId);
+        assert.notEqual(descendant.runs.find((run) => run.id === queued.id)?.status, "queued");
+        assert.isTrue(descendant.turnItems.some((item) => item.type === "run_interrupt_request"));
+        assert.isTrue(
+          (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers?.length === 0,
+        );
+      }),
   );
 
-  it.effect("failed human cancellation keeps the attachment for retry and rejects a different reviewer", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      let attempts = 0;
-      const service = AutoreviewService.make({ ...orchestrator,
-        stopReviewerWork: () => Effect.sync(() => { attempts += 1; }).pipe(
-          Effect.andThen(Effect.fail(new AutoreviewerStopError({ message: "provider stop refused" })))),
-      });
-      const { threadId } = yield* seedReviewedThread("human-stop-failed");
-      const reviewer = yield* attachReviewer(service, threadId, "human-stop-failed");
-      const input = { commandId: CommandId.make("command:human-stop-failed"), threadId,
-        reviewerThreadId: reviewer.reviewerThreadId };
-      const refused = yield* service.stop({ ...input, reviewerThreadId: ThreadId.make("unattached") }).pipe(Effect.flip);
-      assert.equal(refused.reason, "not_found");
-      assert.equal(attempts, 0);
-      const failed = yield* service.stop(input).pipe(Effect.flip);
-      assert.equal(failed.reason, "failed");
-      assert.equal(attempts, 1);
-      assert.deepEqual((yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers?.map((entry) => entry.threadId), [reviewer.reviewerThreadId]);
-    }),
+  it.effect(
+    "failed human cancellation keeps the attachment for retry and rejects a different reviewer",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        let attempts = 0;
+        const service = AutoreviewService.make({
+          ...orchestrator,
+          stopReviewerWork: () =>
+            Effect.sync(() => {
+              attempts += 1;
+            }).pipe(
+              Effect.andThen(
+                Effect.fail(new AutoreviewerStopError({ message: "provider stop refused" })),
+              ),
+            ),
+        });
+        const { threadId } = yield* seedReviewedThread("human-stop-failed");
+        const reviewer = yield* attachReviewer(service, threadId, "human-stop-failed");
+        const input = {
+          commandId: CommandId.make("command:human-stop-failed"),
+          threadId,
+          reviewerThreadId: reviewer.reviewerThreadId,
+        };
+        const refused = yield* service
+          .stop({ ...input, reviewerThreadId: ThreadId.make("unattached") })
+          .pipe(Effect.flip);
+        assert.equal(refused.reason, "not_found");
+        assert.equal(attempts, 0);
+        const failed = yield* service.stop(input).pipe(Effect.flip);
+        assert.equal(failed.reason, "failed");
+        assert.equal(attempts, 1);
+        assert.deepEqual(
+          (yield* orchestrator.getThreadProjection(threadId)).thread.autoreviewers?.map(
+            (entry) => entry.threadId,
+          ),
+          [reviewer.reviewerThreadId],
+        );
+      }),
   );
 
   it.effect(
@@ -1073,53 +1167,56 @@ it.layer(layerTest)("autoreview", (it) => {
       }),
   );
 
-  it.effect.each(["detach", "stop"] as const)("findings that cannot steer share one queued message, and %s drops only its part", (operation) =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const service = AutoreviewService.make({ ...orchestrator,
-        stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
-      });
-      const name = `pile-${operation}`;
-      const { threadId } = yield* seedReviewedThread(name);
-      const first = yield* attachReviewer(service, threadId, `${name}-1`);
-      const second = yield* attachReviewer(service, threadId, `${name}-2`);
+  it.effect.each(["detach", "stop"] as const)(
+    "findings that cannot steer share one queued message, and %s drops only its part",
+    (operation) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const service = AutoreviewService.make({
+          ...orchestrator,
+          stopReviewerWork: (input) => stopAutoreviewerWork(orchestrator, input),
+        });
+        const name = `pile-${operation}`;
+        const { threadId } = yield* seedReviewedThread(name);
+        const first = yield* attachReviewer(service, threadId, `${name}-1`);
+        const second = yield* attachReviewer(service, threadId, `${name}-2`);
 
-      // The test provider has no live session, so steering is refused and findings queue.
-      for (const [index, reviewer] of [first, second].entries()) {
-        const review = yield* finishReview(
-          reviewer.reviewerThreadId,
-          `finding number ${index + 1}`,
-          `${name}-${index}`,
+        // The test provider has no live session, so steering is refused and findings queue.
+        for (const [index, reviewer] of [first, second].entries()) {
+          const review = yield* finishReview(
+            reviewer.reviewerThreadId,
+            `finding number ${index + 1}`,
+            `${name}-${index}`,
+          );
+          yield* service.handle(review.ended);
+        }
+        const queued = yield* queuedFindings(threadId);
+        assert.lengthOf(queued, 1);
+        assert.include(queued[0]!.text, "finding number 1");
+        assert.include(queued[0]!.text, "finding number 2");
+        // Two reviewers, one message: one name line per finding and nothing else.
+        assert.equal(
+          queued[0]!.text,
+          "Autoreview:\nfinding number 1\n\nAutoreview:\nfinding number 2",
         );
-        yield* service.handle(review.ended);
-      }
-      const queued = yield* queuedFindings(threadId);
-      assert.lengthOf(queued, 1);
-      assert.include(queued[0]!.text, "finding number 1");
-      assert.include(queued[0]!.text, "finding number 2");
-      // Two reviewers, one message: one name line per finding and nothing else.
-      assert.equal(
-        queued[0]!.text,
-        "Autoreview:\nfinding number 1\n\nAutoreview:\nfinding number 2",
-      );
 
-      yield* service[operation]({
-        commandId: CommandId.make(`command:${name}:remove-1`),
-        threadId,
-        reviewerThreadId: first.reviewerThreadId,
-      });
-      const afterFirst = yield* queuedFindings(threadId);
-      assert.equal(afterFirst[0]!.status, "queued");
-      assert.notInclude(afterFirst[0]!.text, "finding number 1");
-      assert.include(afterFirst[0]!.text, "finding number 2");
+        yield* service[operation]({
+          commandId: CommandId.make(`command:${name}:remove-1`),
+          threadId,
+          reviewerThreadId: first.reviewerThreadId,
+        });
+        const afterFirst = yield* queuedFindings(threadId);
+        assert.equal(afterFirst[0]!.status, "queued");
+        assert.notInclude(afterFirst[0]!.text, "finding number 1");
+        assert.include(afterFirst[0]!.text, "finding number 2");
 
-      yield* service[operation]({
-        commandId: CommandId.make(`command:${name}:remove-2`),
-        threadId,
-        reviewerThreadId: second.reviewerThreadId,
-      });
-      assert.notEqual((yield* queuedFindings(threadId))[0]!.status, "queued");
-    }),
+        yield* service[operation]({
+          commandId: CommandId.make(`command:${name}:remove-2`),
+          threadId,
+          reviewerThreadId: second.reviewerThreadId,
+        });
+        assert.notEqual((yield* queuedFindings(threadId))[0]!.status, "queued");
+      }),
   );
 
   it.effect("a reviewer's next batch shows the other reviewers' findings", () =>
@@ -1791,9 +1888,9 @@ it.layer(layerTest)("autoreview", (it) => {
         const orchestrator = yield* Orchestrator.OrchestratorV2;
         const eventSink = yield* EventSink.EventSinkV2;
         const service = AutoreviewService.make(orchestrator);
-        const { threadId, runId, now } = yield* seedReviewedThread("paced");
+        const { threadId, runId, now } = yield* seedReviewedThread("interval-paced");
         const { reviewerThreadId } = yield* service.attach({
-          commandId: CommandId.make("command:autoreview-attach:paced"),
+          commandId: CommandId.make("command:autoreview-attach:interval-paced"),
           threadId,
           modelSelection: reviewerModel,
           runtimeMode: "full-access",
@@ -1810,17 +1907,17 @@ it.layer(layerTest)("autoreview", (it) => {
             yield* service.handle(itemEvent(item));
           });
         // The backlog sent at attach counts as the last batch.
-        const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
+        const first = yield* finishReview(reviewerThreadId, "LGTM", "interval-paced-1");
         yield* service.handle(first.ended);
-        yield* step("paced:a", 20);
-        yield* step("paced:b", 21);
+        yield* step("interval-paced:a", 20);
+        yield* step("interval-paced:b", 21);
         assert.lengthOf(yield* batches(), 0);
 
         const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
           (r) => r.id === runId,
         )!;
         const ended: OrchestrationV2DomainEvent = {
-          id: EventId.make("event:paced:ended"),
+          id: EventId.make("event:interval-paced:ended"),
           type: "run.updated",
           threadId,
           runId,
@@ -1834,8 +1931,8 @@ it.layer(layerTest)("autoreview", (it) => {
         assert.lengthOf(yield* batches(), 0);
         yield* TestClock.adjust("10 minutes");
         assert.lengthOf(yield* batches(), 1);
-        assert.include((yield* batches())[0]!.text, "Step paced:a.");
-        assert.include((yield* batches())[0]!.text, "Step paced:b.");
+        assert.include((yield* batches())[0]!.text, "Step interval-paced:a.");
+        assert.include((yield* batches())[0]!.text, "Step interval-paced:b.");
       }),
   );
 
@@ -1955,97 +2052,170 @@ it.layer(layerTest)("autoreview", (it) => {
   );
 });
 
-
-it.effect("human autoreviewer stop suppresses real human follow-up wakes through async settlement", () => {
-  const offered: Array<ProviderContinuationRequests.ProviderContinuationRequest> = [];
-  return Effect.gen(function* () {
-    const orchestrator = yield* Orchestrator.OrchestratorV2;
-    const sink = yield* EventSink.EventSinkV2;
-    const service = AutoreviewService.make({ ...orchestrator,
-      stopReviewerWork: (input) => stopAutoreviewerWork({ ...orchestrator,
-        dispatch: (command) => command.type === "thread.stop" && command.threadId === input.reviewer.threadId
-          ? orchestrator.getThreadRecords(input.threadId, ["subagents"]).pipe(
-              Effect.tap(({ subagents }) => Effect.sync(() => {
-                assert.isTrue(subagents.filter((task) => task.origin === "app_owned" &&
-                  task.childThreadId === input.reviewer.threadId).every((task) =>
-                    task.completionDelivery?.state === "disposed"));
-              })),
-              Effect.andThen(() => orchestrator.dispatch(command)),
-            )
-          : orchestrator.dispatch(command),
-      }, input),
-    });
-    const { threadId, now } = yield* seedReviewedThread("human-stop-followup");
-    const selected = yield* attachReviewer(service, threadId, "human-stop-followup:selected");
-    const sibling = yield* attachReviewer(service, threadId, "human-stop-followup:sibling");
-    const settledTask = (afterSequence: number, taskId: NodeId) => sink.stream({
-      afterSequence, eventType: "subagent.updated",
-    }).pipe(
-      Stream.filter((stored) => stored.event.type === "subagent.updated" &&
-        stored.event.payload.id === taskId && stored.event.payload.result !== null),
-      Stream.take(1), Stream.runHead,
-    );
-    // Finish the originals through the actual asynchronous terminal reactor: follow-up
-    // intake only creates a new task once the original task has its durable result.
-    for (const [name, reviewer] of [["selected", selected], ["sibling", sibling]] as const) {
-      const afterSequence = yield* sink.latestSequence();
-      yield* finishReview(reviewer.reviewerThreadId, `Original ${name} result.`, `human-stop-followup:${name}`);
-      const settled = yield* settledTask(afterSequence, reviewer.taskId);
-      assert.equal(settled._tag, "Some");
-    }
-    const humanFollowup = Effect.fn("test.humanReviewerFollowup")(function* (
-      reviewerThreadId: ThreadId, name: string,
-    ) {
-      const messageId = MessageId.make(`message:human-stop-followup:${name}`);
-      yield* orchestrator.dispatch({
-        type: "message.dispatch", commandId: CommandId.make(`command:human-stop-followup:${name}`),
-        threadId: reviewerThreadId, messageId, text: `Human follow-up for ${name}.`, attachments: [],
-        createdBy: "user", creationSource: "web", dispatchMode: { type: "start_immediately" },
+it.effect(
+  "human autoreviewer stop suppresses real human follow-up wakes through async settlement",
+  () => {
+    const offered: Array<ProviderContinuationRequests.ProviderContinuationRequest> = [];
+    return Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const service = AutoreviewService.make({
+        ...orchestrator,
+        stopReviewerWork: (input) =>
+          stopAutoreviewerWork(
+            {
+              ...orchestrator,
+              dispatch: (command) =>
+                command.type === "thread.stop" && command.threadId === input.reviewer.threadId
+                  ? orchestrator.getThreadRecords(input.threadId, ["subagents"]).pipe(
+                      Effect.tap(({ subagents }) =>
+                        Effect.sync(() => {
+                          assert.isTrue(
+                            subagents
+                              .filter(
+                                (task) =>
+                                  task.origin === "app_owned" &&
+                                  task.childThreadId === input.reviewer.threadId,
+                              )
+                              .every((task) => task.completionDelivery?.state === "disposed"),
+                          );
+                        }),
+                      ),
+                      Effect.andThen(() => orchestrator.dispatch(command)),
+                    )
+                  : orchestrator.dispatch(command),
+            },
+            input,
+          ),
       });
-      const projection = yield* orchestrator.getThreadProjection(reviewerThreadId);
-      const run = projection.runs.find((candidate) => candidate.userMessageId === messageId)!;
-      assert.isDefined(run.delegatedTaskId);
-      return run;
-    });
-    const followup = yield* humanFollowup(selected.reviewerThreadId, "selected");
-    const siblingFollowup = yield* humanFollowup(sibling.reviewerThreadId, "sibling");
-    const before = yield* orchestrator.getThreadProjection(threadId);
-    const original = before.subagents.find((task) => task.id === selected.taskId)!;
-    const pending = before.subagents.find((task) => task.id === followup.delegatedTaskId)!;
-    const siblingTask = before.subagents.find((task) => task.id === siblingFollowup.delegatedTaskId)!;
-    assert.equal(pending.createdBy, "user");
-    assert.equal(pending.completionWake, "always");
-    assert.equal(pending.completionDelivery?.state, "pending");
-    assert.equal(siblingTask.completionDelivery?.state, "pending");
-    const afterSequence = yield* sink.latestSequence();
-    yield* service.stop({ commandId: CommandId.make("command:human-stop-followup:stop"), threadId,
-      reviewerThreadId: selected.reviewerThreadId });
-    // Complete the provider's interruption asynchronously after the attachment is gone.
-    const stoppedChild = yield* orchestrator.getThreadProjection(selected.reviewerThreadId);
-    const stoppingRun = stoppedChild.runs.find((run) => run.id === followup.id)!;
-    yield* sink.write({ events: [{
-      id: EventId.make("event:human-stop-followup:terminal"), type: "run.updated",
-      threadId: selected.reviewerThreadId, runId: followup.id, occurredAt: now,
-      payload: { ...stoppingRun, status: "interrupted", completedAt: now },
-    }] });
-    assert.equal((yield* settledTask(afterSequence, pending.id))._tag, "Some");
-    // Recovery takes the same parent lock, so any terminal reaction has finished its
-    // post-commit delivery offer before these assertions; there is no sleep or polling.
-    yield* orchestrator.recoverDelegatedTasks;
-    const after = yield* orchestrator.getThreadProjection(threadId);
-    const completedFollowup = after.subagents.find((task) => task.id === pending.id)!;
-    assert.isNotNull(completedFollowup.result);
-    assert.equal(completedFollowup.completionDelivery?.state, "disposed");
-    assert.equal(after.subagents.find((task) => task.id === selected.taskId)?.result, original.result);
-    assert.deepEqual(after.subagents.find((task) => task.id === siblingTask.id), siblingTask);
-    assert.deepEqual(after.thread.autoreviewers?.map((entry) => entry.threadId), [sibling.reviewerThreadId]);
-    assert.deepEqual(after.messages, before.messages);
-    assert.deepEqual(after.runs.map((run) => [run.id, run.status, run.delegatedCompletion]),
-      before.runs.map((run) => [run.id, run.status, run.delegatedCompletion]));
-    assert.lengthOf(offered, 0);
-  }).pipe(Effect.provide(layerTest.pipe(Layer.provide(Layer.succeed(
-    ProviderContinuationRequests.ProviderContinuationRequests, {
-      offer: (request) => Effect.sync(() => { offered.push(request); }), take: Effect.never,
-    },
-  )))));
-});
+      const { threadId, now } = yield* seedReviewedThread("human-stop-followup");
+      const selected = yield* attachReviewer(service, threadId, "human-stop-followup:selected");
+      const sibling = yield* attachReviewer(service, threadId, "human-stop-followup:sibling");
+      const settledTask = (afterSequence: number, taskId: NodeId) =>
+        sink
+          .stream({
+            afterSequence,
+            eventType: "subagent.updated",
+          })
+          .pipe(
+            Stream.filter(
+              (stored) =>
+                stored.event.type === "subagent.updated" &&
+                stored.event.payload.id === taskId &&
+                stored.event.payload.result !== null,
+            ),
+            Stream.take(1),
+            Stream.runHead,
+          );
+      // Finish the originals through the actual asynchronous terminal reactor: follow-up
+      // intake only creates a new task once the original task has its durable result.
+      for (const [name, reviewer] of [
+        ["selected", selected],
+        ["sibling", sibling],
+      ] as const) {
+        const afterSequence = yield* sink.latestSequence();
+        yield* finishReview(
+          reviewer.reviewerThreadId,
+          `Original ${name} result.`,
+          `human-stop-followup:${name}`,
+        );
+        const settled = yield* settledTask(afterSequence, reviewer.taskId);
+        assert.equal(settled._tag, "Some");
+      }
+      const humanFollowup = Effect.fn("test.humanReviewerFollowup")(function* (
+        reviewerThreadId: ThreadId,
+        name: string,
+      ) {
+        const messageId = MessageId.make(`message:human-stop-followup:${name}`);
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`command:human-stop-followup:${name}`),
+          threadId: reviewerThreadId,
+          messageId,
+          text: `Human follow-up for ${name}.`,
+          attachments: [],
+          createdBy: "user",
+          creationSource: "web",
+          dispatchMode: { type: "start_immediately" },
+        });
+        const projection = yield* orchestrator.getThreadProjection(reviewerThreadId);
+        const run = projection.runs.find((candidate) => candidate.userMessageId === messageId)!;
+        assert.isDefined(run.delegatedTaskId);
+        return run;
+      });
+      const followup = yield* humanFollowup(selected.reviewerThreadId, "selected");
+      const siblingFollowup = yield* humanFollowup(sibling.reviewerThreadId, "sibling");
+      const before = yield* orchestrator.getThreadProjection(threadId);
+      const original = before.subagents.find((task) => task.id === selected.taskId)!;
+      const pending = before.subagents.find((task) => task.id === followup.delegatedTaskId)!;
+      const siblingTask = before.subagents.find(
+        (task) => task.id === siblingFollowup.delegatedTaskId,
+      )!;
+      assert.equal(pending.createdBy, "user");
+      assert.equal(pending.completionWake, "always");
+      assert.equal(pending.completionDelivery?.state, "pending");
+      assert.equal(siblingTask.completionDelivery?.state, "pending");
+      const afterSequence = yield* sink.latestSequence();
+      yield* service.stop({
+        commandId: CommandId.make("command:human-stop-followup:stop"),
+        threadId,
+        reviewerThreadId: selected.reviewerThreadId,
+      });
+      // Complete the provider's interruption asynchronously after the attachment is gone.
+      const stoppedChild = yield* orchestrator.getThreadProjection(selected.reviewerThreadId);
+      const stoppingRun = stoppedChild.runs.find((run) => run.id === followup.id)!;
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make("event:human-stop-followup:terminal"),
+            type: "run.updated",
+            threadId: selected.reviewerThreadId,
+            runId: followup.id,
+            occurredAt: now,
+            payload: { ...stoppingRun, status: "interrupted", completedAt: now },
+          },
+        ],
+      });
+      assert.equal((yield* settledTask(afterSequence, pending.id))._tag, "Some");
+      // Recovery takes the same parent lock, so any terminal reaction has finished its
+      // post-commit delivery offer before these assertions; there is no sleep or polling.
+      yield* orchestrator.recoverDelegatedTasks;
+      const after = yield* orchestrator.getThreadProjection(threadId);
+      const completedFollowup = after.subagents.find((task) => task.id === pending.id)!;
+      assert.isNotNull(completedFollowup.result);
+      assert.equal(completedFollowup.completionDelivery?.state, "disposed");
+      assert.equal(
+        after.subagents.find((task) => task.id === selected.taskId)?.result,
+        original.result,
+      );
+      assert.deepEqual(
+        after.subagents.find((task) => task.id === siblingTask.id),
+        siblingTask,
+      );
+      assert.deepEqual(
+        after.thread.autoreviewers?.map((entry) => entry.threadId),
+        [sibling.reviewerThreadId],
+      );
+      assert.deepEqual(after.messages, before.messages);
+      assert.deepEqual(
+        after.runs.map((run) => [run.id, run.status, run.delegatedCompletion]),
+        before.runs.map((run) => [run.id, run.status, run.delegatedCompletion]),
+      );
+      assert.lengthOf(offered, 0);
+    }).pipe(
+      Effect.provide(
+        layerTest.pipe(
+          Layer.provide(
+            Layer.succeed(ProviderContinuationRequests.ProviderContinuationRequests, {
+              offer: (request) =>
+                Effect.sync(() => {
+                  offered.push(request);
+                }),
+              take: Effect.never,
+            }),
+          ),
+        ),
+      ),
+    );
+  },
+);

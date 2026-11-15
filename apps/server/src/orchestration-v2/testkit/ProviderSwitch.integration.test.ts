@@ -71,6 +71,7 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 function timestamped(text: string, projection: OrchestrationV2ThreadProjection) {
+  if (text.trimStart().startsWith("/")) return text;
   const message = projection.messages.findLast(
     (message) => message.role === "user" && message.text === text,
   );

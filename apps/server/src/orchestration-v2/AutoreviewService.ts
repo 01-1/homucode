@@ -113,7 +113,9 @@ export class AutoreviewService extends Context.Service<
       AutoreviewError
     >;
     /** Native human stop: cancel work before removing the attachment. */
-    readonly stop: (input: OrchestrationV2StopAutoreviewerInput) => Effect.Effect<void, AutoreviewError>;
+    readonly stop: (
+      input: OrchestrationV2StopAutoreviewerInput,
+    ) => Effect.Effect<void, AutoreviewError>;
     readonly detach: (input: {
       readonly commandId: CommandId;
       readonly threadId: ThreadId;
@@ -564,27 +566,17 @@ export const make = (port: AutoreviewPort) => {
       createdBy: "agent" as const,
       creationSource: "server" as const,
     });
-    if (delivery.type === "steer") {
-      const steered = yield* engine
-        .dispatch({
-          ...message("steer"),
-          dispatchMode: { type: "steer_active", targetRunId: delivery.targetRunId },
-        })
-        .pipe(
-          Effect.as(true),
-          Effect.catchCause((cause) =>
-            Effect.logInfo("autoreview findings could not steer; queueing them", {
-              threadId: found.parent.id,
-              cause,
-            }).pipe(Effect.as(false)),
-          ),
-        );
-      if (steered) return sent;
-    }
-    // Not steerable now: join the findings already waiting, so the queue holds one message.
+    // Steering can fall back to the queue, so join waiting findings before trying another send.
     const fresh = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
     const waiting = queuedFindingsRun(fresh.runs);
-    if (waiting !== undefined) {
+    const target =
+      delivery.type === "steer"
+        ? fresh.runs.find((run) => run.id === delivery.targetRunId)
+        : undefined;
+    if (
+      waiting !== undefined &&
+      (target === undefined || (!waiting.queueHeld && waiting.ordinal > target.ordinal))
+    ) {
       const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
         messageIds: [waiting.userMessageId],
       });
@@ -603,6 +595,23 @@ export const make = (port: AutoreviewPort) => {
           Effect.catchCause(() => Effect.succeed(false)),
         );
       if (joined) return sent;
+    }
+    if (delivery.type === "steer") {
+      const steered = yield* engine
+        .dispatch({
+          ...message("steer"),
+          dispatchMode: { type: "steer_active", targetRunId: delivery.targetRunId },
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catchCause((cause) =>
+            Effect.logInfo("autoreview findings could not steer; queueing them", {
+              threadId: found.parent.id,
+              cause,
+            }).pipe(Effect.as(false)),
+          ),
+        );
+      if (steered) return sent;
     }
     yield* engine.dispatch({ ...message("queue"), dispatchMode: { type: "queue_after_active" } });
     return sent;
@@ -932,33 +941,42 @@ export const make = (port: AutoreviewPort) => {
     );
 
   const stop: AutoreviewService["Service"]["stop"] = (input) =>
-    lock.withPermits(1)(Effect.uninterruptible(Effect.gen(function* () {
-      const thread = yield* projections.getThread(input.threadId).pipe(
-        Effect.mapError(failed("Unable to load the reviewed thread")),
-      );
-      const current = thread.autoreviewers ?? [];
-      const reviewer = current.find((entry) => entry.threadId === input.reviewerThreadId);
-      if (reviewer === undefined) {
-        return yield* new AutoreviewError({
-          reason: "not_found",
-          detail: "This autoreviewer is no longer attached. Refresh the thread.",
-        });
-      }
-      if (port.stopReviewerWork === undefined) {
-        return yield* new AutoreviewError({ reason: "failed", detail: "Human reviewer control is unavailable." });
-      }
-      // Keep the attachment on failure so the same selected reviewer can be retried.
-      // Holding the shared reactor lock prevents new batches between cancellation and detach.
-      yield* port.stopReviewerWork({ commandId: input.commandId, threadId: input.threadId, reviewer }).pipe(
-        Effect.mapError(failed("Unable to stop the autoreviewer")),
-      );
-      yield* dropPendingFindings(input.commandId, input.threadId, [reviewer]).pipe(
-        Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
-      );
-      yield* setReviewers(input.commandId, input.threadId, current.filter((entry) => entry !== reviewer)).pipe(
-        Effect.mapError(failed("Unable to detach the stopped autoreviewer")),
-      );
-    })));
+    lock.withPermits(1)(
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          const thread = yield* projections
+            .getThread(input.threadId)
+            .pipe(Effect.mapError(failed("Unable to load the reviewed thread")));
+          const current = thread.autoreviewers ?? [];
+          const reviewer = current.find((entry) => entry.threadId === input.reviewerThreadId);
+          if (reviewer === undefined) {
+            return yield* new AutoreviewError({
+              reason: "not_found",
+              detail: "This autoreviewer is no longer attached. Refresh the thread.",
+            });
+          }
+          if (port.stopReviewerWork === undefined) {
+            return yield* new AutoreviewError({
+              reason: "failed",
+              detail: "Human reviewer control is unavailable.",
+            });
+          }
+          // Keep the attachment on failure so the same selected reviewer can be retried.
+          // Holding the shared reactor lock prevents new batches between cancellation and detach.
+          yield* port
+            .stopReviewerWork({ commandId: input.commandId, threadId: input.threadId, reviewer })
+            .pipe(Effect.mapError(failed("Unable to stop the autoreviewer")));
+          yield* dropPendingFindings(input.commandId, input.threadId, [reviewer]).pipe(
+            Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
+          );
+          yield* setReviewers(
+            input.commandId,
+            input.threadId,
+            current.filter((entry) => entry !== reviewer),
+          ).pipe(Effect.mapError(failed("Unable to detach the stopped autoreviewer")));
+        }),
+      ),
+    );
 
   const list: AutoreviewService["Service"]["list"] = Effect.fn("AutoreviewService.list")(
     function* (threadId) {
