@@ -214,9 +214,13 @@ export const make = Effect.gen(function* () {
       ([key, group]) =>
         Effect.gen(function* () {
           const first = group[0]!;
-          const project = projects.get(first.projectId);
-          if (project === undefined) return finishBackfill(group);
+          const storedProject = projects.get(first.projectId);
+          if (storedProject === undefined) return finishBackfill(group);
           if (scheduled.has(key) && !scheduledLookups.has(key)) return;
+          const project = {
+            ...storedProject,
+            workspaceRoot: first.workspaceRoot ?? storedProject.workspaceRoot,
+          };
           const { project: resolvedProject, repository } =
             yield* resolveProjectForPullRequestDiscovery(project, repositoryIdentities, {
               refresh: request.refresh,
@@ -355,7 +359,7 @@ export const make = Effect.gen(function* () {
               Effect.gen(function* () {
                 // Discovery yields to network I/O; recheck the project at commit to reject deleted projects or changed checkouts.
                 const currentProject = yield* projectStore.getShell(project.id);
-                if (!projectWorkspaceMatchesSnapshot(currentProject, project.workspaceRoot)) {
+                if (!projectWorkspaceMatchesSnapshot(currentProject, storedProject.workspaceRoot)) {
                   return failBackfill([thread]);
                 }
                 const uuid = yield* random.uuidV4();

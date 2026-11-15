@@ -392,6 +392,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
   it.effect.each([
     {
       worktree: "a linked worktree",
+      workspaceRoot: null,
       existingPaths: ["/workspace/worktree", "/workspace/worktree/.git"],
       unreadablePaths: [],
       cwd: "/workspace/worktree",
@@ -399,25 +400,42 @@ describe("ThreadPullRequestServiceV2 reads", () => {
     // A folder that outlived its .git makes git fail with not_a_repository.
     {
       worktree: "a folder without .git",
+      workspaceRoot: null,
       existingPaths: ["/workspace/worktree"],
       unreadablePaths: [],
       cwd: "/workspace/project",
     },
     {
       worktree: "a folder whose .git cannot be checked",
+      workspaceRoot: null,
       existingPaths: ["/workspace/worktree"],
       unreadablePaths: ["/workspace/worktree/.git"],
       cwd: "/workspace/worktree",
     },
     {
       worktree: "a missing folder",
+      workspaceRoot: null,
       existingPaths: [],
       unreadablePaths: [],
       cwd: "/workspace/project",
     },
+    {
+      worktree: "a linked worktree with a workspace override",
+      workspaceRoot: "/workspace/override",
+      existingPaths: ["/workspace/worktree", "/workspace/worktree/.git"],
+      unreadablePaths: [],
+      cwd: "/workspace/worktree",
+    },
+    {
+      worktree: "a missing folder with a workspace override",
+      workspaceRoot: "/workspace/override",
+      existingPaths: [],
+      unreadablePaths: [],
+      cwd: "/workspace/override",
+    },
   ] as const)(
     "looks up a branch whose worktree is $worktree in $cwd",
-    ({ existingPaths, unreadablePaths, cwd }) =>
+    ({ existingPaths, unreadablePaths, cwd, workspaceRoot }) =>
       Effect.gen(function* () {
         const thread = {
           ...threadShell("worktree-thread"),
@@ -425,6 +443,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           settledAt: NOW,
           branch: "feature/worktree",
           worktreePath: "/workspace/worktree",
+          workspaceRoot: workspaceRoot ?? undefined,
         };
         const project: OrchestrationProjectShell = {
           id: thread.projectId,
@@ -438,6 +457,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
         const activation = yield* Deferred.make<void>();
         const sweepStarted = yield* Deferred.make<void>();
         const lookupCwds: Array<string> = [];
+        const identityRoots: Array<string> = [];
         const dependencies = Layer.mergeAll(
           Layer.mock(Orchestrator.OrchestratorV2)({
             streamDomainEvents: Stream.never,
@@ -466,17 +486,20 @@ describe("ThreadPullRequestServiceV2 reads", () => {
             notifyLinkedThreadsChanged: Effect.void,
           }),
           Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
-            resolve: () =>
-              Effect.succeed({
-                canonicalKey: "github.com/acme/project",
-                locator: {
-                  source: "git-remote" as const,
-                  remoteName: "origin",
-                  remoteUrl: "git@github.com:acme/project.git",
-                },
-                provider: SourceControlProviderKind.make("github"),
-                owner: "acme",
-                name: "project",
+            resolve: (root) =>
+              Effect.sync(() => {
+                identityRoots.push(root);
+                return {
+                  canonicalKey: "github.com/acme/project",
+                  locator: {
+                    source: "git-remote" as const,
+                    remoteName: "origin",
+                    remoteUrl: "git@github.com:acme/project.git",
+                  },
+                  provider: SourceControlProviderKind.make("github"),
+                  owner: "acme",
+                  name: "project",
+                };
               }),
           }),
           Layer.mock(BackgroundPolicy.BackgroundPolicy)({}),
@@ -509,6 +532,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
         }).pipe(Effect.provide(dependencies));
 
         expect(lookupCwds).toEqual([cwd]);
+        expect(identityRoots).toEqual([workspaceRoot ?? project.workspaceRoot]);
       }),
   );
 
@@ -770,7 +794,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
     { state: "merged", sameBranch: true, workspaceRoot: null },
   ] as const)(
     "restores a $state automatic PR only for its own branch (sameBranch=$sameBranch)",
-    ({ state, sameBranch }) =>
+    ({ state, sameBranch, workspaceRoot }) =>
       Effect.gen(function* () {
         const savedReference = {
           projectId: ProjectId.make("project-1"),
@@ -783,6 +807,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           branch: "main",
           branchPullRequest: savedReference,
           linkedPullRequest: savedReference,
+          workspaceRoot: workspaceRoot ?? undefined,
         };
         const project: OrchestrationProjectShell = {
           id: thread.projectId,
