@@ -2349,7 +2349,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     const includeDivergence = options?.includeDivergence !== false;
     // Hidden untracked files could not be committed; `all` stays as configured.
     const untrackedFilesHidden = untrackedFilesHiddenByConfig(
-      yield* readConfigValue(cwd, "status.showUntrackedFiles").pipe(
+      yield* readConfigValueFresh(cwd, "status.showUntrackedFiles").pipe(
         Effect.orElseSucceed(() => null),
       ),
     );
