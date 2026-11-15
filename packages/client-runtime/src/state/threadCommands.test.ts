@@ -157,7 +157,7 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (optio
       ),
     ),
   );
-  const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
+  const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make<OrchestrationV2ShellSnapshot | null>(SNAPSHOT));
   const pins =
     options?.deviceId === undefined
       ? undefined

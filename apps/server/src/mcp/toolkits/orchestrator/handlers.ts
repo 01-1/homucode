@@ -209,7 +209,6 @@ const handlers = {
             title,
             schedule,
             enabled,
-            freshSession,
             bindToCurrentThread,
             freshSession,
             modelSelection,

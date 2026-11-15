@@ -3024,7 +3024,7 @@ const make = Effect.gen(function* () {
         const { scope, parent } = yield* loadThreadCaller(callerScope, "autoreview");
         const callerThreadId = scope.thread.threadId;
         const threadId = input.threadId ?? callerThreadId;
-        const reviewed = threadId === callerThreadId ? parent : yield* loadProjection(threadId);
+        const reviewed = threadId === callerThreadId ? parent : yield* loadCallerRecords(threadId, ["runs"]);
         if (
           threadId !== callerThreadId &&
           (reviewed.thread.lineage.parentThreadId !== callerThreadId ||

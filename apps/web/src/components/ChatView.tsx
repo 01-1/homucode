@@ -1264,7 +1264,7 @@ export default function ChatView(props: ChatViewProps) {
     ?.environmentId;
   const gitCwd = activeProject
     ? projectScriptCwd({
-        project: { cwd: activeProject.workspaceRoot },
+        project: { cwd: activeThread?.workspaceRoot ?? activeProject.workspaceRoot },
         worktreePath: activeThread?.worktreePath ?? null,
       })
     : null;
@@ -1662,12 +1662,6 @@ export default function ChatView(props: ChatViewProps) {
     turnDiffSummaries.at(-1)?.completedAt ?? null,
   );
 
-  const gitCwd = activeProject
-    ? projectScriptCwd({
-        project: { cwd: activeThread?.workspaceRoot ?? activeProject.workspaceRoot },
-        worktreePath: activeThread?.worktreePath ?? null,
-      })
-    : null;
   const gitStatusCwd = activeThread?.worktreePath ?? activeThread?.workspaceRoot ?? gitCwd;
   const gitStatusAtom =
     gitStatusCwd === null

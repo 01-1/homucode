@@ -137,6 +137,7 @@ const layerTest = Layer.mergeAll(
         }),
       request: () => Effect.void,
       readRepositoryIdentity: () => Effect.succeed(null),
+      refreshRepositoryIdentity: () => Effect.void,
       getAvailable: () =>
         Effect.succeed({
           repositoryIdentity: null,

@@ -3924,6 +3924,8 @@ describe("OrchestratorMcpService provider resolution", () => {
                   threadId: ThreadId.make("thread:scheduled-base"),
                   threadMode: "continue",
                 },
+                undefined,
+                undefined,
                 inputs,
               ),
             ),
