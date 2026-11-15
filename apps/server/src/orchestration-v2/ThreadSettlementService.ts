@@ -779,10 +779,14 @@ export const make = Effect.gen(function* () {
   const processEvent = (event: OrchestrationV2DomainEvent) => {
     switch (event.type) {
       case "thread.settled":
-        return cleanUpSettledThread(event.threadId).pipe(Effect.andThen(enqueueFullSweep()));
+        return cleanUpSettledThread(event.threadId).pipe(
+          Effect.andThen(backgroundGitEnabled ? enqueueFullSweep() : Effect.void),
+        );
       case "thread.archived":
       case "thread.deleted":
-        return enqueueFullSweep();
+        return backgroundGitEnabled ? enqueueFullSweep() : Effect.void;
+      case "runtime-request.updated":
+        return event.payload.status !== "pending" ? workEnded(event.threadId) : Effect.void;
       case "thread.pull-request-link-updated":
       case "thread.pull-request-synced":
       case "provider-session.detached":
