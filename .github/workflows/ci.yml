@@ -25,7 +25,7 @@ jobs:
   # open: if the diff cannot be resolved, everything runs.
   changes:
     name: Changes
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       typecheck: ${{ steps.detect.outputs.typecheck }}
@@ -67,7 +67,7 @@ jobs:
       contents: read
       id-token: write
     name: Lint
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -125,7 +125,7 @@ jobs:
     name: Build and Typecheck
     needs: changes
     if: ${{ !cancelled() && (needs.changes.outputs.build != 'false' || needs.changes.outputs.typecheck != 'false') }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -286,7 +286,7 @@ jobs:
     name: Test ${{ matrix.shard }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test != 'false' }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -382,7 +382,7 @@ jobs:
     name: Test Web ${{ matrix.shard }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test_web != 'false' }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -446,7 +446,7 @@ jobs:
       contents: read
       id-token: write
     name: Test Server ${{ matrix.shard }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     # Shards take 2-5 minutes. When the shared task cache throttles reads, each
     # failed fetch stalls vp for 15-90s, which pushed shards past 10 minutes.
     timeout-minutes: 20
@@ -578,7 +578,7 @@ jobs:
     name: Rust
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.rust != 'false' }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -645,7 +645,7 @@ jobs:
     name: Release Smoke
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.release_smoke != 'false' }}
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -685,7 +685,7 @@ jobs:
         mobile_native_static_analysis,
         release_smoke,
       ]
-    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - name: Require every job to pass
