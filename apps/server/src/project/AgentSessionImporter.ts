@@ -12,6 +12,7 @@ import {
   MessageId,
   ProjectId,
   ProviderDriverKind,
+  type ProviderInstanceId,
   ThreadId,
   TurnItemId,
   ThreadTranscriptImportError,
@@ -599,6 +600,21 @@ const make = Effect.gen(function* () {
     return yield* commit(messages);
   });
 
+  const firstAvailableModel = Effect.fn("AgentSessionImporter.firstAvailableModel")(function* (
+    instances: ReadonlyArray<ProviderInstanceId>,
+  ) {
+    for (const instanceId of instances) {
+      if (registry.getMetadata === undefined) break;
+      const metadata = yield* Effect.option(registry.getMetadata(instanceId));
+      const model =
+        Option.isSome(metadata) && metadata.value.enabled
+          ? DEFAULT_MODEL_BY_PROVIDER[metadata.value.driver]
+          : undefined;
+      if (model !== undefined) return { instanceId, model };
+    }
+    return yield* Effect.fail(new Error("No provider on this environment can run the thread."));
+  });
+
   /**
    * Creates a thread holding another environment's conversation as run-less history. The
    * `v1_import` origin hands that history to the agent on the thread's first turn.
@@ -623,7 +639,7 @@ const make = Effect.gen(function* () {
         const modelSelection = instances.includes(input.modelSelection.instanceId)
           ? input.modelSelection
           : (resolveProjectSettings(yield* settingsService.getSettings, project.id, project)
-              .settings.defaultModelSelection ?? input.modelSelection);
+              .settings.defaultModelSelection ?? (yield* firstAvailableModel(instances)));
         const threadId = yield* idAllocator.allocate.thread({ projectId: input.projectId });
         const now = yield* DateTime.now;
         const createdAt =

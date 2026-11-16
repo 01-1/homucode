@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
+  DEFAULT_MODEL_BY_PROVIDER,
   type AgentSessionSource,
   type ServerSettingsError,
   EventId,
@@ -267,6 +268,13 @@ const makeImporter = Effect.fn(function* (
           }),
           Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
             list: () => Effect.succeed([CODEX_MODEL_SELECTION.instanceId]),
+            getMetadata: () =>
+              Effect.succeed({
+                driver: ProviderDriverKind.make("codex"),
+                continuationKey: "codex",
+                enabled: true,
+                capabilities: {} as never,
+              }),
             ...(getAdapter === undefined ? {} : { get: getAdapter }),
           }),
           Layer.succeed(
@@ -1004,6 +1012,17 @@ it.effect("imports another environment's transcript as history the first turn re
     expect((yield* projections.getThread(fallback.threadId)).modelSelection).toEqual(
       CODEX_MODEL_SELECTION,
     );
+    // With no default either, it takes an enabled provider here.
+    const unconfigured = yield* (yield* makeImporter([])).importThreadTranscript({
+      projectId,
+      title: "Moved thread",
+      modelSelection: CLAUDE_MODEL_SELECTION,
+      messages: [],
+    });
+    expect((yield* projections.getThread(unconfigured.threadId)).modelSelection).toEqual({
+      instanceId: CODEX_MODEL_SELECTION.instanceId,
+      model: DEFAULT_MODEL_BY_PROVIDER.codex,
+    });
   }).pipe(Effect.scoped, Effect.provide(persistence)),
 );
 
