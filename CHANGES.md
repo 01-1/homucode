@@ -55,6 +55,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 - **Desktop on Linux.** Thread links reuse the pinned AppImage cache, and URL launches request Wayland activation.
 - **Undo a staged build.** On AppImage installs, Settings → About shows the build the next start loads, with an Undo button that renames that AppImage to `.off` so the one staged before it loads instead. The toast after Undo offers Redo.
 - **Android undo notice.** The thread undo notice shows at the top of the screen on Android.
+- **Find in thread on mobile.** The magnifying glass in a thread's header bar opens a find bar that searches the thread's messages and plans, shows the match count, and steps through matches newest first, scrolling to each one and loading earlier history when needed. Upstream has find in thread on web and desktop only.
 
 ## Add-ons
 
