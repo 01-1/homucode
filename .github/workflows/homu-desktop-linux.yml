@@ -1,0 +1,113 @@
+name: Homu desktop (Linux)
+
+# Publishes the Linux AppImage of every main commit as this fork's latest
+# GitHub release. The build bakes this repository in as its update feed, so an
+# installed build offers the next one in Settings → Updates.
+
+on:
+  push:
+    branches: [main]
+  # A change to this build is built, not published, on its PR.
+  pull_request:
+    paths: [.github/workflows/homu-desktop-linux.yml]
+  workflow_dispatch:
+
+# A newer main replaces a waiting run; a running one finishes so the latest
+# release never moves back to an older commit.
+concurrency:
+  group: homu-desktop-linux-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish AppImage
+    if: github.repository == 'homura-ai/homucode'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # Patch is bumped so a build always outranks the plain upstream version it
+      # sits on (0.1.9-homu.N would sort below 0.1.9); the run number orders builds.
+      - name: Resolve version
+        id: version
+        run: |
+          base=$(jq -r .version apps/desktop/package.json)
+          IFS=. read -r major minor patch <<< "$base"
+          version="$major.$minor.$((patch + 1))-homu.$GITHUB_RUN_NUMBER"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: ./.github/actions/setup-apt-mirrors
+
+      - name: Install Linux desktop build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config libgtk-3-0t64 libnss3 libasound2t64 libgbm1
+          if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get install -y imagemagick
+          fi
+
+      # .env.example holds the public T3 Connect identifiers official builds bake in.
+      - name: Load public T3 Connect config
+        run: grep -E '^T3CODE_(CLERK_PUBLISHABLE_KEY|CLERK_JWT_TEMPLATE|CLERK_CLI_OAUTH_CLIENT_ID|RELAY_URL)=' .env.example >> "$GITHUB_ENV"
+
+      - name: Align package versions
+        run: node scripts/update-release-package-versions.ts "${{ steps.version.outputs.version }}"
+
+      # GITHUB_REPOSITORY makes the build write this repository into app-update.yml
+      # and emit latest-linux.yml.
+      - name: Build AppImage
+        run: |
+          vp run dist:desktop:artifact \
+            --platform linux --target AppImage --arch x64 \
+            --build-version "${{ steps.version.outputs.version }}" --verbose
+
+      - name: Check update feed
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          grep -qx "version: $VERSION" release/latest-linux.yml
+          cat release/latest-linux.yml
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE"/release/*.AppImage --appimage-extract >/dev/null
+          cat squashfs-root/resources/app-update.yml
+          grep -qx "owner: homura-ai" squashfs-root/resources/app-update.yml
+          grep -qx "repo: homucode" squashfs-root/resources/app-update.yml
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(release/*.AppImage release/*.blockmap release/latest-linux.yml)
+          # A rerun of an older run must not take "latest" back from a newer build.
+          current=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          current=${current#v}
+          latest=true
+          if [[ -n "$current" && "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; then
+            latest=false
+          fi
+          gh release create "v$VERSION" "${files[@]}" \
+            --target "$GITHUB_SHA" \
+            --title "Homu $VERSION (${GITHUB_SHA::12})" \
+            --notes "Linux AppImage built from $GITHUB_SHA on main." \
+            --latest="$latest"
