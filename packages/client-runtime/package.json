@@ -586,6 +586,10 @@
     "./provider-instance-ids": {
       "types": "./src/providerInstanceIds.ts",
       "default": "./src/providerInstanceIds.ts"
+    },
+    "./feature-offers": {
+      "types": "./src/featureOffers.ts",
+      "default": "./src/featureOffers.ts"
     }
   },
   "scripts": {

@@ -19,6 +19,7 @@ import {
   ForwardCompatibleOptional,
   OmittedWhenNull,
   ProjectId,
+  ScheduledTaskId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -1400,6 +1401,18 @@ export const SyncedClientSettings = Schema.Struct({
 });
 export type SyncedClientSettings = typeof SyncedClientSettings.Type;
 
+export const DUET_THREAD_PROMPT_MAX_LENGTH = 500;
+export const DuetThreadSettings = Schema.Struct({
+  /** An emoji or a short glyph; null shows the default icon. */
+  icon: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(16))).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  prompt: TrimmedString.check(Schema.isMaxLength(DUET_THREAD_PROMPT_MAX_LENGTH)).pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+  ),
+});
+export type DuetThreadSettings = typeof DuetThreadSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   syncedClientSettings: SyncedClientSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({ revision: 0, values: {} })),
@@ -1530,6 +1543,21 @@ export const ServerSettings = Schema.Struct({
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
   preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Duet: a focused Chat + Tasks view locked to one project. */
+  duetEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  duetProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  /** Per-thread Duet look and brief. The agent sees the thread title and this prompt each turn. */
+  duetThreads: Schema.Record(ThreadId, DuetThreadSettings).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /** The scheduled task that sends the morning brief into a Duet thread. */
+  duetMorningBriefTaskId: Schema.NullOr(ScheduledTaskId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  /** Opt-in features this user has already been offered, by `FEATURE_OFFERS` id. */
+  featureOffersSeen: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /** Beta: Claude and Codex predict the next prompt after completed turns. Codex follows a change at once; open Claude threads after they restart. */
   promptSuggestionsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1978,6 +2006,11 @@ export const ServerSettingsPatch = Schema.Struct({
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
+  duetEnabled: Schema.optionalKey(Schema.Boolean),
+  duetProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
+  duetThreads: Schema.optionalKey(Schema.Record(ThreadId, DuetThreadSettings)),
+  duetMorningBriefTaskId: Schema.optionalKey(Schema.NullOr(ScheduledTaskId)),
+  featureOffersSeen: Schema.optionalKey(Schema.Array(Schema.String)),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),
