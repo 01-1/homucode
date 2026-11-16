@@ -307,7 +307,9 @@ function SnoozePresetList(props: {
         );
       })}
       <p className="text-xs text-muted-foreground">
-        {menuOrder.length === 0 ? "Menus offer only Custom…" : `Menu now: ${menuOrder.join(" · ")}`}
+        {menuOrder.length === 0
+          ? "Menus offer only Custom…"
+          : `Menu now: ${["Custom…", ...menuOrder].join(" · ")}`}
       </p>
       <div>
         <Button

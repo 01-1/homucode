@@ -871,12 +871,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   });
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
+      { id: "snooze:custom", title: "Custom…" },
       ...snoozePresets.map((preset) => ({
         id: `snooze:${preset.id}`,
         title: preset.label,
         subtitle: preset.whenLabel,
       })),
-      { id: "snooze:custom", title: "Custom…" },
     ],
     [snoozePresets],
   );

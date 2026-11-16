@@ -2953,18 +2953,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     label: `Snooze (${count})`,
                     disabled: !canOperateThreads(selectedThreads),
                     children: [
-                      ...snoozePresets.map((preset) => ({
-                        id: `snooze:${preset.id}`,
-                        label: preset.label,
-                        detail: preset.whenLabel,
-                        disabled: !canOperateThreads(selectedThreads),
-                      })),
                       {
                         id: "snooze:custom",
                         label: "Custom…",
-                        separatorBefore: snoozePresets.length > 0,
                         disabled: !canOperateThreads(selectedThreads),
                       },
+                      ...snoozePresets.map((preset, index) => ({
+                        id: `snooze:${preset.id}`,
+                        label: preset.label,
+                        detail: preset.whenLabel,
+                        separatorBefore: index === 0,
+                        disabled: !canOperateThreads(selectedThreads),
+                      })),
                     ],
                   },
                 ]
