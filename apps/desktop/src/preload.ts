@@ -104,6 +104,17 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  configureDuet: (settings) => ipcRenderer.invoke(IpcChannels.CONFIGURE_DUET_CHANNEL, settings),
+  setDuetWindowMode: (mode) => ipcRenderer.invoke(IpcChannels.DUET_WINDOW_MODE_CHANNEL, mode),
+  isDuetWindow: () => process.argv.includes("--t3-duet-window"),
+  onDuetNavigate: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, target: Parameters<typeof listener>[0]) =>
+      listener(target);
+    ipcRenderer.on(IpcChannels.DUET_NAVIGATE_CHANNEL, handler);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.DUET_NAVIGATE_CHANNEL, handler);
+    };
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

@@ -1402,9 +1402,13 @@ export const SyncedClientSettings = Schema.Struct({
 export type SyncedClientSettings = typeof SyncedClientSettings.Type;
 
 export const DUET_THREAD_PROMPT_MAX_LENGTH = 500;
+export const DEFAULT_DUET_ICON = "lucide:message-circle";
 export const DuetThreadSettings = Schema.Struct({
-  /** An emoji or a short glyph; null shows the default icon. */
-  icon: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(16))).pipe(
+  color: Schema.optionalKey(
+    Schema.NullOr(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
+  ),
+  /** A Lucide icon id or emoji; null shows the default icon. */
+  icon: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(64))).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   prompt: TrimmedString.check(Schema.isMaxLength(DUET_THREAD_PROMPT_MAX_LENGTH)).pipe(
@@ -1544,9 +1548,10 @@ export const ServerSettings = Schema.Struct({
   /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
   preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Duet: a focused Chat + Tasks view locked to one project. */
+  duetDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   duetEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   duetProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
-  /** Per-thread Duet look and brief. The agent sees the thread title and this prompt each turn. */
+  /** Per-thread Duet look and brief. The agent sees the icon, thread title and prompt each turn. */
   duetThreads: Schema.Record(ThreadId, DuetThreadSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -2006,6 +2011,7 @@ export const ServerSettingsPatch = Schema.Struct({
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
+  duetDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),
   duetEnabled: Schema.optionalKey(Schema.Boolean),
   duetProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
   duetThreads: Schema.optionalKey(Schema.Record(ThreadId, DuetThreadSettings)),

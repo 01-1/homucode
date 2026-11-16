@@ -1,4 +1,6 @@
 import { SettingsSyncDialogHost } from "../components/SettingsSyncDialog";
+import { DesktopDuetCoordinator } from "../components/desktop/DesktopDuetCoordinator";
+import { FeatureOffersDialog } from "../components/onboarding/FeatureOffers";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -182,6 +184,8 @@ function RootRouteBranch() {
   const appHosts = (
     <>
       {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
+      <FeatureOffersDialog />
+      {isElectron ? <DesktopDuetCoordinator /> : null}
       {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
         <DesktopWebLinkCoordinator />
       ) : null}

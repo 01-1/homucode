@@ -1,3 +1,4 @@
+import * as DesktopDuet from "../window/DesktopDuet.ts";
 import { createClerkBridge } from "@clerk/electron";
 import * as NodeURL from "node:url";
 import { storage } from "@clerk/electron/storage";
@@ -60,6 +61,7 @@ export class DesktopClerk extends Context.Service<
       never,
       | ElectronApp.ElectronApp
       | ElectronWindow.ElectronWindow
+      | DesktopDuet.DesktopDuet
       | DesktopWebLinks.DesktopWebLinks
       | Scope.Scope
     >;
@@ -167,6 +169,7 @@ export const make = Effect.gen(function* () {
       const electronApp = yield* ElectronApp.ElectronApp;
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       const webLinks = yield* DesktopWebLinks.DesktopWebLinks;
+      const duet = yield* DesktopDuet.DesktopDuet;
       const context = yield* Effect.context<ElectronWindow.ElectronWindow>();
       const runPromise = Effect.runPromiseWith(context);
 
@@ -240,6 +243,14 @@ export const make = Effect.gen(function* () {
         void runPromise(webLinks.receive(NodeURL.pathToFileURL(path).href));
       });
       handleSecondInstance = (argv) => {
+        if (argv?.includes("--duet")) {
+          void runPromise(
+            duet.open.pipe(
+              Effect.catch((error) => Effect.logWarning("Could not open Duet", error)),
+            ),
+          );
+          return;
+        }
         if (
           argv?.some(
             (value) =>

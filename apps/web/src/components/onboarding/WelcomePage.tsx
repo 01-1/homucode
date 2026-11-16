@@ -1,3 +1,6 @@
+import { FEATURE_OFFERS, featureOfferSettingsPatch } from "@t3tools/client-runtime/feature-offers";
+import { FeatureOfferChoices } from "./FeatureOffers";
+import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -158,6 +161,12 @@ export function WelcomePage({
     setImportSelectionState(next);
     storeSelection(next);
   };
+  const offerSettings = useEnvironmentSettings(environmentId);
+  const [selectedOffers, setSelectedOffers] = useState<ReadonlySet<string>>(new Set());
+  const saveOffers = useAtomCommand(serverEnvironment.updateSettings);
+  const canSaveOffers = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId),
+  );
   const [isImporting, setIsImporting] = useState(false);
   // True from Start until the landing; leaving earlier would drop the import or the landing.
   const holdPageRef = useRef(false);
@@ -191,7 +200,18 @@ export function WelcomePage({
     }
 
     holdPageRef.current = true;
-    const completion = completeOnboarding()
+    const completion = (async () => {
+      if (canSaveOffers) {
+        const saved = await saveOffers({
+          environmentId,
+          input: {
+            patch: featureOfferSettingsPatch(offerSettings, FEATURE_OFFERS, selectedOffers),
+          },
+        });
+        if (saved._tag !== "Success") throw new Error("Could not save optional features.");
+      }
+      await completeOnboarding();
+    })()
       .then(async () => {
         if (completionErrorToastIdRef.current !== null) {
           toastManager.close(completionErrorToastIdRef.current);
@@ -200,6 +220,18 @@ export function WelcomePage({
         // Release before onDone so its own navigation is not blocked.
         holdPageRef.current = false;
         await onDone(projectRef);
+        if (selectedOffers.has("quick-model") && !offerSettings.defaultModelSelection) {
+          toastManager.add({
+            type: "info",
+            title: "Choose your quick model",
+            description: (
+              <Link to="/settings/threads" search={{ target: "quick-model" }}>
+                Open Quick model settings
+              </Link>
+            ),
+            timeout: 0,
+          });
+        }
         if (!keepChoicesRef.current) setImportSelection(null);
         if (importWarning) {
           toastManager.add({
@@ -290,6 +322,13 @@ export function WelcomePage({
                 projectImport={projectImport}
                 isImporting={isImporting}
               />
+              <WelcomeSection title="Optional features">
+                <FeatureOfferChoices
+                  selected={selectedOffers}
+                  onChange={setSelectedOffers}
+                  disabled={!canSaveOffers || isImporting}
+                />
+              </WelcomeSection>
               {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

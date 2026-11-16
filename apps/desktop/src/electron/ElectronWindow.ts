@@ -113,8 +113,9 @@ export class ElectronWindow extends Context.Service<
     /** Auxiliary windows are never returned as the main-or-first fallback. */
     readonly create: (
       options: Electron.BrowserWindowConstructorOptions,
-      behavior?: { readonly auxiliary?: boolean },
+      behavior?: { readonly auxiliary?: boolean; readonly app?: boolean },
     ) => Effect.Effect<Electron.BrowserWindow, ElectronWindowCreateError>;
+    readonly appWindows: Effect.Effect<readonly Electron.BrowserWindow[]>;
     readonly main: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly currentMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly focusedMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
@@ -147,6 +148,7 @@ export const make = Effect.gen(function* () {
   const captureRevealWindows = new Set<number>();
   yield* Effect.addFinalizer(() => Effect.sync(() => windowsForegroundFocus?.close()));
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  const appWindows = new WeakSet<Electron.BrowserWindow>();
   const auxiliaryWindows = new WeakSet<Electron.BrowserWindow>();
   const titleBarOverlayWindows = new WeakSet<Electron.BrowserWindow>();
 
@@ -244,6 +246,7 @@ export const make = Effect.gen(function* () {
       return Effect.try({
         try: () => {
           const window = new Electron.BrowserWindow(options);
+          if (behavior?.app === true) appWindows.add(window);
           if (behavior?.auxiliary === true) auxiliaryWindows.add(window);
           if (options.titleBarOverlay !== undefined && options.titleBarOverlay !== false) {
             titleBarOverlayWindows.add(window);
@@ -253,6 +256,11 @@ export const make = Effect.gen(function* () {
         catch: (cause) => new ElectronWindowCreateError({ options: diagnosticOptions, cause }),
       });
     }),
+    appWindows: listWindows.pipe(
+      Effect.map((windows) =>
+        windows.filter((window) => appWindows.has(window) && !window.isDestroyed()),
+      ),
+    ),
     main: liveMain,
     currentMainOrFirst,
     focusedMainOrFirst,

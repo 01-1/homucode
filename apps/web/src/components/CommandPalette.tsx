@@ -1,3 +1,4 @@
+import { duetDestinationEnvironmentIdAtom } from "../duet";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -416,6 +417,7 @@ function OpenCommandPaletteDialog(props: {
   readonly initialContext: CommandPaletteReturnContext | undefined;
 }) {
   const navigate = useNavigate();
+  const duetEnvironmentId = useAtomValue(duetDestinationEnvironmentIdAtom);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { openChildSearch, setOpen } = props;
   // Keyed by palette session: the intent and restored search only seed this
@@ -1686,6 +1688,18 @@ function OpenCommandPaletteDialog(props: {
       );
     },
   });
+
+  if (duetEnvironmentId)
+    actionItems.push({
+      kind: "action",
+      value: "action:duet",
+      title: "Open Duet",
+      searchTerms: ["duet", "chat", "tasks"],
+      icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/duet", search: { environmentId: duetEnvironmentId! } });
+      },
+    });
 
   actionItems.push({
     kind: "action",

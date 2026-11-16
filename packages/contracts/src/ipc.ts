@@ -1074,7 +1074,28 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DesktopDuetSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  launcherEnabled: Schema.Boolean,
+  environmentId: Schema.NullOr(Schema.String),
+});
+export type DesktopDuetSettings = typeof DesktopDuetSettings.Type;
+
+export const DesktopDuetWindowMode = Schema.Struct({
+  mode: Schema.Literals(["split", "merged"]),
+  environmentId: Schema.optionalKey(Schema.String),
+  threadId: Schema.optionalKey(Schema.String),
+  tab: Schema.optionalKey(Schema.Literals(["chat", "tasks"])),
+});
+export type DesktopDuetWindowMode = typeof DesktopDuetWindowMode.Type;
+
 export interface DesktopBridge {
+  configureDuet?: (settings: DesktopDuetSettings) => Promise<void>;
+  setDuetWindowMode?: (input: DesktopDuetWindowMode) => Promise<void>;
+  isDuetWindow?: () => boolean;
+  onDuetNavigate?: (
+    listener: (target: Omit<DesktopDuetWindowMode, "mode"> & { view: "duet" | "code" }) => void,
+  ) => () => void;
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

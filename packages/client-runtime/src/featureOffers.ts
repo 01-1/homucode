@@ -36,9 +36,24 @@ export function unseenFeatureOffers(
   return FEATURE_OFFERS.filter((offer) => !seen.has(offer.id));
 }
 
-export function featureOffersSeenAfter(
+function featureOffersSeenAfter(
   settings: Pick<ServerSettings, "featureOffersSeen">,
   offered: ReadonlyArray<FeatureOffer>,
 ): ReadonlyArray<string> {
   return [...new Set([...settings.featureOffersSeen, ...offered.map((offer) => offer.id)])];
+}
+
+export function featureOfferSettingsPatch(
+  settings: Pick<ServerSettings, "featureOffersSeen" | "defaultModelSelection">,
+  offered: ReadonlyArray<FeatureOffer>,
+  selected: ReadonlySet<string>,
+) {
+  return {
+    featureOffersSeen: featureOffersSeenAfter(settings, offered),
+    ...(selected.has("duet") ? { duetEnabled: true } : {}),
+    ...(selected.has("autoreview") ? { autoreviewEnabled: true } : {}),
+    ...(selected.has("quick-model") && settings.defaultModelSelection
+      ? { quickModelSelection: settings.defaultModelSelection }
+      : {}),
+  };
 }

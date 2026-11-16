@@ -1,3 +1,4 @@
+import { readDuetContext, startDuetThread } from "../duet";
 import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 
@@ -51,7 +52,12 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
     handleNewThread,
   });
 
-  const readRouteTarget = () => resolveThreadRouteTarget(router.state.matches.at(-1)?.params ?? {});
+  const readRouteTarget = () => {
+    const duet = readDuetContext(router);
+    return duet?.threadRef
+      ? { kind: "server" as const, threadRef: duet.threadRef }
+      : resolveThreadRouteTarget(router.state.matches.at(-1)?.params ?? {});
+  };
   const readRouteThreadRef = () => {
     const target = readRouteTarget();
     return target?.kind === "server" ? target.threadRef : null;
@@ -112,6 +118,10 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
 
   const startNewLocal: CommandHandler = (event) => {
     claim(event);
+    if (readDuetContext(router)) {
+      void startDuetThread(router);
+      return;
+    }
     // With no current or open project, such as when every project is archived, pick one.
     void startNewThreadFromContext(readThreadContext()).then((started) => {
       if (!started) openCommandPalette({ open: "new-thread-in" });
@@ -139,6 +149,10 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         void scratch.startScratchThread(environmentId);
       },
       "chat.new": (event) => {
+        if (readDuetContext(router)) {
+          startNewLocal(event);
+          return;
+        }
         const groups = readProjectGroups();
         if (
           !shouldCreateNewThreadInCurrentProject(

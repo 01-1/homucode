@@ -1,3 +1,4 @@
+import { duetThreadContext } from "./DuetThreadContext.ts";
 import { withSentFromLine } from "./MessageSentFrom.ts";
 import { withMessageTimestamp } from "./MessageTimestamp.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
@@ -195,6 +196,7 @@ export const layer: Layer.Layer<
     const path = yield* Path.Path;
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
@@ -679,9 +681,15 @@ export const layer: Layer.Layer<
       });
       const { isCurrentAttemptInStatus } = runControls;
 
+      const duetSettings = yield* serverSettings.getSettings;
+      const isMorningBrief =
+        message.scheduledTaskId !== undefined &&
+        message.scheduledTaskId === duetSettings.duetMorningBriefTaskId;
       const resolvedPolicy = yield* runtimePolicy
         .resolve({
-          thread: projection.thread,
+          thread: isMorningBrief
+            ? { ...projection.thread, runtimeMode: "approval-required", interactionMode: "plan" }
+            : projection.thread,
           modelSelection: run.modelSelection,
         })
         .pipe(Effect.result);
@@ -1711,6 +1719,7 @@ export const layer: Layer.Layer<
           ],
         });
       });
+      const duetContext = duetThreadContext(duetSettings, projection.thread);
       const startWithHandoffs = Effect.fn("ProviderTurnStartService.startWithHandoffs")(
         function* (turnInput: Parameters<typeof session.startTurn>[0], compact = false) {
           const delivery = yield* deliverContextHandoffs({
@@ -1737,7 +1746,7 @@ export const layer: Layer.Layer<
             sideChatHandoff === undefined || compact || goalCommand
               ? ""
               : sideChatHandoff.summaryText;
-          const context = [delivery.context, sideChatContext, restartNote]
+          const context = [delivery.context, sideChatContext, restartNote, duetContext]
             .filter((part) => part !== "")
             .join("\n\n");
           const { restartContinuationOfRunId: _resumedRunId, ...promptedInput } = turnInput;
