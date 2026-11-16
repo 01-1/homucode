@@ -52,6 +52,7 @@ Everything Homu Code changes compared to upstream [T3 Code](https://github.com/p
 ## Smaller items
 
 - Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
+- Lavender is the default theme on web, desktop and mobile.
 - CI runs the Linux jobs on Boat runners for pushes to `main`, the owner's PRs, and the run started by adding the `ci:boat` label to a PR. Other runs stay on GitHub's runners.
 
 ## Known limits
