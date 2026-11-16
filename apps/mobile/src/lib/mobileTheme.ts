@@ -54,9 +54,7 @@ export function resolveMobileThemeIdForAppearance(
 ): MobileThemeId {
   if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you") return themeId;
   const theme = [...BUILT_IN_THEMES, ...publishedThemes].find((theme) => theme.id === themeId);
-  return theme && getThemeColorsForAppearance(theme, appearance)
-    ? themeId
-    : DEFAULT_THEME_ID;
+  return theme && getThemeColorsForAppearance(theme, appearance) ? themeId : DEFAULT_THEME_ID;
 }
 
 export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {

@@ -65,7 +65,10 @@ describe("phone settings sync values", () => {
     const fromWeb = { theme: "my-custom-theme", themeHalves: null };
     const phone = apply({ themeId: "grove" }, fromWeb);
 
-    expect(phone).toMatchObject({ lightThemeId: "my-custom-theme", darkThemeId: "my-custom-theme" });
+    expect(phone).toMatchObject({
+      lightThemeId: "my-custom-theme",
+      darkThemeId: "my-custom-theme",
+    });
     expect(syncedValuesFromMobilePreferences(phone)).toMatchObject(fromWeb);
     const unreadable = apply({ themeId: "grove" }, { theme: "Not An Id", themeHalves: null });
     expect(unreadable).toMatchObject({ lightThemeId: "lavender", darkThemeId: "lavender" });
