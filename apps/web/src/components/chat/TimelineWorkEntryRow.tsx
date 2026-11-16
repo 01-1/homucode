@@ -48,6 +48,7 @@ import {
 import { cn } from "~/lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { FetchedToolOutput, V2ItemInspector } from "./V2ItemInspector";
+import { QuestionOptionsHistory } from "./QuestionOptionsHistory";
 import { SubagentNotificationLink } from "./V2LifecycleRow";
 import {
   TimelineRowCtx,
@@ -572,7 +573,14 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
         </WorkLogDetails>
       ) : null}
       {expanded && workEntry.questionAnswer ? (
-        <QuestionAnswerHistory answer={workEntry.questionAnswer} />
+        <QuestionAnswerHistory
+          answer={workEntry.questionAnswer}
+          questions={
+            workEntry.projectedItem?.item.type === "user_input_request"
+              ? workEntry.projectedItem.item.questions
+              : undefined
+          }
+        />
       ) : null}
       {expanded && isReasoning ? <ReasoningTraceContent entries={[workEntry]} /> : null}
       {expanded &&
@@ -618,8 +626,12 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
 
 function QuestionAnswerHistory({
   answer,
+  questions,
 }: {
   answer: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
+  questions:
+    | ReadonlyArray<import("@t3tools/contracts").OrchestrationV2UserInputQuestion>
+    | undefined;
 }) {
   const { activeThreadEnvironmentId } = use(TimelineRowCtx);
   const attachments = Object.values(answer.attachmentsByQuestionId).flat();
@@ -636,44 +648,53 @@ function QuestionAnswerHistory({
           ...Object.keys(answer.answers),
           ...Object.keys(answer.attachmentsByQuestionId),
         ]),
-      ].map((questionId) => (
-        <div key={questionId} className="space-y-1">
-          {answer.questionTextById?.[questionId] ? (
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {answer.questionTextById[questionId]}
-            </p>
-          ) : null}
-          {getQuestionAnswerText(answer.answers[questionId]) ? (
-            <p className="ms-3 whitespace-pre-wrap text-sm text-muted-foreground">
-              {getQuestionAnswerText(answer.answers[questionId])}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            {(answer.attachmentsByQuestionId[questionId] ?? []).map((attachment) => {
-              const url = urls[attachments.indexOf(attachment)];
-              return (
-                <a
-                  key={attachment.id}
-                  href={url ?? undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm underline"
-                >
-                  {attachment.type === "image" && url ? (
-                    <img
-                      src={url}
-                      alt={attachment.name}
-                      className="h-20 max-w-32 rounded object-contain"
-                    />
-                  ) : (
-                    attachment.name
-                  )}
-                </a>
-              );
-            })}
+      ].map((questionId) => {
+        const question = questions?.find((candidate) => candidate.id === questionId);
+        return (
+          <div key={questionId} className="space-y-1">
+            {question ? (
+              <QuestionOptionsHistory question={question} answer={answer.answers[questionId]} />
+            ) : (
+              <>
+                {answer.questionTextById?.[questionId] ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {answer.questionTextById[questionId]}
+                  </p>
+                ) : null}
+                {getQuestionAnswerText(answer.answers[questionId]) ? (
+                  <p className="ms-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {getQuestionAnswerText(answer.answers[questionId])}
+                  </p>
+                ) : null}
+              </>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {(answer.attachmentsByQuestionId[questionId] ?? []).map((attachment) => {
+                const url = urls[attachments.indexOf(attachment)];
+                return (
+                  <a
+                    key={attachment.id}
+                    href={url ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline"
+                  >
+                    {attachment.type === "image" && url ? (
+                      <img
+                        src={url}
+                        alt={attachment.name}
+                        className="h-20 max-w-32 rounded object-contain"
+                      />
+                    ) : (
+                      attachment.name
+                    )}
+                  </a>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

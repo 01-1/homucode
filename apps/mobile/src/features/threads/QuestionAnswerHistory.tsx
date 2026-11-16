@@ -1,11 +1,15 @@
 import type {
   EnvironmentId,
+  OrchestrationV2UserInputQuestion,
   UserInputAttachmentAnswerPayload,
   UserInputAttachments,
 } from "@t3tools/contracts";
 import { Image } from "expo-image";
-import { Linking, Pressable, View } from "react-native";
-import { getQuestionAnswerText } from "@t3tools/client-runtime/work-log/user-input";
+import { Linking, Pressable, ScrollView, View } from "react-native";
+import {
+  getQuestionAnswerSelection,
+  getQuestionAnswerText,
+} from "@t3tools/client-runtime/work-log/user-input";
 import { AppText as Text } from "../../components/ui/AppText";
 import { assetImageSource } from "../../lib/assetImageSource";
 import { useAssetUrl } from "../../state/assets";
@@ -39,39 +43,108 @@ function AnswerFile(props: {
   );
 }
 
+function QuestionOptions(props: { question: OrchestrationV2UserInputQuestion; answer: unknown }) {
+  const { selectedLabels, customText } = getQuestionAnswerSelection(props.question, props.answer);
+  return (
+    <View className="gap-1">
+      <Text selectable className="text-sm text-foreground-muted">
+        {props.question.question}
+      </Text>
+      {props.question.options.map((option) => {
+        const selected = selectedLabels.has(option.label);
+        return (
+          <View key={option.value ?? option.label} className="flex-row gap-2">
+            <Text
+              accessibilityLabel={selected ? "Chosen" : undefined}
+              className={
+                selected ? "w-3 text-sm text-foreground" : "w-3 text-sm text-foreground-muted"
+              }
+            >
+              {selected ? "✓" : "·"}
+            </Text>
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text
+                selectable
+                className={
+                  selected ? "text-sm font-medium text-foreground" : "text-sm text-foreground-muted"
+                }
+              >
+                {option.label}
+              </Text>
+              {option.description && option.description !== option.label ? (
+                <Text selectable className="text-2xs text-foreground-muted">
+                  {option.description}
+                </Text>
+              ) : null}
+              {option.preview ? (
+                <ScrollView
+                  horizontal
+                  className="rounded-md border border-border bg-subtle px-2 py-1.5"
+                >
+                  <Text selectable className="font-mono text-2xs leading-normal text-foreground">
+                    {option.preview}
+                  </Text>
+                </ScrollView>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
+      {customText ? (
+        <Text selectable className="ml-5 text-sm text-foreground">
+          {customText}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function QuestionAnswerHistory(props: {
   environmentId: EnvironmentId;
-  answer: UserInputAttachmentAnswerPayload;
+  answer: UserInputAttachmentAnswerPayload | undefined;
+  questions: ReadonlyArray<OrchestrationV2UserInputQuestion>;
 }) {
+  const answer = props.answer ?? {
+    requestId: "",
+    answers: {},
+    attachmentsByQuestionId: {},
+  };
   return (
     <View className="gap-2">
       {[
         ...new Set([
-          ...Object.keys(props.answer.questionTextById ?? {}),
-          ...Object.keys(props.answer.answers),
-          ...Object.keys(props.answer.attachmentsByQuestionId),
+          ...props.questions.map((question) => question.id),
+          ...Object.keys(answer.questionTextById ?? {}),
+          ...Object.keys(answer.answers),
+          ...Object.keys(answer.attachmentsByQuestionId),
         ]),
-      ].map((questionId) => (
-        <View key={questionId} className="gap-1">
-          {props.answer.questionTextById?.[questionId] ? (
-            <Text className="text-sm text-foreground-muted">
-              {props.answer.questionTextById[questionId]}
-            </Text>
-          ) : null}
-          {getQuestionAnswerText(props.answer.answers[questionId]) ? (
-            <Text className="ml-3 text-sm text-foreground-muted">
-              {getQuestionAnswerText(props.answer.answers[questionId])}
-            </Text>
-          ) : null}
-          {(props.answer.attachmentsByQuestionId[questionId] ?? []).map((attachment) => (
-            <AnswerFile
-              key={attachment.id}
-              environmentId={props.environmentId}
-              attachment={attachment}
-            />
-          ))}
-        </View>
-      ))}
+      ].map((questionId) => {
+        const question = props.questions.find((candidate) => candidate.id === questionId);
+        return (
+          <View key={questionId} className="gap-1">
+            {question ? (
+              <QuestionOptions question={question} answer={answer.answers[questionId]} />
+            ) : null}
+            {!question && answer.questionTextById?.[questionId] ? (
+              <Text className="text-sm text-foreground-muted">
+                {answer.questionTextById[questionId]}
+              </Text>
+            ) : null}
+            {!question && getQuestionAnswerText(answer.answers[questionId]) ? (
+              <Text className="ml-3 text-sm text-foreground-muted">
+                {getQuestionAnswerText(answer.answers[questionId])}
+              </Text>
+            ) : null}
+            {(answer.attachmentsByQuestionId[questionId] ?? []).map((attachment) => (
+              <AnswerFile
+                key={attachment.id}
+                environmentId={props.environmentId}
+                attachment={attachment}
+              />
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 }

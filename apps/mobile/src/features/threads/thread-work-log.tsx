@@ -988,8 +988,9 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
     call && shownItem.type === "command_execution" && shownItem.exitCode
       ? shownItem.exitCode
       : null;
+  const questionItem = shownItem.type === "user_input_request" ? shownItem : null;
   const fullDetail =
-    expanded && !reasoning && !call && !row.workEntry.questionAnswer
+    expanded && !reasoning && !call && !questionItem && !row.workEntry.questionAnswer
       ? fetchedItem && !isRead
         ? formatItemFullDetail(row.projectedItem, fetchedItem)
         : row.getFullDetail()
@@ -1165,6 +1166,7 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
         fetchedOutput ||
         viewedImagePath ||
         outputImages.length > 0 ||
+        questionItem ||
         row.workEntry.questionAnswer) ? (
         <Animated.View
           entering={WORK_LOG_DETAIL_ENTER_TRANSITION}
@@ -1172,10 +1174,11 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
           layout={WORK_LOG_LAYOUT_TRANSITION}
           className={reasoning ? "ml-7 py-1" : "pb-1 pt-0.5"}
         >
-          {row.workEntry.questionAnswer ? (
+          {questionItem || row.workEntry.questionAnswer ? (
             <QuestionAnswerHistory
               environmentId={props.environmentId}
               answer={row.workEntry.questionAnswer}
+              questions={questionItem?.questions ?? []}
             />
           ) : null}
           {viewedImagePath ? (
