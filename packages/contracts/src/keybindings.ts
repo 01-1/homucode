@@ -46,6 +46,7 @@ const THREAD_KEYBINDING_COMMANDS = [
   "thread.regenerateTitle",
   "thread.folder",
   "thread.undo",
+  "thread.scrollToEnd",
   ...THREAD_JUMP_KEYBINDING_COMMANDS,
 ] as const;
 

@@ -132,6 +132,11 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+shift+p", command: "thread.pin", when: "!terminalFocus" },
   { key: "mod+g", command: "thread.folder", when: "!terminalFocus" },
   { key: "mod+z", command: "thread.undo", when: "!terminalFocus && !editableFocus" },
+  {
+    key: "end",
+    command: "thread.scrollToEnd",
+    when: "!terminalFocus && !previewFocus && !editableFocus",
+  },
   ...THREAD_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
     key: `mod+${index + 1}`,
     command,

@@ -395,6 +395,7 @@ import {
 import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransition";
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
+import { endKeyScrollsThread } from "./chat/threadEndKey";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -2773,6 +2774,10 @@ export default function ChatView(props: ChatViewProps) {
       ...threadLifecycleShortcuts,
       "thread.copyReference": ({ event }) => {
         if (!event.repeat) copyActiveThreadReference();
+      },
+      "thread.scrollToEnd": ({ event }) => {
+        if (!endKeyScrollsThread(event.target)) return false;
+        scrollToEnd(true);
       },
       "chat.find": () => {
         if (!isServerThread || serverConfig?.threadFind !== true || activeThreadKey === null)
