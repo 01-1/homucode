@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import {
   AgentScope,
   AgentMemory,
+  AgentMemoryOwner,
   agentScopeCommand,
   type AgentScopeShape,
   type AgentSystemdScope,
@@ -423,7 +424,7 @@ export const make = Effect.gen(function* () {
       const unit = `t3code-${name}-${NodeCrypto.randomUUID().slice(0, 8)}.scope`;
       const config = yield* memory.settings;
       const limits = agentMemoryLimits(config, NodeOS.totalmem());
-      if (!survivesRestart) yield* memory.track(unit, threadId);
+      if (!survivesRestart) yield* memory.track(unit, yield* AgentMemoryOwner);
       // A continuing shared scope cannot attribute a tool's OOM to one thread.
       // Clear the launch thread's previous scope instead.
       const continuing = shared === true && scope.supportsOomPolicy;

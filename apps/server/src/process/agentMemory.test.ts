@@ -11,6 +11,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import type * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/process";
 
@@ -27,7 +28,7 @@ const withGovernor = <A, E>(
     readonly root: string;
     readonly scope: (unit: string, bytes: number) => void;
     readonly group: (bytes: number) => void;
-  }) => Effect.Effect<A, E>,
+  }) => Effect.Effect<A, E, Scope.Scope>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -145,7 +146,11 @@ describe("agent reservations", () => {
         Effect.gen(function* () {
           const releaseA = yield* acquire(memory, "a");
           scope("t3code-claude-a.scope", 1.9 * GiB);
-          yield* memory.track("t3code-claude-a.scope", "a");
+          yield* memory.track("t3code-claude-a.scope", {
+            runtimeId: "runtime-a",
+            ticketId: "a",
+            isolated: false,
+          });
           const waitingB = yield* Deferred.make<void>();
           const b = yield* acquire(memory, "b", Deferred.succeed(waitingB, undefined), 1).pipe(
             Effect.forkChild,
@@ -170,6 +175,65 @@ describe("agent reservations", () => {
           yield* releaseC;
         }),
       ),
+  );
+
+  it.effect("credits only a reused runtime, never another scope from the same thread", () =>
+    withGovernor(({ memory, scope }) =>
+      Effect.gen(function* () {
+        scope("t3code-codex-old.scope", 2.2 * GiB);
+        yield* memory.track("t3code-codex-old.scope", {
+          runtimeId: "shared",
+          ticketId: "old-start",
+          isolated: false,
+        });
+        const releaseReuse = yield* memory.acquire({
+          id: "reuse",
+          threadId: "same-thread",
+          reuseRuntimeId: "shared",
+          requestedAt: 0,
+          onWaiting: Effect.die("A reused runtime already has its floor"),
+        });
+        const waiting = yield* Deferred.make<void>();
+        const fresh = yield* memory
+          .acquire({
+            id: "fresh",
+            threadId: "same-thread",
+            requestedAt: 1,
+            onWaiting: Deferred.succeed(waiting, undefined).pipe(Effect.asVoid),
+          })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(waiting);
+        expect(fresh.pollUnsafe()).toBeUndefined();
+        yield* Fiber.interrupt(fresh);
+        yield* releaseReuse;
+      }),
+    ),
+  );
+
+  it.effect("restores FIFO before workers register and prunes cancelled restored waiters", () =>
+    withGovernor(({ memory, root }) =>
+      Effect.gen(function* () {
+        NodeFS.writeFileSync(NodePath.join(root, "memory.max"), String(GiB));
+        yield* memory.restore([
+          { id: "cancelled", requestedAt: 0, isPending: Effect.succeed(false) },
+          { id: "older", requestedAt: 1, isPending: Effect.succeed(true) },
+        ]);
+        const waiting = yield* Deferred.make<void>();
+        const younger = yield* acquire(
+          memory,
+          "younger",
+          Deferred.succeed(waiting, undefined),
+          2,
+        ).pipe(Effect.forkChild);
+        yield* Deferred.await(waiting);
+        expect(younger.pollUnsafe()).toBeUndefined();
+        const releaseOlder = yield* acquire(memory, "older", Effect.void, 1);
+        expect(younger.pollUnsafe()).toBeUndefined();
+        yield* releaseOlder;
+        yield* TestClock.adjust("2 seconds");
+        yield* yield* Fiber.join(younger);
+      }),
+    ),
   );
 
   it.effect("keeps starts waiting on missing telemetry and wakes them when disabled", () =>

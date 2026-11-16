@@ -2,7 +2,7 @@
 import * as NodeOS from "node:os";
 
 import { type AgentMemorySettings } from "@t3tools/contracts";
-import { AgentMemory } from "@t3tools/shared/AgentScope";
+import { AgentMemory, type AgentMemoryOwnerValue } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveCommandPath } from "@t3tools/shared/shell";
 import * as Deferred from "effect/Deferred";
@@ -42,6 +42,7 @@ export function agentReservation(current: number, minimum: number, cap: number, 
 interface Ticket {
   readonly id: string;
   readonly threadId: string;
+  readonly reuseRuntimeId?: string;
   readonly requestedAt: number;
   readonly ready: Deferred.Deferred<void>;
   granted: boolean;
@@ -71,7 +72,15 @@ export const make = Effect.gen(function* () {
     Effect.orDie,
   );
   const tickets = new Map<string, Ticket>();
-  const threadsByUnit = new Map<string, string>();
+  const ownersByUnit = new Map<string, AgentMemoryOwnerValue>();
+  const restored = new Map<
+    string,
+    {
+      readonly id: string;
+      readonly requestedAt: number;
+      readonly isPending: Effect.Effect<boolean>;
+    }
+  >();
   const lock = yield* Semaphore.make(1);
   let controlGroup: string | undefined;
 
@@ -100,7 +109,8 @@ export const make = Effect.gen(function* () {
     const minimum = Math.min(limits.minimum, cap);
     let measured = 0;
     let reserved = 0;
-    const reservedByThread = new Map<string, number>();
+    const reservedByRuntime = new Map<string, number>();
+    const reservedByTicket = new Map<string, number>();
     const seen = new Set<string>();
     const directories = [controlGroup];
     while (directories.length > 0) {
@@ -123,27 +133,35 @@ export const make = Effect.gen(function* () {
         );
         measured += current;
         reserved += Math.max(current, reservation);
-        const threadId = threadsByUnit.get(name);
-        if (threadId !== undefined) {
-          reservedByThread.set(threadId, (reservedByThread.get(threadId) ?? 0) + reservation);
+        const owner = ownersByUnit.get(name);
+        if (owner !== undefined) {
+          reservedByRuntime.set(
+            owner.runtimeId,
+            (reservedByRuntime.get(owner.runtimeId) ?? 0) + reservation,
+          );
+          reservedByTicket.set(
+            owner.ticketId,
+            (reservedByTicket.get(owner.ticketId) ?? 0) + reservation,
+          );
         }
       }
     }
-    for (const unit of threadsByUnit.keys()) {
-      if (
-        !seen.has(unit) &&
-        !Array.from(tickets.values()).some((t) => t.threadId === threadsByUnit.get(unit))
-      ) {
-        threadsByUnit.delete(unit);
-      }
+    for (const [unit, owner] of ownersByUnit) {
+      if (!seen.has(unit) && !tickets.has(owner.ticketId)) ownersByUnit.delete(unit);
     }
     // Include memory in the slice but outside recognized scopes; never count a parent twice.
     reserved += Math.max(0, groupCurrent - measured);
+    const credit = (ticket: Ticket) =>
+      Math.max(
+        reservedByTicket.get(ticket.id) ?? 0,
+        ticket.reuseRuntimeId === undefined
+          ? 0
+          : (reservedByRuntime.get(ticket.reuseRuntimeId) ?? 0),
+      );
     for (const ticket of tickets.values()) {
-      if (ticket.granted)
-        reserved += Math.max(0, minimum - (reservedByThread.get(ticket.threadId) ?? 0));
+      if (ticket.granted) reserved += Math.max(0, minimum - credit(ticket));
     }
-    return { cap, minimum, reserved, reservedByThread };
+    return { cap, minimum, reserved, credit };
   });
 
   const pump = lock.withPermits(1)(
@@ -158,13 +176,18 @@ export const make = Effect.gen(function* () {
       }
       const usage = yield* readUsage(config);
       if (usage === undefined) return;
-      for (const ticket of Array.from(tickets.values())
-        .filter((t) => !t.granted)
-        .sort((a, b) => a.requestedAt - b.requestedAt || a.id.localeCompare(b.id))) {
-        const additional = Math.max(
-          0,
-          usage.minimum - (usage.reservedByThread.get(ticket.threadId) ?? 0),
-        );
+      const pending = [
+        ...restored.values(),
+        ...Array.from(tickets.values()).filter((t) => !t.granted),
+      ].sort((a, b) => a.requestedAt - b.requestedAt || a.id.localeCompare(b.id));
+      for (const candidate of pending) {
+        const ticket = tickets.get(candidate.id);
+        if (ticket === undefined) {
+          if ("isPending" in candidate && (yield* candidate.isPending)) break;
+          restored.delete(candidate.id);
+          continue;
+        }
+        const additional = Math.max(0, usage.minimum - usage.credit(ticket));
         if (usage.reserved + additional > usage.cap) break;
         usage.reserved += additional;
         ticket.granted = true;
@@ -184,10 +207,19 @@ export const make = Effect.gen(function* () {
 
   return AgentMemory.of({
     settings,
-    track: (unit, threadId) =>
+    track: Effect.fn("AgentMemory.track")((unit, owner) =>
       Effect.sync(() => {
-        if (threadId !== undefined) threadsByUnit.set(unit, threadId);
+        if (owner !== undefined) ownersByUnit.set(unit, owner);
       }),
+    ),
+    restore: Effect.fn("AgentMemory.restore")((waiters) =>
+      lock.withPermits(1)(
+        Effect.sync(() => {
+          for (const waiter of waiters)
+            if (!tickets.has(waiter.id)) restored.set(waiter.id, waiter);
+        }),
+      ),
+    ),
     acquire: Effect.fn("AgentMemory.acquire")(function (input) {
       return Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
@@ -196,6 +228,8 @@ export const make = Effect.gen(function* () {
           const release = Effect.sync(() => {
             if (tickets.get(ticket.id) === ticket) tickets.delete(ticket.id);
           });
+          yield* Effect.addFinalizer(() => release);
+          restored.delete(ticket.id);
           tickets.set(ticket.id, ticket);
           yield* restore(
             Effect.gen(function* () {

@@ -1,3 +1,4 @@
+import { AgentMemory } from "@t3tools/shared/AgentScope";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
@@ -192,6 +193,7 @@ function latestStartedRun(
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
+  const memory = yield* AgentMemory;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
@@ -1120,6 +1122,7 @@ export const make = Effect.gen(function* () {
     let closedRequests = 0;
     let retiredEffects = 0;
     const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
+    const memoryWaiters: Array<Parameters<AgentMemory["Service"]["restore"]>[0][number]> = [];
     const stoppedThisPass = new Map<string, RecoverySession>();
     const grouped = trigger === "shutdown" && threadIds.length > 1;
     const groupSize = grouped ? 32 : 1;
@@ -1150,6 +1153,22 @@ export const make = Effect.gen(function* () {
           }
           cancelledEffectIds.push(...result.cancelledEffectIds);
           resends.push(...result.resends);
+          if (trigger === "startup") {
+            for (const effect of result.resends) {
+              if (effect.request.type !== "provider-turn.start") continue;
+              const runId = effect.request.runId;
+              const run = projection.runs.find((candidate) => candidate.id === runId);
+              if (run?.memoryWaiting !== true) continue;
+              memoryWaiters.push({
+                id: run.id,
+                requestedAt: DateTime.toEpochMillis(run.requestedAt),
+                isPending: Effect.suspend(() => projections.getRun(threadId, runId)).pipe(
+                  Effect.map((current) => current?.status === "starting"),
+                  Effect.orElseSucceed(() => true),
+                ),
+              });
+            }
+          }
           terminalizedRuns += result.terminalizedRuns;
           stoppedSessions += result.stoppedSessions;
           closedRequests += result.closedRequests;
@@ -1174,6 +1193,7 @@ export const make = Effect.gen(function* () {
     // After the drain, which cancels every unsettled provider start. A crash before this write
     // leaves the run unstarted, so the next recovery sends it again.
     if (resends.length > 0) {
+      yield* memory.restore(memoryWaiters);
       yield* eventSink
         .writeWithEffects({ events: [], effects: resends })
         .pipe(
