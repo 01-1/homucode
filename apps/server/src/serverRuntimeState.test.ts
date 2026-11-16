@@ -23,6 +23,7 @@ import { SERVICE_LAUNCHER_CONTEXT_ENV } from "./cloud/serviceProtocol.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as ServerOwnership from "./serverOwnership.ts";
 import * as ServerRuntimeState from "./serverRuntimeState.ts";
+import { chmodDeniesAccess } from "./testUtils/filePermissions.ts";
 
 const startBesideBootService = Effect.fn("test.startBesideBootService")(function* (input: {
   readonly platform: "darwin" | "linux";
@@ -203,8 +204,7 @@ describe("server ownership", () => {
       "replace",
       "during acquisition",
       "first acquisition",
-      // Root bypasses directory permissions, so chmod cannot force EACCES.
-      ...(process.getuid?.() === 0 ? [] : (["stat error"] as const)),
+      ...(chmodDeniesAccess ? (["stat error"] as const) : []),
     ] as const)("monitors ownership after %s", (operation) => {
       const messages: unknown[] = [];
       const warnings: unknown[] = [];

@@ -51,6 +51,7 @@ import * as AntigravityUsage from "../provider/Drivers/AntigravityUsage.ts";
 import * as ProviderHostLive from "../provider/ProviderHostLive.ts";
 import { totalTokens, type UsageRecord } from "@t3tools/provider-core/server/usage";
 import * as UsageService from "./UsageService.ts";
+import { chmodDeniesAccess } from "../testUtils/filePermissions.ts";
 import { DESKTOP_HOST_SCOPE_ENV, physicalSourceIdOf } from "./usageTranscriptReader.ts";
 import * as MuseSdk from "../../../../packages/provider-muse/src/server/sdk.ts";
 import { MuseUsageHome } from "@t3tools/provider-muse/server";
@@ -2721,7 +2722,7 @@ describe("UsageService", () => {
       }),
   );
 
-  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32" || process.getuid?.() === 0)(
+  it.effect.skipIf(!chmodDeniesAccess)(
     "reports unreadable transcripts as partial and recovers once they can be read",
     () =>
       Effect.gen(function* () {
