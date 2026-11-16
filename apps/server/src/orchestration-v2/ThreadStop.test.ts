@@ -1255,18 +1255,30 @@ it.effect.each(["thread.stop", "run.interrupt"] as const)(
       );
       yield* orchestrator.dispatch(
         stopType === "thread.stop"
-          ? { type: "thread.stop", commandId: CommandId.make("stop-resumed-queue"), threadId }
+          ? {
+              type: "thread.stop",
+              commandId: CommandId.make("stop-resumed-queue"),
+              threadId,
+              reason: "Stopped by an agent",
+            }
           : {
               type: "run.interrupt",
               commandId: CommandId.make("stop-resumed-queue"),
               threadId,
               runId: queued!.id,
               holdQueue: true,
+              reason: "Stopped by an agent",
             },
       );
       const stopped = yield* orchestrator.getThreadProjection(threadId);
       const interrupted = stopped.runs.find((run) => run.id === queued!.id)!;
       assert.equal(interrupted.status, "interrupted");
+      assert.deepEqual(
+        stopped.turnItems.flatMap((item) =>
+          item.type === "run_interrupt_result" && item.runId === queued!.id ? [item.message] : [],
+        ),
+        ["Stopped by an agent (before the provider started)"],
+      );
       assert.equal(DateTime.toEpochMillis(interrupted.completedAt!), DateTime.toEpochMillis(now));
       yield* orchestrator.dispatch({
         type: "message.dispatch",

@@ -13932,7 +13932,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         completedAt: now,
         updatedAt: now,
         type: "run_interrupt_result",
-        message: "Run interrupted before provider start",
+        message: `${interruptRequestItem.message} (before the provider started)`,
       };
       yield* emitEvent({
         type: "turn-item.updated",
