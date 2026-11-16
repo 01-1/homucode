@@ -2714,7 +2714,10 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               known?.agent === agent.nativeThreadId &&
               known.preferNativeSubagents === preferNativeSubagents
                 ? known
-                : { orchestration: known?.agent !== agent.nativeThreadId && turnInput.runOrdinal > 1, device: false };
+                : {
+                    orchestration: known?.agent !== agent.nativeThreadId && turnInput.runOrdinal > 1,
+                    device: false,
+                  };
             const interrupted = yield* Ref.get(interruptedPrompt);
             const runCheckpointed = (runId?: string) =>
               agent.session.runCheckpointed?.(runId) ?? Effect.succeed(false);

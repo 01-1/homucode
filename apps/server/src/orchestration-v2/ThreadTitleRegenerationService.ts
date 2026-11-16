@@ -238,9 +238,10 @@ const make = Effect.gen(function* () {
           cwd: worktreeExists
             ? worktreePath
             : (projection.thread.workspaceRoot ?? project.value.workspaceRoot),
-          ...(settings.threadTitleIncludeProjectName ? { projectName: project.value.title } : {}),
+          ...(settings.threadTitleIncludeProjectName
+            ? { projectName: project.value.title, projectTitle: project.value.title }
+            : {}),
           message: context.message,
-          projectTitle: project.value.title,
           attachments: context.attachments,
           ...(input.kind.type === "regenerate" ? { previousTitle: projection.thread.title } : {}),
           ...(inherited === undefined ? {} : { forkSource: inherited }),

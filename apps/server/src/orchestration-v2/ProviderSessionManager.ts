@@ -474,7 +474,8 @@ export const layerWithOptions = (
                     settings.enableDeviceSupport &&
                     !deviceOverridden &&
                     settings.enableAgentDeviceAccess,
-                  preferNativeSubagents: resolveProjectSettings(settings, thread.projectId).settings.preferNativeSubagents,
+                  preferNativeSubagents: resolveProjectSettings(settings, thread.projectId).settings
+                    .preferNativeSubagents,
                 };
             }
             const effective = resolveProjectSettings(settings, thread.projectId).settings;

@@ -561,6 +561,7 @@ describe("ThreadTitleRegenerationService", () => {
           ]);
           assert.equal(call?.previousTitle, "Seed title");
           assert.equal(call?.projectName, "Project");
+          assert.equal(call?.projectTitle, "Project");
           assert.equal(call?.cwd, testCase.cwd);
           assert.include(call?.message, "USER:\nInvestigate the flaky login test");
           const projection = yield* threads.getThreadProjection(threadId);
@@ -638,6 +639,7 @@ describe("ThreadTitleRegenerationService", () => {
         const last = harness.generateThreadTitle.mock.calls.at(-1)?.[0];
         assert.equal(last?.previousTitle, "Fix login bug");
         assert.isUndefined(last?.projectName);
+        assert.isUndefined(last?.projectTitle);
         assert.isUndefined(last?.folderContext?.projectName);
 
         assert.equal(yield* setSettled("second", true), "F1a Fix login bug");
