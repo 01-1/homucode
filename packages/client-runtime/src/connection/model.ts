@@ -89,6 +89,7 @@ export const ConnectionFailureCause = Schema.Literals([
   "tunnel_pending",
   "tunnel_not_enabled",
   "approval_pending",
+  "signed_out",
 ]);
 export type ConnectionFailureCause = typeof ConnectionFailureCause.Type;
 

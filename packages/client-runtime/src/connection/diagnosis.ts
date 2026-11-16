@@ -103,6 +103,8 @@ function headline(host: string, located: Located, failure: ConnectionAttemptErro
       return "This device is still loading its T3 Connect sign-in";
     case "approval_pending":
       return `${host} is waiting for someone to approve this device`;
+    case "signed_out":
+      return "This device is not signed in to T3 Connect";
     case "outdated":
       return `${host} runs an older T3 Code`;
     case "clock_skew":
@@ -174,6 +176,11 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
         `Or run \`t3 auth connect-device approve ${code ?? "<code>"}\` on ${host}.`,
       ];
     }
+    case "signed_out":
+      return [
+        "Sign in to T3 Connect on this device, with the same account as the host.",
+        "T3 Code reconnects once you sign in.",
+      ];
     case "outdated":
       return [`Update T3 Code on ${host}.`];
     case "clock_skew":
@@ -255,6 +262,7 @@ function helpSection(
       return "the-clock-is-off";
     case "session_pending":
     case "approval_pending":
+    case "signed_out":
     case "not_linked":
     case "tunnel_not_enabled":
       return "sign-in-account-or-link-problems";
@@ -370,7 +378,7 @@ export function presentConnectionDiagnosis(
     steps: steps(host, located, failure),
     facts,
     moreInfoUrl:
-      relayPath || located.cause === "session_pending"
+      relayPath || located.cause === "session_pending" || located.cause === "signed_out"
         ? t3ConnectTroubleshootingUrl(helpSection(located, failure))
         : null,
   };

@@ -163,6 +163,19 @@ describe("presentConnectionDiagnosis", () => {
     expect(diagnosis?.steps.join(" ")).toContain("t3 auth connect-device approve K7QM-2XFD");
   });
 
+  it("tells a signed-out device to sign in instead of waiting for the sign-in to load", () => {
+    const failure = new ConnectionBlockedError({
+      reason: "authentication",
+      hop: "device",
+      failureCause: "signed_out",
+      detail: "Sign in to T3 Connect on this device to connect to this environment.",
+    });
+    const diagnosis = diagnose(backoff(failure), "direct");
+    expect(diagnosis?.headline).toBe("This device is not signed in to T3 Connect");
+    expect(diagnosis?.hops.find((hop) => hop.result === "failed")?.hop).toBe("device");
+    expect(diagnosis?.moreInfoUrl).toContain("sign-in-account-or-link-problems");
+  });
+
   it("does not report hops as working when the failure names none", () => {
     const failure = new ConnectionBlockedError({
       reason: "authentication",

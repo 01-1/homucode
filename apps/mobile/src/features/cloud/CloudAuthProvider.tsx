@@ -16,7 +16,7 @@ if (publishableKey) {
 } else {
   // Without cloud config no account can ever activate, so drop anything a
   // previous build with cloud enabled left registered.
-  deactivateCloudRelayAccount();
+  deactivateCloudRelayAccount({ signedOut: true });
 }
 
 export function CloudAuthProvider(props: { readonly children: ReactNode }) {
