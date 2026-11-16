@@ -90,14 +90,9 @@ export async function createDuetThread(
     },
   });
   if (created._tag !== "Success") return null;
-  const pinned = await runAtomCommand(appAtomRegistry, threadEnvironment.pin, {
-    environmentId,
-    input: { threadId },
-  });
-  if (pinned._tag !== "Success") return null;
   const saved = await runAtomCommand(appAtomRegistry, serverEnvironment.updateSettings, {
     environmentId,
-    input: { patch: { duetThreads: { [threadId]: { icon, prompt: "" } } } },
+    input: { patch: { duetThreads: { [threadId]: { icon, prompt: "", pinned: true } } } },
   });
   return saved._tag === "Success" ? threadId : null;
 }

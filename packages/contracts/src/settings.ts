@@ -1404,6 +1404,7 @@ export type SyncedClientSettings = typeof SyncedClientSettings.Type;
 export const DUET_THREAD_PROMPT_MAX_LENGTH = 500;
 export const DEFAULT_DUET_ICON = "lucide:message-circle";
 export const DuetThreadSettings = Schema.Struct({
+  pinned: Schema.optionalKey(Schema.Boolean),
   color: Schema.optionalKey(
     Schema.NullOr(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
   ),

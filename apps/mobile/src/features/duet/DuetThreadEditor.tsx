@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { DUET_ICON_COLORS, duetIconColor } from "@t3tools/client-runtime/duet";
+import { DUET_ICON_COLORS, duetIconColor, isDuetThreadPinned } from "@t3tools/client-runtime/duet";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   DEFAULT_DUET_ICON,
@@ -29,11 +29,9 @@ export function DuetThreadEditor(props: {
   const [icon, setIcon] = useState(entry?.icon ?? "");
   const [color, setColor] = useState(duetIconColor(props.thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
-  const [pinned, setPinned] = useState(props.thread.pinnedAt !== null);
+  const [pinned, setPinned] = useState(isDuetThreadPinned(entry));
   const [busy, setBusy] = useState(false);
   const update = useAtomCommand(threadEnvironment.updateMetadata);
-  const pin = useAtomCommand(threadEnvironment.pin);
-  const unpin = useAtomCommand(threadEnvironment.unpin);
   const validColor = /^#[0-9a-fA-F]{6}$/.test(color);
   const save = async () => {
     if (busy || !validColor || !title.trim()) return;
@@ -51,19 +49,9 @@ export function DuetThreadEditor(props: {
       if (
         !(await actions.save({
           duetThreads: {
-            [props.thread.id]: { icon: icon.trim() || null, color, prompt: prompt.trim() },
+            [props.thread.id]: { icon: icon.trim() || null, color, prompt: prompt.trim(), pinned },
           },
         }))
-      )
-        return;
-      if (
-        pinned !== (props.thread.pinnedAt !== null) &&
-        (
-          await (pinned ? pin : unpin)({
-            environmentId: props.environmentId,
-            input: { threadId: props.thread.id },
-          })
-        )._tag !== "Success"
       )
         return;
       props.onClose();

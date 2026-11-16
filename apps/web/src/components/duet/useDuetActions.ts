@@ -13,7 +13,6 @@ import { providerInstanceEntriesFor } from "../../providerInstances";
 import { useProjects, useVisibleThreadShells } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
-import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTasksSettings.logic";
 
@@ -35,7 +34,6 @@ export function useDuetActions(environmentId: EnvironmentId) {
     serverEnvironment.scheduledTasksLive({ environmentId, input: {} }),
   );
   const task = taskQuery.data?.tasks.find((t) => t.id === settings.duetMorningBriefTaskId) ?? null;
-  const pin = useAtomCommand(threadEnvironment.pin);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const upsert = useAtomCommand(serverEnvironment.upsertScheduledTask);
   const setEnabled = useAtomCommand(serverEnvironment.setScheduledTaskEnabled);
@@ -71,11 +69,15 @@ export function useDuetActions(environmentId: EnvironmentId) {
     const threadId = existing?.id ?? (await createThread("Morning brief", "☀️"));
     if (!threadId) return false;
     if (existing) {
-      if ((await pin({ environmentId, input: { threadId } }))._tag !== "Success") return false;
       if (
         !(await save({
           duetThreads: {
-            [threadId]: { icon: "☀️", prompt: settings.duetThreads[threadId]?.prompt ?? "" },
+            [threadId]: {
+              ...settings.duetThreads[threadId],
+              icon: "☀️",
+              prompt: settings.duetThreads[threadId]?.prompt ?? "",
+              pinned: true,
+            },
           },
         }))
       )
@@ -101,7 +103,8 @@ export function useDuetActions(environmentId: EnvironmentId) {
     icon: string | null,
     prompt: string,
     color: string | null,
-  ) => save({ duetThreads: { [threadId]: { icon, prompt, color } } });
+    pinned: boolean,
+  ) => save({ duetThreads: { [threadId]: { icon, prompt, color, pinned } } });
   return {
     settings,
     project,

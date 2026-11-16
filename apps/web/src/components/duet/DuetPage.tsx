@@ -4,7 +4,13 @@ import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
 import { DuetIcon, DuetIconPicker } from "./DuetIcon";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { duetIconColor, duetTaskLabel, orderDuetTasks } from "@t3tools/client-runtime/duet";
+import {
+  duetIconColor,
+  duetTaskLabel,
+  isDuetThreadPinned,
+  orderDuetTasks,
+  orderDuetThreads,
+} from "@t3tools/client-runtime/duet";
 import {
   AuthOrchestrationOperateScope,
   DUET_THREAD_PROMPT_MAX_LENGTH,
@@ -208,19 +214,16 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
   const search = useSearch({ from: "/_chat/duet" });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
-  const threads = useVisibleThreadShells()
-    .filter(
+  const threads = orderDuetThreads(
+    useVisibleThreadShells().filter(
       (t) =>
         t.environmentId === environmentId &&
         t.projectId === actions.project?.id &&
         t.deletedAt === null &&
         t.archivedAt === null,
-    )
-    .toSorted(
-      (a, b) =>
-        Number(b.pinnedAt !== null) - Number(a.pinnedAt !== null) ||
-        b.updatedAt.localeCompare(a.updatedAt),
-    );
+    ),
+    actions.settings.duetThreads,
+  );
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const [editing, setEditing] = useState<ThreadId | null>(null);
   const [busy, setBusy] = useState(false);
@@ -282,7 +285,7 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
                     color={duetIconColor(thread.id, actions.settings.duetThreads[thread.id]?.color)}
                   />
                   <span className="truncate">{thread.title}</span>
-                  {thread.pinnedAt === null ? (
+                  {!isDuetThreadPinned(actions.settings.duetThreads[thread.id]) ? (
                     <span className="ml-auto text-xs text-muted-foreground">Temporary</span>
                   ) : null}
                 </button>
@@ -336,10 +339,8 @@ function DuetThreadEditor({
   const [color, setColor] = useState(duetIconColor(thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
   const [busy, setBusy] = useState(false);
-  const [pinned, setPinned] = useState(thread.pinnedAt !== null);
+  const [pinned, setPinned] = useState(isDuetThreadPinned(entry));
   const update = useAtomCommand(threadEnvironment.updateMetadata);
-  const pin = useAtomCommand(threadEnvironment.pin);
-  const unpin = useAtomCommand(threadEnvironment.unpin);
   const save = async () => {
     setBusy(true);
     await (async () => {
@@ -348,12 +349,14 @@ function DuetThreadEditor({
           ._tag !== "Success"
       )
         return;
-      if (!(await actions.setThreadSettings(thread.id, icon.trim() || null, prompt, color || null)))
-        return;
       if (
-        pinned !== (thread.pinnedAt !== null) &&
-        (await (pinned ? pin : unpin)({ environmentId, input: { threadId: thread.id } }))._tag !==
-          "Success"
+        !(await actions.setThreadSettings(
+          thread.id,
+          icon.trim() || null,
+          prompt,
+          color || null,
+          pinned,
+        ))
       )
         return;
       onClose();

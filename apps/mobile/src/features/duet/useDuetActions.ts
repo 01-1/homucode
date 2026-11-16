@@ -38,7 +38,6 @@ export function useDuetActions(environmentId: EnvironmentId) {
     taskQuery.data?.tasks.find((row) => row.id === settings.duetMorningBriefTaskId) ?? null;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const create = useAtomCommand(threadEnvironment.create);
-  const pin = useAtomCommand(threadEnvironment.pin);
   const upsert = useAtomCommand(serverEnvironment.upsertScheduledTask);
   const setEnabled = useAtomCommand(serverEnvironment.setScheduledTaskEnabled);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
@@ -69,8 +68,9 @@ export function useDuetActions(environmentId: EnvironmentId) {
       },
     });
     if (result._tag !== "Success") return null;
-    if ((await pin({ environmentId, input: { threadId } }))._tag !== "Success") return null;
-    return (await save({ duetThreads: { [threadId]: { icon, prompt: "" } } })) ? threadId : null;
+    return (await save({ duetThreads: { [threadId]: { icon, prompt: "", pinned: true } } }))
+      ? threadId
+      : null;
   };
 
   const setMorningBrief = async (enabled: boolean, timeOfDay: string) => {
@@ -95,7 +95,6 @@ export function useDuetActions(environmentId: EnvironmentId) {
     const threadId = existing?.id ?? (await createThread("Morning brief", "☀️"));
     if (!threadId) return false;
     if (existing) {
-      if ((await pin({ environmentId, input: { threadId } }))._tag !== "Success") return false;
       if (
         !(await save({
           duetThreads: {
@@ -103,6 +102,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
               ...settings.duetThreads[threadId],
               icon: "☀️",
               prompt: settings.duetThreads[threadId]?.prompt ?? "",
+              pinned: true,
             },
           },
         }))

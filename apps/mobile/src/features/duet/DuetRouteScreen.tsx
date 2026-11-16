@@ -1,6 +1,12 @@
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { LegendList } from "@legendapp/list/react-native";
-import { duetIconColor, duetTaskLabel, orderDuetTasks } from "@t3tools/client-runtime/duet";
+import {
+  duetIconColor,
+  duetTaskLabel,
+  isDuetThreadPinned,
+  orderDuetTasks,
+  orderDuetThreads,
+} from "@t3tools/client-runtime/duet";
 import { AuthOrchestrationOperateScope, EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -44,11 +50,7 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
   const rows =
     tab === "tasks"
       ? orderDuetTasks(threads)
-      : [...threads].sort(
-          (a, b) =>
-            Number(b.pinnedAt !== null) - Number(a.pinnedAt !== null) ||
-            b.updatedAt.localeCompare(a.updatedAt),
-        );
+      : orderDuetThreads(threads, actions.settings.duetThreads);
   const edited = threads.find((thread) => thread.id === editing);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId }));
@@ -168,7 +170,7 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
                       <Text className="text-sm text-foreground-muted">{duetTaskLabel(thread)}</Text>
                     ) : null}
                   </View>
-                  {thread.pinnedAt === null ? (
+                  {!isDuetThreadPinned(actions.settings.duetThreads[thread.id]) ? (
                     <Text className="text-xs text-foreground-muted">Temporary</Text>
                   ) : null}
                 </Pressable>

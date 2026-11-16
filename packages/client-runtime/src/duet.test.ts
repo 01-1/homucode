@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
+import * as Schema from "effect/Schema";
 import {
+  DuetThreadSettings,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -10,10 +12,39 @@ import {
   duetMorningBriefInput,
   duetTaskLabel,
   findDuetMorningBriefThread,
+  isDuetThreadPinned,
   MORNING_BRIEF_PROMPT,
+  orderDuetThreads,
   orderDuetTasks,
   selectDuetEnvironment,
 } from "./duet.ts";
+
+it("keeps Duet entries pinned by default and treats other project threads as temporary", () => {
+  const decode = Schema.decodeUnknownSync(DuetThreadSettings);
+  expect(isDuetThreadPinned(undefined)).toBe(false);
+  expect(isDuetThreadPinned(decode({ icon: null, prompt: "" }))).toBe(true);
+  expect(isDuetThreadPinned(decode({ icon: "☀️", prompt: "", pinned: true }))).toBe(true);
+  expect(isDuetThreadPinned(decode({ icon: null, prompt: "", pinned: false }))).toBe(false);
+});
+
+it("orders kept threads before temporary threads independently of device pins", () => {
+  const kept = { id: ThreadId.make("kept"), updatedAt: "2026-11-14", pinnedAt: null };
+  const legacy = { id: ThreadId.make("legacy"), updatedAt: "2026-11-15", pinnedAt: null };
+  const temporary = {
+    id: ThreadId.make("temporary"),
+    updatedAt: "2026-11-16",
+    pinnedAt: "2026-11-16",
+  };
+  const other = { id: ThreadId.make("other"), updatedAt: "2026-11-13", pinnedAt: "2026-11-16" };
+  const rows = [temporary, kept, other, legacy];
+  const entries = {
+    [kept.id]: { icon: null, prompt: "", pinned: true },
+    [legacy.id]: { icon: null, prompt: "" },
+    [temporary.id]: { icon: null, prompt: "", pinned: false },
+  };
+  expect(orderDuetThreads(rows, entries)).toEqual([legacy, kept, temporary, other]);
+  expect(rows[0]).toBe(temporary);
+});
 
 it("reuses a renamed bound brief thread within the Duet project, excluding other environments and closed threads", () => {
   const environmentId = EnvironmentId.make("duet-environment");

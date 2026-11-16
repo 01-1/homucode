@@ -1,4 +1,5 @@
 import type {
+  DuetThreadSettings,
   EnvironmentId,
   ModelSelection,
   ProjectId,
@@ -7,6 +8,21 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "./state/models.ts";
+
+export function isDuetThreadPinned(entry: DuetThreadSettings | undefined): boolean {
+  return entry !== undefined && entry.pinned !== false;
+}
+
+export function orderDuetThreads<T extends Pick<EnvironmentThreadShell, "id" | "updatedAt">>(
+  threads: ReadonlyArray<T>,
+  entries: Readonly<Record<ThreadId, DuetThreadSettings>>,
+): T[] {
+  return [...threads].sort(
+    (a, b) =>
+      Number(isDuetThreadPinned(entries[b.id])) - Number(isDuetThreadPinned(entries[a.id])) ||
+      b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
 
 export const DUET_ICON_COLORS = [
   "#f43f5e",
