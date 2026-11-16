@@ -96,6 +96,8 @@ jobs:
       # downloads from GitHub. The key changes only with the Electron version.
       - name: Cache Electron download
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
@@ -165,6 +167,8 @@ jobs:
       # downloads from GitHub. The key changes only with the Electron version.
       - name: Cache Electron download
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
@@ -236,6 +240,8 @@ jobs:
         id: chromium_cache
         if: ${{ !cancelled() && steps.build.outcome == 'success' && needs.changes.outputs.test_web != 'false' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}
@@ -267,7 +273,8 @@ jobs:
           exit "$(cat "$RUNNER_TEMP/typecheck-status")"
 
   # Everything except `t3` (apps/server) and the web app, which has its own job
-  # below. `--parallel` drops the package dependency ordering that `vp run`
+  # below. Two shards split the mobile suite that otherwise gates this job.
+  # `--parallel` drops the package dependency ordering that `vp run`
   # applies by default: these `test` tasks declare no `dependsOn` and resolve
   # workspace deps from source, so ordering only bought us idle runners between
   # dependency layers. The concurrency limit stays at the default 4 so peak load
@@ -276,11 +283,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    name: Test
+    name: Test ${{ matrix.shard }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test != 'false' }}
     runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.user.login == '01-1' || (github.event.action == 'labeled' && github.event.label.name == 'ci:boat')) && (vars.BOAT_WARM == '1' && 'boat-warm' || 'boat') || 'ubuntu-24.04' }}
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -319,6 +330,8 @@ jobs:
       # downloads from GitHub. The key changes only with the Electron version.
       - name: Cache Electron download
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/electron
           key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
@@ -351,7 +364,7 @@ jobs:
             for package in $TEST_PACKAGES; do filters+=(--filter "$package"); done
           fi
           # The runner's trace writer can crash on surrogate pairs in test output.
-          vp run --parallel --concurrency-limit 4 "${filters[@]}" test 2>&1 | python3 -u -c '
+          vp run --parallel --concurrency-limit 4 "${filters[@]}" test --shard ${{ matrix.shard }}/${{ strategy.job-total }} --passWithNoTests 2>&1 | python3 -u -c '
           import sys
           for line in sys.stdin:
               sys.stdout.write(line.encode("ascii", "backslashreplace").decode("ascii"))
@@ -399,6 +412,8 @@ jobs:
       - name: Cache Chromium
         id: chromium_cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}
@@ -474,6 +489,8 @@ jobs:
         id: chromium_cache
         if: steps.changes.outputs.test_server != 'false'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          TAR_OPTIONS: --overwrite
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}

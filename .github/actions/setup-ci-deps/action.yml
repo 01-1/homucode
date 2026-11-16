@@ -31,11 +31,24 @@ runs:
         echo "node=$(jq -r '.engines.node' package.json)" >> "$GITHUB_OUTPUT"
         echo "pnpm=$(jq -r '.packageManager' package.json)" >> "$GITHUB_OUTPUT"
 
+    - name: Detect installed Vite+
+      id: vp_local
+      shell: bash
+      env:
+        VP_VERSION: ${{ steps.vp.outputs.version }}
+      run: |
+        installed=$("$HOME/.vite-plus/bin/vp" --version 2>/dev/null || true)
+        if [[ -n "$VP_VERSION" ]] && grep -Eq "(^|[[:space:]])${VP_VERSION//./[.]}($|[[:space:]])" <<< "$installed"; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        fi
+
     # Pinned because release-desktop.yml signs builds with this action in the job.
     - name: Cache Vite+
       id: vp_cache
-      if: steps.vp.outputs.version != ''
+      if: steps.vp.outputs.version != '' && steps.vp_local.outputs.present != 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      env:
+        TAR_OPTIONS: ${{ runner.os == 'Linux' && '--overwrite' || '' }}
       with:
         path: ~/.vite-plus
         key: vite-plus-home-v2-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.vp.outputs.version }}-node${{ steps.vp.outputs.node }}-${{ steps.vp.outputs.pnpm }}
@@ -44,8 +57,8 @@ runs:
     # this exact version is installed. A cache hit already has everything, so
     # skip setup-vp and do its remaining work here. This keeps npm outages from
     # failing jobs.
-    - name: Use cached Vite+
-      if: steps.vp_cache.outputs.cache-hit == 'true'
+    - name: Use installed Vite+
+      if: steps.vp_local.outputs.present == 'true' || steps.vp_cache.outputs.cache-hit == 'true'
       shell: bash
       run: |
         echo "$HOME/.vite-plus/bin" >> "$GITHUB_PATH"
@@ -55,7 +68,7 @@ runs:
     # stalled stream holds the job that long. It retries 3 times and resumes
     # partial bytes, so a shorter limit costs a slow download only a retry.
     - name: Setup Vite+
-      if: steps.vp_cache.outputs.cache-hit != 'true'
+      if: steps.vp_local.outputs.present != 'true' && steps.vp_cache.outputs.cache-hit != 'true'
       uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
       env:
         VP_DOWNLOAD_TIMEOUT: "120"
@@ -73,7 +86,11 @@ runs:
       env:
         INSTALL_ARGS: ${{ inputs.install-args }}
       run: |
-        echo "path=$(vp pm cache dir)" >> "$GITHUB_OUTPUT"
+        store_path=$(vp pm cache dir)
+        echo "path=$store_path" >> "$GITHUB_OUTPUT"
+        if [[ -d "$store_path" ]] && [[ -n "$(find "$store_path" -type f -print -quit)" ]]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        fi
         metadata_dir="${pnpm_config_cache_dir:-$RUNNER_TEMP/pnpm-metadata}"
         echo "pnpm_config_cache_dir=$metadata_dir" >> "$GITHUB_ENV"
         echo "verified=$metadata_dir/lockfile-verified.jsonl" >> "$GITHUB_OUTPUT"
@@ -83,6 +100,8 @@ runs:
           echo "namespace=filtered-$(printf '%s' "$INSTALL_ARGS" | cksum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
         fi
 
+    # A warm runner's store can fill any missing packages during install without
+    # downloading and extracting the full cache over its existing files.
     # Filtered installs prefer the current full store, which holds every package,
     # over an older store of their own.
     # The pnpm store stays a cache tarball on the runner's own disk. A store on a
@@ -91,8 +110,10 @@ runs:
     # against 9s plus an 11s restore.
     - name: Restore pnpm store
       id: pnpm_cache
-      if: inputs.install == 'true'
+      if: inputs.install == 'true' && steps.pnpm_store.outputs.present != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      env:
+        TAR_OPTIONS: ${{ runner.os == 'Linux' && '--overwrite' || '' }}
       with:
         path: ${{ steps.pnpm_store.outputs.path }}
         key: pnpm-${{ steps.pnpm_store.outputs.namespace }}-v1-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
@@ -107,6 +128,8 @@ runs:
       id: pnpm_verified
       if: inputs.install == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      env:
+        TAR_OPTIONS: ${{ runner.os == 'Linux' && '--overwrite' || '' }}
       with:
         path: ${{ steps.pnpm_store.outputs.verified }}
         key: pnpm-verified-v1-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
@@ -134,6 +157,7 @@ runs:
     - name: Save pnpm store
       if: >-
         inputs.install == 'true' && inputs.save-pnpm-store == 'true' &&
+        steps.pnpm_store.outputs.present != 'true' &&
         (github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch) &&
         steps.pnpm_cache.outputs.cache-hit != 'true' &&
         (steps.pnpm_store.outputs.namespace == 'full' ||
