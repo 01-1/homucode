@@ -5786,17 +5786,17 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     {
       readBy: "none",
       echoes: true,
-      title: "warns that a steer Claude never read before Stop was not delivered",
+      title: "redelivers a steer Claude never read before Stop",
     },
     {
       readBy: "none",
       echoes: false,
-      title: "does not warn about a steer on a CLI that never echoes prompt uuids",
+      title: "does not redeliver a steer on a CLI that never echoes prompt uuids",
     },
     {
       readBy: "assistant",
       echoes: true,
-      title: "does not warn about a steer Claude read before Stop",
+      title: "does not redeliver a steer Claude read before Stop",
     },
   ] as const)("$title", ({ readBy, echoes }) =>
     Effect.gen(function* () {
@@ -5889,33 +5889,21 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           }),
         );
       }
-      const noticesBefore = harness.events.length;
+      const eventsBefore = harness.events.length;
       yield* harness.runtime.interruptTurn({
         providerThread: harness.providerThread,
         providerTurnId,
       });
       assert.equal((yield* Queue.take(harness.terminalReceipts)).status, "interrupted");
 
-      const notices = harness.events
-        .slice(noticesBefore)
-        .flatMap((event) =>
-          event.type === "turn_item.updated" && event.turnItem.type === "system_notice"
-            ? [event.turnItem.message]
-            : [],
-        );
-      const undelivered = notices.find((message) =>
-        /not (have )?(been )?delivered|never (reached|delivered)/i.test(message ?? ""),
+      const redelivered = harness.events
+        .slice(eventsBefore)
+        .filter((event) => event.type === "steer.updated" && event.redeliver === true)
+        .map((event) => (event.type === "steer.updated" ? event.messageId : undefined));
+      assert.deepStrictEqual(
+        redelivered,
+        readBy === "none" && echoes ? [MessageId.make("unread-steer")] : [],
       );
-      if (readBy !== "none" || !echoes) {
-        assert.isUndefined(undelivered);
-        return;
-      }
-      assert.isDefined(
-        undelivered,
-        `expected an undelivered-steer notice, got ${JSON.stringify(notices)}`,
-      );
-      assert.match(undelivered ?? "", /resend|send it again|re-send/i);
-      assert.include(undelivered, "PELICAN");
     }).pipe(
       Effect.scoped,
       Effect.provide(

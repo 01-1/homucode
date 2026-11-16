@@ -140,6 +140,8 @@ export const ProviderAdapterV2Event = Schema.Union([
     runId: RunId,
     messageId: MessageId,
     status: Schema.Literals(["pending", "completed", "cancelled"]),
+    /** Stop dropped it before the agent confirmed reading it, so T3 sends it again. */
+    redeliver: Schema.optional(Schema.Literal(true)),
   }),
   // Start before the root terminal; clear only after the final covered projection.
   // Consumer lifetime cannot depend on a producer probe that runs ahead of its queue.

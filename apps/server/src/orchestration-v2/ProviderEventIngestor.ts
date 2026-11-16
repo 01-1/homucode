@@ -35,6 +35,7 @@ import {
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import { UsageLimitResetFallback } from "../usage/UsageLimitSources.ts";
+import type * as EffectOutbox from "./EffectOutbox.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -771,6 +772,19 @@ export const layer: Layer.Layer<
             if (events.length === 0) {
               return [];
             }
+            const effects: ReadonlyArray<EffectOutbox.PendingOrchestrationEffectV2> =
+              input.event.type === "steer.updated" && input.event.redeliver === true
+                ? [
+                    {
+                      id: `effect:steer.redeliver:${input.event.runId}:${input.event.messageId}`,
+                      commandId: CommandId.make(
+                        `command:effect:steer.redeliver:${input.event.runId}:${input.event.messageId}`,
+                      ),
+                      threadId: input.event.threadId,
+                      request: { type: "steer.redeliver", messageId: input.event.messageId },
+                    },
+                  ]
+                : [];
             const mapWriteError = (cause: unknown) =>
               new ProviderEventPublishError({
                 providerSessionId: input.providerSessionId,
@@ -789,13 +803,16 @@ export const layer: Layer.Layer<
               return ownerResult.storedEvents;
             }
             if (input.writeIfRunCurrent === undefined) {
-              return yield* eventSink
-                .write({
-                  guardPendingUserInputCancellations: true,
-                  ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
-                  events,
-                })
-                .pipe(retryLockTimeout, Effect.mapError(mapWriteError));
+              const write = {
+                guardPendingUserInputCancellations: true,
+                ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+                events,
+              };
+              return yield* (
+                effects.length === 0
+                  ? eventSink.write(write)
+                  : eventSink.writeWithEffects({ ...write, effects })
+              ).pipe(retryLockTimeout, Effect.mapError(mapWriteError));
             }
             const result = yield* eventSink
               .writeIfRunCurrent({
@@ -804,6 +821,7 @@ export const layer: Layer.Layer<
                 threadId: input.threadId,
                 ...input.writeIfRunCurrent,
                 events,
+                ...(effects.length === 0 ? {} : { effects }),
               })
               .pipe(retryLockTimeout, Effect.mapError(mapWriteError));
             return result.storedEvents;

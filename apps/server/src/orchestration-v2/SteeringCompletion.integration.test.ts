@@ -2849,6 +2849,83 @@ it.effect("queues a plain send behind the stopped queue and releases its hold", 
   }),
 );
 
+it.effect("sends a steer again after Stop drops it unread", () =>
+  Effect.gen(function* () {
+    let dropSteer: Effect.Effect<void> = Effect.void;
+    const { events, started, steered, layer, startFirstTurn } = yield* nextTurnSelectionHarness(
+      "steer-redelivered-after-stop",
+      false,
+      true,
+      Effect.suspend(() => dropSteer),
+    );
+    yield* Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+      const threadId = yield* startFirstTurn;
+      const first = started[0]!;
+      const messageId = MessageId.make("message:unread-steer");
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("steer"),
+        threadId,
+        messageId,
+        text: "use the other emulator",
+        attachments: [],
+        dispatchMode: { type: "steer_active", targetRunId: first.runId },
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* worker.drain();
+      assert.deepEqual(steered, [timestamped("use the other emulator")]);
+      const steerUpdated = (status: "pending" | "cancelled") =>
+        Queue.offer(events, {
+          type: "steer.updated",
+          driver,
+          threadId,
+          runId: first.runId,
+          messageId,
+          status,
+          ...(status === "cancelled" ? { redeliver: true as const } : {}),
+        });
+      yield* steerUpdated("pending");
+      dropSteer = steerUpdated("cancelled").pipe(Effect.asVoid);
+      const stopped = yield* orchestrator.streamDomainEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.type === "run.updated" &&
+            event.payload.id === first.runId &&
+            event.payload.status === "interrupted",
+        ),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.forkScoped,
+      );
+      yield* orchestrator.dispatch({
+        type: "run.interrupt",
+        commandId: CommandId.make("stop"),
+        threadId,
+        runId: first.runId,
+        holdQueue: true,
+        leaveSubagentsRunning: true,
+      });
+      yield* worker.drain();
+      yield* Fiber.join(stopped);
+      yield* worker.drain();
+      yield* orchestrator.resumeQueuedRuns;
+      yield* worker.drain();
+
+      assert.equal(started.length, 2);
+      assert.equal(started[1]?.message.messageId, messageId);
+      const projection = yield* orchestrator.getThreadProjection(threadId);
+      const steer = projection.turnItems.find(
+        (item) => item.type === "user_message" && item.messageId === messageId,
+      );
+      assert.equal(steer?.runId, started[1]!.runId);
+      assert.equal(steer?.status, "completed");
+    }).pipe(Effect.provide(layer));
+  }),
+);
+
 const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoals?: boolean) {
   const harness = yield* nextTurnSelectionHarness(
     name,
