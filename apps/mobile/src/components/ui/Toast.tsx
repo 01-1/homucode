@@ -30,6 +30,7 @@ export type ToastProps = {
   readonly tone?: "default" | "success" | "danger";
   readonly busy?: boolean;
   readonly action?: { readonly label: string; readonly onPress: () => void };
+  readonly placement?: "top" | "bottom";
 } & (
   | { readonly dismissMode: "swipe"; readonly onDismiss: () => void }
   | { readonly dismissMode?: "button"; readonly onDismiss?: () => void }
@@ -148,7 +149,12 @@ function SwipeableToast(props: ToastProps & { readonly onDismiss: () => void }) 
   const toastEntering = (values: EntryAnimationsValues) => {
     "worklet";
     return {
-      initialValues: { originY: values.targetOriginY + values.targetHeight + 12 },
+      initialValues: {
+        originY:
+          props.placement === "top"
+            ? values.targetOriginY - values.targetHeight - 12
+            : values.targetOriginY + values.targetHeight + 12,
+      },
       animations: { originY: withTiming(values.targetOriginY, ENTER_TIMING) },
       callback: (finished: boolean) => {
         if (finished) runOnJS(finishEntering)();
