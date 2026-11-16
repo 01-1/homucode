@@ -113,7 +113,9 @@ export class AutoreviewService extends Context.Service<
       AutoreviewError
     >;
     /** Native human stop: cancel work before removing the attachment. */
-    readonly stop: (input: OrchestrationV2StopAutoreviewerInput) => Effect.Effect<void, AutoreviewError>;
+    readonly stop: (
+      input: OrchestrationV2StopAutoreviewerInput,
+    ) => Effect.Effect<void, AutoreviewError>;
     readonly detach: (input: {
       readonly commandId: CommandId;
       readonly threadId: ThreadId;
@@ -932,33 +934,42 @@ export const make = (port: AutoreviewPort) => {
     );
 
   const stop: AutoreviewService["Service"]["stop"] = (input) =>
-    lock.withPermits(1)(Effect.uninterruptible(Effect.gen(function* () {
-      const thread = yield* projections.getThread(input.threadId).pipe(
-        Effect.mapError(failed("Unable to load the reviewed thread")),
-      );
-      const current = thread.autoreviewers ?? [];
-      const reviewer = current.find((entry) => entry.threadId === input.reviewerThreadId);
-      if (reviewer === undefined) {
-        return yield* new AutoreviewError({
-          reason: "not_found",
-          detail: "This autoreviewer is no longer attached. Refresh the thread.",
-        });
-      }
-      if (port.stopReviewerWork === undefined) {
-        return yield* new AutoreviewError({ reason: "failed", detail: "Human reviewer control is unavailable." });
-      }
-      // Keep the attachment on failure so the same selected reviewer can be retried.
-      // Holding the shared reactor lock prevents new batches between cancellation and detach.
-      yield* port.stopReviewerWork({ commandId: input.commandId, threadId: input.threadId, reviewer }).pipe(
-        Effect.mapError(failed("Unable to stop the autoreviewer")),
-      );
-      yield* dropPendingFindings(input.commandId, input.threadId, [reviewer]).pipe(
-        Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
-      );
-      yield* setReviewers(input.commandId, input.threadId, current.filter((entry) => entry !== reviewer)).pipe(
-        Effect.mapError(failed("Unable to detach the stopped autoreviewer")),
-      );
-    })));
+    lock.withPermits(1)(
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          const thread = yield* projections
+            .getThread(input.threadId)
+            .pipe(Effect.mapError(failed("Unable to load the reviewed thread")));
+          const current = thread.autoreviewers ?? [];
+          const reviewer = current.find((entry) => entry.threadId === input.reviewerThreadId);
+          if (reviewer === undefined) {
+            return yield* new AutoreviewError({
+              reason: "not_found",
+              detail: "This autoreviewer is no longer attached. Refresh the thread.",
+            });
+          }
+          if (port.stopReviewerWork === undefined) {
+            return yield* new AutoreviewError({
+              reason: "failed",
+              detail: "Human reviewer control is unavailable.",
+            });
+          }
+          // Keep the attachment on failure so the same selected reviewer can be retried.
+          // Holding the shared reactor lock prevents new batches between cancellation and detach.
+          yield* port
+            .stopReviewerWork({ commandId: input.commandId, threadId: input.threadId, reviewer })
+            .pipe(Effect.mapError(failed("Unable to stop the autoreviewer")));
+          yield* dropPendingFindings(input.commandId, input.threadId, [reviewer]).pipe(
+            Effect.mapError(failed("Unable to drop the reviewer's pending findings")),
+          );
+          yield* setReviewers(
+            input.commandId,
+            input.threadId,
+            current.filter((entry) => entry !== reviewer),
+          ).pipe(Effect.mapError(failed("Unable to detach the stopped autoreviewer")));
+        }),
+      ),
+    );
 
   const list: AutoreviewService["Service"]["list"] = Effect.fn("AutoreviewService.list")(
     function* (threadId) {

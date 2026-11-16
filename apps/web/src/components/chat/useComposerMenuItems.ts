@@ -229,7 +229,8 @@ export function useComposerMenuItems({
           type: "slash-command",
           command: "q",
           label: "/q",
-          description: "Ask one question on the quick model, then switch back; the thread's context and cache are kept",
+          description:
+            "Ask one question on the quick model, then switch back; the thread's context and cache are kept",
         },
         {
           id: "slash:cd",

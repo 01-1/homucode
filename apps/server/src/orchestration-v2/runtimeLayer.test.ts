@@ -7444,49 +7444,51 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
       }),
   );
 
-  it.effect("changes an idle thread's folder to the destination project's, refusing a busy one", () =>
-    Effect.gen(function* () {
-      const projects = yield* ProjectService.ProjectService;
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const { folder, createThread } = yield* setup("project-cd");
-      const threadId = yield* createThread("main", folder);
-      const destination = yield* projects.create({
-        commandId: CommandId.make("project-cd-destination"),
-        projectId: ProjectId.make("project-cd-destination"),
-        title: "Destination",
-        workspaceRoot: "/tmp/project-cd-destination",
-      });
-      const move = (step: string) =>
-        orchestrator.dispatch({
-          type: "thread.project.move",
-          commandId: CommandId.make(`project-cd-${step}`),
-          threadId,
-          projectId: destination.id,
-          changeDirectory: true,
+  it.effect(
+    "changes an idle thread's folder to the destination project's, refusing a busy one",
+    () =>
+      Effect.gen(function* () {
+        const projects = yield* ProjectService.ProjectService;
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const { folder, createThread } = yield* setup("project-cd");
+        const threadId = yield* createThread("main", folder);
+        const destination = yield* projects.create({
+          commandId: CommandId.make("project-cd-destination"),
+          projectId: ProjectId.make("project-cd-destination"),
+          title: "Destination",
+          workspaceRoot: "/tmp/project-cd-destination",
         });
+        const move = (step: string) =>
+          orchestrator.dispatch({
+            type: "thread.project.move",
+            commandId: CommandId.make(`project-cd-${step}`),
+            threadId,
+            projectId: destination.id,
+            changeDirectory: true,
+          });
 
-      yield* move("idle");
-      const moved = yield* shellOf(threadId);
-      assert.equal(moved?.projectId, destination.id);
-      assert.isNull(moved?.worktreePath);
-      assert.equal(moved?.workspaceRoot, destination.workspaceRoot);
-      assert.equal((yield* move("again")).storedEvents.length, 0);
+        yield* move("idle");
+        const moved = yield* shellOf(threadId);
+        assert.equal(moved?.projectId, destination.id);
+        assert.isNull(moved?.worktreePath);
+        assert.equal(moved?.workspaceRoot, destination.workspaceRoot);
+        assert.equal((yield* move("again")).storedEvents.length, 0);
 
-      yield* orchestrator.dispatch({
-        type: "message.dispatch",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: CommandId.make("project-cd-start"),
-        threadId,
-        messageId: MessageId.make("project-cd-start"),
-        text: "Keep this run active.",
-        attachments: [],
-        modelSelection,
-        dispatchMode: { type: "start_immediately" },
-      });
-      const rejected = yield* move("busy").pipe(Effect.flip);
-      assert.equal(rejected._tag, "OrchestratorDispatchError");
-    }),
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("project-cd-start"),
+          threadId,
+          messageId: MessageId.make("project-cd-start"),
+          text: "Keep this run active.",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const rejected = yield* move("busy").pipe(Effect.flip);
+        assert.equal(rejected._tag, "OrchestratorDispatchError");
+      }),
   );
 
   it.effect("moves every thread in the folder and its bound tasks into one project", () =>
