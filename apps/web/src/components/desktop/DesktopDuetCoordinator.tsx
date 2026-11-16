@@ -24,9 +24,15 @@ function EnvironmentDuetCoordinator({ environmentId }: { environmentId: Environm
   const launcherEnabled = settings?.duetDesktopAppEnabled;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the server's Duet opt-in to the Electron launcher and window service
   useEffect(() => {
-    if (bridge?.isDuetWindow?.() || !bridge?.configureDuet || enabled === undefined) return;
+    if (!bridge?.configureDuet || enabled === undefined) return;
+    const isDuetWindow = bridge.isDuetWindow?.() === true;
     void bridge
-      .configureDuet({ enabled, launcherEnabled: launcherEnabled === true, environmentId })
+      .configureDuet({
+        enabled,
+        launcherEnabled: launcherEnabled === true,
+        // The Duet window's own destination can lag its route at startup; leave it to the main window.
+        ...(isDuetWindow ? {} : { environmentId }),
+      })
       .catch(() =>
         toastManager.add({ type: "error", title: "Could not update the Duet desktop app" }),
       );

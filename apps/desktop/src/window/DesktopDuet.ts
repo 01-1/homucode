@@ -63,7 +63,7 @@ const make = Effect.gen(function* () {
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   let requested = args.includes("--duet");
   let configured = false;
-  let settings: DesktopDuetSettings = {
+  let settings: Required<DesktopDuetSettings> = {
     enabled: false,
     launcherEnabled: false,
     environmentId: null,
@@ -187,7 +187,13 @@ const make = Effect.gen(function* () {
     }
   });
   const configure = Effect.fn("DesktopDuet.configure")(
-    function* (next: DesktopDuetSettings) {
+    function* (input: DesktopDuetSettings) {
+      const next = {
+        enabled: input.enabled,
+        launcherEnabled: input.launcherEnabled,
+        environmentId:
+          input.environmentId === undefined ? settings.environmentId : input.environmentId,
+      };
       if (
         configured &&
         settings.enabled === next.enabled &&

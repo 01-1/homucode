@@ -1077,7 +1077,8 @@ export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 export const DesktopDuetSettings = Schema.Struct({
   enabled: Schema.Boolean,
   launcherEnabled: Schema.Boolean,
-  environmentId: Schema.NullOr(Schema.String),
+  /** Omitted by the Duet window, which keeps the destination the main window set. */
+  environmentId: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 export type DesktopDuetSettings = typeof DesktopDuetSettings.Type;
 

@@ -129,7 +129,11 @@ it.effect(
         "tasks",
       );
       expect(sent.at(-1)).toEqual({ view: "code", ...location });
-      yield* duet.configure({ ...settings, enabled: false });
+      const loads = loaded.length;
+      // The Duet window omits the destination, so the main window's choice stays.
+      yield* duet.configure({ enabled: true, launcherEnabled: false });
+      expect(loaded.length).toBe(loads);
+      yield* duet.configure({ enabled: false, launcherEnabled: false });
       expect(closed).toBe(2);
       yield* duet.configure({ ...settings, enabled: false });
       expect(closed).toBe(2);
