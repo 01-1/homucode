@@ -845,6 +845,22 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="settings-sync" title="Settings sync">
+        <SettingsRow
+          {...setting("settings-sync")}
+          description="Keep this device's settings the same as your other devices', through your primary server. When a setting changed in two places, or on first setup, you choose which value to keep."
+          control={
+            <Switch
+              checked={settings.settingsSyncEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ settingsSyncEnabled: Boolean(checked) })
+              }
+              aria-label="Settings sync"
+            />
+          }
+        />
+      </SettingsSection>
+
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow

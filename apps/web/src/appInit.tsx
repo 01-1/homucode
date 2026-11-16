@@ -1,3 +1,4 @@
+import { startClientSettingsSync } from "./settingsSync";
 import {
   scopedThreadKey,
   scopeProjectRef,
@@ -267,6 +268,7 @@ export function startAppServices(): AppRouter {
   startBrowserChromeThemeSync(router);
   startDefaultThemeAdoption();
   startModelPreferencesMigration();
+  startClientSettingsSync();
   startAgentOpenedPreviews();
   if (isElectron) startElectronBrowserHost();
   startPreviewTitleRecording();
