@@ -890,6 +890,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["git submodule init recursive top-level none worktree t3.json"],
   },
   {
+    id: "local-default-branch",
+    title: "Start on default branch",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["new local threads checkout switch main default branch project folder"],
+  },
+  {
     id: "start-from-origin",
     title: "Start from remote",
     to: "/settings/worktrees",

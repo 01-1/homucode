@@ -26,6 +26,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { toastManager } from "../ui/toast";
 import { Switch } from "../ui/switch";
 import { resolveDefaultModelSettingsPresentation } from "./ProjectDefaultsSettings.logic";
+import { ScopedSwitch } from "./ScopedSwitch";
 import type { ProjectSettingsCategory } from "./ProjectSettingsPanel";
 import { searchableSetting } from "./settingsSearch";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -42,6 +43,43 @@ import {
   useScopedSettingSource,
   useUpdateScopedSettings,
 } from "./useScopedSettings";
+
+function LocalThreadsUseDefaultBranchRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      serverScoped
+      settingKeys={["newLocalThreadsUseDefaultBranch"]}
+      {...searchableSetting("local-default-branch")}
+      description="New threads in the project folder switch it to the default branch first. Skipped when it has uncommitted changes or another thread there is working."
+      resetAction={
+        settings.newLocalThreadsUseDefaultBranch !==
+        DEFAULT_SERVER_SETTINGS.newLocalThreadsUseDefaultBranch ? (
+          <SettingResetButton
+            label="local threads start on the default branch"
+            onClick={() =>
+              updateSettings({
+                newLocalThreadsUseDefaultBranch:
+                  DEFAULT_SERVER_SETTINGS.newLocalThreadsUseDefaultBranch,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <ScopedSwitch
+          settingKeys={["newLocalThreadsUseDefaultBranch"]}
+          checked={settings.newLocalThreadsUseDefaultBranch}
+          onCheckedChange={(checked) =>
+            updateSettings({ newLocalThreadsUseDefaultBranch: Boolean(checked) })
+          }
+          aria-label="Start new local threads on the default branch"
+        />
+      }
+    />
+  );
+}
 
 const WORKTREE_SUBMODULES_OPTIONS = ["recursive", "top-level", "none"] as const;
 function isWorktreeSubmodules(value: string | null): value is WorktreeSubmodules {
@@ -416,6 +454,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
           {modelRow}
           {fallbackRow}
           {workspaceRow}
+          <LocalThreadsUseDefaultBranchRow />
         </>
       ) : category === "general" ? (
         <>
@@ -495,6 +534,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             }
           />
           {workspaceRow}
+          <LocalThreadsUseDefaultBranchRow />
         </>
       ) : (
         <>
