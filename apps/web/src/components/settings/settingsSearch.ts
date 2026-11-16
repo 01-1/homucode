@@ -865,6 +865,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "staged-build",
+    title: "Staged build",
+    to: "/settings/about",
+    searchTerms: ["appimage rollback undo revert previous build launcher next start"],
+    desktopOnly: true,
+  },
+  {
     id: "mobile-app",
     title: "Mobile app",
     to: "/settings/about",

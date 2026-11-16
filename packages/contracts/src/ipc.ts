@@ -341,6 +341,24 @@ export const DesktopCliCommandStateSchema = Schema.Struct({
 });
 export type DesktopCliCommandState = typeof DesktopCliCommandStateSchema.Type;
 
+/** Builds in the running AppImage's folder; a launcher starts the newest `T3-Code-*.AppImage`. */
+export const DesktopStagedBuildsStateSchema = Schema.Struct({
+  folder: Schema.String,
+  running: Schema.NullOr(Schema.String),
+  /** What the next start loads. */
+  next: Schema.NullOr(Schema.String),
+  /** What the next start loads once `next` is undone. */
+  previous: Schema.NullOr(Schema.String),
+});
+export type DesktopStagedBuildsState = typeof DesktopStagedBuildsStateSchema.Type;
+
+export const DesktopStagedBuildUndoResultSchema = Schema.Struct({
+  state: DesktopStagedBuildsStateSchema,
+  /** The undone build's new file name, which `redo` takes. */
+  undoneAs: Schema.String,
+});
+export type DesktopStagedBuildUndoResult = typeof DesktopStagedBuildUndoResultSchema.Type;
+
 export interface DesktopUpdateActionResult {
   accepted: boolean;
   completed: boolean;
@@ -1145,6 +1163,12 @@ export interface DesktopBridge {
     install: () => Promise<DesktopCliCommandState>;
     uninstall: () => Promise<DesktopCliCommandState>;
     addToPath: () => Promise<DesktopCliCommandState>;
+  };
+  /** Null when this app is not running from an AppImage. */
+  stagedBuilds: {
+    getState: () => Promise<DesktopStagedBuildsState | null>;
+    undo: () => Promise<DesktopStagedBuildUndoResult>;
+    redo: (undoneAs: string) => Promise<DesktopStagedBuildsState>;
   };
   webLinks: {
     setReady: (ready: boolean) => Promise<void>;
