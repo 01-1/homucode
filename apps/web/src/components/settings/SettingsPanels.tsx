@@ -535,6 +535,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? ["Rich text composer"]
       : []),
+    ...(settings.userMessageMarkdownEnabled !== DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled
+      ? ["Format sent messages as Markdown"]
+      : []),
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? ["Send shortcut"] : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
       ? ["Follow-up behavior"]
@@ -654,6 +657,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
+      userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility,
@@ -1128,6 +1132,32 @@ export function ChatSettingsPanel() {
                 updateSettings({ composerRichTextEnabled: Boolean(checked) })
               }
               aria-label="Rich text composer"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("user-message-markdown")}
+          description="Off shows your sent messages as the plain text you typed."
+          resetAction={
+            settings.userMessageMarkdownEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled ? (
+              <SettingResetButton
+                label="sent message formatting"
+                onClick={() =>
+                  updateSettings({
+                    userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.userMessageMarkdownEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ userMessageMarkdownEnabled: Boolean(checked) })
+              }
+              aria-label="Format sent messages as Markdown"
             />
           }
         />

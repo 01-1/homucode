@@ -14,6 +14,7 @@ import { useQuietThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { useClientSettings } from "../../hooks/useSettings";
 import { memo, use, useState, type ReactNode } from "react";
 import {
   createMessageAttachmentPreviewProjector,
@@ -1181,8 +1182,17 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   markdownCwd: string | undefined;
 }) {
   const ctx = use(TimelineRowCtx);
+  const markdownEnabled = useClientSettings((settings) => settings.userMessageMarkdownEnabled);
   if (props.text.length === 0) {
     return null;
+  }
+  if (!markdownEnabled) {
+    return (
+      <PlainUserMessageText
+        text={props.text}
+        renderContextReference={props.renderContextReference}
+      />
+    );
   }
   return (
     <ChatMarkdown
@@ -1198,3 +1208,26 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     />
   );
 });
+
+function PlainUserMessageText(props: {
+  text: string;
+  renderContextReference?: ((reference: ChatMarkdownContextReference) => ReactNode) | undefined;
+}) {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const reference of collectComposerContextReferences(props.text)) {
+    parts.push(props.text.slice(cursor, reference.start));
+    parts.push(
+      <span key={reference.start}>
+        {props.renderContextReference ? props.renderContextReference(reference) : reference.label}
+      </span>,
+    );
+    cursor = reference.end;
+  }
+  parts.push(props.text.slice(cursor));
+  return (
+    <div className="text-foreground wrap-break-word whitespace-pre-wrap" data-user-message-plain>
+      {parts}
+    </div>
+  );
+}
