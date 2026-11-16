@@ -29,7 +29,9 @@ const runCli = (
   Command.runWith(cli, { version: "0.0.0" })(args).pipe(
     Effect.provide(
       Layer.mergeAll(
-        NodeServices.layer.pipe(Layer.updateService(FileSystem.FileSystem, mapFileSystem)),
+        Layer.effect(FileSystem.FileSystem, Effect.map(FileSystem.FileSystem, mapFileSystem)).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
         NodeCrypto.layer,
         NetService.layer,
         TestConsole.layer,
