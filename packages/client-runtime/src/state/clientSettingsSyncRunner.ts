@@ -42,10 +42,12 @@ export interface ClientSettingsSyncAdapter {
     environmentId: EnvironmentId,
     next: SyncedClientSettings,
   ) => Promise<SyncedClientSettings | null>;
+  readonly onError: (error: unknown) => void;
 }
 
 export interface ClientSettingsSyncRunner {
-  readonly requestSync: () => void;
+  /** Resolves when this and any sync it queued behind have finished. */
+  readonly requestSync: () => Promise<void>;
   readonly getPrompt: () => SettingsSyncPrompt | null;
   readonly subscribePrompt: (listener: () => void) => () => void;
   /** Applies the user's side for every conflict and syncs. */
@@ -101,7 +103,15 @@ export function createClientSettingsSyncRunner(
     const { environmentId, remote } = target;
     const local = adapter.readLocal();
     const base = await adapter.readBase(environmentId);
-    if (base?.revision === remote.revision && syncedValuesEqual(local, base.values)) return;
+    // Keys this client does not have are not its opinion, so they cannot make it out of date.
+    if (
+      base?.revision === remote.revision &&
+      Object.entries(local).every(([key, value]) =>
+        syncedValuesEqual({ value }, { value: base.values[key] }),
+      )
+    ) {
+      return;
+    }
 
     const plan = planClientSettingsSync({ local, base, remote });
     const resolved = resolveClientSettingsSync(plan, choices ?? {});
@@ -134,27 +144,27 @@ export function createClientSettingsSyncRunner(
     await writeRemote(environmentId, remote, resolved);
   };
 
-  let running = false;
+  let running: Promise<void> | null = null;
   let rerun = false;
 
-  const requestSync = () => {
-    if (running) {
+  const requestSync = (): Promise<void> => {
+    if (running !== null) {
       rerun = true;
-      return;
+      return running;
     }
-    running = true;
-    void (async () => {
+    running = (async () => {
       try {
         do {
           rerun = false;
           await syncOnce();
         } while (rerun);
       } catch (error) {
-        console.warn("[SETTINGS_SYNC] sync failed", error);
+        adapter.onError(error);
       } finally {
-        running = false;
+        running = null;
       }
     })();
+    return running;
   };
 
   return {
@@ -168,7 +178,7 @@ export function createClientSettingsSyncRunner(
       choices = nextChoices;
       promptDeferred = false;
       setPrompt(null);
-      requestSync();
+      void requestSync();
     },
     deferPrompt: () => {
       promptDeferred = true;

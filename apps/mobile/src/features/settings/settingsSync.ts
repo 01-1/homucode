@@ -61,7 +61,11 @@ const runner = createClientSettingsSyncRunner({
   },
   readLocal: () => syncedValuesFromMobilePreferences(readPreferences() ?? {}),
   applyLocal: async (changed) => {
-    savePreferences((current) => mobilePreferencesPatchFromSyncedValues(changed, current));
+    const preferences = readPreferences();
+    if (preferences === null) return;
+    const patch = mobilePreferencesPatchFromSyncedValues(changed, preferences);
+    // Settings only web has come through as changes; writing nothing would still wake sync.
+    if (Object.keys(patch).length > 0) savePreferences(() => patch);
   },
   readBase: (environmentId) => readPreferences()?.settingsSyncBases?.[environmentId] ?? null,
   writeBase: (environmentId, base) => {
@@ -86,6 +90,7 @@ const runner = createClientSettingsSyncRunner({
     }
     return null;
   },
+  onError: (error) => console.warn("[SETTINGS_SYNC] sync failed", error),
 });
 
 export function useSettingsSyncPrompt() {

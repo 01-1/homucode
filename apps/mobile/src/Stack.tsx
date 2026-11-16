@@ -710,9 +710,9 @@ const RootStackConfig = createWorkspaceStackNavigator({
       options: sheetRoute({ detent: 0.55, maxDetent: 0.7, androidFit: true }),
     }),
     ...SETTINGS_SCREENS,
-    SettingsSync: createNativeStackScreen({
+    SyncConflicts: createNativeStackScreen({
       screen: SettingsSyncSheet,
-      linking: "settings/sync",
+      linking: "sync-conflicts",
       options: sheetRoute({ detent: 0.75, androidFit: true }),
     }),
     SettingsLegal: createNativeStackScreen({

@@ -3,7 +3,12 @@ import { ModelFavorites, ToolCallVisibility } from "@t3tools/contracts/settings"
 import * as Schema from "effect/Schema";
 
 import type { Preferences } from "../../persistence/mobile-preferences";
-import { normalizeMobileThemeId, resolveMobileThemeIds } from "../../lib/mobileTheme";
+import {
+  DEFAULT_MOBILE_THEME_ID,
+  normalizeMobileThemeId,
+  resolveMobileThemeIds,
+  type MobileThemeId,
+} from "../../lib/mobileTheme";
 import {
   mobileProjectGroupingModePatch,
   resolveMobileProjectGroupingSettings,
@@ -21,6 +26,9 @@ const PREFERENCES = {
   sidebarWorkingShelfEnabled: ["workingShelfEnabled", isBoolean],
   themeAppearanceMode: ["themeMode", Schema.is(Schema.Literals(["light", "dark", "system"]))],
 } as const satisfies Record<string, readonly [keyof Preferences, (value: unknown) => boolean]>;
+
+/** Web has no id for the standard theme: it is the "system" theme, or a half left unset. */
+const webThemeId = (id: MobileThemeId) => (id === DEFAULT_MOBILE_THEME_ID ? undefined : id);
 
 interface SyncedTheme {
   readonly theme: unknown;
@@ -70,11 +78,14 @@ export function syncedValuesFromMobilePreferences(preferences: Preferences): Syn
       values.theme = echo.theme;
       values.themeHalves = echo.themeHalves;
     } else if (ids.light === ids.dark) {
-      values.theme = ids.light;
+      values.theme = webThemeId(ids.light) ?? "system";
       values.themeHalves = null;
     } else {
-      values.theme = preferences.themeId ?? ids.light;
-      values.themeHalves = JSON.stringify({ light: ids.light, dark: ids.dark });
+      values.theme = "system";
+      values.themeHalves = JSON.stringify({
+        light: webThemeId(ids.light),
+        dark: webThemeId(ids.dark),
+      });
     }
   }
   return values;

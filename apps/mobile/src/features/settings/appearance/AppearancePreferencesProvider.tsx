@@ -227,8 +227,9 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     startTransition(() => savePreferences(patch));
   };
 
+  // A theme picked here replaces a synced one the phone could not show.
   const updateThemePreferences = (patch: Partial<Preferences>) => {
-    savePreferences(patch);
+    savePreferences({ ...patch, settingsSyncTheme: undefined });
   };
 
   const setThemeIdForAppearance = (appearance: MobileThemeAppearance, value: MobileThemeId) => {

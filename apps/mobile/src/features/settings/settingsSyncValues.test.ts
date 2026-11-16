@@ -43,6 +43,19 @@ describe("phone settings sync values", () => {
     });
   });
 
+  it("sends the standard theme as web's own, so web keeps the other half", () => {
+    const phone: Preferences = { themeId: "ocean", lightThemeId: "t3-code", darkThemeId: "ocean" };
+
+    expect(syncedValuesFromMobilePreferences(phone)).toMatchObject({
+      theme: "system",
+      themeHalves: '{"dark":"ocean"}',
+    });
+    expect(syncedValuesFromMobilePreferences({ themeId: "t3-code" })).toMatchObject({
+      theme: "system",
+      themeHalves: null,
+    });
+  });
+
   it("keeps a synced theme the phone cannot show instead of replacing it", () => {
     const fromWeb = { theme: "my-custom-theme", themeHalves: null };
     const phone = apply({ themeId: "grove" }, fromWeb);

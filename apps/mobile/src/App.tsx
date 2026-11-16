@@ -214,7 +214,7 @@ const appServiceDisposers = [
   installAppShortcuts(linkToAppPath),
   installAppUpdateChecks(),
   installShowcaseCapture(rootPathnameFromState),
-  installClientSettingsSync(() => linkToAppPath("/settings/sync")),
+  installClientSettingsSync(() => linkToAppPath("/sync-conflicts")),
 ];
 disposeOnFoundationReplace(typeof module === "undefined" ? undefined : module.hot, () => {
   for (const dispose of appServiceDisposers) dispose();

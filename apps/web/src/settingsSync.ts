@@ -119,6 +119,7 @@ const runner = createClientSettingsSyncRunner({
   readBase,
   writeBase,
   writeRemote,
+  onError: (error) => console.warn("[SETTINGS_SYNC] sync failed", error),
 });
 
 export function useSettingsSyncPrompt(): SettingsSyncPrompt | null {
