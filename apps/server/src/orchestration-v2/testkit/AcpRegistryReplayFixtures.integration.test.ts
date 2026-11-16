@@ -18,13 +18,18 @@ import { AcpRegistryOrchestratorReplayHarness } from "../Adapters/AcpRegistryAda
 import * as EffectWorker from "../EffectWorker.ts";
 import * as Orchestrator from "../Orchestrator.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
-import { materializeFixtureInput, SIMPLE_PROMPT } from "./fixtures/shared.ts";
+import {
+  materializeFixtureInput,
+  MULTI_TURN_SECOND_PROMPT,
+  SIMPLE_PROMPT,
+} from "./fixtures/shared.ts";
 import {
   itRunsReplayFixtures,
   readReplayFixtureTranscript,
   runReplayFixture,
 } from "./ProviderReplayFixtures.ts";
 import { layerProviderReplay } from "./ProviderReplayHarness.ts";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 
 describe("ACP registry replay fixtures", () => {
@@ -208,6 +213,15 @@ describe("ACP registry replay fixtures", () => {
   );
 
   itRunsReplayFixtures("acpRegistry", (input) =>
-    runReplayFixture({ ...input, harness: AcpRegistryOrchestratorReplayHarness }),
+    runReplayFixture({
+      ...input,
+      harness: AcpRegistryOrchestratorReplayHarness,
+      transformTranscript: (transcript) =>
+        materializeReplayPromptTimestamps(
+          transcript,
+          [MULTI_TURN_SECOND_PROMPT],
+          DateTime.makeUnsafe(0),
+        ),
+    }),
   );
 });
