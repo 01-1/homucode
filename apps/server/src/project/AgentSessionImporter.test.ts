@@ -987,6 +987,23 @@ it.effect("imports another environment's transcript as history the first turn re
       { role: "user", text: "Fix it", runId: null },
       { role: "assistant", text: "Fixed", runId: null },
     ]);
+
+    // A provider this environment lacks falls back to its default model.
+    const fallback = yield* (yield* makeImporter(
+      [],
+      Effect.void,
+      undefined,
+      undefined,
+      ServerSettings.layerTest({ defaultModelSelection: CODEX_MODEL_SELECTION }),
+    )).importThreadTranscript({
+      projectId,
+      title: "Moved thread",
+      modelSelection: CLAUDE_MODEL_SELECTION,
+      messages: [],
+    });
+    expect((yield* projections.getThread(fallback.threadId)).modelSelection).toEqual(
+      CODEX_MODEL_SELECTION,
+    );
   }).pipe(Effect.scoped, Effect.provide(persistence)),
 );
 

@@ -620,11 +620,10 @@ const make = Effect.gen(function* () {
       return yield* Effect.gen(function* () {
         const runtimeMode = yield* importRuntimeMode(project);
         const instances = yield* registry.list();
-        const modelSelection =
-          instances.includes(input.modelSelection.instanceId) ||
-          project.defaultModelSelection === null
-            ? input.modelSelection
-            : project.defaultModelSelection;
+        const modelSelection = instances.includes(input.modelSelection.instanceId)
+          ? input.modelSelection
+          : (resolveProjectSettings(yield* settingsService.getSettings, project.id, project)
+              .settings.defaultModelSelection ?? input.modelSelection);
         const threadId = yield* idAllocator.allocate.thread({ projectId: input.projectId });
         const now = yield* DateTime.now;
         const createdAt =
