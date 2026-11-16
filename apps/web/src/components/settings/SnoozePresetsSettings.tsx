@@ -63,7 +63,13 @@ const WHEN_LABELS: Record<"after" | "days" | SnoozePresetDay, string> = {
   saturday: "Saturday",
   sunday: "Sunday",
 };
-const WHEN_VALUES = ["after", "today", "tomorrow", "days", ...SnoozePresetDay.literals.slice(2)] as const;
+const WHEN_VALUES = [
+  "after",
+  "today",
+  "tomorrow",
+  "days",
+  ...SnoozePresetDay.literals.slice(2),
+] as const;
 
 // Offered in order when adding, skipping any already in the list.
 const ADD_CANDIDATES: ReadonlyArray<SnoozePresetSetting> = [
