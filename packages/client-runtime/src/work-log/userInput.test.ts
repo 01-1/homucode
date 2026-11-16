@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getQuestionAnswerPreview, getQuestionAnswerText } from "./userInput.js";
+import {
+  getQuestionAnswerPreview,
+  getQuestionAnswerSelection,
+  getQuestionAnswerText,
+} from "./userInput.js";
 
 // Shape the web client submits for an answer holding a review-comment chip.
 const answerWithReviewComment = [
@@ -35,5 +39,28 @@ describe("question answer display", () => {
     const typedXml =
       'Use this XML literally: <t3_context version="1"><context kind="review-comment" id="example">keep me</context></t3_context>';
     expect(getQuestionAnswerText(typedXml)).toBe(typedXml);
+  });
+
+  it("separates picked option labels from typed answers", () => {
+    const question = {
+      multiSelect: true,
+      options: [
+        { label: "Red", description: "Warm" },
+        { label: "Blue", description: "Cool" },
+        { label: "Green, light", description: "Comma in label" },
+      ],
+    };
+    const labels = (value: unknown) => [
+      ...getQuestionAnswerSelection(question, value).selectedLabels,
+    ];
+
+    expect(labels(["Red", "Blue"])).toEqual(["Red", "Blue"]);
+    expect(labels("Red, Blue")).toEqual(["Red", "Blue"]);
+    expect(labels("Green, light")).toEqual(["Green, light"]);
+    expect(labels({ answers: ["Blue"] })).toEqual(["Blue"]);
+    expect(getQuestionAnswerSelection(question, ["Red", "Something else"])).toEqual({
+      selectedLabels: new Set(["Red"]),
+      customText: "Something else",
+    });
   });
 });

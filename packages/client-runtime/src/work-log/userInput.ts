@@ -1,4 +1,7 @@
-import { type UserInputAttachmentAnswerPayload } from "@t3tools/contracts";
+import {
+  type OrchestrationV2UserInputQuestion,
+  type UserInputAttachmentAnswerPayload,
+} from "@t3tools/contracts";
 import { composerContextProviderTextForDisplay } from "@t3tools/shared/composerContextReferences";
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -43,4 +46,31 @@ export function hasQuestionAnswer(answer: UserInputAttachmentAnswerPayload): boo
     Object.values(answer.answers).some(getQuestionAnswerText) ||
     Object.values(answer.attachmentsByQuestionId).some((attachments) => attachments.length > 0)
   );
+}
+
+function answerStrings(value: unknown): ReadonlyArray<string> {
+  if (typeof value === "string") return value.trim() ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(answerStrings);
+  const nested = record(value);
+  return nested ? answerStrings(nested.answers) : [];
+}
+
+/** Splits an answer into the option labels it picked and any typed text. */
+export function getQuestionAnswerSelection(
+  question: Pick<OrchestrationV2UserInputQuestion, "options" | "multiSelect">,
+  value: unknown,
+): { readonly selectedLabels: ReadonlySet<string>; readonly customText: string } {
+  const labels = new Set(question.options.map((option) => option.label));
+  const selectedLabels = new Set<string>();
+  const custom: string[] = [];
+  for (const text of answerStrings(value)) {
+    const trimmed = text.trim();
+    // Claude joins multi-select labels with ", " before they reach the provider.
+    const parts = question.multiSelect ? trimmed.split(", ") : [trimmed];
+    if (labels.has(trimmed)) selectedLabels.add(trimmed);
+    else if (parts.length > 1 && parts.every((part) => labels.has(part)))
+      for (const part of parts) selectedLabels.add(part);
+    else custom.push(getQuestionAnswerText(text));
+  }
+  return { selectedLabels, customText: custom.filter(Boolean).join(", ") };
 }

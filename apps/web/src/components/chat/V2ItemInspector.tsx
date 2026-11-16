@@ -26,6 +26,7 @@ import { RenderErrorBoundary } from "../RenderErrorBoundary";
 import { CommandOutputPanel, useCommandOutputStreaming } from "./CommandOutputPanel";
 import { resolveExternalWebLinkHref } from "./externalLinkContextMenu";
 import type { ExpandedImagePreview } from "./ExpandedImagePreview";
+import { QuestionOptionsHistory } from "./QuestionOptionsHistory";
 import { ShellCommandBlock } from "./ShellCommandBlock";
 import { useInitialOutputReady, type TurnItemSource } from "./timelineRowContext";
 
@@ -388,15 +389,15 @@ export const V2ItemInspector = memo(function V2ItemInspector(props: V2ItemInspec
 
       {item.type === "approval_request" ? <StructuredValue value={item.prompt} /> : null}
       {item.type === "user_input_request" ? (
-        <StructuredValue
-          value={item.questions
-            .map((question) =>
-              [question.question, ...question.options.map((option) => `• ${option.label}`)].join(
-                "\n",
-              ),
-            )
-            .join("\n\n")}
-        />
+        <div className="space-y-3">
+          {item.questions.map((question) => (
+            <QuestionOptionsHistory
+              key={question.id}
+              question={question}
+              answer={item.questionAnswer?.answers[question.id]}
+            />
+          ))}
+        </div>
       ) : null}
       {item.type === "notification" ? <StructuredValue value={item.detail} /> : null}
       {item.type === "system_notice" ? <StructuredValue value={item.message} /> : null}
