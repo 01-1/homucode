@@ -12,7 +12,7 @@ import { Button } from "../../components/ui/Button";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { Sheet } from "../../components/ui/Sheet";
 import { useEnvironments } from "../../state/environments";
-import { useServerConfig } from "../../state/entities";
+import { useEnvironmentServerConfig } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentsWithScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -37,7 +37,7 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
 }
 
 function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const config = useServerConfig(environmentId);
+  const config = useEnvironmentServerConfig(environmentId);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());

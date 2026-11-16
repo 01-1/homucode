@@ -10,7 +10,7 @@ import {
 } from "@t3tools/contracts";
 
 import { uuidv4 } from "../../lib/uuid";
-import { useProjects, useServerConfig, useThreadShells } from "../../state/entities";
+import { useProjects, useEnvironmentServerConfig, useThreadShells } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentScope } from "../../state/session";
 import { serverEnvironment } from "../../state/server";
@@ -19,7 +19,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
 
 export function useDuetActions(environmentId: EnvironmentId) {
-  const config = useServerConfig(environmentId);
+  const config = useEnvironmentServerConfig(environmentId);
   const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
   const projects = useProjects();
   const threads = useThreadShells();
