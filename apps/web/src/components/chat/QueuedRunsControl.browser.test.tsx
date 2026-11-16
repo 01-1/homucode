@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   projection: null as unknown,
   workflow: null as unknown,
   commandInputs: [] as unknown[],
+  commandOutcomes: [] as Array<"Success" | "Failure">,
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -34,7 +35,7 @@ vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
   useAtomCommand: (() => async (value: unknown) => {
     state.commandInputs.push(value);
-    return { _tag: "Success" };
+    return { _tag: state.commandOutcomes.shift() ?? "Success" };
   }) as never,
 }));
 
@@ -52,6 +53,7 @@ function setup() {
   state.projection = null;
   state.workflow = null;
   state.commandInputs = [];
+  state.commandOutcomes = [];
 }
 
 const baseProps = {
@@ -209,14 +211,20 @@ it("stays inside the timeline scroller instead of growing the chat column", asyn
   expect(column.scrollHeight).toBe(column.clientHeight);
 });
 
+const steerCall = (queuedRunId: string) => ({
+  environmentId: "environment:test",
+  input: { threadId: "thread:test", queuedRunId, targetRunId: "run:active" },
+});
+
+const queuedRun = (id: string, run: object = {}) => ({
+  run: { id, userMessageId: `message:${id}`, ...run },
+  text: id,
+  attachments: [],
+});
+
 it("steers the whole queue in order and stops before a message that starts its own turn", async () => {
   setup();
   state.projection = { projection: { messages: [] } };
-  const queuedRun = (id: string, run: object = {}) => ({
-    run: { id, userMessageId: `message:${id}`, ...run },
-    text: id,
-    attachments: [],
-  });
   state.workflow = {
     activeRun: { id: "run:active" },
     canPromoteToSteer: true,
@@ -232,10 +240,41 @@ it("steers the whole queue in order and stops before a message that starts its o
 
   expect(ref.current?.steerAll()).toBe(true);
   await vi.waitFor(() => expect(state.commandInputs).toHaveLength(2));
-  expect(state.commandInputs).toEqual(
-    ["run:first", "run:second"].map((queuedRunId) => ({
-      environmentId: "environment:test",
-      input: { threadId: "thread:test", queuedRunId, targetRunId: "run:active" },
-    })),
-  );
+  expect(state.commandInputs).toEqual([steerCall("run:first"), steerCall("run:second")]);
+});
+
+it("waits for a restarted turn before steering the next queued message", async () => {
+  setup();
+  state.projection = { projection: { messages: [] } };
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: [queuedRun("run:first"), queuedRun("run:second")],
+  };
+  // The server refuses the second steer while the first one restarts the turn.
+  state.commandOutcomes = ["Success", "Failure"];
+  const ref = createRef<QueuedRunsControlHandle>();
+  await using screen = await renderQueue({ ref });
+
+  expect(ref.current?.steerAll()).toBe(true);
+  await vi.waitFor(() => expect(state.commandInputs).toHaveLength(2));
+
+  state.projection = { projection: { messages: [] } };
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: false,
+    queuedRuns: [queuedRun("run:second")],
+  };
+  await screen.rerender(<QueuedRunsControl {...baseProps} ref={ref} />);
+  expect(state.commandInputs).toHaveLength(2);
+
+  state.projection = { projection: { messages: [] } };
+  state.workflow = { ...(state.workflow as object), canPromoteToSteer: true };
+  await screen.rerender(<QueuedRunsControl {...baseProps} ref={ref} />);
+  await vi.waitFor(() => expect(state.commandInputs).toHaveLength(3));
+  expect(state.commandInputs).toEqual([
+    steerCall("run:first"),
+    steerCall("run:second"),
+    steerCall("run:second"),
+  ]);
 });
