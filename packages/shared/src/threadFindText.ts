@@ -33,6 +33,7 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import {
+  escapePlusListMarkers,
   shouldPreserveAssistantLineBreaks,
   CHAT_MARKDOWN_REHYPE_PLUGINS,
   CHAT_MARKDOWN_REMARK_PLUGINS,
@@ -230,15 +231,19 @@ export function searchableMessageSegments(
   message: Pick<OrchestrationV2ConversationMessage, "role" | "text" | "streaming" | "context">,
   cwd?: string,
   skills: readonly InlineSkill[] = [],
-  plainUserText = false,
+  userTextFormat: "markdown" | "literal-plus" | "plain" = "markdown",
 ): readonly string[] | null {
   if (message.role === "user") {
     // Clients hide this prompt, so find must not match text nobody can see.
     if (isAttachmentOnlyBootstrapPrompt(message.text)) return [];
     const text = message.context ? message.text : upgradeLegacyContextMessage(message.text).text;
-    return plainUserText
-      ? plainThreadFindText(text)
-      : markdownThreadFindText(text, true, cwd, skills);
+    if (userTextFormat === "plain") return plainThreadFindText(text);
+    return markdownThreadFindText(
+      userTextFormat === "literal-plus" ? escapePlusListMarkers(text) : text,
+      true,
+      cwd,
+      skills,
+    );
   }
   if (message.role !== "assistant") return null;
   return markdownThreadFindText(
