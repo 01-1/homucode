@@ -420,8 +420,11 @@ export const writesEnvironment = <P, A, E, R>(
         ),
       ),
     // Linked work never reaches a link at all; that is checked as the call goes.
-    (params) =>
-      Effect.tap(orchestratingCaller, (caller) => approvedByUser(caller, options.approval(params))),
+    // An approval here would not carry to the other environment, so none is asked.
+    () =>
+      orchestratingCaller.pipe(
+        Effect.tap((caller) => assertFullAccess(caller, fullAccessRequired)),
+      ),
   );
 };
 

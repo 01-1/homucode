@@ -498,6 +498,17 @@ it.effect.each([
   ),
 );
 
+// An approval here would not carry to the other environment, so a linked call is not asked.
+it.effect.each([
+  [{ environmentId: box }, "capability_denied"],
+  [{ environmentId: here }, "here"],
+] as const)("an approved writes_environment with %o: %s", ([args, expected]) =>
+  call("writes_environment", supervised, args, askingClient("accept")).pipe(
+    Effect.map((outcome) => expect(outcome).toBe(expected)),
+    Effect.provide(linkedProbeServer),
+  ),
+);
+
 it.effect("refuses a linked environment to a tool that acts as its calling thread", () =>
   Effect.gen(function* () {
     const CallerToolkit = Toolkit.make(
