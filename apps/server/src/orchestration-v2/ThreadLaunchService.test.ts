@@ -1219,6 +1219,58 @@ it.effect("records the checkout's branch on a root launch that names none", () =
   }).pipe(Effect.provide(harness.layer));
 });
 
+it.effect("switches an opted-in project folder to its default branch only when it is clean", () =>
+  Effect.forEach(
+    [
+      { dirty: false, branch: "main", switched: true },
+      { dirty: true, branch: "fix/checkout-total", switched: false },
+    ],
+    (scenario) => {
+      let checkedOut = "fix/checkout-total";
+      const switchRef = vi.fn((input: { readonly refName: string }) => {
+        checkedOut = input.refName;
+        return Effect.succeed({ refName: input.refName } as never);
+      });
+      const harness = makeHarness({
+        serverSettings: {
+          projectSettingsOverrides: { [projectId]: { newLocalThreadsUseDefaultBranch: true } },
+        },
+        git: {
+          currentBranch: () => Effect.sync(() => checkedOut),
+          localStatus: () =>
+            Effect.succeed({
+              isRepo: true,
+              isDefaultRef: false,
+              hasWorkingTreeChanges: scenario.dirty,
+            } as never),
+          listRefs: () =>
+            Effect.succeed({
+              refs: [
+                { name: "fix/checkout-total", current: true, isDefault: false, worktreePath: null },
+                { name: "main", current: false, isDefault: true, worktreePath: null },
+              ],
+            } as never),
+          switchRef,
+        },
+      });
+      return Effect.gen(function* () {
+        const launches = yield* ThreadLaunch.ThreadLaunchService;
+        const launched = yield* launches.launch(
+          launchInput({
+            command: "command:launch:default-branch",
+            thread: "thread:launch:default-branch",
+          }),
+        );
+        const threads = yield* ThreadManagement.ThreadManagementService;
+        const { thread } = yield* threads.getThreadProjection(launched.threadId);
+        assert.equal(thread.branch, scenario.branch);
+        assert.equal(switchRef.mock.calls.length, scenario.switched ? 1 : 0);
+      }).pipe(Effect.provide(harness.layer));
+    },
+    { discard: true },
+  ),
+);
+
 it.effect("launches a worktree request for Scratch at the root, in its own folder", () => {
   const harness = scratchHarness();
   return Effect.gen(function* () {

@@ -264,6 +264,43 @@ const make = Effect.gen(function* () {
     strategy.type === "root" && strategy.branch === undefined
       ? git.currentBranch(workspaceRoot).pipe(Effect.orElseSucceed(() => null))
       : Effect.succeed(strategy.branch ?? null);
+  // Opt-in: a new project-folder thread starts on the default branch unless that would disturb work there.
+  const switchProjectFolderToDefaultBranch = Effect.fn(
+    "ThreadLaunchService.switchProjectFolderToDefaultBranch",
+  )(
+    function* (input: {
+      readonly projectId: ProjectId;
+      readonly threadId: ThreadId;
+      readonly workspaceRoot: string;
+    }) {
+      const settings = yield* serverSettings.getSettings;
+      if (
+        !resolveProjectSettings(settings, input.projectId).settings.newLocalThreadsUseDefaultBranch
+      )
+        return;
+      const shells = yield* threads.getShellSnapshot({
+        projectId: input.projectId,
+        unsettledOnly: true,
+      });
+      const folderBusy = shells.threads.some(
+        (thread) =>
+          thread.id !== input.threadId &&
+          thread.worktreePath === null &&
+          thread.workspaceRoot === undefined &&
+          thread.activeRunId !== null,
+      );
+      if (folderBusy) return;
+      const status = yield* git.localStatus({ cwd: input.workspaceRoot });
+      if (!status.isRepo || status.isDefaultRef || status.hasWorkingTreeChanges) return;
+      const { refs } = yield* git.listRefs({ cwd: input.workspaceRoot, refKind: "local" });
+      const defaultRef = refs.find((ref) => ref.isDefault && ref.isRemote !== true);
+      if (defaultRef === undefined) return;
+      yield* git.switchRef({ cwd: input.workspaceRoot, refName: defaultRef.name });
+    },
+    Effect.catchCause((cause) =>
+      Effect.logWarning("Could not switch the project folder to its default branch.", cause),
+    ),
+  );
   const preparationScope = yield* Scope.make("sequential");
   const scheduledLaunches = yield* Ref.make<ReadonlySet<CommandId>>(new Set());
   yield* Effect.addFinalizer(() => Scope.close(preparationScope, Exit.void));
@@ -1257,6 +1294,18 @@ const make = Effect.gen(function* () {
                 },
               )
             : input.workspaceStrategy;
+        if (
+          workspaceStrategy.type === "root" &&
+          workspaceStrategy.branch === undefined &&
+          input.workspaceRoot === undefined &&
+          Option.isNone(launchReceipt)
+        ) {
+          yield* switchProjectFolderToDefaultBranch({
+            projectId: input.projectId,
+            threadId: candidateThreadId,
+            workspaceRoot: project.workspaceRoot,
+          });
+        }
         const initialBranch = yield* launchBranch(workspaceStrategy, project.workspaceRoot);
         const initialWorktreePath =
           workspaceStrategy.type === "existing_worktree" ? workspaceStrategy.worktreePath : null;
