@@ -5000,7 +5000,6 @@ interface ActiveClaudeTurnContext {
     string,
     {
       readonly messageId: MessageId;
-      readonly text: string;
       readonly liveQuery: ClaudeLiveQueryContext;
     }
   >;
@@ -9071,6 +9070,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           context: ActiveClaudeTurnContext,
           messageId: MessageId,
           status: "pending" | "completed" | "cancelled",
+          redeliver?: true,
         ) =>
           emitProviderEvent({
             type: "steer.updated",
@@ -9079,6 +9079,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             runId: context.input.runId,
             messageId,
             status,
+            ...(redeliver === undefined ? {} : { redeliver }),
           });
 
         const markSteersAccepted = Effect.fnUntraced(function* (
@@ -9129,11 +9130,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           // A turn that completes has taken in every steer; one that stops drops them unread.
           const droppedSteers = [...input.context.pendingSteers];
           input.context.pendingSteers.clear();
-          for (const [, { messageId }] of droppedSteers) {
+          for (const [, { messageId, liveQuery }] of droppedSteers) {
             yield* emitSteerStatus(
               input.context,
               messageId,
               input.status === "completed" ? "completed" : "cancelled",
+              // Only a CLI proven to echo prompt uuids can show a steer went unread.
+              input.status === "interrupted" &&
+                (liveQuery.promptEchoMode === "early" || liveQuery.promptEchoMode === "result_only")
+                ? true
+                : undefined,
             );
           }
           if (input.context.compaction?.status === "running") {
@@ -9271,49 +9277,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 updatedAt: input.completedAt,
               }),
             });
-          }
-
-          if (input.status === "interrupted") {
-            for (const [uuid, { text, liveQuery }] of droppedSteers) {
-              // Only a CLI proven to echo prompt uuids can leave a steer unconfirmed.
-              if (
-                liveQuery.promptEchoMode !== "early" &&
-                liveQuery.promptEchoMode !== "result_only"
-              ) {
-                continue;
-              }
-              const nativeItemId = `unread-steer:${uuid}`;
-              const notice = `Claude did not confirm reading your steer before Stop. It may not have been delivered. Resend it if needed: "${text}"`;
-              yield* emitProviderEvent({
-                type: "turn_item.updated",
-                driver: CLAUDE_PROVIDER,
-                turnItem: {
-                  id: idAllocator.derive.turnItemFromProviderItem({
-                    driver: CLAUDE_PROVIDER,
-                    nativeItemId,
-                  }),
-                  threadId: input.context.input.threadId,
-                  runId: input.context.input.runId,
-                  nodeId: input.context.input.rootNodeId,
-                  providerThreadId: input.context.input.providerThread.id,
-                  providerTurnId: input.context.providerTurnId,
-                  nativeItemRef: {
-                    driver: CLAUDE_PROVIDER,
-                    nativeId: nativeItemId,
-                    strength: "weak",
-                  },
-                  parentItemId: null,
-                  ordinal: yield* resolveItemOrdinal(input.context, nativeItemId),
-                  type: "system_notice",
-                  status: "completed",
-                  title: "Steer delivery not confirmed",
-                  message: notice,
-                  startedAt: input.completedAt,
-                  completedAt: input.completedAt,
-                  updatedAt: input.completedAt,
-                },
-              });
-            }
           }
 
           const threadDisposition = input.threadDisposition ?? "reusable";
@@ -13626,7 +13589,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             currentTurn.steerUuids.add(steerUuid);
             currentTurn.pendingSteers.set(steerUuid, {
               messageId,
-              text: turnInput.message.text,
               liveQuery: existing,
             });
             yield* Ref.update(steeredTurns, (current) => {

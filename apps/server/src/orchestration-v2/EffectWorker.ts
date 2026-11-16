@@ -451,6 +451,58 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
+          case "steer.redeliver": {
+            const messageId = effect.request.messageId;
+            return Effect.gen(function* () {
+              const { messages } = yield* threads.getThreadRecords(effect.threadId, ["messages"], {
+                messageIds: [messageId],
+              });
+              const message = messages.find((row) => row.id === messageId);
+              if (message === undefined) return;
+              const { turnItems } = yield* threads.getThreadRecords(
+                effect.threadId,
+                ["turnItems"],
+                { turnItemRunIds: [message.runId] },
+              );
+              const item = turnItems.find(
+                (row) => row.type === "user_message" && row.messageId === messageId,
+              );
+              // Anything else already sent it again or cleared it.
+              if (item?.status !== "cancelled") return;
+              // The same message id moves the dropped steer into the turn that delivers it.
+              yield* threads.dispatch({
+                type: "message.dispatch",
+                commandId: CommandId.make(`command:steer-redeliver:${effect.id}`),
+                threadId: effect.threadId,
+                messageId,
+                text: message.text,
+                ...(message.context ? { context: message.context } : {}),
+                attachments: message.attachments,
+                deliveryIntent: "auto",
+                dispatchMode: { type: "start_immediately" },
+                createdBy: message.createdBy,
+                creationSource: message.creationSource,
+                ...(message.scheduledTaskId === undefined
+                  ? {}
+                  : { scheduledTaskId: message.scheduledTaskId }),
+                ...(message.senderThreadId === undefined
+                  ? {}
+                  : { senderThreadId: message.senderThreadId }),
+                ...(message.linkedSender === undefined
+                  ? {}
+                  : { linkedSender: message.linkedSender }),
+              });
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
+          }
           case "provider-turn.restart":
             return providerTurnControl
               .interruptAndAwaitTerminal({

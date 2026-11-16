@@ -75,6 +75,10 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     steerFollowUpAfterRunOrdinal: Schema.optional(NonNegativeInt),
   }),
   Schema.Struct({
+    type: Schema.Literal("steer.redeliver"),
+    messageId: MessageId,
+  }),
+  Schema.Struct({
     type: Schema.Literal("provider-turn.restart"),
     providerSessionId: ProviderSessionId,
     providerThreadId: ProviderThreadId,
@@ -150,6 +154,7 @@ export const REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS = [
   "attachment.cleanup",
   "thread-title.generate",
   "delegated-tasks.stop",
+  "steer.redeliver",
 ] as const satisfies ReadonlyArray<OrchestrationEffectRequestV2["type"]>;
 
 export const PROCESS_BOUND_EFFECT_TYPES = [
