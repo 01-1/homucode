@@ -744,6 +744,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["user message markdown plain text raw formatting render bullet list prompt"],
   },
   {
+    id: "user-message-plus-bullets",
+    title: "Lines starting with + become bullets",
+    to: "/settings/chat",
+    searchTerms: ["plus + bullet list item sent message markdown literal"],
+  },
+  {
     id: "send-shortcut",
     title: "Send shortcut",
     to: "/settings/chat",

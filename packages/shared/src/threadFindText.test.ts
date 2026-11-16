@@ -40,9 +40,22 @@ it("excludes structured context chips without joining text across them", () => {
       },
       undefined,
       [],
-      true,
+      "plain",
     ),
   ).toEqual(["hello **world**  + x", "after"]);
+  expect(
+    searchableMessageSegments(
+      {
+        role: "user",
+        streaming: false,
+        text: "option\n + x\n> + quoted\n```\n+ code\n```",
+        context: { version: 1, records: [] },
+      },
+      undefined,
+      [],
+      "literal-plus",
+    ),
+  ).toEqual(["option", " + x", "+ quoted", "+ code\n"]);
 });
 
 it("excludes the hidden prompt of an attachment-only message", () => {

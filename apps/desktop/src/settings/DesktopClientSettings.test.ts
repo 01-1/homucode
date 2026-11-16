@@ -54,6 +54,7 @@ const clientSettings: ClientSettings = {
   proactivePanelsEnabled: true,
   showSkillsInSlashMenu: false,
   userMessageMarkdownEnabled: false,
+  userMessagePlusBullets: false,
   persistComposerContextStrip: true,
   providerModelPreferences: {},
   sidebarProjectGroupingMode: "repository_path",
