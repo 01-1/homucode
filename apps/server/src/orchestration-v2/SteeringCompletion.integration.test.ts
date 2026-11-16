@@ -2927,6 +2927,31 @@ it.effect.each([undefined, false, true])(
     }),
 );
 
+it.effect.each([
+  ["STPO", "queue"],
+  ["Wait!", "auto"],
+] as const)(
+  "stops the running turn and starts a bare %s sent with %s delivery next",
+  ([text, delivery]) =>
+    Effect.gen(function* () {
+      const { steered, layer, startFirstTurn, send, read } = yield* goalHarness(`halt-${delivery}`);
+      yield* Effect.gen(function* () {
+        const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+        const threadId = yield* startFirstTurn;
+        yield* send("queued", "queued", "queue");
+        yield* send("halt", text, delivery);
+        yield* worker.drain();
+
+        assert.deepEqual(steered, []);
+        assert.deepEqual(yield* read(threadId), {
+          queue: ["queued"],
+          started: ["first", text].map(timestamped),
+          stopRequested: true,
+        });
+      }).pipe(Effect.provide(layer));
+    }),
+);
+
 it.effect("starts a goal that names no model on the thread's model ahead of a queued pick", () =>
   Effect.gen(function* () {
     const { started, layer, startFirstTurn, read } = yield* goalHarness("goal-ahead-of-pick");

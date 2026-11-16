@@ -70,6 +70,25 @@ export function isNativeMaintenanceCommand(message: {
   );
 }
 
+const HALT_WORDS = new Set(["stop", "sto", "stp", "stpo", "stopp", "wait", "wiat"]);
+
+/**
+ * Only "stop" or "wait", typos and repeats included. The user sends it to halt the running
+ * turn now; queued or steered behind that turn, it arrives after the work it meant to halt.
+ */
+export function isHaltMessage(message: {
+  readonly text: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+}): boolean {
+  if (message.attachments.length > 0) return false;
+  const words = message.text
+    .trim()
+    .toLowerCase()
+    .split(/\s+/u)
+    .map((word) => word.replace(/[.!?,]+$/u, ""));
+  return words.length <= 3 && words.every((word) => HALT_WORDS.has(word));
+}
+
 /**
  * A goal command sent into active work stops that work when it starts or
  * replaces goal work, or ends a goal that is driving the run.
