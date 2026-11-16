@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Preferences } from "../../persistence/mobile-preferences";
 import {
   mobilePreferencesPatchFromSyncedValues,
+  pickSettingsSyncEnvironment,
   syncedValuesFromMobilePreferences,
 } from "./settingsSyncValues";
 
@@ -77,5 +78,11 @@ describe("phone settings sync values", () => {
     expect(phone.followUpBehavior).toBe("queue");
     expect(phone.themeMode).toBeUndefined();
     expect(phone).toMatchObject({ projectGroupingMode: "separate", projectGroupingEnabled: false });
+  });
+
+  it("syncs only through a connected server, never one known only from its cached config", () => {
+    expect(pickSettingsSyncEnvironment(["old", "live"], ["live"], undefined)).toBe("live");
+    expect(pickSettingsSyncEnvironment(["old", "live"], ["live"], "old")).toBeNull();
+    expect(pickSettingsSyncEnvironment(["live"], ["live"], "removed")).toBe("live");
   });
 });

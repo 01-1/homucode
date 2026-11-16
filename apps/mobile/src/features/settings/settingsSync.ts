@@ -13,9 +13,11 @@ import { environmentCatalog } from "../../connection/catalog";
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import {
   mobilePreferencesPatchFromSyncedValues,
+  pickSettingsSyncEnvironment,
   syncedValuesFromMobilePreferences,
 } from "./settingsSyncValues";
 
@@ -30,18 +32,12 @@ function savePreferences(transform: (current: Preferences) => Partial<Preference
   appAtomRegistry.set(updateMobilePreferencesAtom, { transform });
 }
 
-/**
- * The server the phone first synced through, while it stays paired; otherwise the first paired
- * server whose config has loaded.
- */
 function syncEnvironmentId(preferences: Preferences): EnvironmentId | null {
-  const enabled = [
-    ...enabledEnvironmentIds(appAtomRegistry.get(environmentCatalog.catalogValueAtom)),
-  ];
-  const saved = enabled.find((id) => id === preferences.settingsSyncEnvironmentId);
-  if (saved !== undefined) return saved;
-  const configs = appAtomRegistry.get(environmentServerConfigsAtom);
-  return enabled.find((id) => configs.has(id)) ?? null;
+  return pickSettingsSyncEnvironment(
+    [...enabledEnvironmentIds(appAtomRegistry.get(environmentCatalog.catalogValueAtom))],
+    appAtomRegistry.get(connectedEnvironmentIdsAtom),
+    preferences.settingsSyncEnvironmentId,
+  );
 }
 
 const runner = createClientSettingsSyncRunner({
@@ -119,6 +115,7 @@ export function installClientSettingsSync(openSheet: () => void): () => void {
   };
   const unsubscribes = [
     appAtomRegistry.subscribe(environmentServerConfigsAtom, runner.requestSync),
+    appAtomRegistry.subscribe(connectedEnvironmentIdsAtom, runner.requestSync),
     appAtomRegistry.subscribe(mobilePreferencesAtom, onLocalChange),
     runner.subscribePrompt(() => {
       if (runner.getPrompt() !== null && !sheetOpen) openSheet();
