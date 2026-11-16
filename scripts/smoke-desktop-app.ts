@@ -59,6 +59,10 @@ try {
   // thread wait below fails either way and its screenshot shows the startup error.
   step = "waiting for the first window";
   const page = await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
+  // An existing database gets the one-time offer of optional features, as an upgrading user would.
+  await page.addLocatorHandler(page.getByRole("dialog", { name: "Optional features" }), (dialog) =>
+    dialog.getByRole("button", { name: "Not now" }).click(),
+  );
   try {
     step = `finding "${THREAD_TITLE}" in the sidebar`;
     const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });
