@@ -5,6 +5,7 @@ import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tool
 
 export class AgentMemory extends Context.Reference<{
   readonly settings: Effect.Effect<AgentMemorySettings>;
+  readonly setLimitUpdater: (update: Effect.Effect<void>) => Effect.Effect<void>;
   readonly track: (unit: string, owner: AgentMemoryOwnerValue | undefined) => Effect.Effect<void>;
   readonly restore: (
     waiters: ReadonlyArray<{
@@ -23,6 +24,7 @@ export class AgentMemory extends Context.Reference<{
 }>("@t3tools/shared/AgentMemory", {
   defaultValue: () => ({
     settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false }),
+    setLimitUpdater: () => Effect.void,
     track: () => Effect.void,
     restore: () => Effect.void,
     acquire: () => Effect.succeed(Effect.void),

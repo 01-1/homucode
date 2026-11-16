@@ -218,6 +218,7 @@ export const make = Effect.gen(function* () {
           appliedKey = key;
         }),
       );
+      yield* memory.setLimitUpdater(applyMemoryLimits);
       yield* applyMemoryLimits;
       yield* setProperties(AGENTS_PARENT_SLICE, AGENTS_PARENT_PROPERTIES);
       yield* Effect.logInfo("Agent scopes are on", {

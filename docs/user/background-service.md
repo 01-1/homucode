@@ -158,8 +158,8 @@ are optional; these are their defaults (byte values use GiB):
 Null group limits keep the automatic limits: RAM minus 6 GiB for throttling
 and minus 4 GiB for the hard cap (at least half and three quarters of RAM,
 respectively). The effective minimum and throttle limit cannot exceed the
-hard cap. Reservations follow settings changes on the next poll; process
-caps apply to new processes and group limits at the next launch. Setting
+hard cap. Reservations and group limits follow settings changes on the next
+poll; process caps apply to new processes. Setting
 `enabled` to false releases waiting starts and stops applying per-process
 caps to new processes. Existing process caps remain until those processes
 exit. The group cap stays in place.

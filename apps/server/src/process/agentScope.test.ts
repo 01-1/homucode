@@ -61,6 +61,7 @@ const withFakeSystemd = <A, E>(
     readonly failingVerbs: Set<string>;
     readonly stateDir: string;
     readonly cgroupRoot: string;
+    readonly updateLimits: Effect.Effect<void>;
   }) => Effect.Effect<A, E>,
   // A user manager older than systemd 253 rejects OOMPolicy on scopes.
   {
@@ -85,6 +86,7 @@ const withFakeSystemd = <A, E>(
     const cgroupRoot = NodePath.join(bin, "cgroup");
     const units = new Map<string, FakeUnit>();
     const calls: Array<ReadonlyArray<string>> = [];
+    let updateLimits = Effect.void;
     const failingVerbs = new Set<string>();
     const output = (stdout: string, code = 0): ProcessRunner.ProcessRunOutput => ({
       stdout,
@@ -131,6 +133,10 @@ const withFakeSystemd = <A, E>(
     const scope = yield* make.pipe(
       Effect.provideService(AgentMemory, {
         ...AgentMemory.defaultValue(),
+        setLimitUpdater: (update) =>
+          Effect.sync(() => {
+            updateLimits = update;
+          }),
         settings: Effect.succeed(
           memorySettings ?? { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false },
         ),
@@ -147,7 +153,15 @@ const withFakeSystemd = <A, E>(
           fileSystem.writeFileString(path.replace("/sys/fs/cgroup", cgroupRoot), data, options),
       }),
     );
-    return yield* body({ scope, units, calls, failingVerbs, stateDir, cgroupRoot }).pipe(
+    return yield* body({
+      scope,
+      units,
+      calls,
+      failingVerbs,
+      stateDir,
+      cgroupRoot,
+      updateLimits: Effect.suspend(() => updateLimits),
+    }).pipe(
       Effect.ensuring(Effect.sync(() => NodeFS.rmSync(bin, { recursive: true, force: true }))),
     );
   }).pipe(
@@ -384,6 +398,30 @@ describe("AgentScope service", () => {
         ]);
       }),
     ),
+  );
+
+  it.effect(
+    "registers the cached limit updater for admission before another scope launches",
+    () => {
+      memory.total = 16 * GiB;
+      return withFakeSystemd(({ calls, updateLimits }) =>
+        Effect.gen(function* () {
+          memory.total = 22 * GiB;
+          yield* updateLimits;
+          expect(calls.at(-1)).toEqual([
+            "--user",
+            "set-property",
+            "--runtime",
+            "app-t3code-agents.slice",
+            `MemoryHigh=${16 * GiB}`,
+            `MemoryMax=${18 * GiB}`,
+          ]);
+          const count = calls.length;
+          yield* updateLimits;
+          expect(calls).toHaveLength(count);
+        }),
+      );
+    },
   );
 
   it.effect("follows a live memory change at the next launch", () => {

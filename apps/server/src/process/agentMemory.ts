@@ -83,6 +83,7 @@ export const make = Effect.gen(function* () {
   >();
   const lock = yield* Semaphore.make(1);
   let controlGroup: string | undefined;
+  let updateLimits: Effect.Effect<void> = Effect.void;
 
   const readNumber = (directory: string, file: string) =>
     fileSystem.readFileString(path.join(directory, file)).pipe(
@@ -168,6 +169,7 @@ export const make = Effect.gen(function* () {
   const pump = lock.withPermits(1)(
     Effect.gen(function* () {
       const config = yield* settings;
+      yield* updateLimits;
       if (!config.enabled) {
         for (const ticket of tickets.values()) {
           ticket.granted = true;
@@ -208,6 +210,11 @@ export const make = Effect.gen(function* () {
 
   return AgentMemory.of({
     settings,
+    setLimitUpdater: Effect.fn("AgentMemory.setLimitUpdater")((update) =>
+      Effect.sync(() => {
+        updateLimits = update;
+      }),
+    ),
     track: Effect.fn("AgentMemory.track")((unit, owner) =>
       Effect.sync(() => {
         if (owner !== undefined) ownersByUnit.set(unit, owner);

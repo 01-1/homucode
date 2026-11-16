@@ -240,6 +240,34 @@ describe("agent reservations", () => {
     ),
   );
 
+  it.effect("raises a saturated group cap before admitting a queued start", () =>
+    withGovernor(({ memory, root, settings }) =>
+      Effect.gen(function* () {
+        yield* memory.setLimitUpdater(
+          Effect.gen(function* () {
+            const config = (yield* settings.getSettings).agentMemory;
+            NodeFS.writeFileSync(NodePath.join(root, "memory.max"), String(config.groupMaxBytes));
+          }),
+        );
+        const releaseA = yield* acquire(memory, "a");
+        const releaseB = yield* acquire(memory, "b");
+        const releaseC = yield* acquire(memory, "c");
+        const waiting = yield* Deferred.make<void>();
+        const fourth = yield* acquire(memory, "d", Deferred.succeed(waiting, undefined)).pipe(
+          Effect.forkChild,
+        );
+        yield* Deferred.await(waiting);
+        yield* settings.updateSettings({ agentMemory: { groupMaxBytes: 4 * GiB } });
+        yield* TestClock.adjust("2 seconds");
+        const releaseD = yield* Fiber.join(fourth);
+        yield* releaseA;
+        yield* releaseB;
+        yield* releaseC;
+        yield* releaseD;
+      }),
+    ),
+  );
+
   it.effect("keeps starts waiting on missing telemetry and wakes them when disabled", () =>
     withGovernor(({ memory, settings, root }) =>
       Effect.gen(function* () {
