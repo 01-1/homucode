@@ -1056,6 +1056,38 @@ export function useThreadActions() {
     return deleteThread(target);
   };
 
+  /** Rebuilds the conversation in a project on any environment and opens the copy there. */
+  const copyThreadToProject = async (
+    target: ScopedThreadRef,
+    environmentId: EnvironmentId,
+    projectId: ProjectId,
+  ) => {
+    const thread = readThreadShell(target);
+    if (!thread) return AsyncResult.success(null);
+    const transcript = await loadThreadTranscript({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId },
+    });
+    if (transcript._tag === "Failure") return transcript;
+    const imported = await importThreadTranscript({
+      environmentId,
+      input: {
+        projectId,
+        title: thread.title,
+        modelSelection: thread.modelSelection,
+        messages: transcriptImportMessages(transcript.value),
+      },
+    });
+    if (imported._tag === "Failure") return imported;
+    await settlePromise(() =>
+      router.navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams({ environmentId, threadId: imported.value.threadId }),
+      }),
+    );
+    return AsyncResult.success(imported.value.threadId);
+  };
+
   return {
     archiveThread,
     unarchiveThread,
@@ -1128,31 +1160,10 @@ export function useThreadActions() {
     ) => {
       const permissionFailure = threadOperationFailure(target);
       if (permissionFailure) return permissionFailure;
-      const thread = readThreadShell(target);
-      if (!thread) return AsyncResult.success(undefined);
-      const transcript = await loadThreadTranscript({
-        environmentId: target.environmentId,
-        input: { threadId: target.threadId },
-      });
-      if (transcript._tag === "Failure") return transcript;
-      const imported = await importThreadTranscript({
-        environmentId,
-        input: {
-          projectId,
-          title: thread.title,
-          modelSelection: thread.modelSelection,
-          messages: transcriptImportMessages(transcript.value),
-        },
-      });
-      if (imported._tag === "Failure") return imported;
-      await settlePromise(() =>
-        router.navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams({ environmentId, threadId: imported.value.threadId }),
-        }),
-      );
-      return archiveThread(target);
+      const copied = await copyThreadToProject(target, environmentId, projectId);
+      return copied._tag === "Failure" || copied.value === null ? copied : archiveThread(target);
     },
+    copyThreadToProject,
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({
         environmentId: target.environmentId,

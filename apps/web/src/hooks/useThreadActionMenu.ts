@@ -23,7 +23,7 @@ import {
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
-  parseMoveToEnvironmentProjectMenuId,
+  parseEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
   type ThreadActionMenuId,
@@ -105,6 +105,7 @@ export function useThreadActionMenu(input: {
     moveThread,
     moveThreadToProject,
     moveThreadToEnvironmentProject,
+    copyThreadToProject,
     moveThreadToNewProject,
     stopThreadWithSubagents,
     turnThreadIntoProject,
@@ -181,6 +182,14 @@ export function useThreadActionMenu(input: {
               !project.archivedAt,
           )
           .map((project) => ({ id: project.id, title: project.title })),
+        copyProjectOptions: {
+          environmentId: threadRef.environmentId,
+          projects: projects
+            .filter(
+              (project) => project.environmentId === threadRef.environmentId && !project.archivedAt,
+            )
+            .map((project) => ({ id: project.id, title: project.title })),
+        },
         moveEnvironmentOptions: buildMoveEnvironmentOptions({
           sourceEnvironmentId: threadRef.environmentId,
           projects,
@@ -247,13 +256,15 @@ export function useThreadActionMenu(input: {
         await moveThreadToNewProject(threadRef);
         return;
       }
-      const environmentMove = parseMoveToEnvironmentProjectMenuId(action);
-      if (environmentMove !== null) {
-        await reportFailure("Failed to move thread", () =>
-          moveThreadToEnvironmentProject(
+      const environmentProject = parseEnvironmentProjectMenuId(action);
+      if (environmentProject !== null) {
+        await reportFailure(`Failed to ${environmentProject.action} thread`, () =>
+          (environmentProject.action === "copy"
+            ? copyThreadToProject
+            : moveThreadToEnvironmentProject)(
             threadRef,
-            environmentMove.environmentId as EnvironmentId,
-            environmentMove.projectId as ProjectId,
+            environmentProject.environmentId as EnvironmentId,
+            environmentProject.projectId as ProjectId,
           ),
         );
         return;

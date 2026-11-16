@@ -212,7 +212,7 @@ import {
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
-  parseMoveToEnvironmentProjectMenuId,
+  parseEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
@@ -1039,6 +1039,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     moveThread,
     moveThreadToProject,
     moveThreadToEnvironmentProject,
+    copyThreadToProject,
     moveThreadToNewProject,
     stopThreadWithSubagents,
   } = useThreadActions();
@@ -3277,6 +3278,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     !project.archivedAt,
                 )
                 .map((project) => ({ id: project.id, title: project.title })),
+              copyProjectOptions: {
+                environmentId: threadRef.environmentId,
+                projects: [...projectByKey.values()]
+                  .filter(
+                    (project) =>
+                      project.environmentId === threadRef.environmentId && !project.archivedAt,
+                  )
+                  .map((project) => ({ id: project.id, title: project.title })),
+              },
               moveEnvironmentOptions: buildMoveEnvironmentOptions({
                 sourceEnvironmentId: threadRef.environmentId,
                 projects: [...projectByKey.values()],
@@ -3319,18 +3329,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           await moveThreadToNewProject(threadRef);
           return;
         }
-        const environmentMove = parseMoveToEnvironmentProjectMenuId(clicked.value);
-        if (environmentMove !== null) {
-          const moved = await moveThreadToEnvironmentProject(
+        const environmentProject = parseEnvironmentProjectMenuId(clicked.value);
+        if (environmentProject !== null) {
+          const moved = await (
+            environmentProject.action === "copy"
+              ? copyThreadToProject
+              : moveThreadToEnvironmentProject
+          )(
             threadRef,
-            environmentMove.environmentId as EnvironmentId,
-            environmentMove.projectId as ProjectId,
+            environmentProject.environmentId as EnvironmentId,
+            environmentProject.projectId as ProjectId,
           );
           if (moved._tag === "Failure" && !isAtomCommandInterrupted(moved)) {
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to move thread",
+                title: `Failed to ${environmentProject.action} thread`,
                 description: String(squashAtomCommandFailure(moved)),
               }),
             );

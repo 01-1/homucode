@@ -38,6 +38,9 @@ export type ThreadActionMenuId =
   | `move-to-project:${string}`
   | `move-to-environment:${string}`
   | `move-to-environment-project:${string}`
+  | "copy-to-project"
+  | `copy-to-environment:${string}`
+  | `copy-to-project:${string}`
   | "move-to-root"
   | "move-under"
   | `move-under:${string}`
@@ -122,6 +125,11 @@ export interface ThreadActionMenuState {
     readonly label: string;
     readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   }>;
+  /** The thread's own environment and its live projects; copies may also go to `moveEnvironmentOptions`. */
+  readonly copyProjectOptions?: {
+    readonly environmentId: string;
+    readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  };
   readonly hasRunningSubagents?: boolean;
 }
 
@@ -250,6 +258,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
 export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
+  const copyOptions = state.copyProjectOptions;
   const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
     ...(state.canFind
       ? [{ id: "find" as const, label: "Find in thread", icon: "text-search" }]
@@ -357,7 +366,31 @@ export function buildThreadActionMenuItems(
                 // The source is archived after the copy, and archive rejects a running thread.
                 disabled: state.isRunning,
                 children: environment.projects.map((project) => ({
-                  id: moveToEnvironmentProjectMenuId(environment.environmentId, project.id),
+                  id: environmentProjectMenuId("move", environment.environmentId, project.id),
+                  label: project.title,
+                })),
+              })),
+            ],
+          },
+        ]
+      : []),
+    ...(copyOptions !== undefined
+      ? [
+          {
+            id: "copy-to-project" as const,
+            label: "Copy to project",
+            icon: "copy" as const,
+            children: [
+              ...copyOptions.projects.map((project) => ({
+                id: environmentProjectMenuId("copy", copyOptions.environmentId, project.id),
+                label: project.title,
+              })),
+              ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
+                id: `copy-to-environment:${environment.environmentId}` as const,
+                label: `On ${environment.label}`,
+                separatorBefore: index === 0 && copyOptions.projects.length > 0,
+                children: environment.projects.map((project) => ({
+                  id: environmentProjectMenuId("copy", environment.environmentId, project.id),
                   label: project.title,
                 })),
               })),
@@ -449,20 +482,32 @@ export function buildThreadActionMenuItems(
       );
 }
 
-function moveToEnvironmentProjectMenuId(
+const ENVIRONMENT_PROJECT_PREFIX = {
+  move: "move-to-environment-project:",
+  copy: "copy-to-project:",
+} as const;
+
+function environmentProjectMenuId<A extends keyof typeof ENVIRONMENT_PROJECT_PREFIX>(
+  action: A,
   environmentId: string,
   projectId: string,
-): `move-to-environment-project:${string}` {
-  return `move-to-environment-project:${JSON.stringify([environmentId, projectId])}`;
+): `${(typeof ENVIRONMENT_PROJECT_PREFIX)[A]}${string}` {
+  return `${ENVIRONMENT_PROJECT_PREFIX[action]}${JSON.stringify([environmentId, projectId])}`;
 }
 
-export function parseMoveToEnvironmentProjectMenuId(
-  id: string,
-): { readonly environmentId: string; readonly projectId: string } | null {
-  const prefix = "move-to-environment-project:";
-  if (!id.startsWith(prefix)) return null;
-  const [environmentId, projectId] = JSON.parse(id.slice(prefix.length)) as [string, string];
-  return { environmentId, projectId };
+/** A move to another environment's project, or a copy to any environment's project. */
+export function parseEnvironmentProjectMenuId(id: string): {
+  readonly action: keyof typeof ENVIRONMENT_PROJECT_PREFIX;
+  readonly environmentId: string;
+  readonly projectId: string;
+} | null {
+  for (const action of ["move", "copy"] as const) {
+    const prefix = ENVIRONMENT_PROJECT_PREFIX[action];
+    if (!id.startsWith(prefix)) continue;
+    const [environmentId, projectId] = JSON.parse(id.slice(prefix.length)) as [string, string];
+    return { action, environmentId, projectId };
+  }
+  return null;
 }
 
 /** Other connected environments' live projects, for moving a thread off its own environment. */
