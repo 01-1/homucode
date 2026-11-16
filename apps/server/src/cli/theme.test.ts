@@ -10,6 +10,8 @@ import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
+import * as PlatformError from "effect/PlatformError";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/cli";
 
@@ -20,10 +22,18 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 // Windows chmod cannot force these directory or file permission failures.
 const windowsHost = HostProcess.Platform.defaultValue() === "win32";
 
-const runCli = (args: ReadonlyArray<string>) =>
+const runCli = (
+  args: ReadonlyArray<string>,
+  mapFileSystem: (fs: FileSystem.FileSystem) => FileSystem.FileSystem = (fs) => fs,
+) =>
   Command.runWith(cli, { version: "0.0.0" })(args).pipe(
     Effect.provide(
-      Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer, TestConsole.layer),
+      Layer.mergeAll(
+        NodeServices.layer.pipe(Layer.updateService(FileSystem.FileSystem, mapFileSystem)),
+        NodeCrypto.layer,
+        NetService.layer,
+        TestConsole.layer,
+      ),
     ),
   );
 
@@ -191,17 +201,25 @@ describe("t3 theme", () => {
     }),
   );
 
-  it.effect.skipIf(windowsHost)("refuses to write when the settings file cannot be read", () =>
+  it.effect("refuses to write when the settings file cannot be read", () =>
     Effect.gen(function* () {
       const baseDir = makeBaseDir();
       writeSettings(baseDir, { enableProviderUpdateChecks: false });
-      NodeFS.chmodSync(settingsPathFor(baseDir), 0o000);
 
-      const failure = yield* runCli(["theme", "set", "ocean", "--base-dir", baseDir]).pipe(
-        Effect.flip,
-      );
-
-      NodeFS.chmodSync(settingsPathFor(baseDir), 0o644);
+      const failure = yield* runCli(["theme", "set", "ocean", "--base-dir", baseDir], (fs) => ({
+        ...fs,
+        readFileString: (path, options) =>
+          path === settingsPathFor(baseDir)
+            ? Effect.fail(
+                PlatformError.systemError({
+                  _tag: "PermissionDenied",
+                  module: "FileSystem",
+                  method: "readFileString",
+                  pathOrDescriptor: path,
+                }),
+              )
+            : fs.readFileString(path, options),
+      })).pipe(Effect.flip);
       assert.include(String(failure), "Could not read");
       assert.equal(readSettings(baseDir).enableProviderUpdateChecks, false);
       assert.equal(Object.hasOwn(readSettings(baseDir), "defaultTheme"), false);
