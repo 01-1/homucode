@@ -287,6 +287,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     uninstall: () => ipcRenderer.invoke(IpcChannels.CLI_COMMAND_UNINSTALL_CHANNEL),
     addToPath: () => ipcRenderer.invoke(IpcChannels.CLI_COMMAND_ADD_TO_PATH_CHANNEL),
   },
+  stagedBuilds: {
+    getState: () => ipcRenderer.invoke(IpcChannels.STAGED_BUILDS_GET_STATE_CHANNEL),
+    undo: () => ipcRenderer.invoke(IpcChannels.STAGED_BUILDS_UNDO_CHANNEL),
+    redo: (undoneAs) => ipcRenderer.invoke(IpcChannels.STAGED_BUILDS_REDO_CHANNEL, undoneAs),
+  },
   onUpdateState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;
