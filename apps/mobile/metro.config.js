@@ -19,6 +19,33 @@ const escapedWorkspaceRoot = workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"
 const generatedDeviceStreamRoot = path.join(__dirname, ".generated", "device-stream");
 const generatedPreviewStreamRoot = path.join(__dirname, ".generated", "preview-stream");
 
+// Android release bundles load each module at first use, not all at launch. Not yet tried on iOS.
+const getTransformOptions = config.transformer.getTransformOptions;
+config.transformer.getTransformOptions = async (...args) => {
+  const options = getTransformOptions ? await getTransformOptions(...args) : {};
+  const { dev, platform } = args[1];
+  return {
+    ...options,
+    transform: {
+      ...options.transform,
+      inlineRequires: !dev && platform === "android",
+      // Setting this replaces Metro's default list, repeated here. The Expo pair installs the
+      // global JS error handler when it loads, so it must load at launch.
+      nonInlinedRequires: [
+        "React",
+        "react",
+        "react/jsx-dev-runtime",
+        "react/jsx-runtime",
+        "react-compiler-runtime",
+        "react-native",
+        "expo-observe",
+        "expo-app-metrics",
+      ],
+    },
+  };
+};
+
+const upstreamResolveRequest = config.resolver?.resolveRequest;
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
   ...config.resolver,
@@ -36,6 +63,13 @@ config.resolver = {
     "@t3tools/mobile-device-stream": generatedDeviceStreamRoot,
     "@t3tools/mobile-preview-stream": generatedPreviewStreamRoot,
   },
+  // An inlined require loses its import kind; workspace packages export only "import".
+  resolveRequest: (context, moduleName, platform) =>
+    (upstreamResolveRequest ?? context.resolveRequest)(
+      moduleName.startsWith("@t3tools/") ? { ...context, isESMImport: true } : context,
+      moduleName,
+      platform,
+    ),
 };
 
 async function writeFileIfChanged(filePath, contents) {
