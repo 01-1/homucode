@@ -3420,13 +3420,7 @@ export const layerWithOptions = (
                   Effect.gen(function* () {
                     const entry = (yield* Ref.get(sessions)).get(key);
                     if (entry?.runtime !== detached.value.runtime) return;
-                    if (entry.attachedThreadIds.has(ownerThreadId)) {
-                      if (input.awaitUnload === true)
-                        return yield* Effect.die(
-                          "The native thread is still attached to its previous owner.",
-                        );
-                      return;
-                    }
+                    if (entry.attachedThreadIds.has(ownerThreadId)) return;
                     yield* unloadThread({
                       providerThread,
                       ...(input.awaitUnload === true ? { awaitClosed: true } : {}),
