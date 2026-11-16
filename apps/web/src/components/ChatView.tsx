@@ -384,6 +384,7 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
+import { ThreadStatusBar } from "./chat/ThreadStatusBar";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useTimelineFollow } from "./chat/useTimelineFollow";
@@ -3863,6 +3864,21 @@ export default function ChatView(props: ChatViewProps) {
                           </div>
                         </div>
                       </ComposerSurface.Shell>
+                      {serverThread !== null && !embedded && !isDraftHeroState ? (
+                        <ThreadStatusBar
+                          environmentId={serverThread.environmentId}
+                          createdAt={serverThread.createdAt}
+                          source={{
+                            threadId: serverThread.id,
+                            cwd: gitCwd,
+                            modelSelection: serverThread.modelSelection,
+                            providers: providerStatuses,
+                            usageLimitSources:
+                              serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                            contextWindow: activeContextWindow,
+                          }}
+                        />
+                      ) : null}
                       {isDraftHeroState && composerBannerItems.length > 0 ? (
                         // Out of flow, like the headline, so a notice never moves the centered composer.
                         // Short windows pin the composer to the bottom, where an out-of-flow notice

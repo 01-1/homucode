@@ -313,6 +313,16 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
             ) : null}
             {props.page === "threads" ? (
               <>
+                <SettingsSection title="Status line">
+                  <SettingsSwitchRow
+                    icon="terminal"
+                    label="Status line"
+                    subtitle="Show a line under the composer with the model, context, and usage limits, like Claude Code's status line. Set its command in Settings on desktop or web."
+                    value={uniform("statusLineEnabled")}
+                    disabled={disabledFor("statusLineEnabled")}
+                    onValueChange={(value) => write({ statusLineEnabled: value })}
+                  />
+                </SettingsSection>
                 <SettingsSection
                   title="Default workspace"
                   footer={managed("defaultThreadEnvMode")}

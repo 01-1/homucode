@@ -1,5 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
 import { deriveReportedModelSelection } from "@t3tools/client-runtime/state/thread-execution";
+import {
+  deriveLatestContextWindowSnapshot,
+  latestProviderTurnTokenUsage,
+} from "@t3tools/client-runtime/state/context-window";
 
 import { appAtomRegistry } from "./atom-registry";
 import type {
@@ -289,6 +293,26 @@ export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {
 
 const selectReportedModelSelection = (thread: EnvironmentThread | null) =>
   thread === null ? null : deriveReportedModelSelection(thread.projection);
+
+const selectContextWindow = (thread: EnvironmentThread | null) => {
+  if (thread === null) return null;
+  const { projection } = thread;
+  const providerThread = projection.providerThreads.find(
+    (candidate) => candidate.id === projection.thread.activeProviderThreadId,
+  );
+  return deriveLatestContextWindowSnapshot(
+    [],
+    latestProviderTurnTokenUsage(projection.providerTurns, projection, providerThread),
+    providerThread,
+  );
+};
+
+export function useThreadContextWindow(ref: ScopedThreadRef | null) {
+  return useAtomValue(
+    ref === null ? EMPTY_THREAD_ATOM : environmentThreadDetails.threadAtom(ref),
+    selectContextWindow,
+  );
+}
 
 export function useThreadReportedModelSelection(ref: ScopedThreadRef | null) {
   return useAtomValue(

@@ -128,6 +128,18 @@ returns to the remembered selection.
 
 Leaving reasoning level or service tier unset uses the provider's own configuration.
 
+## Status line
+
+A line under the composer shows the model, effort, context use, and usage limits,
+like Claude Code's status line. It refreshes when the thread changes and every 30
+seconds. Turn it off in **Settings → Chat → Status line**.
+
+The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
+script on the thread's machine, which needs `bash` and `jq`. To draw your own, set
+**Status line command** to any shell command: it receives Claude Code's status line
+JSON on stdin and runs in the thread's folder, so a script written for Claude Code's
+`statusLine` setting works unchanged. Colors from its output are kept.
+
 ## Quote an assistant response
 
 On web and desktop, select text within one assistant response and choose

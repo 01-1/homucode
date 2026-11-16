@@ -31,6 +31,10 @@
       "types": "./src/locales.ts",
       "default": "./src/locales.ts"
     },
+    "./status-line": {
+      "types": "./src/statusLine.ts",
+      "default": "./src/statusLine.ts"
+    },
     "./model-search": {
       "types": "./src/modelSearch.ts",
       "default": "./src/modelSearch.ts"
