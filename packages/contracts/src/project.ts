@@ -209,6 +209,8 @@ export const ProjectMutation = Schema.Union([
     commandId: CommandId,
     projectId: ProjectId,
     ...ProjectCreatePayload.fields,
+    /** Return the project already rooted at this folder instead of failing on the conflict. */
+    reuseExisting: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("project.update"),

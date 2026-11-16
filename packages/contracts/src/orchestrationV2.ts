@@ -2989,12 +2989,14 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
 export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJson.Type;
 
 export const OrchestrationV2Command = Schema.Union([
-  /** Refiles this thread and its descendants without changing their checkout paths or running work. */
+  /** Refiles this thread and its descendants without changing their checkout paths or running work, unless `changeDirectory`. */
   Schema.Struct({
     type: Schema.Literal("thread.project.move"),
     commandId: CommandId,
     threadId: ThreadId,
     projectId: ProjectId,
+    /** Also run this thread (not its descendants) in the project's folder from its next turn. */
+    changeDirectory: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.stop"),
