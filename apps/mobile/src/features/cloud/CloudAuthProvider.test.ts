@@ -1,11 +1,25 @@
 import { managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+const secureStore = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn((key: string) => Promise.resolve(secureStore.get(key) ?? null)),
+  setItemAsync: vi.fn((key: string, value: string) => {
+    secureStore.set(key, value);
+    return Promise.resolve();
+  }),
+  deleteItemAsync: vi.fn((key: string) => {
+    secureStore.delete(key);
+    return Promise.resolve();
+  }),
+}));
+
 import { appAtomRegistry } from "../../state/atom-registry";
 import {
   activateCloudRelayAccount,
   cloudAccountService,
   deactivateCloudRelayAccount,
+  restoreLastCloudAccount,
 } from "./cloudAccountService";
 import { setAgentAwarenessRelayTokenProvider } from "../agent-awareness/remoteRegistration";
 import { requestConnectOnboarding } from "./connectOnboarding";
@@ -60,14 +74,19 @@ type ClerkListener = (resources: { readonly user: { readonly id: string } | null
 
 function fakeClerk() {
   const listeners = new Set<ClerkListener>();
+  let loaded = false;
   const clerk = {
-    session: null,
+    get loaded() {
+      return loaded;
+    },
+    session: { getToken: vi.fn(async () => "clerk-token") },
     addListener: (listener: ClerkListener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
   } as unknown as Parameters<typeof cloudAccountService.attach>[0];
   const emit = (userId: string | null) => {
+    loaded = true;
     for (const listener of listeners) listener({ user: userId === null ? null : { id: userId } });
   };
   return { clerk, emit };
@@ -75,6 +94,7 @@ function fakeClerk() {
 
 afterEach(() => {
   deactivateCloudRelayAccount();
+  secureStore.clear();
   vi.clearAllMocks();
 });
 
@@ -122,5 +142,66 @@ describe("cloudAccountService", () => {
     await vi.waitFor(() =>
       expect(appAtomRegistry.get(managedRelaySessionAtom)?.accountId).toBe("account-1"),
     );
+  });
+});
+
+describe("restoreLastCloudAccount", () => {
+  async function launchWithStoredAccount(storedAccountId: string) {
+    activateCloudRelayAccount(storedAccountId, async () => null);
+    await vi.waitFor(() => expect(secureStore.size).toBe(1));
+    deactivateCloudRelayAccount({ signedOut: false });
+    const launch = fakeClerk();
+    const detach = cloudAccountService.attach(launch.clerk);
+    await restoreLastCloudAccount(launch.clerk);
+    return { ...launch, [Symbol.dispose]: detach };
+  }
+
+  it("connects as the last account before Clerk loads, reading tokens only once it has", async () => {
+    using launch = await launchWithStoredAccount("account-1");
+
+    const session = appAtomRegistry.get(managedRelaySessionAtom);
+    expect(session?.accountId).toBe("account-1");
+    const readToken = vi.mocked(setAgentAwarenessRelayTokenProvider).mock.lastCall?.[0];
+    const token = readToken!();
+    expect(launch.clerk.session!.getToken).not.toHaveBeenCalled();
+
+    launch.emit("account-1");
+    await expect(token).resolves.toBe("clerk-token");
+    await vi.waitFor(() => expect(cloudAccountService.getState()._tag).toBe("Active"));
+    // The same account keeps its session, so live connections are not replaced.
+    expect(appAtomRegistry.get(managedRelaySessionAtom)).toBe(session);
+  });
+
+  it("drops the restored account when Clerk loads signed out", async () => {
+    using launch = await launchWithStoredAccount("account-1");
+
+    launch.emit(null);
+
+    expect(appAtomRegistry.get(managedRelaySessionAtom)).toBeNull();
+    await vi.waitFor(() => expect(secureStore.size).toBe(0));
+  });
+
+  it("drops the restored account at once when Clerk loads another account", async () => {
+    using launch = await launchWithStoredAccount("account-1");
+
+    launch.emit("account-2");
+
+    expect(appAtomRegistry.get(managedRelaySessionAtom)).toBeNull();
+    await vi.waitFor(() =>
+      expect(appAtomRegistry.get(managedRelaySessionAtom)?.accountId).toBe("account-2"),
+    );
+  });
+
+  it("leaves an account Clerk already reported alone", async () => {
+    activateCloudRelayAccount("account-1", async () => null);
+    await vi.waitFor(() => expect(secureStore.size).toBe(1));
+    deactivateCloudRelayAccount({ signedOut: false });
+    const { clerk, emit } = fakeClerk();
+    using _detach = { [Symbol.dispose]: cloudAccountService.attach(clerk) };
+    emit("account-2");
+
+    await restoreLastCloudAccount(clerk);
+
+    expect(appAtomRegistry.get(managedRelaySessionAtom)?.accountId).not.toBe("account-1");
   });
 });

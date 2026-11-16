@@ -11,6 +11,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
+import * as SecureStore from "expo-secure-store";
 
 import { runtime } from "../../lib/runtime";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -29,9 +30,12 @@ import { resolveRelayClerkTokenOptions } from "./publicConfig";
 
 type ClerkInstance = ReturnType<typeof getClerkInstance>;
 
+const LAST_CLOUD_ACCOUNT_KEY = "t3code.cloud.last-active-account";
+
 export function deactivateCloudRelayAccount(input?: { readonly signedOut: boolean }): void {
   setAgentAwarenessRelayTokenProvider(null);
   setManagedRelaySession(appAtomRegistry, null, input);
+  if (input?.signedOut) void SecureStore.deleteItemAsync(LAST_CLOUD_ACCOUNT_KEY).catch(() => {});
 }
 
 export function activateCloudRelayAccount(
@@ -42,6 +46,39 @@ export function activateCloudRelayAccount(
   setManagedRelaySession(appAtomRegistry, {
     accountId,
     readClerkToken: tokenProvider,
+  });
+  void SecureStore.setItemAsync(LAST_CLOUD_ACCOUNT_KEY, accountId).catch(() => {});
+}
+
+function onClerkLoad(clerk: ClerkInstance, run: (user: { readonly id: string } | null) => void) {
+  let unsubscribe: (() => void) | undefined;
+  let settled = false;
+  unsubscribe = clerk.addListener(({ user }) => {
+    if (user === undefined || settled) return;
+    settled = true;
+    queueMicrotask(() => unsubscribe?.());
+    run(user);
+  });
+}
+
+/**
+ * Clerk fetches its client over the network on every launch before it reports
+ * the signed-in user. Until then the last account lets connections use their
+ * cached environment credentials; a Clerk token waits for Clerk.
+ */
+export async function restoreLastCloudAccount(clerk: ClerkInstance): Promise<void> {
+  const accountId = await SecureStore.getItemAsync(LAST_CLOUD_ACCOUNT_KEY).catch(() => null);
+  if (accountId === null || cloudAccountService.getState()._tag !== "Unobserved") return;
+  const loaded = new Promise<void>((resolve) =>
+    onClerkLoad(clerk, (user) => {
+      if (user?.id !== accountId) deactivateCloudRelayAccount({ signedOut: user === null });
+      resolve();
+    }),
+  );
+  const readToken = clerkTokenReader(clerk);
+  activateCloudRelayAccount(accountId, async () => {
+    if (!clerk.loaded) await loaded;
+    return readToken();
   });
 }
 
