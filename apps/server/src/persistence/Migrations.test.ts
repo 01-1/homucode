@@ -95,41 +95,41 @@ describe("runMigrations", () => {
     it.effect(
       `upgrades the legacy Homu migration ledger without losing fork data (upstream through ${upstreamThrough})`,
       () =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* runMigrations({ toMigrationInclusive: upstreamThrough });
-        for (const [id, name, migration] of [
-          [82, "ThreadCompletionOutbox", HomuCompletion],
-          [83, "WorkAssistanceContinuity", HomuAssistance],
-          [84, "ProjectRouterNotices", HomuRouter],
-          [85, "ThreadFolders", HomuFolders],
-          [86, "ThreadFolderRules", HomuFolderRules],
-        ] as const) {
-          yield* sql.withTransaction(
-            migration.pipe(
-              Effect.andThen(
-                sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (${id}, ${name})`,
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* runMigrations({ toMigrationInclusive: upstreamThrough });
+          for (const [id, name, migration] of [
+            [82, "ThreadCompletionOutbox", HomuCompletion],
+            [83, "WorkAssistanceContinuity", HomuAssistance],
+            [84, "ProjectRouterNotices", HomuRouter],
+            [85, "ThreadFolders", HomuFolders],
+            [86, "ThreadFolderRules", HomuFolderRules],
+          ] as const) {
+            yield* sql.withTransaction(
+              migration.pipe(
+                Effect.andThen(
+                  sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (${id}, ${name})`,
+                ),
               ),
-            ),
-          );
-        }
-        yield* sql`INSERT INTO thread_completion_outbox(thread_id, run_id, workspace_root, payload_json) VALUES ('thread:legacy', 'run:legacy', '/repo', '{}')`;
-        yield* sql`INSERT INTO thread_folders(folder_id, name, created_at, updated_at, sort_key) VALUES ('legacy-folder', 'Kept folder', '2026-11-14', '2026-11-14', 23)`;
-        yield* sql`UPDATE effect_sql_migrations SET name = 'Unexpected' WHERE migration_id = 80`;
-        const invalidHistory = yield* history;
-        const rejected = yield* Effect.exit(runMigrations());
-        assert.isTrue(Exit.isFailure(rejected));
-        assert.deepStrictEqual(yield* history, invalidHistory);
-        yield* sql`UPDATE effect_sql_migrations SET name = 'ScheduledTaskThreadMode' WHERE migration_id = 80`;
-        yield* runMigrations();
-        assert.deepStrictEqual(yield* history, migrationManifest);
-        const completions = yield* sql`SELECT thread_id FROM thread_completion_outbox`;
-        assert.deepStrictEqual(completions, [{ thread_id: "thread:legacy" }]);
-        const folders = yield* sql`SELECT name, sort_key FROM thread_folders`;
-        assert.deepStrictEqual(folders, [{ name: "Kept folder", sort_key: 23 }]);
-        yield* sql`PRAGMA query_only = ON`;
-        assert.deepStrictEqual(yield* runMigrations(), []);
-      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+            );
+          }
+          yield* sql`INSERT INTO thread_completion_outbox(thread_id, run_id, workspace_root, payload_json) VALUES ('thread:legacy', 'run:legacy', '/repo', '{}')`;
+          yield* sql`INSERT INTO thread_folders(folder_id, name, created_at, updated_at, sort_key) VALUES ('legacy-folder', 'Kept folder', '2026-11-14', '2026-11-14', 23)`;
+          yield* sql`UPDATE effect_sql_migrations SET name = 'Unexpected' WHERE migration_id = 80`;
+          const invalidHistory = yield* history;
+          const rejected = yield* Effect.exit(runMigrations());
+          assert.isTrue(Exit.isFailure(rejected));
+          assert.deepStrictEqual(yield* history, invalidHistory);
+          yield* sql`UPDATE effect_sql_migrations SET name = 'ScheduledTaskThreadMode' WHERE migration_id = 80`;
+          yield* runMigrations();
+          assert.deepStrictEqual(yield* history, migrationManifest);
+          const completions = yield* sql`SELECT thread_id FROM thread_completion_outbox`;
+          assert.deepStrictEqual(completions, [{ thread_id: "thread:legacy" }]);
+          const folders = yield* sql`SELECT name, sort_key FROM thread_folders`;
+          assert.deepStrictEqual(folders, [{ name: "Kept folder", sort_key: 23 }]);
+          yield* sql`PRAGMA query_only = ON`;
+          assert.deepStrictEqual(yield* runMigrations(), []);
+        }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
     );
   }
 
