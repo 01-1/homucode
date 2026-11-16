@@ -1,4 +1,3 @@
-import { useAndroidFloatingTabs } from "../settings/appearance/AppearancePreferencesProvider";
 import { useState } from "react";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { Platform, View } from "react-native";
@@ -19,7 +18,6 @@ import {
 } from "./thread-undo-notice";
 
 export function ThreadUndoNotice(props: { readonly visible: boolean }) {
-  const floatingTabsEnabled = useAndroidFloatingTabs();
   const notice = useThreadUndoNotice();
   const insets = useSafeAreaInsets();
   const columnMetrics = useNativeColumnLayoutMetrics();
@@ -70,18 +68,19 @@ export function ThreadUndoNotice(props: { readonly visible: boolean }) {
               columnMetrics?.safeArea.bottom ?? 0,
               (workspace?.bottomClearance ?? 0) - workspacePadding,
             ) + 8
-      : floatingTabsEnabled && keyboardHeight === 0
-        ? Math.max(insets.bottom + 12, workspace?.bottomClearance ?? 0)
-        : insets.bottom + 12;
+      : undefined;
+  // Android keeps New thread at the bottom, so the notice sits at the top instead of covering it.
+  const position = bottom === undefined ? { top: insets.top + 12 } : { bottom };
   return (
     <View
       key={instance.key}
       collapsable={false}
       className="absolute z-[100]"
-      style={{ bottom, ...horizontalInsets }}
+      style={{ ...position, ...horizontalInsets }}
       pointerEvents="box-none"
     >
       <Toast
+        placement={bottom === undefined ? "top" : "bottom"}
         message={`${notice.action} thread`}
         action={{
           label: "Undo",
