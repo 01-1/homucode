@@ -30,6 +30,7 @@ describe("mutateProjectWithClone", () => {
       const rejected = new ProjectNotEmptyError({ projectId });
       const result = yield* mutateProjectWithClone(
         {
+          bootstrap: () => Effect.die("unused"),
           create: () => Effect.die("unused"),
           update: () => Effect.die("unused"),
           delete: () => Effect.fail(rejected),
@@ -48,6 +49,7 @@ describe("mutateProjectWithClone", () => {
       const finishDelete = yield* Deferred.make<void>();
       const discarded: Array<ProjectId> = [];
       const projects = {
+        bootstrap: () => Effect.die("unused"),
         create: () => Effect.die("unused"),
         update: () => Effect.die("unused"),
         // The delete event is already durable while its post-commit cleanup runs.

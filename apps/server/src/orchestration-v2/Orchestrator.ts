@@ -4640,6 +4640,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     function* (
       command: Extract<OrchestrationV2ServerCommand, { readonly type: "thread.project.move" }>,
       events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+      effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
     ) {
       const reject = (cause: string) =>
         new OrchestratorDispatchError({
@@ -4659,6 +4660,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ) {
         return yield* reject("The destination project is missing or archived.");
       }
+      const rootSessions =
+        command.changeDirectory === true
+          ? yield* projectionStore
+              .getThreadRecords(root.id, ["runs", "runtimeRequests", "providerSessions"], {
+                turnItemTypes: [],
+              })
+              .pipe(
+                mapDispatchError(command),
+                Effect.flatMap((records) =>
+                  threadHasUnfinishedWork(records)
+                    ? Effect.fail(
+                        reject("The thread still has work in progress. Finish or stop it first."),
+                      )
+                    : Effect.succeed(records.providerSessions),
+                ),
+              )
+          : [];
       const family = yield* Effect.forEach(["active", "archive"] as const, (location) =>
         projectionStore.getShellSnapshot({ location, familyOf: root.id }),
       ).pipe(mapDispatchError(command));
@@ -4687,6 +4705,63 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           id === root.id
             ? root
             : yield* projectionStore.getThread(id).pipe(mapDispatchError(command));
+        if (id === root.id && command.changeDirectory === true) {
+          if (
+            thread.projectId === command.projectId &&
+            thread.worktreePath === null &&
+            (thread.workspaceRoot ?? target.value.workspaceRoot) === target.value.workspaceRoot
+          ) {
+            continue;
+          }
+          yield* emit(
+            events,
+            command,
+          )({
+            type: "thread.metadata-updated",
+            threadId: id,
+            providerInstanceId: thread.providerInstanceId,
+            occurredAt: now,
+            payload: {
+              ...thread,
+              projectId: command.projectId,
+              workspaceRoot: target.value.workspaceRoot,
+              worktreePath: null,
+              branch: null,
+              updatedAt: now,
+            },
+          });
+          // The next turn opens a session in the new folder and resumes the conversation there.
+          for (const session of rootSessions) {
+            if (session.status === "stopped" || session.status === "error") continue;
+            yield* emit(
+              events,
+              command,
+            )({
+              type: "provider-session.detached",
+              threadId: id,
+              driver: session.driver,
+              providerInstanceId: session.providerInstanceId,
+              occurredAt: now,
+              payload: {
+                providerSessionId: session.id,
+                detachedAt: now,
+                reason: "Workspace changed.",
+              },
+            });
+            const pendingEffect = {
+              id: `effect:${command.commandId}:provider-session.detach:${session.id}`,
+              commandId: command.commandId,
+              threadId: id,
+              request: {
+                type: "provider-session.detach",
+                providerSessionId: session.id,
+                detail: "Workspace changed.",
+              },
+            } satisfies PendingOrchestrationEffectV2;
+            yield* Ref.update(effects, (existing) => [...existing, pendingEffect]);
+          }
+          continue;
+        }
         if (thread.projectId === command.projectId) continue;
         const source = yield* projects.get(thread.projectId).pipe(mapDispatchError(command));
         const cwd = thread.workspaceRoot ?? Option.getOrUndefined(source)?.workspaceRoot;
@@ -14095,7 +14170,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
       case "thread.project.move":
-        yield* dispatchThreadProjectMove(command, events);
+        yield* dispatchThreadProjectMove(command, events, effects);
         break;
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);

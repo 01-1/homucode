@@ -1833,6 +1833,44 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
+  it.effect("refuses to add an autoreviewer while autoreviewers are off", () =>
+    Effect.gen(function* () {
+      const layerDependencies = (autoreviewEnabled: boolean) =>
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            hasReceipt: () => Effect.succeed(false),
+            getThreadRecords: () => Effect.succeed(parentProjection([])),
+          }),
+          ServerSettings.layerTest({ autoreviewEnabled }),
+          providerRegistryLayer([]),
+          adapterRegistryLayer([]),
+          Layer.mock(ProjectService.ProjectService)({}),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        );
+      const add = (autoreviewEnabled: boolean) =>
+        Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          return yield* service
+            .prepareAutoreview(scope, { action: "add", clientRequestId: "autoreview-off" })
+            .pipe(Effect.flip);
+        }).pipe(
+          Effect.provide(
+            layerOrchestratorService.pipe(Layer.provide(layerDependencies(autoreviewEnabled))),
+          ),
+        );
+
+      const off = yield* add(false);
+      assert.equal(off.code, "capability_denied");
+      assert.include(off.message, "Settings → Threads → Autoreviewers");
+      // On, the same call goes on to resolve the reviewer's provider, which is missing here.
+      assert.notEqual((yield* add(true)).code, "capability_denied");
+    }),
+  );
+
   it.effect("driver-only delegation skips an instance the project turned off", () =>
     Effect.gen(function* () {
       const altInstanceId = ProviderInstanceId.make("codex-alt");
@@ -2847,36 +2885,51 @@ describe("OrchestratorMcpService provider resolution", () => {
       }),
     );
 
-    it.effect("saves an explicit scheduled model on create and update without resetting other settings", () =>
-      Effect.gen(function* () {
-        const selections = yield* Ref.make<ReadonlyArray<ScheduledTask["modelSelection"]>>([]);
-        const mcp = yield* OrchestratorMcpService.OrchestratorMcpService.pipe(
-          Effect.provide(service(
-              masterRepository,
-              yield* Ref.make<ReadonlyArray<ScheduledTask["workspaceStrategy"]>>([]),
-              existing,
-              undefined,
-              selections,
-            )),
-        );
-        const modelSelection = {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5.4",
-          options: [{ id: "reasoningEffort", value: "high" }],
-        };
-        const created = yield* mcp.scheduleTask(client, {
-          projectId, prompt: "Check the build", schedule, modelSelection,
-        });
-        const updated = yield* mcp.updateScheduledTask(client, {
-          scheduledTaskId: existing.id, modelSelection,
-        });
-        yield* mcp.updateScheduledTask(client, { scheduledTaskId: existing.id, title: "Renamed" });
-        assert.deepEqual(yield* Ref.get(selections), [modelSelection, modelSelection, existing.modelSelection]);
-        assert.deepEqual(created.modelSelection, modelSelection);
-        assert.deepEqual(updated.modelSelection, modelSelection);
-        assert.equal(updated.enabled, existing.enabled);
-        assert.deepEqual(updated.schedule, existing.schedule);
-      }),
+    it.effect(
+      "saves an explicit scheduled model on create and update without resetting other settings",
+      () =>
+        Effect.gen(function* () {
+          const selections = yield* Ref.make<ReadonlyArray<ScheduledTask["modelSelection"]>>([]);
+          const mcp = yield* OrchestratorMcpService.OrchestratorMcpService.pipe(
+            Effect.provide(
+              service(
+                masterRepository,
+                yield* Ref.make<ReadonlyArray<ScheduledTask["workspaceStrategy"]>>([]),
+                existing,
+                undefined,
+                selections,
+              ),
+            ),
+          );
+          const modelSelection = {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.4",
+            options: [{ id: "reasoningEffort", value: "high" }],
+          };
+          const created = yield* mcp.scheduleTask(client, {
+            projectId,
+            prompt: "Check the build",
+            schedule,
+            modelSelection,
+          });
+          const updated = yield* mcp.updateScheduledTask(client, {
+            scheduledTaskId: existing.id,
+            modelSelection,
+          });
+          yield* mcp.updateScheduledTask(client, {
+            scheduledTaskId: existing.id,
+            title: "Renamed",
+          });
+          assert.deepEqual(yield* Ref.get(selections), [
+            modelSelection,
+            modelSelection,
+            existing.modelSelection,
+          ]);
+          assert.deepEqual(created.modelSelection, modelSelection);
+          assert.deepEqual(updated.modelSelection, modelSelection);
+          assert.equal(updated.enabled, existing.enabled);
+          assert.deepEqual(updated.schedule, existing.schedule);
+        }),
     );
 
     it.effect("keeps one thread when fresh sessions are turned off before the first run", () =>

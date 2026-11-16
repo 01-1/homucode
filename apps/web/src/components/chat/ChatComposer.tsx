@@ -1883,8 +1883,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }
         return;
       }
-      if (item.command === "side" || item.command === "btw" || item.command === "q") {
-        if (item.command !== "q" && props.sideChatDisabledReason) return;
+      if (
+        item.command === "side" ||
+        item.command === "btw" ||
+        item.command === "q" ||
+        item.command === "cd"
+      ) {
+        if ((item.command === "side" || item.command === "btw") && props.sideChatDisabledReason) {
+          return;
+        }
         const applied = applyPromptReplacement(
           trigger.rangeStart,
           trigger.rangeEnd,

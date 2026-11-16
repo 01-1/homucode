@@ -229,7 +229,15 @@ export function useComposerMenuItems({
           type: "slash-command",
           command: "q",
           label: "/q",
-          description: "Ask one question on the quick model, then switch back; the thread's context and cache are kept",
+          description:
+            "Ask one question on the quick model, then switch back; the thread's context and cache are kept",
+        },
+        {
+          id: "slash:cd",
+          type: "slash-command",
+          command: "cd",
+          label: "/cd",
+          description: "Move this thread to a folder's project, adding the project if needed",
         },
         ...(sideChatAvailable
           ? ([

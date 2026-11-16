@@ -462,6 +462,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "autoreviewers",
+    title: "Autoreviewers",
+    to: "/settings/threads",
+    searchTerms: ["autoreview reviewer subagent code review watch thread findings lgtm"],
+  },
+  {
     id: "working-shelf",
     title: "Working section",
     to: "/settings/general",

@@ -4,15 +4,18 @@ import * as Effect from "effect/Effect";
 import { type ProjectCloneTracker } from "./ProjectCloneTracker.ts";
 import { type ProjectService } from "./ProjectService.ts";
 
-type ProjectMutations = Pick<ProjectService["Service"], "create" | "delete" | "update">;
+type ProjectMutations = Pick<
+  ProjectService["Service"],
+  "bootstrap" | "create" | "delete" | "update"
+>;
 
 export const projectMutationOperation = Effect.fn("projectMutationOperation")(function* (
   projects: ProjectMutations,
   mutation: ProjectMutation,
 ) {
   switch (mutation.type) {
-    case "project.create":
-      return yield* projects.create({
+    case "project.create": {
+      const input = {
         commandId: mutation.commandId,
         projectId: mutation.projectId,
         title: mutation.title,
@@ -24,7 +27,11 @@ export const projectMutationOperation = Effect.fn("projectMutationOperation")(fu
           ? {}
           : { defaultModelSelection: mutation.defaultModelSelection }),
         ...(mutation.scripts === undefined ? {} : { scripts: mutation.scripts }),
-      });
+      };
+      return mutation.reuseExisting === true
+        ? (yield* projects.bootstrap(input)).project
+        : yield* projects.create(input);
+    }
 
     case "project.update":
       return yield* projects.update({
