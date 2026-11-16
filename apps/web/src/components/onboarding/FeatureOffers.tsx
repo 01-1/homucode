@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   FEATURE_OFFERS,
+  enabledFeatureOffers,
   featureOfferSettingsPatch,
   unseenFeatureOffers,
   type FeatureOffer,
@@ -27,11 +28,13 @@ import {
 export function FeatureOfferChoices({
   offers = FEATURE_OFFERS,
   selected,
+  enabled,
   onChange,
   disabled = false,
 }: {
   offers?: ReadonlyArray<FeatureOffer>;
   selected: ReadonlySet<string>;
+  enabled?: ReadonlySet<string>;
   onChange: (selected: ReadonlySet<string>) => void;
   disabled?: boolean;
 }) {
@@ -40,8 +43,8 @@ export function FeatureOfferChoices({
       {offers.map((offer) => (
         <label key={offer.id} className="flex cursor-pointer items-start gap-3 text-sm">
           <Checkbox
-            disabled={disabled}
-            checked={selected.has(offer.id)}
+            disabled={disabled || enabled?.has(offer.id)}
+            checked={selected.has(offer.id) || enabled?.has(offer.id) === true}
             onCheckedChange={(checked) => {
               const next = new Set(selected);
               if (checked) next.add(offer.id);
@@ -114,6 +117,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
           <FeatureOfferChoices
             offers={offers}
             selected={selected}
+            enabled={enabledFeatureOffers(settings)}
             onChange={setSelected}
             disabled={busy}
           />

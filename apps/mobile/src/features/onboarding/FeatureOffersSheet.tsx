@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
+  enabledFeatureOffers,
   featureOfferSettingsPatch,
   unseenFeatureOffers,
 } from "@t3tools/client-runtime/feature-offers";
@@ -45,6 +46,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const pending = useRef(false);
   const settings = config?.settings;
   const offers = settings ? unseenFeatureOffers(settings) : [];
+  const enabled = settings ? enabledFeatureOffers(settings) : new Set<string>();
   const save = async (apply: boolean) => {
     if (pending.current || !settings) return;
     pending.current = true;
@@ -74,8 +76,8 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             key={offer.id}
             label={offer.title}
             subtitle={offer.description}
-            value={selected.has(offer.id)}
-            disabled={busy}
+            value={selected.has(offer.id) || enabled.has(offer.id)}
+            disabled={busy || enabled.has(offer.id)}
             onValueChange={(enabled) =>
               setSelected((current) => {
                 const next = new Set(current);

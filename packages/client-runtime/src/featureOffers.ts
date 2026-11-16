@@ -36,6 +36,17 @@ export function unseenFeatureOffers(
   return FEATURE_OFFERS.filter((offer) => !seen.has(offer.id));
 }
 
+/** Offers whose feature is already on, shown checked and locked so the prompt doesn't look like it is off. */
+export function enabledFeatureOffers(
+  settings: Pick<ServerSettings, "duetEnabled" | "autoreviewEnabled" | "quickModelSelection">,
+): ReadonlySet<string> {
+  return new Set([
+    ...(settings.duetEnabled ? ["duet"] : []),
+    ...(settings.autoreviewEnabled ? ["autoreview"] : []),
+    ...(settings.quickModelSelection ? ["quick-model"] : []),
+  ]);
+}
+
 function featureOffersSeenAfter(
   settings: Pick<ServerSettings, "featureOffersSeen">,
   offered: ReadonlyArray<FeatureOffer>,
