@@ -32,6 +32,9 @@ export interface McpThreadCaller {
   readonly subagent?: boolean;
 }
 
+/** The MCP session label of the `t3 thread` CLI, which people, scripts and agents all run. */
+export const T3_THREAD_CLI_LABEL = "t3 thread cli";
+
 export interface McpClientCaller {
   readonly sessionId: string;
   readonly label: string;

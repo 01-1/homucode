@@ -15,6 +15,7 @@ import {
   ThreadId,
   TurnItemId,
   type ModelSelection,
+  type OrchestrationMessageContext,
   type OrchestrationV2DomainEvent,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -2935,7 +2936,13 @@ const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoal
     true,
     nativeGoals,
   );
-  const send = (id: string, text: string, delivery: "queue" | "auto", freshContext = false) =>
+  const send = (
+    id: string,
+    text: string,
+    delivery: "queue" | "auto",
+    freshContext = false,
+    context?: OrchestrationMessageContext,
+  ) =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       yield* orchestrator.dispatch({
@@ -2947,6 +2954,7 @@ const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoal
         attachments: [],
         modelSelection: runSelection,
         ...(freshContext ? { freshContext } : {}),
+        ...(context === undefined ? {} : { context }),
         ...(delivery === "queue"
           ? { dispatchMode: { type: "queue_after_active" } }
           : { dispatchMode: { type: "start_immediately" }, deliveryIntent: "auto" }),
@@ -3005,24 +3013,37 @@ it.effect.each([undefined, false, true])(
 );
 
 it.effect.each([
-  ["STPO", "queue"],
-  ["Wait!", "auto"],
+  ["STPO", "queue", "desktop", "T3 desktop", "Stopped by a human"],
+  ["Wait!", "auto", "cli", "T3 CLI", "Stopped by an unknown sender"],
 ] as const)(
-  "stops the running turn and starts a bare %s sent with %s delivery next",
-  ([text, delivery]) =>
+  "stops the running turn and starts a bare %s sent with %s delivery from %s next",
+  ([text, delivery, surface, label, reason]) =>
     Effect.gen(function* () {
       const { steered, layer, startFirstTurn, send, read } = yield* goalHarness(`halt-${delivery}`);
       yield* Effect.gen(function* () {
         const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
         const threadId = yield* startFirstTurn;
         yield* send("queued", "queued", "queue");
-        yield* send("halt", text, delivery);
+        yield* send("halt", text, delivery, false, {
+          version: 1,
+          records: [],
+          sentFrom: { surface },
+        });
         yield* worker.drain();
+        const projection = yield* (yield* Orchestrator.OrchestratorV2).getThreadProjection(
+          threadId,
+        );
+        assert.deepEqual(
+          projection.turnItems.flatMap((item) =>
+            item.type === "run_interrupt_request" ? [item.message] : [],
+          ),
+          [reason],
+        );
 
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued"],
-          started: ["first", text].map(timestamped),
+          started: ["first", `${text}\n\n[T3] Sent from: ${label}`].map(timestamped),
           stopRequested: true,
         });
       }).pipe(Effect.provide(layer));

@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import type * as Orchestrator from "./Orchestrator.ts";
+import { stoppedBy, type StopActor } from "./StopAttribution.ts";
 import type {
   ThreadManagementProviderInstanceDisabledError,
   ThreadManagementServiceShape,
@@ -33,6 +34,7 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
     readonly commandId: CommandId;
     readonly threadId: ThreadId;
     readonly reviewer: OrchestrationV2Autoreviewer;
+    readonly stoppedBy?: StopActor;
   },
 ) {
   const parent = yield* threads.getThreadRecords(input.threadId, ["subagents"]);
@@ -105,7 +107,7 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
         commandId: commandId("stop"),
         threadId: childThreadId,
         stopDelegatedTasks: false,
-        reason: "Autoreviewer stopped by the user.",
+        reason: `Autoreviewer ${stoppedBy(input.stoppedBy ?? "unknown").toLowerCase()}`,
       });
     }
     const child = yield* threads.getThreadRecords(childThreadId, ["runs", "subagents"]);
