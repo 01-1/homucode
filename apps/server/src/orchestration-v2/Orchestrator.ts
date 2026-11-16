@@ -1,5 +1,6 @@
 import * as WorkAssistance from "./WorkAssistance.ts";
 import { withOriginalSentFrom, withoutNonUserSentFrom } from "./MessageSentFrom.ts";
+import { messageStopActor, stoppedBy } from "./StopAttribution.ts";
 import { isAutoreviewFindingsMessageId } from "./autoreviewBatch.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
@@ -7686,7 +7687,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           (targetMessage === undefined || !isNativeMaintenanceCommand(targetMessage)) &&
           !(yield* stopReachedRun(command, command.threadId, target.id))
         ) {
-          queuedRunStop = { runId: target.id, reason: "Stopped to apply /goal" };
+          queuedRunStop = {
+            runId: target.id,
+            reason: stoppedBy(messageStopActor(command), "to apply /goal"),
+          };
         }
         dispatchMode = { type: "queue_after_active" };
       }
@@ -7771,7 +7775,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // The restart replaces the stopped turn, so an older held queue does not hold it.
         queuedRunStop = {
           runId: target.id,
-          reason: "Stopped to send a new message",
+          reason: stoppedBy(messageStopActor(command), "to send a new message"),
           skipsHeldQueue: true,
         };
         dispatchMode = { type: "queue_after_active" };
@@ -7795,7 +7799,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         (targetMessage === undefined || !isNativeMaintenanceCommand(targetMessage)) &&
         !(yield* stopReachedRun(command, command.threadId, target.id))
       ) {
-        queuedRunStop = { runId: target.id, reason: RunExecutionService.USER_STOP_REASON };
+        queuedRunStop = { runId: target.id, reason: stoppedBy(messageStopActor(command)) };
         dispatchMode = { type: "queue_after_active" };
       }
     }
@@ -12029,7 +12033,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection,
         queuedRunId: queuedRun.id,
         targetRunId: stops ? target.id : undefined,
-        reason: "Stopped to apply /goal",
+        reason: stoppedBy(messageStopActor(queuedMessage), "to apply /goal"),
         now,
       });
     }
@@ -13256,7 +13260,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         completedAt: now,
         updatedAt: now,
         type: "run_interrupt_request",
-        message: command.reason ?? RunExecutionService.USER_STOP_REASON,
+        message: command.reason ?? stoppedBy("unknown"),
       },
     });
   });
@@ -13843,7 +13847,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       completedAt: now,
       updatedAt: now,
       type: "run_interrupt_request",
-      message: command.reason ?? RunExecutionService.USER_STOP_REASON,
+      message: command.reason ?? stoppedBy("unknown"),
     };
 
     const otherProviderInterrupts: Array<PendingOrchestrationEffectV2> = [];

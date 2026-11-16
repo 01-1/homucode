@@ -1115,7 +1115,7 @@ export const layerFromThreadManagement = Layer.effect(
     const threads = yield* ThreadManagementService.ThreadManagementService;
     return make({
       enabled: yield* readEnabled,
-      stopReviewerWork: (input) => stopAutoreviewerWork(threads, input),
+      stopReviewerWork: (input) => stopAutoreviewerWork(threads, { ...input, stoppedBy: "agent" }),
       dispatch: threads.dispatch,
       getThreadRecords: threads.getThreadRecords,
       listActiveSubagentThreadIds: threads.listActiveSubagentThreadIds,

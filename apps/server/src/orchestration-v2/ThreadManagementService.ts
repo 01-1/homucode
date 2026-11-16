@@ -68,6 +68,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import { DispatchModeLimit, exceededDispatchModeLimit } from "./DispatchModeLimit.ts";
 import { projectTurnItemForDetail } from "./WireProjection.ts";
+import { stoppedBy, type StopActor } from "./StopAttribution.ts";
 import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { ThreadWorktreeRestore } from "../workspace/restoreMissingWorktree.ts";
@@ -501,7 +502,7 @@ export interface ThreadManagementServiceShape {
    * its turn as interrupted. Never kills a process other working threads share.
    */
   readonly forceStopThread: (
-    input: OrchestrationV2ForceStopThreadInput,
+    input: OrchestrationV2ForceStopThreadInput & { readonly stoppedBy?: StopActor },
   ) => Effect.Effect<OrchestrationV2ForceStopThreadResult, OrchestrationV2ForceStopThreadError>;
   readonly awaitBackgroundTasks: (input: {
     readonly threadId: ThreadId;
@@ -600,7 +601,6 @@ function latestSteerableRun(
 }
 
 const SETTLE_AFTER_RUN_WAIT_MS = 24 * 60 * 60 * 1_000;
-const FORCE_STOP_REASON = "Force stopped by user";
 const FORCE_STOP_RELEASE_WAIT = "10 seconds";
 const isForceStopThreadError = Schema.is(OrchestrationV2ForceStopThreadError);
 
@@ -1290,6 +1290,7 @@ const make = Effect.gen(function* () {
     "ThreadManagementService.forceStopThread",
   )(
     function* (input) {
+      const forceStopReason = `Force ${stoppedBy(input.stoppedBy ?? "unknown").toLowerCase()}`;
       // Under the thread lock no new run can be created between the check and the kill. The
       // settlement below dispatches, which takes that lock itself, so it runs after release.
       const { records, target, killed } = yield* threadDispatch.withLock(
@@ -1348,7 +1349,7 @@ const make = Effect.gen(function* () {
                 commandId,
                 threadId: input.threadId,
                 runId: run.id,
-                reason: FORCE_STOP_REASON,
+                reason: forceStopReason,
               })
             : orchestrator.dispatch({
                 type: "thread.background-work.settle",
@@ -1356,7 +1357,7 @@ const make = Effect.gen(function* () {
                 threadId: input.threadId,
                 providerThreadId: providerTurn.providerThreadId,
                 providerTurnId: providerTurn.id,
-                reason: FORCE_STOP_REASON,
+                reason: forceStopReason,
               });
       }
       const ownProviderThreadIds = records.providerThreads.flatMap((providerThread) =>
@@ -1386,7 +1387,7 @@ const make = Effect.gen(function* () {
         );
       const detach = (providerSessionId: ProviderSessionId) =>
         sessions
-          .detach({ providerSessionId, threadId: input.threadId, detail: FORCE_STOP_REASON })
+          .detach({ providerSessionId, threadId: input.threadId, detail: forceStopReason })
           .pipe(
             Effect.catchCause((cause) =>
               Effect.logWarning("orchestration-v2.force-stop-detach-failed", {
@@ -1425,7 +1426,7 @@ const make = Effect.gen(function* () {
             // A promoted follow-up may not have marked its turn busy yet.
             keepIf: laterRunActive(providerSessionId),
             reason: "manual_shutdown",
-            detail: FORCE_STOP_REASON,
+            detail: forceStopReason,
           })
           .pipe(Effect.forkIn(layerScope));
         releases.push({ providerSessionId, fiber });

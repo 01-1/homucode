@@ -1,4 +1,6 @@
-import type { OrchestrationV2Command } from "@t3tools/contracts";
+import type { OrchestrationMessageSentFrom, OrchestrationV2Command } from "@t3tools/contracts";
+
+import { connectionStopActor, stoppedBy } from "./StopAttribution.ts";
 
 /**
  * A Stop sent by an app ends only that thread: its subagents keep running and still report back.
@@ -35,4 +37,13 @@ export function withClientStopScope(command: OrchestrationV2Command): Orchestrat
     return { ...command, leaveSubagentsRunning: true };
   }
   return command;
+}
+
+/** A client's Stop names who sent it from the socket's surface, replacing any reason it claimed. */
+export function withClientStopReason(
+  command: OrchestrationV2Command,
+  sentFrom: OrchestrationMessageSentFrom | undefined,
+): OrchestrationV2Command {
+  if (command.type !== "thread.stop" && command.type !== "run.interrupt") return command;
+  return { ...command, reason: stoppedBy(connectionStopActor(sentFrom)) };
 }

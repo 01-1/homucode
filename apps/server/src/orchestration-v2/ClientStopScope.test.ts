@@ -1,7 +1,7 @@
 import { CommandId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { withClientStopScope } from "./ClientStopScope.ts";
+import { withClientStopReason, withClientStopScope } from "./ClientStopScope.ts";
 
 const threadId = ThreadId.make("thread");
 const commandId = CommandId.make("command");
@@ -57,5 +57,27 @@ describe("withClientStopScope", () => {
     expect(withClientStopScope(walk)).toBe(walk);
     const interrupt = { type: "run.interrupt", commandId, threadId, runId } as const;
     expect(withClientStopScope(interrupt)).toBe(interrupt);
+  });
+
+  it("names who sent a Stop from the socket, not from what the client claims", () => {
+    const stop = {
+      type: "thread.stop",
+      commandId,
+      threadId,
+      reason: "Stopped by an agent",
+    } as const;
+    expect(withClientStopReason(stop, { surface: "desktop" })).toEqual({
+      ...stop,
+      reason: "Stopped by a human",
+    });
+    const interrupt = { type: "run.interrupt", commandId, threadId, runId } as const;
+    expect(withClientStopReason(interrupt, { surface: "cli" })).toEqual({
+      ...interrupt,
+      reason: "Stopped by an unknown sender",
+    });
+    expect(withClientStopReason(interrupt, undefined)).toEqual({
+      ...interrupt,
+      reason: "Stopped by an unknown sender",
+    });
   });
 });

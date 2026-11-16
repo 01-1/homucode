@@ -134,6 +134,7 @@ import {
   type McpInvocationScope,
   type McpThreadInvocationScope,
   requireThreadScope,
+  T3_THREAD_CLI_LABEL,
   threadLinkFor,
 } from "./McpInvocationContext.ts";
 import * as Metrics from "../observability/Metrics.ts";
@@ -148,6 +149,7 @@ import { assertTargetWithinLimits, isLiveCallerShell, threadNotFound } from "./t
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
+import { stoppedBy, type StopActor } from "../orchestration-v2/StopAttribution.ts";
 
 // Return recoverable handles before common MCP client timeouts expire.
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -317,9 +319,8 @@ function threadManagementFailure(error: unknown): OrchestratorMcpFailure {
   }
 }
 
-// Without a reason, a Stop reads as the user's (see RunExecutionService.USER_STOP_REASON).
-function agentStopReason(reason: string | undefined): string {
-  return reason === undefined ? "Stopped by an agent" : `Stopped by an agent: ${reason}`;
+function agentStopReason(reason: string | undefined, actor: StopActor = "agent"): string {
+  return reason === undefined ? stoppedBy(actor) : `${stoppedBy(actor)}: ${reason}`;
 }
 
 function errorMessage(error: unknown): string {
@@ -3805,11 +3806,14 @@ const make = Effect.gen(function* () {
       yield* assertLiveCallerForOtherThread(scope, parent, target);
       yield* assertTargetWithinLimits(limits, target.thread);
       const key = yield* requestKey(input.clientRequestId);
+      // People, scripts and agents all run the t3 CLI; other outside MCP clients are agents.
+      const callerActor: StopActor =
+        parent === undefined && scope.client?.label === T3_THREAD_CLI_LABEL ? "unknown" : "agent";
       // A peer from before `stop` drops it when decoding, so it interrupts
       // the run instead, as this call did then.
       if (input.stop === true) {
         const commandId = stableCommandId({ scope, requestKey: key, operation: "thread-stop" });
-        const reason = agentStopReason(input.reason);
+        const reason = agentStopReason(input.reason, callerActor);
         // The cause goes to the log; the caller learns only that the stop failed.
         const stopFailed = (error: unknown) =>
           Effect.logWarning("orchestrator-mcp.thread-stop-failed", {
@@ -3861,7 +3865,7 @@ const make = Effect.gen(function* () {
           }),
           threadId: input.threadId,
           ...(input.runId === undefined ? {} : { runId: input.runId }),
-          reason: agentStopReason(input.reason),
+          reason: agentStopReason(input.reason, callerActor),
         })
         .pipe(
           Effect.mapError((error) =>

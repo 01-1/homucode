@@ -131,7 +131,8 @@ import {
   withDeviceName,
   type DeviceNameRule,
 } from "./orchestration-v2/MessageSentFrom.ts";
-import { withClientStopScope } from "./orchestration-v2/ClientStopScope.ts";
+import { connectionStopActor } from "./orchestration-v2/StopAttribution.ts";
+import { withClientStopReason, withClientStopScope } from "./orchestration-v2/ClientStopScope.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
@@ -1448,7 +1449,11 @@ export const layerWsRpc = (
         dispatch: threadManagement.dispatch,
         getThreadRecords: threadManagement.getThreadRecords,
         listActiveSubagentThreadIds: threadManagement.listActiveSubagentThreadIds,
-        stopReviewerWork: (input) => stopAutoreviewerWork(threadManagement, input),
+        stopReviewerWork: (input) =>
+          stopAutoreviewerWork(threadManagement, {
+            ...input,
+            stoppedBy: connectionStopActor(sentFromConnection(clientAnalyticsProps)),
+          }),
       });
       const intakeContext = yield* Effect.context<
         | ThreadManagementService.ThreadManagementService
@@ -2023,7 +2028,7 @@ export const layerWsRpc = (
                     : ThreadMessageIntake.dispatchCommand(
                         withConnectionSentFrom(
                           ThreadManagementService.withCreationProvenance(
-                            withClientStopScope(command),
+                            withClientStopReason(withClientStopScope(command), connectionSentFrom),
                             {
                               createdBy: "user",
                               creationSource:
@@ -2063,7 +2068,10 @@ export const layerWsRpc = (
             ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
-          threadManagement.forceStopThread(input),
+          threadManagement.forceStopThread({
+            ...input,
+            stoppedBy: connectionStopActor(connectionSentFrom),
+          }),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: (input) =>

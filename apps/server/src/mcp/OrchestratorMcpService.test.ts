@@ -71,7 +71,7 @@ import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts
 import * as ServerSettings from "../serverSettings.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
-import type { McpInvocationScope } from "./McpInvocationContext.ts";
+import { T3_THREAD_CLI_LABEL, type McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
@@ -5054,6 +5054,11 @@ describe("OrchestratorMcpService thread stop", () => {
       queued: true,
       stop: { reason: "Make room", message: "Stopped by an agent: Make room" },
     },
+    {
+      name: "a running turn stopped from the t3 CLI",
+      queued: false,
+      stop: { reason: undefined, message: "Stopped by an unknown sender", cli: true },
+    },
   ])("t3_thread_interrupt stop reports the run it interrupted on $name", ({ queued, stop }) =>
     Effect.gen(function* () {
       const cwd = yield* checkpointWorkspace("mcp-thread-stop");
@@ -5161,7 +5166,11 @@ describe("OrchestratorMcpService thread stop", () => {
         const childThreadId = (yield* orchestrator.getThreadProjection(threadId)).subagents[0]!
           .childThreadId!;
 
-        const stopped = yield* service.interruptThread(client, {
+        const caller =
+          "cli" in stop
+            ? { ...client, client: { ...client.client!, label: T3_THREAD_CLI_LABEL } }
+            : client;
+        const stopped = yield* service.interruptThread(caller, {
           threadId,
           stop: true,
           clientRequestId: "stop",

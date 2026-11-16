@@ -948,14 +948,16 @@ it.effect.each([
     );
     yield* Effect.gen(function* () {
       const service = yield* ThreadManagementService.ThreadManagementService;
-      const stopping = yield* service.forceStopThread({ threadId, runId }).pipe(Effect.forkChild);
+      const stopping = yield* service
+        .forceStopThread({ threadId, runId, stoppedBy: "human" })
+        .pipe(Effect.forkChild);
       yield* TestClock.adjust("10 seconds");
       expect(yield* Fiber.join(stopping)).toEqual(expected);
       expect(dispatched).toMatchObject([
         {
           type: "thread.background-work.settle",
           providerThreadId,
-          reason: "Force stopped by user",
+          reason: "Force stopped by a human",
         },
       ]);
       if (teardown.at(-1) === "detach") yield* Deferred.await(tornDown);
