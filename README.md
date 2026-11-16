@@ -11,6 +11,7 @@ The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 - **Queue and steering.** Auto and steer delivery that steers as soon as the turn can take it, Ctrl+Enter to steer every queued message, and Claude steers that survive Stop.
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, and answered questions that keep every option.
 - **Desktop, CLI and mobile.** Settings sync across web, desktop and phone, faster CLI launches, Linux desktop link fixes, undo for a staged build, and smaller fixes.
+- **Add-ons.** Optional tools in [`addons/`](./addons/README.md), all off until you install one: an agent team launcher, cloud builds, an outside agent that restarts T3, staged-build loading, autoreviewer reports and a Wekan board relay.
 
 Only builds from this repository have these changes; upstream's published apps don't. See [Known limits](./CHANGES.md#known-limits).
 

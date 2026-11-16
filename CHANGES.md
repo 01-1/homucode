@@ -45,6 +45,10 @@ Everything Homu Code changes compared to upstream [T3 Code](https://github.com/p
 - **Undo a staged build.** On AppImage installs, Settings → About shows the build the next start loads, with an Undo button that renames that AppImage to `.off` so the one staged before it loads instead. The toast after Undo offers Redo.
 - **Android undo notice.** The thread undo notice shows at the top of the screen on Android.
 
+## Add-ons
+
+- **Optional tools.** [`addons/`](./addons/README.md) holds the tools from [t3code-tools](https://github.com/01-1/t3code-tools): an agent team launcher, cloud builds on boat.dev, an outside agent that restarts T3 when it dies, staged-build loading with rollback, autoreviewer reports, and a Wekan board relay. They are all off by default: nothing in the app runs them, and each one starts working only after you install it as its README shows.
+
 ## Smaller items
 
 - Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
