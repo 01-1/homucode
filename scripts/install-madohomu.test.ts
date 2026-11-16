@@ -11,7 +11,7 @@ it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
   async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "madohomu-install-"));
     try {
-      const runtime = NodePath.join(root, "Homu Code's runtime");
+      const runtime = NodePath.join(root, "HomuCode's runtime");
       const shared = NodePath.join(root, ".t3", "userdata", "settings.json");
       await NodeFSP.mkdir(NodePath.dirname(shared), { recursive: true });
       await NodeFSP.writeFile(shared, "shared settings");
