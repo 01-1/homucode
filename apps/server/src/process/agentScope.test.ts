@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { AgentScope, AgentMemory } from "@t3tools/shared/AgentScope";
+import { AgentScope, AgentMemory, AgentMemoryOwner } from "@t3tools/shared/AgentScope";
 import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
@@ -307,6 +307,23 @@ describe("AgentScope service", () => {
           }),
         { oomPolicy },
       ),
+  );
+
+  it.effect("owns an isolated Codex scope for OOM diagnosis and force stop", () =>
+    withFakeSystemd(({ scope, units, cgroupRoot }) =>
+      Effect.gen(function* () {
+        const codex = yield* launchCodex(scope, "isolated").pipe(
+          Effect.provideService(AgentMemoryOwner, {
+            runtimeId: "isolated-session",
+            ticketId: "isolated-start",
+            isolated: true,
+          }),
+        );
+        expect(codex.args).toContain("--property=OOMPolicy=stop");
+        exitedAgent(units, cgroupRoot, unitOf(codex), { populated: true, oomKills: 0 });
+        expect(yield* scope.kill("isolated")).toBe(true);
+      }),
+    ),
   );
 
   it.effect("keeps a running scope while hundreds of other threads launch", () =>

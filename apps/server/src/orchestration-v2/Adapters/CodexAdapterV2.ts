@@ -1986,14 +1986,30 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     }),
                 ),
               );
-        const client = yield* clientFactory.open({
-          instanceId: adapterOptions.instanceId,
-          threadId: input.threadId,
-          providerSessionId: input.providerSessionId,
-          runtimePolicy: input.runtimePolicy,
-          settings: resolvedRuntime?.config ?? adapterOptions.settings,
-          environment: resolvedRuntime?.environment ?? adapterOptions.environment,
-        });
+        const isolated =
+          input.threadId !== null &&
+          input.providerSessionId ===
+            idAllocator.derive.providerSession({
+              providerInstanceId: adapterOptions.instanceId,
+              threadId: input.threadId,
+            });
+        const owner = yield* AgentMemoryOwner;
+        const client = yield* clientFactory
+          .open({
+            instanceId: adapterOptions.instanceId,
+            threadId: input.threadId,
+            providerSessionId: input.providerSessionId,
+            runtimePolicy: input.runtimePolicy,
+            settings: resolvedRuntime?.config ?? adapterOptions.settings,
+            environment: resolvedRuntime?.environment ?? adapterOptions.environment,
+          })
+          .pipe(
+            Effect.provideService(AgentMemoryOwner, {
+              runtimeId: input.providerSessionId,
+              ticketId: owner?.ticketId ?? input.providerSessionId,
+              isolated,
+            }),
+          );
         const codexZone = codexTimeZone(resolvedRuntime?.environment ?? adapterOptions.environment);
         const additionalContextByThread = yield* Ref.make(
           new Map<string, NonNullable<CodexTurnStartParams["additionalContext"]>>(),
@@ -2113,13 +2129,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           cwd: input.runtimePolicy.cwd,
           model: input.modelSelection.model,
           now,
-          isolated:
-            input.threadId !== null &&
-            input.providerSessionId ===
-              idAllocator.derive.providerSession({
-                providerInstanceId: adapterOptions.instanceId,
-                threadId: input.threadId,
-              }),
+          isolated,
         });
         // Drain final notifications before the session manager retires the dead process.
         // Queue.fail lets readers take items already buffered before they see the failure.

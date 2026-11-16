@@ -125,10 +125,11 @@ export const make = Effect.gen(function* () {
         if (current === undefined) return;
         seen.add(name);
         const isAgent = !name.startsWith("t3code-terminal-") && !name.startsWith("t3code-browser-");
+        const scopeMax = yield* readNumber(path.join(directory, name), "memory.max");
         const reservation = agentReservation(
           current,
           isAgent ? minimum : 0,
-          Math.min(limits.agentMax, cap),
+          Math.min(limits.agentMax, cap, scopeMax ?? limits.agentMax),
           config.headroomPercent,
         );
         measured += current;

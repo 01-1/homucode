@@ -254,6 +254,24 @@ describe("agent reservations", () => {
     ),
   );
 
+  it.effect("truncates headroom at an existing scope's actual hard cap", () =>
+    withGovernor(({ memory, root, scope }) =>
+      Effect.gen(function* () {
+        scope("t3code-claude-capped.scope", 1.9 * GiB);
+        NodeFS.writeFileSync(
+          NodePath.join(root, "t3code-claude-capped.scope", "memory.max"),
+          String(2 * GiB),
+        );
+        const release = yield* acquire(
+          memory,
+          "b",
+          Effect.die("The existing scope cannot reserve above its 2 GiB hard cap"),
+        );
+        yield* release;
+      }),
+    ),
+  );
+
   it.effect("accounts for other slice consumers and the actual kernel group cap", () =>
     withGovernor(({ memory, root, group }) =>
       Effect.gen(function* () {
