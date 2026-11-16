@@ -137,6 +137,7 @@ const makeHarness = Effect.fn("TestRemoteAuthorization.makeHarness")(function* (
   const session = yield* Ref.make<Option.Option<ClientCapabilities.CloudSessionIdentity>>(
     Option.some({ accountId: "account-1" }),
   );
+  const signedOut = yield* Ref.make(false);
   const thumbprint = yield* Ref.make("thumbprint-1");
   const tokenReads = yield* Queue.unbounded<EnvironmentId>();
   const proofInputs = yield* Ref.make<
@@ -211,6 +212,7 @@ const makeHarness = Effect.fn("TestRemoteAuthorization.makeHarness")(function* (
         Layer.succeed(ManagedRelay.ManagedRelayClient, relay),
         Layer.succeed(ClientCapabilities.CloudSession, {
           identity: Ref.get(session),
+          signedOut: Ref.get(signedOut),
           clerkToken: input.clerkToken ?? Effect.succeed("clerk-session"),
         }),
         Layer.succeed(ClientCapabilities.RelayDeviceIdentity, {
@@ -238,6 +240,7 @@ const makeHarness = Effect.fn("TestRemoteAuthorization.makeHarness")(function* (
     fetch,
     relayInputs,
     session,
+    signedOut,
     thumbprint,
     tokenReads,
   };
@@ -1042,6 +1045,27 @@ describe("RemoteEnvironmentAuthorization", () => {
         expect(loaded.httpAuthorization.accessToken).toBe("loaded-token");
       }).pipe(Effect.provide(harness.layer));
       expect(yield* Ref.get(harness.bootstrapCalls)).toBe(1);
+    }),
+  );
+
+  it.effect("asks for a sign-in instead of retrying once this device is signed out", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ responses: [] });
+      yield* Ref.set(harness.session, Option.none());
+      yield* Ref.set(harness.signedOut, true);
+      const error = yield* Effect.gen(function* () {
+        const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
+        return yield* remote
+          .authorizeDpopHttp({ expectedEnvironmentId: ENVIRONMENT_ID })
+          .pipe(Effect.flip);
+      }).pipe(Effect.provide(harness.layer));
+      expect(error).toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        hop: "device",
+        failureCause: "signed_out",
+      });
+      expect(yield* Ref.get(harness.bootstrapCalls)).toBe(0);
     }),
   );
 

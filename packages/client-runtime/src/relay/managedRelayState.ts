@@ -68,6 +68,12 @@ export const managedRelaySessionAtom = Atom.make<ManagedRelaySession | null>(nul
   Atom.withLabel("managed-relay:session"),
 );
 
+/** Set while the account service has seen this device signed out; a null session alone may still be loading. */
+export const managedRelaySignedOutAtom = Atom.make(false).pipe(
+  Atom.keepAlive,
+  Atom.withLabel("managed-relay:signed-out"),
+);
+
 const managedRelaySessionControls = new WeakMap<ManagedRelaySession, ManagedRelaySessionControl>();
 
 export function createManagedRelaySession(input: ManagedRelaySessionInput): ManagedRelaySession {
@@ -154,7 +160,9 @@ export function createManagedRelaySession(input: ManagedRelaySessionInput): Mana
 export function setManagedRelaySession(
   registry: AtomRegistry.AtomRegistry,
   input: ManagedRelaySessionInput | null,
+  options?: { readonly signedOut?: boolean },
 ): void {
+  registry.set(managedRelaySignedOutAtom, input === null && options?.signedOut === true);
   const current = registry.get(managedRelaySessionAtom);
   if (input === null) {
     if (current !== null) {

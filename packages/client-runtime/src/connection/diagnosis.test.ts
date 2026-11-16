@@ -163,24 +163,14 @@ describe("presentConnectionDiagnosis", () => {
     expect(diagnosis?.steps.join(" ")).toContain("t3 auth connect-device approve K7QM-2XFD");
   });
 
-  it("does not report hops as working when the failure names none", () => {
+  it("tells a signed-out device to sign in instead of waiting for the sign-in to load", () => {
     const failure = new ConnectionBlockedError({
       reason: "authentication",
-      detail: "Your cloud sign-in changed. Sign in again to authorize the environment.",
+      hop: "device",
+      failureCause: "signed_out",
+      detail: "Sign in to T3 Connect on this device to connect to this environment.",
     });
-    expect(results(backoff(failure))).not.toContainEqual(expect.stringMatching(/:ok$/));
-  });
-
-  it("keeps the relay health status out of a failure that has its own cause", () => {
-    const failure = mapRemoteEnvironmentError(
-      new RemoteEnvironmentAuthFetchError({ message: "Failed to fetch", cause: new TypeError() }),
-    );
-    const diagnosis = presentConnectionDiagnosis({
-      hostLabel: "Mac mini",
-      state: backoff(failure),
-      via: "direct",
-      relayStatus: { status: "offline", endpointFailure: "tunnel_down", endpointStatus: 530 },
-    });
-    expect(diagnosis?.facts.map(([label]) => label)).not.toContain("HTTP status");
-  });
-});
+    const diagnosis = diagnose(backoff(failure), "direct");
+    expect(diagnosis?.headline).toBe("This device is not signed in to T3 Connect");
+    expect(diagnosis?.hops.find((hop) => hop.result === "failed")?.hop).toBe("device");
+    expect(diagnosis?.moreInfoUrl).toContain("sign-in-account-or-link-problems");

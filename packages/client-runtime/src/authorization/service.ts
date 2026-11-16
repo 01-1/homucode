@@ -292,6 +292,14 @@ export const make = Effect.gen(function* () {
       detail: "Waiting for the T3 Connect sign-in to load.",
     });
 
+  const signInRequired = () =>
+    new ConnectionBlockedError({
+      reason: "authentication",
+      hop: "device",
+      failureCause: "signed_out",
+      detail: "Sign in to T3 Connect on this device to connect to this environment.",
+    });
+
   const assertSession = Effect.fnUntraced(function* (
     identity: ClientCapabilities.CloudSessionIdentity,
   ) {
@@ -408,7 +416,7 @@ export const make = Effect.gen(function* () {
   ) {
     const session = yield* cloudSession.identity;
     if (Option.isNone(session)) {
-      return yield* sessionPending();
+      return yield* (yield* cloudSession.signedOut) ? signInRequired() : sessionPending();
     }
     const identity = session.value;
     const thumbprint = yield* signer.thumbprint.pipe(

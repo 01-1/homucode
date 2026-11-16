@@ -17,8 +17,10 @@ import { runtime } from "../lib/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { resolveRelayClerkTokenOptions } from "./publicConfig";
 
-export function deactivateManagedRelayAuthentication(): void {
-  setManagedRelaySession(appAtomRegistry, null);
+export function deactivateManagedRelayAuthentication(input?: {
+  readonly signedOut: boolean;
+}): void {
+  setManagedRelaySession(appAtomRegistry, null, input);
 }
 
 export function activateManagedRelayAuthentication(
@@ -40,7 +42,7 @@ function clerkTokenReader(clerk: ClerkInstance): () => Promise<string | null> {
 
 const managedRelayAccountService = createCloudAccountService<ClerkInstance>({
   deactivate: deactivateManagedRelayAuthentication,
-  detach: deactivateManagedRelayAuthentication,
+  detach: () => deactivateManagedRelayAuthentication(),
   cleanUp: async () => {
     const results = await Promise.all([
       runAtomCommand(appAtomRegistry, environmentCatalog.removeRelayEnvironments, undefined, {
