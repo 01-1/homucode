@@ -1303,6 +1303,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "scratch-environment",
+    title: "Threads without a project",
+    to: "/settings/connections",
+    searchTerms: ["no project scratch default machine environment device start new thread"],
+  },
+  {
     id: "pull-request-routing",
     title: "Pull request sharing",
     to: "/settings/connections",

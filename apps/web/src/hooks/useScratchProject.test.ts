@@ -20,6 +20,7 @@ function actions(
   primary: EnvironmentId | null,
   localRoot: string | null,
   remoteRoot: string | null = "/remote/scratch",
+  preferred: EnvironmentId | null = null,
 ) {
   const environments = [
     scratchEnvironment(local, localRoot),
@@ -29,6 +30,7 @@ function actions(
   return createScratchProjectActions({
     environments: () => environments,
     primaryEnvironmentId: () => primary,
+    preferredEnvironmentId: () => preferred,
     registry: AtomRegistry.make(),
     handleNewThread: async () => null,
   });
@@ -38,6 +40,13 @@ describe("scratchEnvironmentId", () => {
   it("prefers the primary environment over the one on screen", () => {
     expect(actions(local, "/local/scratch").scratchEnvironmentId(remote)).toBe(local);
     expect(actions(local, "/local/scratch").scratchEnvironmentId(null)).toBe(local);
+  });
+
+  it("prefers the chosen environment when it offers a scratch root", () => {
+    expect(
+      actions(local, "/local/scratch", "/remote/scratch", other).scratchEnvironmentId(remote),
+    ).toBe(other);
+    expect(actions(local, "/local/scratch", null, remote).scratchEnvironmentId(null)).toBe(local);
   });
 
   it("falls back when the primary environment offers no scratch root", () => {
