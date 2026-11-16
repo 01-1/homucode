@@ -53,6 +53,7 @@ const clientSettings: ClientSettings = {
   panelAnimationDurationMs: 0,
   proactivePanelsEnabled: true,
   showSkillsInSlashMenu: false,
+  userMessageMarkdownEnabled: false,
   persistComposerContextStrip: true,
   providerModelPreferences: {},
   sidebarProjectGroupingMode: "repository_path",

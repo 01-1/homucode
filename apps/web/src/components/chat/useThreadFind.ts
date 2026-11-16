@@ -6,6 +6,7 @@ import { orchestrationEnvironment } from "~/state/orchestration";
 import { useThreadProjection } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
+import { useClientSettings } from "~/hooks/useSettings";
 import { type ThreadFindMatch, type ThreadFindStart, stepThreadFindIndex } from "./threadFind";
 import {
   CLOSED_THREAD_FIND,
@@ -275,6 +276,7 @@ function useServerResults(
   progressive: boolean,
 ) {
   const skillLabels = skills.map(({ name, displayName }) => ({ name, displayName }));
+  const plainUserText = !useClientSettings((settings) => settings.userMessageMarkdownEnabled);
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, 100);
   const environmentId = thread?.environmentId;
@@ -289,6 +291,7 @@ function useServerResults(
             ...(start ? { start } : {}),
             ...(offset !== 0 ? { offset } : {}),
             skills: skillLabels,
+            ...(plainUserText ? { plainUserText } : {}),
           },
         }
       : null;

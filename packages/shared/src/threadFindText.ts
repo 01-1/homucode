@@ -22,6 +22,7 @@ import {
 } from "./markdownLinks.ts";
 import { upgradeLegacyContextMessage } from "./composerContextLegacy.ts";
 import {
+  collectComposerContextReferences,
   isAttachmentOnlyBootstrapPrompt,
   parseComposerContextHref,
 } from "./composerContextReferences.ts";
@@ -213,16 +214,31 @@ export function searchablePlanSegments(markdown: string, cwd?: string): readonly
   ];
 }
 
+/** Matches a plain-text bubble: context chips split it, and line breaks read as spaces. */
+function plainThreadFindText(text: string): string[] {
+  const segments: string[] = [];
+  let cursor = 0;
+  for (const reference of collectComposerContextReferences(text)) {
+    segments.push(text.slice(cursor, reference.start));
+    cursor = reference.end;
+  }
+  segments.push(text.slice(cursor));
+  return segments.map((segment) => segment.replace(/\r?\n/g, " ")).filter(Boolean);
+}
+
 export function searchableMessageSegments(
   message: Pick<OrchestrationV2ConversationMessage, "role" | "text" | "streaming" | "context">,
   cwd?: string,
   skills: readonly InlineSkill[] = [],
+  plainUserText = false,
 ): readonly string[] | null {
   if (message.role === "user") {
     // Clients hide this prompt, so find must not match text nobody can see.
     if (isAttachmentOnlyBootstrapPrompt(message.text)) return [];
     const text = message.context ? message.text : upgradeLegacyContextMessage(message.text).text;
-    return markdownThreadFindText(text, true, cwd, skills);
+    return plainUserText
+      ? plainThreadFindText(text)
+      : markdownThreadFindText(text, true, cwd, skills);
   }
   if (message.role !== "assistant") return null;
   return markdownThreadFindText(

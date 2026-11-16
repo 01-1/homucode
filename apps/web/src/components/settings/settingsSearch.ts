@@ -732,6 +732,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
+    id: "user-message-markdown",
+    title: "Format sent messages as Markdown",
+    to: "/settings/chat",
+    searchTerms: ["user message markdown plain text raw formatting render bullet list prompt"],
+  },
+  {
     id: "send-shortcut",
     title: "Send shortcut",
     to: "/settings/chat",
