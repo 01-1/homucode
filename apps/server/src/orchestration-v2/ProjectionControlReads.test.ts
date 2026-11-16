@@ -393,7 +393,10 @@ it.effect.each(storageCases)(
         yield* interrupt;
         assert.deepEqual(calls, [
           "interrupt",
-          "Use the smaller fix.",
+          withMessageTimestamp("Use the smaller fix.", {
+            text: "Use the smaller fix.",
+            createdAt: now,
+          }),
           "reply",
           "interrupt",
           "interrupt",
