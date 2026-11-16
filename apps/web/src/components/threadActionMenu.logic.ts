@@ -296,16 +296,13 @@ export function buildThreadActionMenuItems(
                 icon: "clock",
                 disabled: !state.canSnoozeNow,
                 children: [
-                  ...state.snoozePresets.map((preset) => ({
+                  { id: "snooze:custom" as const, label: "Custom…" },
+                  ...state.snoozePresets.map((preset, index) => ({
                     id: `snooze:${preset.id}` as const,
                     label: preset.label,
                     detail: preset.whenLabel,
+                    separatorBefore: index === 0,
                   })),
-                  {
-                    id: "snooze:custom" as const,
-                    label: "Custom…",
-                    separatorBefore: state.snoozePresets.length > 0,
-                  },
                 ],
               },
         ]

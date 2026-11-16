@@ -22,6 +22,7 @@ import {
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
+  SnoozePresetSettings,
   withIdleCompaction,
 } from "./settings.ts";
 
@@ -554,4 +555,22 @@ it("defaults native subagents off and persists environment and project choices",
   };
   expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
   expect(decodeServerSettingsPatch(input)).toEqual(input);
+});
+
+describe("SnoozePresetSettings", () => {
+  it("accepts sixteen presets, including days from today, and rejects a seventeenth", () => {
+    const decode = Schema.decodeUnknownSync(SnoozePresetSettings);
+    const presets = [
+      ...[15, 30, 60, 120, 240, 480, 720, 1440, 20160].map((minutes) => ({
+        kind: "after",
+        minutes,
+      })),
+      { kind: "at", day: "tomorrow", time: "09:00" },
+      ...[2, 4, 7, 14, 30].map((days) => ({ kind: "at", days, time: "09:00" })),
+      { kind: "at", day: "monday", time: "18:00" },
+    ];
+    expect(decode(presets)).toEqual(presets);
+    expect(() => decode([...presets, { kind: "after", minutes: 5 }])).toThrow();
+    expect(() => decode([{ kind: "at", days: 31, time: "09:00" }])).toThrow();
+  });
 });

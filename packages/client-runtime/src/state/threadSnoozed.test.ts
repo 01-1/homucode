@@ -454,6 +454,23 @@ describe("resolveSnoozePresets", () => {
     ]);
   });
 
+  it("counts days from today and dates a wake a week or more out", () => {
+    // Wednesday 20:00.
+    expect(
+      menu(localDate(2026, 4, 8, 20), [
+        { kind: "at", days: 1, time: "09:00" },
+        { kind: "at", days: 2, time: "09:00" },
+        { kind: "at", days: 14, time: "09:00" },
+        { kind: "after", minutes: 7 * 24 * 60 },
+      ]),
+    ).toEqual([
+      "Tomorrow 9:00",
+      "In 2 days Fri 9:00",
+      "In 7 days Wed, Apr 15 20:00",
+      "In 14 days Wed, Apr 22 9:00",
+    ]);
+  });
+
   it("shows one row when two presets wake at the same time", () => {
     // Sunday, so Tomorrow 9:00 and Next week 9:00 are the same Monday.
     expect(menu(localDate(2026, 8, 30, 7, 1))).toEqual([

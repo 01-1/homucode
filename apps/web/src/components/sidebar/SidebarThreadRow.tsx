@@ -408,6 +408,16 @@ function SnoozeMenuButton(props: {
         <TooltipPopup>Snooze thread</TooltipPopup>
       </Tooltip>
       <MenuPopup side="bottom" align="end">
+        <MenuItem
+          onClick={async (event) => {
+            event.stopPropagation();
+            const choice = await requestCustomSnooze();
+            if (choice) onSnooze(choice);
+          }}
+        >
+          Custom…
+        </MenuItem>
+        {presets.length > 0 ? <MenuSeparator /> : null}
         {presets.map((preset) => (
           <MenuItem
             key={preset.id}
@@ -421,16 +431,6 @@ function SnoozeMenuButton(props: {
             <MenuItemDetail>{preset.whenLabel}</MenuItemDetail>
           </MenuItem>
         ))}
-        {presets.length > 0 ? <MenuSeparator /> : null}
-        <MenuItem
-          onClick={async (event) => {
-            event.stopPropagation();
-            const choice = await requestCustomSnooze();
-            if (choice) onSnooze(choice);
-          }}
-        >
-          Custom…
-        </MenuItem>
       </MenuPopup>
     </Menu>
   );

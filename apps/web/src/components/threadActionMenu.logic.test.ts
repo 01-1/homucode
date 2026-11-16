@@ -140,6 +140,14 @@ describe("buildThreadActionMenuItems", () => {
       "folder",
       "rename",
     ]);
+    expect(
+      ids(true, folderMenu)
+        .find((item) => item.id === "snooze")
+        ?.children?.map((child) => [child.id, child.separatorBefore === true]),
+    ).toEqual([
+      ["snooze:custom", false],
+      ["snooze:hour", true],
+    ]);
     expect(ids(true, null).some((item) => item.id === "folder")).toBe(false);
     const locked = ids(false, folderMenu).find((item) => item.id === "folder");
     expect(locked?.disabled).toBe(true);
