@@ -1,6 +1,6 @@
 # Changes from T3 Code
 
-Everything Homu Code changes compared to upstream [T3 Code](https://github.com/pingdotgg/t3code), starting from upstream commit `c5e6b24ff5` (2026-11-15). The [README](./README.md#changes-compared-to-t3-code) has a short summary.
+Everything Homu Code changes compared to upstream [T3 Code](https://github.com/pingdotgg/t3code). The [README](./README.md#changes-compared-to-t3-code) has a short summary.
 
 ## Server speed
 
@@ -15,6 +15,8 @@ Everything Homu Code changes compared to upstream [T3 Code](https://github.com/p
 - **Sidebar folders.** Thread folders in the sidebar, ported from upstream PR #26714 without its mobile part.
 - **Stop.** Stop stops only the current thread. Shift-click, the background-work Stop or `/stopall` also stops its subagents.
 - **Bare "stop" or "wait".** A message that is only "stop" or "wait" stops the running turn and goes first in the queue, instead of waiting behind the work it meant to halt. This works on providers that can't interrupt and restart, such as Claude.
+- **Subagents default to T3 delegation.** Agents are told to start subagents through T3 Code's `delegate_task` rather than their provider's own subagent tool. The `preferNativeSubagents` setting (off by default, per project) switches the preference back to native subagents. Running Claude, OpenCode and Pi sessions pick up a change.
+- **Thread titles.** The titler sees the project name, so titles can leave out what it already says (`threadTitleIncludeProjectName`, on by default). An optional title ID (`threadTitleIdPrefix`, off by default) gives each active thread a short ID from its title's first letter, numbered when another thread in the project has it (F, F1, F2). Settling a thread adds letters (F1a) to free the number again. Both settings are per project, next to the title instructions.
 - **Message context.** Each user message records which device it came from, and the agent sees a `[T3] Sent from: ...` line. Optional names come from `device-names.json` in the state folder.
 - **`/q`.** Asks one question in the same thread on a "Quick model" (a new setting): the thread switches to the quick model for that one answer, then switches back to its own model. Context and prompt cache are kept: on the same provider the answer runs in the thread's own provider conversation, so nothing is handed off. On another provider the quick model gets a summary of the thread, and the switch back resumes the thread's original provider conversation with only the missed turn added.
 - **`/cd`.** `/cd <folder>` moves the thread to that folder's project and adds the project if there isn't one yet. A relative folder starts from the thread's current one, and `~` works. A started thread keeps its conversation and runs in the new folder from its next turn; it has to be idle first. In a new thread that hasn't started, `/cd` opens a new thread in that project instead. Web and desktop only.
@@ -44,7 +46,7 @@ Everything Homu Code changes compared to upstream [T3 Code](https://github.com/p
 ## Smaller items
 
 - Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
-- CI runs the Linux jobs on Boat runners for pushes to `main`, the owner's PRs, and PRs labelled `ci:boat`. Other PRs stay on GitHub's runners.
+- CI runs the Linux jobs on Boat runners for pushes to `main`, the owner's PRs, and the run started by adding the `ci:boat` label to a PR. Other runs stay on GitHub's runners.
 
 ## Known limits
 
