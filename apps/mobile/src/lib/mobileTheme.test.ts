@@ -6,6 +6,7 @@ import {
   T3_CHAT_THEME,
   T3_CODE_LIGHT_THEME_COLORS,
   T3_CODE_DARK_THEME_COLORS,
+  type ThemeDefinition,
   MOBILE_THEME_IDS,
   getThemeColorsForAppearance,
 } from "@t3tools/shared/themePalettes";
@@ -14,9 +15,11 @@ import {
   readGeneratedMobileThemeVariables,
 } from "./mobileTheme.test-support";
 import { getMobileThemeRuntimeVariables } from "./mobileThemeVariables";
+import { getMobileUniwindThemeName } from "./mobileThemeRuntime";
 
 import {
   createMobileThemeSelectionPatch,
+  createMobileDefaultThemePatch,
   createMobileThemeVariables,
   DEFAULT_MOBILE_THEME_ID,
   flattenThemeColor,
@@ -58,6 +61,86 @@ function compositeOver(overlay: string, background: string): string {
 }
 
 describe("mobile themes", () => {
+  it("resolves published colors and falls back without losing an unavailable theme id", () => {
+    const theme: ThemeDefinition = {
+      id: "nightfall",
+      label: "Nightfall",
+      appearance: "dark",
+      css: ":root { background: red !important; }",
+      colors: { ...T3_CODE_DARK_THEME_COLORS, canvas: "oklch(0.2 0 0)", accent: "#7aa2f7" },
+      variants: { light: { ...T3_CODE_LIGHT_THEME_COLORS, canvas: "#eef1fa" } },
+    };
+    expect(resolveMobileThemeIds({ themeId: theme.id })).toEqual({
+      light: theme.id,
+      dark: theme.id,
+    });
+    for (const platform of ["ios", "android"]) {
+      expect(getMobileUniwindThemeName(theme.id, "dark")).toBe("dark");
+      expect(
+        getMobileThemeRuntimeVariables(theme.id, "dark", platform, [theme])["--color-screen"],
+      ).toBe(themeColorToNativeColor(theme.colors.canvas));
+      expect(
+        getMobileThemeRuntimeVariables(theme.id, "light", platform, [theme])["--color-screen"],
+      ).toBe("#eef1fa");
+      expect(
+        getMobileThemeRuntimeVariables(theme.id, "dark", platform, [
+          { ...theme, colors: { ...theme.colors, canvas: "#102030" } },
+        ])["--color-screen"],
+      ).toBe("#102030");
+      expect(getMobileThemeRuntimeVariables(theme.id, "dark", platform, [])).toEqual(
+        getMobileThemeRuntimeVariables(DEFAULT_THEME_ID, "dark", platform),
+      );
+      expect(
+        getMobileThemeRuntimeVariables(theme.id, "light", platform, [
+          { ...theme, variants: undefined },
+        ]),
+      ).toEqual(getMobileThemeRuntimeVariables(DEFAULT_THEME_ID, "light", platform));
+    }
+  });
+
+  it("adopts each server default once, waits for its palette, and switches a single appearance", () => {
+    const theme: ThemeDefinition = {
+      id: "nightfall",
+      label: "Nightfall",
+      appearance: "dark",
+      colors: T3_CODE_DARK_THEME_COLORS,
+    };
+    const input = {
+      defaultTheme: theme.id,
+      defaultThemeSetAt: "2026-11-15T00:00:00.000Z",
+      appliedGeneration: undefined,
+      publishedThemes: [theme],
+    };
+    expect(createMobileDefaultThemePatch({ ...input, publishedThemes: [] })).toBeNull();
+    expect(createMobileDefaultThemePatch({ ...input, defaultTheme: "" })).toBeNull();
+    const patch = createMobileDefaultThemePatch(input);
+    expect(patch).toEqual({
+      themeId: theme.id,
+      lightThemeId: theme.id,
+      darkThemeId: theme.id,
+      themeMode: "dark",
+      generation: `${theme.id}@${input.defaultThemeSetAt}`,
+    });
+    expect(
+      createMobileDefaultThemePatch({ ...input, appliedGeneration: patch!.generation }),
+    ).toBeNull();
+    expect(
+      createMobileDefaultThemePatch({
+        ...input,
+        appliedGeneration: patch!.generation,
+        defaultThemeSetAt: "2026-11-15T01:00:00.000Z",
+      }),
+    ).not.toBeNull();
+    expect(
+      createMobileDefaultThemePatch({ ...input, defaultTheme: "grove", publishedThemes: [] }),
+    ).toMatchObject({ themeId: "grove" });
+    expect(
+      createMobileDefaultThemePatch({
+        ...input,
+        publishedThemes: [{ ...theme, variants: { light: T3_CODE_LIGHT_THEME_COLORS } }],
+      }),
+    ).not.toHaveProperty("themeMode");
+  });
   it("declares every runtime theme variable in the static stylesheet", () => {
     const generatedVariables = createMobileThemeVariables(T3_CHAT_THEME.colors, "light");
     expect(Object.keys(readDefaultMobileThemeVariables("light")).sort()).toEqual(
@@ -234,7 +317,7 @@ describe("mobile themes", () => {
       resolveMobileThemeIds({ themeId: "grove", lightThemeId: "iris", darkThemeId: "ocean" }),
     ).toEqual({ light: "iris", dark: "ocean" });
     expect(resolveMobileThemeIds({ themeId: "grove", lightThemeId: "missing" })).toEqual({
-      light: DEFAULT_THEME_ID,
+      light: "missing",
       dark: "grove",
     });
     expect(resolveMobileThemeIds({})).toEqual({ light: DEFAULT_THEME_ID, dark: DEFAULT_THEME_ID });

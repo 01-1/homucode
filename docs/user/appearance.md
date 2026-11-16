@@ -11,8 +11,9 @@ Use **Change appearance** in the command palette to choose System, Light, or Dar
 the theme. **Cmd+Option+Shift+A** on macOS or **Ctrl+Alt+Shift+A** on Windows/Linux cycles through
 those modes. Customize these shortcuts under **Settings → Keybindings**.
 
-On mobile, open **Settings → Appearance**. Mobile has its own themes and text,
-code, and terminal preferences. It does not follow environment themes or defaults.
+On mobile, open **Settings → Appearance**. Alongside built-in themes, mobile offers published
+themes from your first enabled saved environment. It applies their colors only, without CSS.
+Text, code, and terminal preferences remain specific to the device.
 
 On Android 12 or newer, choose the **Material You** theme in Appearance to use colors from
 your wallpaper. Selecting another theme replaces those colors. Like other themes, Material You
@@ -86,10 +87,15 @@ main local environment. With the desktop app's local environment off, they come 
 [background service](./background-service.md) on the same machine while the app is connected to
 it. app.t3.codes and other connections do not use them.
 
+On mobile, published themes and defaults come from the first enabled saved environment, even
+when you view a thread on another machine. The picker names the source machine. While a selected
+theme is unavailable, mobile uses its default colors and remembers your selection for when the
+theme becomes available again.
+
 Select a published theme in **Settings → Appearance** to follow its palette as the server updates
-it. **Duplicate** makes an independent copy you can edit. A saved custom theme with the same ID
-takes precedence. If the server stops publishing the selected theme, T3 Code falls back to its
-standard theme.
+it. On web and desktop, **Duplicate** makes an independent copy you can edit, and a saved custom
+theme with the same ID takes precedence. If the server stops publishing the selected theme,
+T3 Code falls back to its standard theme.
 
 Run this on the server to set a default and switch connected clients to it:
 

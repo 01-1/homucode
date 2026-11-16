@@ -390,7 +390,7 @@ const publishThemeFile = Effect.fn(function* (input: {
   return { themeId, revert, cleanup };
 });
 
-/** Web and desktop cannot resolve the mobile default, and mobile does not follow this setting. */
+/** The mobile default is not available on web and desktop. */
 const resolvableThemeIds = Effect.fn(function* (themesDir: string) {
   const published = yield* readPublishedThemes(themesDir);
   return [...BUILT_IN_THEME_IDS, ...published.map((theme) => theme.id)].toSorted();

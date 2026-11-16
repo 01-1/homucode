@@ -1,8 +1,10 @@
+import type { ThemeDefinition } from "@t3tools/shared/themePalettes";
 import defaultThemeVariables from "../../generated-uniwind-default-theme-variables.json";
 import {
   DEFAULT_MOBILE_THEME_ID,
   flattenThemeColor,
   getMobileThemeVariables,
+  resolveMobileThemeIdForAppearance,
   themeColorWithAlpha,
   themeColorWithContrast,
   type MobileThemeAppearance,
@@ -46,19 +48,24 @@ export function getMobileThemeRuntimeVariables(
   themeId: MobileThemeId,
   appearance: MobileThemeAppearance,
   platform: string,
+  publishedThemes: ReadonlyArray<ThemeDefinition> = [],
 ): MobileThemeVariables {
-  return withVisibleSelection(platformThemeVariables(themeId, appearance, platform));
+  const resolvedId = resolveMobileThemeIdForAppearance(themeId, appearance, publishedThemes);
+  return withVisibleSelection(
+    platformThemeVariables(resolvedId, appearance, platform, publishedThemes),
+  );
 }
 
 function platformThemeVariables(
   themeId: MobileThemeId,
   appearance: MobileThemeAppearance,
   platform: string,
+  publishedThemes: ReadonlyArray<ThemeDefinition>,
 ): MobileThemeVariables {
   const usesDefaultPalette = themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you";
   const variables = usesDefaultPalette
     ? defaults[appearance]
-    : getMobileThemeVariables(themeId, appearance);
+    : getMobileThemeVariables(themeId, appearance, null, publishedThemes);
   const frame = themeColorWithAlpha(
     variables[usesDefaultPalette ? "--color-row-hover" : "--color-drawer"],
     1,

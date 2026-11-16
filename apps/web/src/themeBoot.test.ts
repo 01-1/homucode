@@ -1,3 +1,4 @@
+import { publishedThemeDefinitions } from "@t3tools/shared/themeColors";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { BUILT_IN_THEMES, LAVENDER_THEME } from "@t3tools/shared/themePalettes";
@@ -9,7 +10,6 @@ import {
   getDefaultThemeColors,
   getThemeColorsForMode,
   invalidateCustomThemes,
-  publishedThemeDefinitions,
   resolveThemeAppearance,
   T3_CHAT_THEME,
   GROVE_THEME,

@@ -4,6 +4,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import { ScopedTheme, ScopedVariables } from "uniwind";
 
 import { mixThemePreviewBase, THEME_PREVIEW_RENDER_SPECS } from "@t3tools/shared/themePreview";
+import { getThemeColorsForAppearance } from "@t3tools/shared/themePalettes";
 
 import { SymbolView } from "../../../../components/ui/AppSymbol";
 import { AppText as Text } from "../../../../components/ui/AppText";
@@ -38,12 +39,12 @@ const PreviewOrb = memo(function PreviewOrb(props: {
   const idPrefix = useId().replaceAll(":", "");
   const accentGradientId = `${idPrefix}-accent-glow`;
   const actionGradientId = `${idPrefix}-action-glow`;
-  const { systemColorPalettes } = useAppearancePreferences();
+  const { systemColorPalettes, publishedThemes } = useAppearancePreferences();
   const palette = systemColorPalettes?.[props.appearance];
   const colors =
     props.themeId === "material-you" && palette
       ? { canvas: palette.surface, accent: palette.primary, messageAction: palette.tertiary }
-      : getMobileThemePreviewColors(props.themeId, props.appearance);
+      : getMobileThemePreviewColors(props.themeId, props.appearance, publishedThemes);
   const spec = THEME_PREVIEW_RENDER_SPECS[props.appearance];
   const accentRadius = Math.hypot(
     Math.max(spec.accent.center[0], 1 - spec.accent.center[0]),
@@ -114,6 +115,7 @@ const PreviewOrb = memo(function PreviewOrb(props: {
 });
 
 function ThemeCard(props: {
+  readonly availableAppearances: ReadonlyArray<MobileThemeAppearance>;
   readonly disabled: boolean;
   readonly darkSelected: boolean;
   readonly label: string;
@@ -127,12 +129,16 @@ function ThemeCard(props: {
       accessibilityHint={`Sets the ${appearance} appearance only`}
       accessibilityLabel={`${props.label} ${appearance} theme`}
       accessibilityRole="button"
-      accessibilityState={{ disabled: props.disabled, selected }}
+      accessibilityState={{
+        disabled: props.disabled || !props.availableAppearances.includes(appearance),
+        selected,
+      }}
       className={cn(
         "size-[66px] items-center justify-center rounded-full border-[3px] active:scale-[0.94]",
         selected ? "border-primary" : "border-transparent",
+        !props.availableAppearances.includes(appearance) && "opacity-40",
       )}
-      disabled={props.disabled}
+      disabled={props.disabled || !props.availableAppearances.includes(appearance)}
       onPress={() => props.onSelect(appearance)}
     >
       <PreviewOrb appearance={appearance} compact themeId={props.themeId} />
@@ -153,7 +159,11 @@ function ThemeCard(props: {
   return (
     <View className="min-w-36 flex-1 basis-[47%] gap-3 rounded-[24px] border border-border bg-grouped-card px-2 py-4">
       <Pressable
-        accessibilityHint="Sets both light and dark appearances"
+        accessibilityHint={
+          props.availableAppearances.length === 1
+            ? `Sets the ${props.availableAppearances[0]} appearance`
+            : "Sets both light and dark appearances"
+        }
         accessibilityLabel={`${props.label} theme`}
         accessibilityRole="button"
         accessibilityState={{
@@ -165,8 +175,8 @@ function ThemeCard(props: {
         onPress={props.onSelectBoth}
       />
       <View className="flex-row items-center justify-center gap-2 py-1" pointerEvents="box-none">
-        {choice("light", props.lightSelected)}
-        {choice("dark", props.darkSelected)}
+        {choice("light", props.lightSelected && props.availableAppearances.includes("light"))}
+        {choice("dark", props.darkSelected && props.availableAppearances.includes("dark"))}
       </View>
       <Text
         className="min-w-0 flex-1 px-1 text-lg font-t3-medium"
@@ -293,7 +303,21 @@ export function ThemeAppearanceSection() {
     themeIds,
     themeMode,
     systemColorsAvailable,
+    publishedThemes,
+    themeSourceLabel,
   } = useAppearancePreferences();
+  const themeOptions = [
+    ...MOBILE_THEME_OPTIONS.map((theme) => ({
+      ...theme,
+      availableAppearances: ["light", "dark"] as ReadonlyArray<MobileThemeAppearance>,
+    })),
+    ...publishedThemes.map((theme) => ({
+      ...theme,
+      availableAppearances: (["light", "dark"] as const).filter(
+        (appearance) => getThemeColorsForAppearance(theme, appearance) !== null,
+      ),
+    })),
+  ];
 
   return (
     <View className="gap-6">
@@ -316,21 +340,27 @@ export function ThemeAppearanceSection() {
 
       <View className="gap-3">
         <SectionLabel>Themes</SectionLabel>
+        {publishedThemes.length > 0 && themeSourceLabel ? (
+          <Text className="px-2 text-sm text-foreground-muted">
+            Includes themes from {themeSourceLabel}
+          </Text>
+        ) : null}
         <View className="flex-row flex-wrap gap-3">
-          {MOBILE_THEME_OPTIONS.filter(
-            (theme) => theme.id !== "material-you" || systemColorsAvailable,
-          ).map((theme) => (
-            <ThemeCard
-              disabled={!isReady}
-              key={theme.id}
-              label={theme.label}
-              darkSelected={theme.id === themeIds.dark}
-              lightSelected={theme.id === themeIds.light}
-              onSelect={(appearance) => setThemeIdForAppearance(appearance, theme.id)}
-              onSelectBoth={() => setThemeIdForBothAppearances(theme.id)}
-              themeId={theme.id}
-            />
-          ))}
+          {themeOptions
+            .filter((theme) => theme.id !== "material-you" || systemColorsAvailable)
+            .map((theme) => (
+              <ThemeCard
+                availableAppearances={theme.availableAppearances}
+                disabled={!isReady}
+                key={theme.id}
+                label={theme.label}
+                darkSelected={theme.id === themeIds.dark}
+                lightSelected={theme.id === themeIds.light}
+                onSelect={(appearance) => setThemeIdForAppearance(appearance, theme.id)}
+                onSelectBoth={() => setThemeIdForBothAppearances(theme.id)}
+                themeId={theme.id}
+              />
+            ))}
         </View>
       </View>
     </View>

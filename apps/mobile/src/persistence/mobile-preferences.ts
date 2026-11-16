@@ -20,7 +20,7 @@ import type { AndroidNavigationStyle } from "../lib/androidNavigationStyle";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
 import { isMicrophoneKind, type MicrophoneEntry } from "../lib/microphonePriority";
-import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
+import { isMobileThemeId, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
@@ -93,11 +93,12 @@ const SettingsSyncBase = Schema.Struct({
 type SettingsSyncBase = typeof SettingsSyncBase.Type;
 const isSettingsSyncBases = Schema.is(Schema.Record(Schema.String, SettingsSyncBase));
 
+const StoredMobileThemeId = Schema.String.check(Schema.makeFilter(isMobileThemeId));
 const SettingsSyncTheme = Schema.Struct({
   theme: Schema.Unknown,
   themeHalves: Schema.Unknown,
-  light: Schema.Literals(MOBILE_THEME_IDS),
-  dark: Schema.Literals(MOBILE_THEME_IDS),
+  light: StoredMobileThemeId,
+  dark: StoredMobileThemeId,
 });
 type SettingsSyncTheme = typeof SettingsSyncTheme.Type;
 const isSettingsSyncTheme = Schema.is(SettingsSyncTheme);
@@ -126,6 +127,7 @@ export interface Preferences {
   readonly lightThemeId?: MobileThemeId;
   readonly darkThemeId?: MobileThemeId;
   readonly themeMode?: MobileThemeMode;
+  readonly appliedDefaultThemes?: Readonly<Record<string, string>>;
   readonly androidNavigationStyle?: AndroidNavigationStyle;
   readonly baseFontSize?: number;
   readonly terminalFontSize?: number | null;
@@ -209,6 +211,7 @@ export class MobilePreferencesStore extends Context.Service<
   }
 >()("@t3tools/mobile/persistence/mobile-preferences/MobilePreferencesStore") {}
 
+const isAppliedDefaultThemes = Schema.is(Schema.Record(Schema.String, Schema.String));
 const isToolCallVisibility = Schema.is(ToolCallVisibility);
 const isPullRequestMergeMethod = Schema.is(PullRequestMergeMethod);
 
@@ -225,6 +228,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     lightThemeId?: MobileThemeId;
     darkThemeId?: MobileThemeId;
     themeMode?: MobileThemeMode;
+    appliedDefaultThemes?: Readonly<Record<string, string>>;
     androidNavigationStyle?: AndroidNavigationStyle;
     baseFontSize?: number;
     terminalFontSize?: number | null;
@@ -288,23 +292,17 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
-  if (
-    typeof parsed.themeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.themeId)
-  ) {
-    preferences.themeId = parsed.themeId as MobileThemeId;
+  if (isAppliedDefaultThemes(parsed.appliedDefaultThemes)) {
+    preferences.appliedDefaultThemes = parsed.appliedDefaultThemes;
   }
-  if (
-    typeof parsed.lightThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.lightThemeId)
-  ) {
-    preferences.lightThemeId = parsed.lightThemeId as MobileThemeId;
+  if (isMobileThemeId(parsed.themeId)) {
+    preferences.themeId = parsed.themeId;
   }
-  if (
-    typeof parsed.darkThemeId === "string" &&
-    (MOBILE_THEME_IDS as readonly string[]).includes(parsed.darkThemeId)
-  ) {
-    preferences.darkThemeId = parsed.darkThemeId as MobileThemeId;
+  if (isMobileThemeId(parsed.lightThemeId)) {
+    preferences.lightThemeId = parsed.lightThemeId;
+  }
+  if (isMobileThemeId(parsed.darkThemeId)) {
+    preferences.darkThemeId = parsed.darkThemeId;
   }
   if (
     parsed.themeMode === "system" ||

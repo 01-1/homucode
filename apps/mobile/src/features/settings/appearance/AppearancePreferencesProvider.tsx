@@ -1,4 +1,5 @@
-import { createContext, startTransition, use, useMemo, type ReactNode } from "react";
+import type { ThemeDefinition } from "@t3tools/shared/themePalettes";
+import { createContext, startTransition, use, useEffect, useMemo, type ReactNode } from "react";
 import { AppState, Appearance, Platform, useColorScheme } from "react-native";
 
 import { manufacturer } from "expo-device";
@@ -19,6 +20,7 @@ import {
 } from "../../../lib/appearancePreferences";
 import { appAtomRegistry } from "../../../state/atom-registry";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../../state/preferences";
+import { mobilePublishedThemesAtom, mobileThemeSourceAtom } from "../../../state/themes";
 import type { Preferences } from "../../../persistence/mobile-preferences";
 import {
   isSystemColorsAvailable,
@@ -30,6 +32,7 @@ import { getMobileThemeRuntimeVariables } from "../../../lib/mobileThemeVariable
 import type { MobileThemeVariables } from "../../../lib/mobileTheme";
 import {
   createMobileThemePairPatch,
+  createMobileDefaultThemePatch,
   createMobileThemeSelectionPatch,
   normalizeMobileThemeMode,
   resolveMobileThemeIds,
@@ -48,6 +51,8 @@ interface AppearancePreferencesContextValue {
   readonly appearance: ResolvedAppearance;
   readonly themeId: MobileThemeId;
   readonly themeIds: MobileThemeIds;
+  readonly publishedThemes: ReadonlyArray<ThemeDefinition>;
+  readonly themeSourceLabel: string | null;
   readonly themeMode: MobileThemeMode;
   readonly androidNavigationStyle: AndroidNavigationStyle;
   readonly setAndroidNavigationStyle: (value: AndroidNavigationStyle) => void;
@@ -108,9 +113,15 @@ const systemColorPalettesAtom = Atom.make((get): MaterialYouPalettes | null => {
 function resolveThemeVariablesByAppearance(
   themeIds: MobileThemeIds,
   palettes: MaterialYouPalettes | null,
+  publishedThemes: ReadonlyArray<ThemeDefinition>,
 ): Readonly<Record<MobileThemeAppearance, MobileThemeVariables>> {
   const resolve = (appearance: MobileThemeAppearance) => {
-    const base = getMobileThemeRuntimeVariables(themeIds[appearance], appearance, Platform.OS);
+    const base = getMobileThemeRuntimeVariables(
+      themeIds[appearance],
+      appearance,
+      Platform.OS,
+      publishedThemes,
+    );
     return themeIds[appearance] === "material-you" && palettes
       ? materialYouPaletteToMobileThemeVariables(palettes[appearance], appearance, base)
       : base;
@@ -187,6 +198,9 @@ export function installAppearanceRuntime(): () => void {
 
 export function AppearancePreferencesProvider(props: { readonly children: ReactNode }) {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const themeSource = useAtomValue(mobileThemeSourceAtom);
+  const publishedThemes = useAtomValue(mobilePublishedThemesAtom);
+  const themeSourceLabel = themeSource?.label ?? null;
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const systemColorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const storedPreferences = AsyncResult.isSuccess(preferencesResult)
@@ -211,9 +225,9 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   const themeId = themeIds[themeAppearance];
   const systemColorsActive = themeId === "material-you" && isSystemColorsAvailable;
   const systemColorPalettes = useAtomValue(systemColorPalettesAtom);
-  const themeVariablesByAppearance = resolveThemeVariablesByAppearance(
-    themeIds,
-    systemColorPalettes,
+  const themeVariablesByAppearance = useMemo(
+    () => resolveThemeVariablesByAppearance(themeIds, systemColorPalettes, publishedThemes),
+    [themeIds, systemColorPalettes, publishedThemes],
   );
   const themeVariables = themeVariablesByAppearance[themeAppearance];
   const activeThemeName = getMobileUniwindThemeName(themeId, themeAppearance);
@@ -223,6 +237,37 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     [baseFontSize, codeFontSize, codeWordBreak, terminalFontSize],
   );
   const isReady = AsyncResult.isSuccess(preferencesResult);
+  const themeEnvironmentId = themeSource?.environmentId ?? null;
+  const defaultTheme = themeSource?.defaultTheme ?? "";
+  const defaultThemeSetAt = themeSource?.defaultThemeSetAt ?? "";
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Adopt server defaults into persisted device preferences once per set.
+  useEffect(() => {
+    if (!isReady || themeEnvironmentId === null) return;
+    const current = storedPreferencesOf(appAtomRegistry.get(mobilePreferencesAtom));
+    const selection = createMobileDefaultThemePatch({
+      defaultTheme,
+      defaultThemeSetAt,
+      appliedGeneration: current?.appliedDefaultThemes?.[themeEnvironmentId],
+      publishedThemes,
+    });
+    if (!selection) return;
+    const { generation, ...patch } = selection;
+    savePreferences({
+      ...patch,
+      appliedDefaultThemes: {
+        ...current?.appliedDefaultThemes,
+        [themeEnvironmentId]: generation,
+      },
+    });
+  }, [
+    isReady,
+    themeEnvironmentId,
+    defaultTheme,
+    defaultThemeSetAt,
+    publishedThemes,
+    savePreferences,
+  ]);
+
   const updatePreferences = (patch: Partial<Preferences>) => {
     startTransition(() => savePreferences(patch));
   };
@@ -246,7 +291,12 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   };
 
   const setThemeIdForBothAppearances = (value: MobileThemeId) => {
-    pickTheme(createMobileThemePairPatch(value));
+    pickTheme(
+      createMobileThemePairPatch(
+        value,
+        publishedThemes.find((theme) => theme.id === value),
+      ),
+    );
   };
 
   const setThemeMode = (value: MobileThemeMode) => {
@@ -301,6 +351,8 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       appearance,
       themeId,
       themeIds,
+      publishedThemes,
+      themeSourceLabel,
       themeMode,
       androidNavigationStyle,
       setAndroidNavigationStyle,
@@ -325,6 +377,8 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       appearance,
       themeId,
       themeIds,
+      publishedThemes,
+      themeSourceLabel,
       themeMode,
       androidNavigationStyle,
       setAndroidNavigationStyle,

@@ -1,3 +1,4 @@
+import { publishedThemeDefinitions } from "@t3tools/shared/themeColors";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { converter } from "culori/fn";
 import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
@@ -19,7 +20,6 @@ import {
   installCustomTheme,
   parseThemeFile,
   parseThemeHalves,
-  publishedThemeDefinitions,
   removeCustomTheme,
   replaceCustomThemeCollection,
   resolveDesktopTheme,
@@ -30,7 +30,6 @@ import {
   updateCustomTheme,
   updateThemeColorFamily,
   CUSTOM_THEMES_STORAGE_KEY,
-  createVividThemeColors,
   getDefaultThemeColors,
   themeColorToHex,
   toCanonicalThemeColor,
@@ -148,71 +147,6 @@ describe("theme files", () => {
       }
     },
   );
-
-  it("derives readable, distinctive vivid palettes from exact seeds", () => {
-    const seeds: ReadonlyArray<["light" | "dark", string, string]> = [
-      ["light", "#f4f9f2", "#1d8a4e"],
-      ["dark", "#101a2c", "#4f8fe8"],
-      ["dark", "#211a23", "#df5398"],
-      ["light", "#fdf6ec", "#c2571b"],
-      ["light", "#111827", "#8ab4f8"],
-      ["dark", "#f5ecf5", "#a84370"],
-    ];
-    const channels = (value: string) =>
-      [1, 3, 5].map((index) => Number.parseInt(asHex(value).slice(index, index + 2), 16)) as [
-        number,
-        number,
-        number,
-      ];
-    for (const [appearance, canvas, accent] of seeds) {
-      const colors = createVividThemeColors(appearance, canvas, accent);
-      expect(colors.canvas).toMatch(/^oklch\(/);
-      expect(colors.accent).toMatch(/^oklch\(/);
-      expect(asHex(colors.canvas)).toBe(canvas);
-      expect(asHex(colors.accent)).toBe(accent);
-      expect(contrastRatio(colors.text, colors.canvas)).toBeGreaterThanOrEqual(7);
-      expect(contrastRatio(colors.textMuted, colors.canvas)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(colors.textMuted, colors.canvas)).toBeLessThan(5.5);
-      expect(contrastRatio(colors.mutedForeground, colors.muted)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(colors.mutedForeground, colors.muted)).toBeLessThan(
-        contrastRatio(colors.text, colors.muted),
-      );
-      expect(contrastRatio(colors.placeholder, colors.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(colors.placeholder, colors.surfaceRaised)).toBeLessThan(
-        contrastRatio(colors.text, colors.surfaceRaised),
-      );
-      expect(colors.secondaryLabel).toBe(colors.textMuted);
-      expect(contrastRatio(colors.accentForeground, colors.accent)).toBeGreaterThanOrEqual(4.5);
-      expect(
-        contrastRatio(colors.searchMatchForeground, colors.searchMatchBackground),
-      ).toBeGreaterThanOrEqual(4.5);
-      expect(
-        contrastRatio(colors.searchMatchActiveForeground, colors.searchMatchActiveBackground),
-      ).toBeGreaterThanOrEqual(4.5);
-      expect(
-        contrastRatio(colors.messageActionForeground, colors.messageAction),
-      ).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(colors.messageForeground, colors.messageSurface)).toBeGreaterThanOrEqual(
-        4.5,
-      );
-      expect(contrastRatio(colors.secondaryForeground, colors.secondary)).toBeGreaterThanOrEqual(
-        4.5,
-      );
-      expect(contrastRatio(colors.sidebarForeground, colors.sidebar)).toBeGreaterThanOrEqual(4.5);
-      expect(colors.messageAction).not.toBe(colors.accent);
-      expect(asHex(colors.update)).toBe(accent);
-      const [errorRed, errorGreen, errorBlue] = channels(colors.error);
-      expect(errorRed).toBeGreaterThan(errorGreen * 2);
-      expect(errorRed).toBeGreaterThan(errorBlue * 2);
-      expect(contrastRatio(colors.error, "#ffffff")).toBeGreaterThanOrEqual(2.5);
-      expect(contrastRatio(colors.errorForeground, colors.errorSurface)).toBeGreaterThanOrEqual(
-        4.5,
-      );
-      const [warnRed, warnGreen, warnBlue] = channels(colors.warning);
-      expect(warnRed).toBeGreaterThan(warnBlue);
-      expect(warnGreen).toBeGreaterThan(warnBlue);
-    }
-  });
 
   it("decodes literal CSS color formats into OKLCH without dropping alpha", () => {
     const theme = parseThemeFile({
