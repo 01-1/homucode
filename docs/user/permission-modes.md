@@ -24,6 +24,10 @@ Approve or reject requests in the conversation to let the agent continue. Permis
 not prevent the agent from asking questions about the task. Subagent approval requests appear in
 the parent conversation with the subagent's name, so you can respond without switching threads.
 
+Below **Full access**, an agent that adds, changes, or deletes projects, links environments, or
+changes environment settings through T3 Code's tools asks you first. Declining leaves everything
+as it was.
+
 ## Provider differences
 
 Providers enforce permissions differently. Some read-only actions can proceed in **Supervised**.

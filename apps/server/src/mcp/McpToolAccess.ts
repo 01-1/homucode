@@ -336,13 +336,62 @@ export const afterForwarding = <P, A, E, R, E2, R2>(
 const fullAccessRequired =
   "Changing projects or environment settings needs a live full-access/default calling thread or a full-access client.";
 
+const isFullAccess = ({ limits }: Caller) =>
+  limits.runtimeMode === "full-access" && limits.interactionMode === "default";
+
+/**
+ * A thread below full access asks its user through an MCP elicitation, which
+ * the provider shows as the thread's approval card. Clients keep the ceiling
+ * they were approved with, and a provider that cannot ask is refused as before.
+ */
+const approvedByUser = Effect.fn("McpToolAccess.approvedByUser")(function* (
+  caller: Caller,
+  prompt: string,
+) {
+  if (isFullAccess(caller)) return;
+  const server = yield* Effect.serviceOption(McpSchema.McpServerClient);
+  if (
+    caller.scope.thread === undefined ||
+    Option.isNone(server) ||
+    server.value.clientCapabilities.elicitation === undefined
+  )
+    return yield* assertFullAccess(caller, fullAccessRequired);
+  const client = yield* server.value.getClient;
+  const answer = yield* client
+    .elicit(
+      new McpSchema.ElicitRequestFormParams({
+        mode: "form",
+        message: prompt,
+        requestedSchema: { type: "object", properties: {} },
+      }),
+    )
+    .pipe(Effect.option);
+  if (Option.isSome(answer) && answer.value.action === "accept") return;
+  return yield* new OrchestratorMcpFailure({
+    code: Option.isSome(answer) ? "user_declined" : "capability_denied",
+    message: Option.isSome(answer)
+      ? "The user declined this change."
+      : `The approval prompt could not be shown. ${fullAccessRequired}`,
+  });
+}, Effect.scoped);
+
+/** An approval prompt naming the change and the arguments it was called with. */
+export const approvalPrompt =
+  (action: string) =>
+  (params: unknown): string => {
+    const shown = JSON.stringify(params, null, 2) ?? "";
+    return `Allow this thread to ${action}?\n\n${shown.length > 2000 ? `${shown.slice(0, 2000)}…` : shown}`;
+  };
+
 /** Recheck after waits before writing; caller modes may have changed. */
 export const writesEnvironment = <P, A, E, R>(
   handle: (
     params: P,
     check: Effect.Effect<Caller, OrchestratorMcpFailure, CheckServices>,
   ) => Effect.Effect<A, E, R>,
-  options?: {
+  options: {
+    /** What the user approves when the calling thread is below full access. */
+    readonly approval: (params: P) => string;
     /**
      * Whether a linked caller may make it, as for adding a project: it leaves
      * everything already here as it was.
@@ -350,21 +399,29 @@ export const writesEnvironment = <P, A, E, R>(
     readonly linkedCallers?: "allowed";
   },
 ) => {
-  const check = orchestratingCaller.pipe(
+  const live = orchestratingCaller.pipe(
     Effect.tap((caller) =>
-      options?.linkedCallers === "allowed"
+      options.linkedCallers === "allowed"
         ? Effect.void
         : assertNotLinked(caller, "change projects or environment settings"),
     ),
-    Effect.tap((caller) => assertFullAccess(caller, fullAccessRequired)),
   );
+  const approved = (params: P) =>
+    Effect.tap(live, (caller) => approvedByUser(caller, options.approval(params)));
   return declare(
-    (params: P) => check.pipe(Effect.flatMap(() => handle(params, check))),
-    // Linked work never reaches a link at all; that is checked as the call goes.
-    () =>
-      orchestratingCaller.pipe(
-        Effect.tap((caller) => assertFullAccess(caller, fullAccessRequired)),
+    (params: P) =>
+      Effect.flatMap(approved(params), (caller) =>
+        // Once the user approved, a recheck confirms only that the caller is still live.
+        handle(
+          params,
+          isFullAccess(caller)
+            ? Effect.tap(live, (rechecked) => assertFullAccess(rechecked, fullAccessRequired))
+            : live,
+        ),
       ),
+    // Linked work never reaches a link at all; that is checked as the call goes.
+    (params) =>
+      Effect.tap(orchestratingCaller, (caller) => approvedByUser(caller, options.approval(params))),
   );
 };
 

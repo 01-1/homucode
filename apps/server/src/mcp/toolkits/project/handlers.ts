@@ -395,33 +395,37 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       }),
     // Linked work may bring the repository it works in; an existing
     // registered workspace is still refused.
-    { linkedCallers: "allowed" },
+    { linkedCallers: "allowed", approval: McpToolAccess.approvalPrompt("add a project") },
   ),
-  t3_project_update: McpToolAccess.writesEnvironment((input) =>
-    Effect.gen(function* () {
-      const projects = yield* Project.ProjectService;
-      return yield* projects
-        .update({ ...input, commandId: yield* newCommandId() })
-        .pipe(Effect.mapError(projectFailure));
-    }),
+  t3_project_update: McpToolAccess.writesEnvironment(
+    (input) =>
+      Effect.gen(function* () {
+        const projects = yield* Project.ProjectService;
+        return yield* projects
+          .update({ ...input, commandId: yield* newCommandId() })
+          .pipe(Effect.mapError(projectFailure));
+      }),
+    { approval: McpToolAccess.approvalPrompt("update a project") },
   ),
-  t3_project_delete: McpToolAccess.writesEnvironment((input) =>
-    Effect.gen(function* () {
-      const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
-      if (yield* folders.isScratchProject(input.projectId))
-        return yield* new OrchestratorMcpFailure({
-          code: "invalid_request",
-          message:
-            '"No project" is the built-in scratch project and cannot be deleted through MCP. The user can remove it in Settings.',
-        });
-      const projects = yield* Project.ProjectService;
-      const clones = yield* ProjectCloneTracker.ProjectCloneTracker;
-      return yield* mutateProjectWithClone(projects, clones, {
-        ...input,
-        type: "project.delete",
-        commandId: yield* newCommandId(),
-      }).pipe(Effect.mapError(projectFailure));
-    }),
+  t3_project_delete: McpToolAccess.writesEnvironment(
+    (input) =>
+      Effect.gen(function* () {
+        const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
+        if (yield* folders.isScratchProject(input.projectId))
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message:
+              '"No project" is the built-in scratch project and cannot be deleted through MCP. The user can remove it in Settings.',
+          });
+        const projects = yield* Project.ProjectService;
+        const clones = yield* ProjectCloneTracker.ProjectCloneTracker;
+        return yield* mutateProjectWithClone(projects, clones, {
+          ...input,
+          type: "project.delete",
+          commandId: yield* newCommandId(),
+        }).pipe(Effect.mapError(projectFailure));
+      }),
+    { approval: McpToolAccess.approvalPrompt("delete a project") },
   ),
   t3_project_clone: McpToolAccess.writesEnvironment(
     (input) =>
@@ -439,6 +443,6 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         );
       }),
     // An existing destination is never adopted.
-    { linkedCallers: "allowed" },
+    { linkedCallers: "allowed", approval: McpToolAccess.approvalPrompt("clone a repository") },
   ),
 });
