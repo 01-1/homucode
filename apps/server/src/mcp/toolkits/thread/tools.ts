@@ -244,7 +244,7 @@ const ThreadSearchTool = Tool.make("t3_thread_search", {
 const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   ...commandTool,
   description:
-    "Run one scheduled task now. Below full access, the user approves each call. Returns its thread, or null if not started. Success means started, not finished.",
+    "Run one scheduled task now. Asks the user first below full access. Returns its thread, or null if not started. Success means started, not finished.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     taskId: ScheduledTaskId,
