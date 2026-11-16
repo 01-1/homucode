@@ -928,6 +928,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     onActionSweepStart(threadRef, variantAction, event.nativeEvent);
   };
+  const unsettles = variantAction === "unsettle";
   const handleUnsettleClick = (event: ReactMouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -1613,17 +1614,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             render={
                               <button
                                 type="button"
-                                aria-label="Settle thread"
-                                onClick={handleSettleClick}
+                                aria-label={unsettles ? "Un-settle thread" : "Settle thread"}
+                                onClick={unsettles ? handleUnsettleClick : handleSettleClick}
                                 onPointerDown={handleActionPointerDown}
                                 className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
                               />
                             }
                           >
-                            <CheckIcon className="size-3.5" />
-                            Settle
+                            {unsettles ? (
+                              <Undo2Icon className="size-3.5" />
+                            ) : (
+                              <CheckIcon className="size-3.5" />
+                            )}
+                            {unsettles ? "Un-settle" : "Settle"}
                           </TooltipTrigger>
-                          <TooltipPopup>Settle thread</TooltipPopup>
+                          <TooltipPopup>
+                            {unsettles
+                              ? "Settles when the turn ends. Un-settle to keep it."
+                              : "Settle thread"}
+                          </TooltipPopup>
                         </Tooltip>
                       ) : null}
                     </span>

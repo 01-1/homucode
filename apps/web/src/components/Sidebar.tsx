@@ -61,6 +61,7 @@ import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-
 import {
   canSnooze,
   effectiveSnoozed,
+  isShelvedSettled,
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -699,8 +700,19 @@ function useSidebarThreads(input: {
     visibleWorkingThreads,
     orderedThreadKeys: orderedThreads.map(threadShellKey),
     threadByKey: new Map(orderedThreads.map((thread) => [threadShellKey(thread), thread] as const)),
-    // Filed threads keep their shelf state for menus and next-thread picks.
-    settledThreadKeys: new Set(partition.settledThreads.map(threadShellKey)),
+    // Filed threads keep their shelf state for menus and next-thread picks, and threads that
+    // settle when their turn ends already read as settled there.
+    settledThreadKeys: new Set(
+      [
+        ...partition.settledThreads,
+        ...partition.visibleThreads.filter(
+          (thread) =>
+            serverConfigs.has(thread.environmentId) &&
+            thread.settledOverride === "settled" &&
+            !isShelvedSettled(thread),
+        ),
+      ].map(threadShellKey),
+    ),
     snoozedThreadKeys: new Set(partition.snoozedThreads.map(threadShellKey)),
     sectionByThreadKey,
     pinnedKeys: pinnedThreads.map(threadShellKey),
@@ -765,7 +777,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     } else {
       const section = resolveSidebarThreadSection({
         snoozed: configLoaded && effectiveSnoozed(thread, { now: preciseNow }),
-        settled: configLoaded && thread.settledOverride === "settled",
+        settled: configLoaded && isShelvedSettled(thread),
         pinned: thread.pinnedAt != null,
       });
       (section === "snoozed"
@@ -4132,7 +4144,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled"
+                                : section === "settled" || settledThreadKeys.has(threadKey)
                                   ? "unsettle"
                                   : "settle"
                             }

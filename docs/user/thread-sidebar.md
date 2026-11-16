@@ -231,6 +231,8 @@ example, ask for "put the review threads in a Reviews folder".
 Choose **Settle thread** from its menu to move finished work out of the active list
 without deleting the conversation. **Un-settle thread** restores it to active work
 and prevents automatic settlement until new activity resumes the usual rules.
+Settling a thread while its agent is still working keeps it with your active work
+until the turn finishes, then moves it to Settled. Un-settle it before then to keep it.
 Manually settling an idle thread dismisses unanswered async questions without
 sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
