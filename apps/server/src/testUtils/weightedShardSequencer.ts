@@ -7,7 +7,7 @@ import { BaseSequencer, type TestSpecification } from "vite-plus/test/node";
 import shardWeights from "./shardWeights.json" with { type: "json" };
 
 // Use the recorded median for new files.
-const UNRECORDED_FILE_SECONDS = 0.6;
+const UNRECORDED_FILE_SECONDS = 2.1;
 
 const recordedSeconds: Readonly<Record<string, number>> = shardWeights;
 
