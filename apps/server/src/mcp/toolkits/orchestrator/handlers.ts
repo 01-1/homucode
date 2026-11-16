@@ -301,26 +301,30 @@ const handlers = {
   ),
   // A link lets every agent here reach the other environment, so it is an
   // environment setting: full access, and never for linked work.
-  t3_environment_link: McpToolAccess.writesEnvironment((input) =>
-    Effect.gen(function* () {
-      const scope = yield* McpInvocationContext.McpInvocationContext;
-      const requests = yield* PeerLinkRequests.PeerLinkRequests;
-      return yield* requests.request(scope, input);
-    }),
+  t3_environment_link: McpToolAccess.writesEnvironment(
+    (input) =>
+      Effect.gen(function* () {
+        const scope = yield* McpInvocationContext.McpInvocationContext;
+        const requests = yield* PeerLinkRequests.PeerLinkRequests;
+        return yield* requests.request(scope, input);
+      }),
+    { approval: McpToolAccess.approvalPrompt("link another environment") },
   ),
-  t3_environment_unlink: McpToolAccess.writesEnvironment(({ environmentId }) =>
-    Effect.gen(function* () {
-      const links = yield* PeerLinks.PeerLinks;
-      const removed = yield* links
-        .unlink(environmentId)
-        .pipe(
-          Effect.mapError(
-            (error) =>
-              new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
-          ),
-        );
-      return { environmentId, removed };
-    }),
+  t3_environment_unlink: McpToolAccess.writesEnvironment(
+    ({ environmentId }) =>
+      Effect.gen(function* () {
+        const links = yield* PeerLinks.PeerLinks;
+        const removed = yield* links
+          .unlink(environmentId)
+          .pipe(
+            Effect.mapError(
+              (error) =>
+                new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
+            ),
+          );
+        return { environmentId, removed };
+      }),
+    { approval: McpToolAccess.approvalPrompt("unlink an environment") },
   ),
   t3_thread_interrupt: McpToolAccess.writesThreads(
     (input) => [input.threadId],

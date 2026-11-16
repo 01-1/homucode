@@ -104,6 +104,18 @@ const mcpClient = McpSchema.McpServerClient.of({
   getClient: Effect.die("unused"),
 });
 
+/** A provider that shows the approval card and answers it with `action`. */
+const askingClient = (action: "accept" | "decline" | "cancel") =>
+  McpSchema.McpServerClient.of({
+    ...mcpClient,
+    clientCapabilities: { elicitation: {} },
+    getClient: Effect.succeed({
+      listRoots: () => Effect.die("unused"),
+      createMessage: () => Effect.die("unused"),
+      elicit: () => Effect.succeed({ action }),
+    }),
+  });
+
 const probe = {
   success: Schema.Struct({ ran: Schema.String }),
   failure: OrchestratorMcpFailure,
@@ -154,7 +166,9 @@ const probeHandlers: McpToolAccess.Handlers<typeof ProbeToolkit.tools> = {
     (_, modes) => Effect.succeed({ ran: `${modes.runtimeMode}/${modes.interactionMode}` }),
     "stamped",
   ),
-  writes_environment: McpToolAccess.writesEnvironment(() => ran),
+  writes_environment: McpToolAccess.writesEnvironment(() => ran, {
+    approval: McpToolAccess.approvalPrompt("change the probe"),
+  }),
 };
 const layerProbeHandlers = McpToolAccess.toLayer(ProbeToolkit, probeHandlers);
 
@@ -214,6 +228,7 @@ const call = (
   tool: string,
   scope: McpInvocationContext.McpInvocationScope,
   args: Record<string, unknown> = {},
+  client = mcpClient,
 ) =>
   McpServer.McpServer.pipe(
     Effect.flatMap((server) => server.callTool({ name: tool, arguments: args })),
@@ -222,7 +237,7 @@ const call = (
     ),
     Effect.map((outcome) => ("code" in outcome ? outcome.code : outcome.ran)),
     Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
-    Effect.provideService(McpSchema.McpServerClient, mcpClient),
+    Effect.provideService(McpSchema.McpServerClient, client),
   );
 
 const supervised = threadCaller(supervisedThreadId);
@@ -334,6 +349,28 @@ it.effect.each([
   ),
 );
 
+// Below full access, a thread asks its user; clients keep the ceiling they were approved with.
+it.effect.each([
+  ["writes_environment", supervised, "accept", "ran"],
+  ["writes_environment", plan, "accept", "ran"],
+  ["writes_environment", supervised, "decline", "user_declined"],
+  ["writes_environment", supervised, "cancel", "user_declined"],
+  ["writes_environment", ended, "accept", "parent_not_active"],
+  ["writes_environment", fullAccess, "decline", "ran"],
+  ["writes_environment", supervisedClient, "accept", "capability_denied"],
+] as const)("%s from %o when the user answers %s: %s", ([tool, scope, answer, expected]) =>
+  call(tool, scope, {}, askingClient(answer)).pipe(
+    Effect.map((outcome) => expect(outcome).toBe(expected)),
+    Effect.provide(
+      probeServer(
+        Layer.mock(ThreadManagement.ThreadManagementService)({
+          getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+        }),
+      ),
+    ),
+  ),
+);
+
 it("refuses a declaration or handlers layer that only wears another's fields", () => {
   const copiedDeclaration = Object.assign(
     unchecked,
@@ -395,7 +432,9 @@ const linkedProbeServer = McpHttpServer.toolkitRegistration(
     writes_with_capability: McpToolAccess.writesWithCapability(ranHere),
     writes_threads: McpToolAccess.writesThreads((input) => [input.threadId], ranHere),
     starts_threads: McpToolAccess.startsThreads((input) => input, ranHere, "stamped"),
-    writes_environment: McpToolAccess.writesEnvironment(ranHere),
+    writes_environment: McpToolAccess.writesEnvironment(ranHere, {
+      approval: McpToolAccess.approvalPrompt("change the probe"),
+    }),
   }),
 ).pipe(
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
@@ -454,6 +493,17 @@ it.effect.each([
   ],
 ] as const)("a linked %s from %o with %o: %s", ([tool, scope, args, expected]) =>
   call(tool, scope, args).pipe(
+    Effect.map((outcome) => expect(outcome).toBe(expected)),
+    Effect.provide(linkedProbeServer),
+  ),
+);
+
+// An approval here would not carry to the other environment, so a linked call is not asked.
+it.effect.each([
+  [{ environmentId: box }, "capability_denied"],
+  [{ environmentId: here }, "here"],
+] as const)("an approved writes_environment with %o: %s", ([args, expected]) =>
+  call("writes_environment", supervised, args, askingClient("accept")).pipe(
     Effect.map((outcome) => expect(outcome).toBe(expected)),
     Effect.provide(linkedProbeServer),
   ),
