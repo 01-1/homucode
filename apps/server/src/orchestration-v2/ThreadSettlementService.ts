@@ -178,6 +178,23 @@ export function isAutoSettlementCandidate(
   return !isSnoozed(thread, nowMs);
 }
 
+/** Duet keeps its threads with a shared setting instead of a per-device pin, so they stay unsettled too. */
+export function isDuetKeptThread(
+  settings: Pick<
+    import("@t3tools/contracts").ServerSettings,
+    "duetEnabled" | "duetProjectId" | "duetThreads"
+  >,
+  thread: Pick<ProjectionStore.ProjectionSettlementCandidate, "id" | "projectId">,
+): boolean {
+  const entry = settings.duetThreads[thread.id];
+  return (
+    settings.duetEnabled &&
+    thread.projectId === settings.duetProjectId &&
+    entry !== undefined &&
+    entry.pinned !== false
+  );
+}
+
 /** Match client effectiveSnoozed so agents and sidebar agree. */
 export function isSnoozed(
   thread: Pick<
@@ -365,7 +382,8 @@ export const make = Effect.gen(function* () {
     const candidates = threads.filter(
       (thread) =>
         (automaticSettlementEnabled || thread.lineage.relationshipToParent === "subagent") &&
-        isAutoSettlementCandidate(thread, nowMs),
+        isAutoSettlementCandidate(thread, nowMs) &&
+        !isDuetKeptThread(settings, thread),
     );
 
     // Runs per candidate thread, thousands per sweep on busy servers; the sweep owns the span.
