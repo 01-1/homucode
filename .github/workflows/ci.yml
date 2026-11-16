@@ -181,7 +181,8 @@ jobs:
         run: |
           (
             set +e
-            vpr typecheck
+            # Runs beside the desktop build; four checkers at once ran out of memory on our runners.
+            vp run -r --cache --concurrency-limit 2 typecheck
             echo "$?" > "$RUNNER_TEMP/typecheck-status"
           ) > "$RUNNER_TEMP/typecheck.log" 2>&1 < /dev/null &
 
