@@ -60,7 +60,7 @@ import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
 import { recordPromptSent } from "../GitHubStarPrompt";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
-import { newMessageId, newThreadId } from "~/lib/utils";
+import { newMessageId, newProjectId, newThreadId } from "~/lib/utils";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {
@@ -97,6 +97,10 @@ import { runMobileComposerTransition } from "./draftHeroTransition";
 import { useClientSettingsHydrated, useEnvironmentSettings } from "../../hooks/useSettings";
 import { resolveQuickCommandSend } from "./composerQuickCommand";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { resolveCdCommand } from "./composerCdCommand";
+import { projectEnvironment } from "../../state/projects";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { inferProjectTitleFromPath } from "@t3tools/client-runtime/state/projects";
 import { environmentPresentations } from "../../state/presentation";
 import {
   approvalRedirectNotice,
@@ -352,6 +356,13 @@ export function useComposerSend(input: ComposerSendInput) {
     reportFailure: false,
   });
   const uploadThreadFeedback = useOrchestrationCommand(threadEnvironment.uploadFeedback, {
+    reportFailure: false,
+  });
+  const ensureProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
+  const updateProject = useOrchestrationCommand(projectEnvironment.update, {
+    reportFailure: false,
+  });
+  const moveThreadToProject = useOrchestrationCommand(threadEnvironment.moveToProject, {
     reportFailure: false,
   });
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
@@ -776,6 +787,85 @@ export function useComposerSend(input: ComposerSendInput) {
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
+      return;
+    }
+    const cdCommand =
+      composerHoldsOnlyText && multipleModelSelections === null && !queuedRunEdit.isEditing
+        ? resolveCdCommand({
+            prompt: trimmed,
+            cwd:
+              activeThread.worktreePath ??
+              activeThread.workspaceRoot ??
+              activeProject?.workspaceRoot ??
+              null,
+          })
+        : ({ kind: "none" } as const);
+    if (cdCommand.kind === "blocked") {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: cdCommand.title,
+          description: cdCommand.description,
+        }),
+      );
+      return;
+    }
+    if (cdCommand.kind === "cd") {
+      const reportCdFailure = (error: unknown) =>
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not change folder",
+            description: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      const ensured = await ensureProject({
+        environmentId: activeThread.environmentId,
+        input: {
+          projectId: newProjectId(),
+          title: inferProjectTitleFromPath(cdCommand.path),
+          workspaceRoot: cdCommand.path,
+          reuseExisting: true,
+          defaultModelSelection: null,
+        },
+      });
+      if (ensured._tag === "Failure") {
+        if (!isAtomCommandInterrupted(ensured)) reportCdFailure(squashAtomCommandFailure(ensured));
+        return;
+      }
+      const project = ensured.value;
+      if (project.archivedAt != null) {
+        const unarchived = await updateProject({
+          environmentId: activeThread.environmentId,
+          input: { projectId: project.id, archived: false },
+        });
+        if (unarchived._tag === "Failure") {
+          if (!isAtomCommandInterrupted(unarchived)) {
+            reportCdFailure(squashAtomCommandFailure(unarchived));
+          }
+          return;
+        }
+      }
+      if (isServerThread) {
+        const moved = await moveThreadToProject({
+          environmentId: activeThread.environmentId,
+          input: { threadId: activeThread.id, projectId: project.id, changeDirectory: true },
+        });
+        if (moved._tag === "Failure") {
+          if (!isAtomCommandInterrupted(moved)) reportCdFailure(squashAtomCommandFailure(moved));
+          return;
+        }
+      }
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      if (!isServerThread) {
+        // A draft has no folder of its own yet: open the new project's draft instead.
+        const opened = await settlePromise(() =>
+          handleNewThread(scopeProjectRef(activeThread.environmentId, project.id)),
+        );
+        if (opened._tag === "Failure") reportCdFailure(squashAtomCommandFailure(opened));
+      }
       return;
     }
     // Read once: an arm made while this send is in flight belongs to the next message.

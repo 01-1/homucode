@@ -146,3 +146,9 @@ export function parseQuickCommand(text: string): { question: string } | null {
   const match = /^\/q(?:\s+([\s\S]*))?$/i.exec(text.trim());
   return match ? { question: match[1]?.trim() ?? "" } : null;
 }
+
+/** `/cd [path]` as the whole message: move to the project for that folder. */
+export function parseCdCommand(text: string): { path: string } | null {
+  const match = /^\/cd(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  return match ? { path: match[1]?.trim() ?? "" } : null;
+}

@@ -57,6 +57,8 @@ export interface CreateProjectInput extends CommandMetadata {
   readonly title: string;
   readonly workspaceRoot: string;
   readonly createWorkspaceRootIfMissing?: boolean;
+  /** Return the project already rooted at this folder instead of failing. */
+  readonly reuseExisting?: boolean;
   readonly defaultModelSelection?: ModelSelection | null;
   readonly scripts?: ReadonlyArray<ProjectScript>;
 }
@@ -404,6 +406,7 @@ const mutateProject = Effect.fn("EnvironmentCommands.mutateProject")(function* (
         readonly title: string;
         readonly workspaceRoot: string;
         readonly createWorkspaceRootIfMissing?: boolean;
+        readonly reuseExisting?: boolean;
         readonly defaultModelSelection?: ModelSelection | null;
         readonly scripts?: ReadonlyArray<ProjectScript>;
       }
@@ -438,6 +441,7 @@ export const createProject = Effect.fn("EnvironmentCommands.createProject")(func
     ...(input.createWorkspaceRootIfMissing === undefined
       ? {}
       : { createWorkspaceRootIfMissing: input.createWorkspaceRootIfMissing }),
+    ...(input.reuseExisting === undefined ? {} : { reuseExisting: input.reuseExisting }),
     ...(input.defaultModelSelection === undefined
       ? {}
       : { defaultModelSelection: input.defaultModelSelection }),
@@ -635,13 +639,17 @@ export const reorderActiveThread = Effect.fn("EnvironmentCommands.reorderActiveT
 });
 
 export const moveThreadToProject = Effect.fn("EnvironmentCommands.moveThreadToProject")(function* (
-  input: ThreadCommandInput & { readonly projectId: import("@t3tools/contracts").ProjectId },
+  input: ThreadCommandInput & {
+    readonly projectId: import("@t3tools/contracts").ProjectId;
+    readonly changeDirectory?: boolean;
+  },
 ) {
   return yield* dispatch({
     type: "thread.project.move",
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
     projectId: input.projectId,
+    ...(input.changeDirectory === undefined ? {} : { changeDirectory: input.changeDirectory }),
   });
 });
 
