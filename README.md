@@ -10,7 +10,7 @@ The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 - **Threads and subagents.** Move threads under other threads, pinned subagents and sidebar folders, Stop that stops only the current thread, bare "stop" or "wait" messages that halt the running turn, the sending device on each message, `/q` for a quick question on a cheaper model, `/cd` to move a thread to another folder, and opt-in autoreviewers.
 - **Queue and steering.** Auto and steer delivery that steers as soon as the turn can take it, Ctrl+Enter to steer every queued message, and Claude steers that survive Stop.
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, and answered questions that keep every option.
-- **Desktop, CLI and mobile.** Faster CLI launches, Linux desktop link fixes, undo for a staged build, and smaller fixes.
+- **Desktop, CLI and mobile.** Settings sync across web, desktop and phone, faster CLI launches, Linux desktop link fixes, undo for a staged build, and smaller fixes.
 
 Only builds from this repository have these changes; upstream's published apps don't. See [Known limits](./CHANGES.md#known-limits).
 

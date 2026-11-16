@@ -55,13 +55,17 @@ describe("phone settings sync values", () => {
       theme: "system",
       themeHalves: null,
     });
+    expect(apply({ themeId: "grove" }, { theme: "system", themeHalves: null })).toMatchObject({
+      lightThemeId: "t3-code",
+      darkThemeId: "t3-code",
+    });
   });
 
   it("keeps a synced theme the phone cannot show instead of replacing it", () => {
     const fromWeb = { theme: "my-custom-theme", themeHalves: null };
     const phone = apply({ themeId: "grove" }, fromWeb);
 
-    expect(phone).toMatchObject({ lightThemeId: "t3-code", darkThemeId: "t3-code" });
+    expect(phone).toMatchObject({ lightThemeId: "lavender", darkThemeId: "lavender" });
     expect(syncedValuesFromMobilePreferences(phone)).toMatchObject(fromWeb);
   });
 

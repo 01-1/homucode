@@ -43,10 +43,9 @@ function themeIdsFromSynced({ theme, themeHalves }: SyncedTheme) {
       if (typeof parsed === "object" && parsed !== null) halves = parsed;
     } catch {}
   }
-  return {
-    light: normalizeMobileThemeId(halves.light ?? theme),
-    dark: normalizeMobileThemeId(halves.dark ?? theme),
-  };
+  const phoneId = (id: unknown) =>
+    id === "system" ? DEFAULT_MOBILE_THEME_ID : normalizeMobileThemeId(id);
+  return { light: phoneId(halves.light ?? theme), dark: phoneId(halves.dark ?? theme) };
 }
 
 /**
