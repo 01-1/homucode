@@ -48,14 +48,14 @@ it("excludes structured context chips without joining text across them", () => {
       {
         role: "user",
         streaming: false,
-        text: "option\n + x\n> + quoted\n```\n+ code\n```",
+        text: "option\n + x\n>   > + quoted\n```\n+ code\n```\n> ```\n> + quoted code\n> ```",
         context: { version: 1, records: [] },
       },
       undefined,
       [],
       "literal-plus",
     ),
-  ).toEqual(["option", " + x", "+ quoted", "+ code\n"]);
+  ).toEqual(["option", " + x", "+ quoted", "+ code\n", "+ quoted code\n"]);
 });
 
 it("excludes the hidden prompt of an attachment-only message", () => {

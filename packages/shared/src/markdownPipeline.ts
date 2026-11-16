@@ -535,7 +535,7 @@ export function chatMarkdownImageSources(markdown: string): Array<string> {
 }
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
-const PLUS_LIST_MARKER = /^([ \t]*(?:>[ \t]?)*[ \t]*)\+(?=[ \t]|$)/;
+const QUOTE_PREFIX = /^[ \t]*(?:>[ \t]*)*/;
 
 /** Escapes `+` list markers outside fenced code so they render as typed. */
 export function escapePlusListMarkers(markdown: string): string {
@@ -544,7 +544,9 @@ export function escapePlusListMarkers(markdown: string): string {
   return markdown
     .split("\n")
     .map((line) => {
-      const marker = FENCE.exec(line)?.[1];
+      const prefix = QUOTE_PREFIX.exec(line)?.[0] ?? "";
+      const rest = line.slice(prefix.length);
+      const marker = FENCE.exec(rest)?.[1];
       if (fence) {
         if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = null;
         return line;
@@ -553,7 +555,7 @@ export function escapePlusListMarkers(markdown: string): string {
         fence = marker;
         return line;
       }
-      return line.replace(PLUS_LIST_MARKER, "$1\\+");
+      return /^\+(?=[ \t]|$)/.test(rest) ? `${prefix}\\${rest}` : line;
     })
     .join("\n");
 }
