@@ -5752,7 +5752,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               driver: session.driver,
               providerInstanceId: session.providerInstanceId,
               occurredAt: now,
-              payload: { providerSessionId: session.id, detachedAt: now, reason: "Workspace changed." },
+              payload: {
+                providerSessionId: session.id,
+                detachedAt: now,
+                reason: "Workspace changed.",
+              },
             });
             const pendingEffect = {
               id: `effect:${command.commandId}:provider-session.detach:${session.id}`,
