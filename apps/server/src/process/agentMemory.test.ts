@@ -11,6 +11,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import type * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/process";
@@ -83,8 +84,11 @@ const withGovernor = <A, E>(
       return yield* body({ memory, settings, root: agents, scope, group });
     }),
   ).pipe(
-    Effect.provide(ServerSettings.layerTest({ agentMemory: { groupMaxBytes: 3 * GiB } })),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(
+      ServerSettings.layerTest({ agentMemory: { groupMaxBytes: 3 * GiB } }).pipe(
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
   );
 
 const acquire = (

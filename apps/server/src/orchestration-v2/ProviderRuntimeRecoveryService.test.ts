@@ -687,7 +687,7 @@ it.effect.each([
           ]
         : [],
   } as unknown as OrchestrationV2ThreadProjection;
-  const restored: Array<Parameters<AgentMemory["Service"]["restore"]>[0][number]> = [];
+  const restored: Array<Parameters<(typeof AgentMemory)["Service"]["restore"]>[0][number]> = [];
   const layer = ProviderRuntimeRecovery.layer.pipe(
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(

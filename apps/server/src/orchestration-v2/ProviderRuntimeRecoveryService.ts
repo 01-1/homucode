@@ -1122,7 +1122,8 @@ export const make = Effect.gen(function* () {
     let closedRequests = 0;
     let retiredEffects = 0;
     const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
-    const memoryWaiters: Array<Parameters<AgentMemory["Service"]["restore"]>[0][number]> = [];
+    const memoryWaiters: Array<Parameters<(typeof AgentMemory)["Service"]["restore"]>[0][number]> =
+      [];
     const stoppedThisPass = new Map<string, RecoverySession>();
     const grouped = trigger === "shutdown" && threadIds.length > 1;
     const groupSize = grouped ? 32 : 1;

@@ -1400,7 +1400,7 @@ effectIt.effect(
       const memory = {
         ...AgentMemory.defaultValue(),
         settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
-        acquire: ({ onWaiting }: Parameters<AgentMemory["Service"]["acquire"]>[0]) =>
+        acquire: ({ onWaiting }: Parameters<(typeof AgentMemory)["Service"]["acquire"]>[0]) =>
           onWaiting.pipe(
             Effect.andThen(Deferred.succeed(waiting, undefined)),
             Effect.andThen(Deferred.await(available)),
