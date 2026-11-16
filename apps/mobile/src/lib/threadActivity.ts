@@ -1074,6 +1074,23 @@ export function failedFeedRunIds(
  * it, or the segment after its run's last steer when `presented` shows that
  * fold. Null for user messages, which never fold.
  */
+/** A jump lands on a message, or on a plan card, which find also matches by its item id. */
+export function isFeedJumpTarget(
+  entry: {
+    readonly type: string;
+    readonly id?: string;
+    readonly activities?: ReadonlyArray<{
+      readonly projectedItem?: OrchestrationV2ProjectedTurnItem;
+    }>;
+  },
+  entryId: string,
+): boolean {
+  if (entry.type === "message") return entry.id === entryId;
+  if (entry.type !== "activity-group") return false;
+  const item = entry.activities?.[0]?.projectedItem?.item;
+  return item?.type === "proposed_plan" && item.id === entryId;
+}
+
 export function messageFoldRunId(
   feed: ReadonlyArray<ThreadFeedEntry>,
   entryId: string,
@@ -1082,6 +1099,9 @@ export function messageFoldRunId(
   let runlessKey: RunId | null = null;
   const lastSteerIdByRunId = new Map<RunId, string>();
   for (const entry of feed) {
+    if (entry.type === "activity-group" && isFeedJumpTarget(entry, entryId)) {
+      return entry.runId ?? runlessKey;
+    }
     if (entry.type !== "message") continue;
     if (entry.message.role === "user") {
       if (entry.id === entryId) return null;

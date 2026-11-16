@@ -212,6 +212,7 @@ import {
   isSecretRequestActivityGroup,
   type ThreadFeedEntry,
   type ThreadFeedLatestRun,
+  isFeedJumpTarget,
   messageFoldRunId,
 } from "../../lib/threadActivity";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
@@ -3472,8 +3473,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     guestShare,
   );
   const jumpRunId =
-    jumpReady &&
-    !presentedFeed.some((entry) => entry.type === "message" && entry.id === jumpToMessageId)
+    jumpReady && !presentedFeed.some((entry) => isFeedJumpTarget(entry, jumpToMessageId))
       ? messageFoldRunId(props.feed, jumpToMessageId, presentedFeed)
       : null;
   if (jumpRunId && !expandedTurnIds.has(jumpRunId)) {
@@ -3500,7 +3500,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     if (list && bottom > 0) list.reportContentInset({ bottom });
   };
   const jumpIndex = jumpReady
-    ? presentedFeed.findIndex((entry) => entry.type === "message" && entry.id === jumpToMessageId)
+    ? presentedFeed.findIndex((entry) => isFeedJumpTarget(entry, jumpToMessageId))
     : null;
   const landJump = useEffectEvent((index: number) => {
     const list = listRef.current;

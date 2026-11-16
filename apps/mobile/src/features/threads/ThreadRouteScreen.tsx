@@ -51,6 +51,7 @@ import { vcsEnvironment } from "../../state/vcs";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { openThreadFind } from "./threadFindState";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useThreadShell } from "../../state/entities";
@@ -1004,6 +1005,14 @@ function ThreadRouteContent(
                 inspectorMode={inspectorMode}
                 onOpenFilesInspector={handleOpenFilesInspector}
                 onReturnToThread={props.onReturnToThread}
+                onFindInThread={
+                  serverConfig?.threadFind === true
+                    ? () =>
+                        openThreadFind(
+                          scopedThreadKey(selectedThread.environmentId, selectedThread.id),
+                        )
+                    : undefined
+                }
               />
             )
           }

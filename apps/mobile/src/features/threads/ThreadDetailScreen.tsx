@@ -158,6 +158,8 @@ import {
   pendingThreadMessageJump,
   subscribeThreadMessageJump,
 } from "./threadMessageJump";
+import { ThreadFindBar } from "./ThreadFindBar";
+import { useThreadFindOpen } from "./threadFindState";
 import {
   clearThreadComposerError,
   threadComposerErrorsAtom,
@@ -172,6 +174,7 @@ import { threadStreamHaptics } from "./threadStreamHaptics";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
+import { isFeedJumpTarget } from "../../lib/threadActivity";
 import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
 import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import type {
@@ -503,6 +506,7 @@ function ThreadDetailBody(
   const nativeMetrics = usesNativeWorkspaceColumns ? columnMetrics : screenMetrics;
   const controlInsets = deriveBottomControlInsets(nativeMetrics);
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  const findOpen = useThreadFindOpen(selectedThreadKey);
   const childThreadInputs = useChildThreadInputs({
     environmentId: props.environmentId,
     threadId: props.selectedThread.id,
@@ -913,7 +917,7 @@ function ThreadDetailBody(
   );
   const jumpMessageLoaded =
     jumpMessageId !== null &&
-    selectedThreadFeed.some((entry) => entry.type === "message" && entry.id === jumpMessageId);
+    selectedThreadFeed.some((entry) => isFeedJumpTarget(entry, jumpMessageId));
   const historyForJump = props.historyControls;
   // History down to the message in one request; another page if it is not
   // there yet.
@@ -1545,6 +1549,16 @@ function ThreadDetailBody(
           loaded={browserTabs.loaded}
           top={navigationHeaderHeight + 8}
           onOpen={openBrowserPreview}
+        />
+      ) : null}
+
+      {showContent && findOpen ? (
+        <ThreadFindBar
+          key={selectedThreadKey}
+          environmentId={props.environmentId}
+          threadId={props.selectedThread.id}
+          threadKey={selectedThreadKey}
+          top={navigationHeaderHeight}
         />
       ) : null}
 

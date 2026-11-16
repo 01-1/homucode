@@ -29,6 +29,7 @@ import {
   threadFeedCompactionLabels,
   createThreadFeedCache,
   deriveThreadFeedPresentation,
+  isFeedJumpTarget,
   messageFoldRunId,
   type ThreadFeedCache,
   type ThreadFeedEntry,
@@ -956,6 +957,18 @@ describe("buildThreadFeed", () => {
     expect(
       messageFoldRunId(buildThreadFeed([projected(userMessage(), 0)]), "message-user", []),
     ).toBe(null);
+    const plan = {
+      ...base("item-plan", "2026-06-20T00:00:02.000Z", 2),
+      type: "proposed_plan",
+      planId: "plan-1",
+      markdown: "Needle plan",
+      streaming: false,
+    } as OrchestrationV2TurnItem;
+    const planFeed = buildThreadFeed(
+      [userMessage(), plan, assistantMessage()].map((item, position) => projected(item, position)),
+    );
+    expect(planFeed.filter((entry) => isFeedJumpTarget(entry, "item-plan"))).toHaveLength(1);
+    expect(messageFoldRunId(planFeed, "item-plan", [])).toBe(runId);
   });
 
   it("folds progress messages while keeping the final assistant answer visible", () => {

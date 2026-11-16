@@ -21,6 +21,7 @@ export function ThreadHeader(props: {
   readonly hasThreadCwd: boolean;
   readonly inspectorMode: ThreadInspectorMode | null;
   readonly onOpenFilesInspector: () => void;
+  readonly onFindInThread?: (() => void) | undefined;
 }) {
   const goBack = useWorkspaceBackNavigation();
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
@@ -28,8 +29,19 @@ export function ThreadHeader(props: {
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
   const terminalMenu = threadTerminalMenu(props.gitControls);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
+  const findAction: AppBarAction[] = props.onFindInThread
+    ? [
+        {
+          accessibilityLabel: "Find in thread",
+          icon: "magnifyingglass",
+          separateBackground: false,
+          onPress: props.onFindInThread,
+        },
+      ]
+    : [];
   const actions: AppBarAction[] = props.hasThreadCwd
     ? [
+        ...findAction,
         {
           accessibilityLabel: filesVisible ? "Close files" : "Open files",
           icon: "folder",
@@ -39,7 +51,7 @@ export function ThreadHeader(props: {
           onPress: filesVisible ? toggleAuxiliaryPane : props.onOpenFilesInspector,
         },
       ]
-    : [];
+    : findAction;
   const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
 
   return (
