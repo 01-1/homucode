@@ -8253,15 +8253,32 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 const pending = threadClosings.get(nativeThreadId);
                 const closing = pending ?? (yield* Deferred.make<void>());
                 threadClosings.set(nativeThreadId, closing);
+                let unloaded = false;
                 if (pending === undefined || unloadInput.awaitClosed !== true) {
-                  yield* client.request("thread/unsubscribe", { threadId: nativeThreadId }).pipe(
-                    Effect.onError(() =>
-                      Effect.sync(() => {
-                        if (threadClosings.get(nativeThreadId) === closing)
-                          threadClosings.delete(nativeThreadId);
-                      }),
-                    ),
-                  );
+                  const response = yield* client
+                    .request("thread/unsubscribe", { threadId: nativeThreadId })
+                    .pipe(
+                      Effect.onError(() =>
+                        Effect.sync(() => {
+                          if (threadClosings.get(nativeThreadId) === closing)
+                            threadClosings.delete(nativeThreadId);
+                        }),
+                      ),
+                    );
+                  unloaded = response.status === "notLoaded";
+                  if (response.status === "notSubscribed" && unloadInput.awaitClosed === true) {
+                    unloaded = !(yield* readCodexThreadHistoryMetadata(client.raw, nativeThreadId))
+                      .loaded;
+                  }
+                } else {
+                  unloaded = !(yield* readCodexThreadHistoryMetadata(client.raw, nativeThreadId))
+                    .loaded;
+                }
+                if (unloaded) {
+                  closedNativeThreads.add(nativeThreadId);
+                  if (threadClosings.get(nativeThreadId) === closing)
+                    threadClosings.delete(nativeThreadId);
+                  yield* Deferred.succeed(closing, undefined);
                 }
                 if (unloadInput.awaitClosed === true) yield* Deferred.await(closing);
               }

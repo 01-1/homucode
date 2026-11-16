@@ -4183,6 +4183,71 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ),
   );
 
+  it.effect.each(["notLoaded", "notSubscribed"] as const)(
+    "transfers a native writer already absent from the old runtime (%s)",
+    (status) =>
+      Effect.gen(function* () {
+        const nativeThreadId = "already-unloaded-thread";
+        const harness = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario: `already-unloaded-${status}`,
+            entries: [
+              ...codexReplayPreamble({
+                nativeThreadId,
+                nativeTurnId: "unused-turn",
+                prompt: "unused-prompt",
+              }).slice(0, 5),
+              {
+                type: "expect_outbound",
+                label: "unsubscribe",
+                frame: {
+                  id: 3,
+                  method: "thread/unsubscribe",
+                  params: { threadId: nativeThreadId },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "unsubscribe result",
+                frame: { id: 3, result: { status } },
+              },
+              ...(status === "notSubscribed"
+                ? [
+                    {
+                      type: "expect_outbound" as const,
+                      label: "verify writer absent",
+                      frame: {
+                        id: 4,
+                        method: "thread/read",
+                        params: { threadId: nativeThreadId, includeTurns: false },
+                      },
+                    },
+                    {
+                      type: "emit_inbound" as const,
+                      label: "writer absent",
+                      frame: { id: 4, result: { thread: { status: { type: "notLoaded" } } } },
+                    },
+                  ]
+                : []),
+            ],
+          }),
+        );
+        yield* harness.runtime.unloadThread!({
+          providerThread: harness.providerThread,
+          awaitClosed: true,
+        });
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+  );
+
   // regression: #33747 Codex refuses thread/resume until an unsubscribed thread finishes closing
   it.effect.each([
     { name: "waits for thread/closed after a closing error", closedFirst: false },
