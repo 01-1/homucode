@@ -282,7 +282,7 @@
               ? "system"
               : storedFollowSystem === "false"
                 ? preferenceMode
-                : theme === "system"
+                : theme === "system" || theme === DEFAULT_THEME_ID
                   ? "system"
                   : preferenceMode;
           // A valid mix half for the wanted appearance takes over: it decides

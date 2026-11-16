@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { BUILT_IN_THEMES, LAVENDER_THEME } from "@t3tools/shared/themePalettes";
 import indexHtml from "../index.html?raw";
+import { readAppearanceModePreference, readThemePreference } from "./hooks/useTheme";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
   ENVIRONMENT_THEMES_STORAGE_KEY,
   getDefaultThemeColors,
   getThemeColorsForMode,
   invalidateCustomThemes,
-  isKnownThemePreference,
   publishedThemeDefinitions,
   resolveThemeAppearance,
   T3_CHAT_THEME,
@@ -109,22 +109,10 @@ function runtimeResolvedAppearance(
   });
   invalidateCustomThemes();
   try {
-    const raw = storage[THEME_STORAGE_KEY] ?? null;
-    const theme = raw !== null && isKnownThemePreference(raw) ? raw : "system";
-    const followRaw = storage[THEME_FOLLOW_SYSTEM_STORAGE_KEY] ?? null;
-    const appearanceRaw = storage[THEME_APPEARANCE_MODE_STORAGE_KEY] ?? null;
-    const appearanceMode =
-      appearanceRaw === "light" || appearanceRaw === "dark" || appearanceRaw === "system"
-        ? appearanceRaw
-        : followRaw === "true"
-          ? "system"
-          : followRaw === "false"
-            ? null
-            : theme === "system"
-              ? "system"
-              : null;
+    const theme = readThemePreference();
+    const appearanceMode = readAppearanceModePreference(theme);
     const followSystem = appearanceMode === "system";
-    return resolveThemeAppearance(theme, prefersDark, followSystem, appearanceMode ?? undefined);
+    return resolveThemeAppearance(theme, prefersDark, followSystem, appearanceMode);
   } finally {
     vi.unstubAllGlobals();
     invalidateCustomThemes();
@@ -184,6 +172,11 @@ describe("index.html boot script", () => {
     {
       name: "Iris follows a dark OS",
       storage: { [THEME_STORAGE_KEY]: "iris", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
+      prefersDark: true,
+    },
+    {
+      name: "a stored default palette with no appearance setting follows the OS",
+      storage: { [THEME_STORAGE_KEY]: "lavender" },
       prefersDark: true,
     },
     {
