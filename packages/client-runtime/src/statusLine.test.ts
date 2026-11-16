@@ -1,8 +1,13 @@
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
-import { buildStatusLineInput, parseAnsiLines, stampStatusLineInput } from "./statusLine.ts";
+import {
+  buildStatusLineInput,
+  parseAnsiLines,
+  stampStatusLineInput,
+  statusLineModelName,
+} from "./statusLine.ts";
 
 const plain = { background: null, bold: false, dim: false, italic: false, underline: false };
 
@@ -156,5 +161,16 @@ describe("buildStatusLineInput", () => {
         seven_day: { used_percentage: 43 },
       },
     });
+  });
+});
+
+describe("statusLineModelName", () => {
+  it.each([
+    ["Claude Opus 5.5", "Opus 5.5"],
+    ["GPT-6.1-Sol", "Sol 6.1"],
+    ["GPT-6-Astra", "Astra 6"],
+    ["claude-fable-5-2", "fable 5 2"],
+  ])("%s becomes %s", (name, expected) => {
+    expect(statusLineModelName(name)).toBe(expected);
   });
 });

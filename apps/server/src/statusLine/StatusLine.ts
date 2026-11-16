@@ -4,6 +4,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -44,6 +45,8 @@ function lastLines(text: string): string {
   return trimmed.length > MAX_ERROR_LENGTH ? trimmed.slice(-MAX_ERROR_LENGTH) : trimmed;
 }
 
+const encodeInput = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
 const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const runner = yield* ProcessRunner.ProcessRunner;
@@ -60,12 +63,13 @@ const make = Effect.gen(function* () {
             Effect.map((info) => info.type === "Directory"),
             Effect.orElseSucceed(() => false),
           );
+    const stdin = yield* encodeInput(input).pipe(Effect.orElseSucceed(() => "{}"));
     const spawn = yield* invocation(current.value.statusLineCommand);
     return yield* runner
       .run({
         ...spawn,
         cwd: isDirectory && requested !== null ? requested : yield* HostProcess.HomeDirectory,
-        stdin: JSON.stringify(input),
+        stdin,
         ignoreStdinErrors: true,
         timeout: TIMEOUT,
         maxOutputBytes: MAX_OUTPUT_BYTES,

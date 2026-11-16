@@ -1,6 +1,7 @@
 import type {
   ModelSelection,
   ServerProvider,
+  ServerProviderModel,
   ServerProviderUsageWindow,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
@@ -55,6 +56,34 @@ function rateLimit(
   };
 }
 
+/** "Claude Opus 5.5" and "GPT-6.1-Sol" become "Opus 5.5" and "Sol 6.1", the shape Claude Code reports. */
+export function statusLineModelName(name: string): string {
+  const words = name.split(/[\s-]+/).filter((word) => word !== "" && !/^(claude|gpt)$/i.test(word));
+  const versions = words.filter((word) => /^\d/.test(word));
+  const rest = words.filter((word) => !/^\d/.test(word));
+  return [...rest, ...versions].join(" ") || name;
+}
+
+function effortLevel(
+  selection: ModelSelection | null,
+  model: ServerProviderModel | undefined,
+): string | undefined {
+  const stated = REASONING_EFFORT_OPTION_IDS.map((id) =>
+    getModelSelectionStringOptionValue(selection, id),
+  ).find(Boolean);
+  if (stated !== undefined) return stated;
+  for (const id of REASONING_EFFORT_OPTION_IDS) {
+    const descriptor = model?.capabilities?.optionDescriptors?.find(
+      (candidate) => candidate.id === id,
+    );
+    if (descriptor?.type !== "select") continue;
+    const value =
+      descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 /** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
 export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
   const selection = source.modelSelection;
@@ -63,10 +92,8 @@ export function buildStatusLineInput(source: StatusLineInputSource): Record<stri
       ? undefined
       : source.providers.find((candidate) => candidate.instanceId === selection.instanceId);
   const model = provider?.models.find((candidate) => candidate.slug === selection?.model);
-  const displayName = (model?.name ?? selection?.model)?.replace(/^Claude\s+/i, "");
-  const effort = REASONING_EFFORT_OPTION_IDS.map((id) =>
-    getModelSelectionStringOptionValue(selection, id),
-  ).find(Boolean);
+  const displayName = statusLineModelName(model?.name ?? selection?.model ?? "");
+  const effort = effortLevel(selection, model);
   const fastMode = getModelSelectionBooleanOptionValue(selection, "fastMode");
   const context = source.contextWindow;
   const windows = usageWindows(source);
