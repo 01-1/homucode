@@ -162,7 +162,7 @@ function normalizeContextHandoffText(value: string): string {
 
 function normalizeFrame(value: unknown): unknown {
   if (typeof value === "string") {
-    return normalizeContextHandoffText(value);
+    return normalizeContextHandoffText(value.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, ""));
   }
   if (Array.isArray(value)) {
     return value.map(normalizeFrame);

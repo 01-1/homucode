@@ -89,6 +89,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function replayValueMatches(expected: unknown, actual: unknown): boolean {
   if (expected === MUSE_REPLAY_ANY) return true;
+  if (typeof expected === "string" && typeof actual === "string") {
+    return expected === actual.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, "");
+  }
   if (Array.isArray(expected)) {
     return (
       Array.isArray(actual) &&
