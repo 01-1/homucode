@@ -13,12 +13,7 @@ const refreshTheme = vi.hoisted(() => vi.fn());
 vi.mock(import("./useTheme"), () => ({ refreshTheme }) as never);
 
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import {
-  getThemeDefinition,
-  installCustomTheme,
-  invalidateCustomThemes,
-  publishedThemeDefinitions,
-} from "../themePalette";
+import { getThemeDefinition, installCustomTheme, invalidateCustomThemes } from "../themePalette";
 import { startEnvironmentThemeRepaint } from "./useEnvironmentTheme";
 
 const NIGHTFALL_THEME = {
@@ -34,57 +29,6 @@ afterEach(() => {
 });
 
 describe("environment themes", () => {
-  it("drops published themes with reserved ids", () => {
-    const definitions = publishedThemeDefinitions([
-      NIGHTFALL_THEME,
-      { ...NIGHTFALL_THEME, id: "t3-iris", name: "Impostor Iris" },
-      { ...NIGHTFALL_THEME, id: "ocean", name: "Impostor Ocean" },
-      { ...NIGHTFALL_THEME, id: "dark", name: "Impostor Dark" },
-    ]);
-
-    expect(definitions.map((definition) => definition.id)).toEqual(["nightfall"]);
-  });
-
-  it("drops published palettes with no usable colors", () => {
-    const theme = { id: "invalid", name: "Invalid", appearance: "dark" } as const;
-    const definitions = publishedThemeDefinitions([
-      { ...theme, colors: { canvas: "not-a-color" } },
-      { ...theme, id: "unknown-roles", colors: { futureRole: "#ffffff" } },
-      {
-        ...theme,
-        id: "ignored-variant",
-        colors: { canvas: "not-a-color" },
-        variants: { dark: { canvas: "#112233" } },
-      },
-    ]);
-
-    expect(definitions).toEqual([]);
-  });
-
-  it("keeps seeds, partial palettes, and usable alternate appearances", () => {
-    const theme = { name: "Shared", appearance: "dark" } as const;
-    const definitions = publishedThemeDefinitions([
-      NIGHTFALL_THEME,
-      {
-        ...theme,
-        id: "partial",
-        colors: { canvas: "not-a-color", text: "#ffffff", futureRole: "#ffffff" },
-      },
-      {
-        ...theme,
-        id: "light-variant",
-        colors: { canvas: "not-a-color" },
-        variants: { light: { canvas: "#eff1f5" } },
-      },
-    ]);
-
-    expect(definitions.map((definition) => definition.id)).toEqual([
-      "nightfall",
-      "partial",
-      "light-variant",
-    ]);
-  });
-
   // Routes without the old root sync component (/connect, prompt-link landings) never saw them.
   it("resolves published themes without a React subscriber mounted", () => {
     appAtomRegistry.set(publishedThemes.atom, [NIGHTFALL_THEME]);

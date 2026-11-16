@@ -72,7 +72,7 @@ export const THEME_CSS_HOOKS = [
 
 /** What an agent needs to restyle the app. `t3_theme_read` returns it. */
 export const THEME_GUIDE = [
-  "Themes restyle T3 Code on web and desktop. Mobile does not use them.",
+  "Themes restyle T3 Code on web, desktop, and mobile. Web and desktop apply colors and CSS; mobile applies colors only.",
   "",
   "Colors: `canvas` and `accent` (hex) derive a full palette. `colors` overrides single roles, and `variants.light` or `variants.dark` does that for the other appearance. Prefer colors over CSS.",
   `Roles: ${THEME_COLOR_ROLES.join(", ")}.`,

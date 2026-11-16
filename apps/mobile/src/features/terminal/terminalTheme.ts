@@ -1,3 +1,4 @@
+import type { ThemeDefinition } from "@t3tools/shared/themePalettes";
 import {
   getMobileThemeColors,
   getMobileThemeVariables,
@@ -97,11 +98,12 @@ function getPierreTerminalTheme(scheme: TerminalAppearanceScheme): TerminalTheme
 export function getMobileTerminalTheme(
   themeId: MobileThemeId,
   scheme: TerminalAppearanceScheme,
+  publishedThemes: ReadonlyArray<ThemeDefinition> = [],
 ): TerminalTheme {
   const base = getPierreTerminalTheme(scheme);
   const paletteId = themeId === "material-you" ? "t3-code" : themeId;
-  const palette = getMobileThemeColors(paletteId, scheme);
-  const colors = getMobileThemeVariables(paletteId, scheme);
+  const palette = getMobileThemeColors(paletteId, scheme, publishedThemes);
+  const colors = getMobileThemeVariables(paletteId, scheme, null, publishedThemes);
   const background = themeColorToNativeColor(palette.terminalBackground);
   return {
     ...base,

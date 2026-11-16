@@ -30,13 +30,14 @@ export function htmlRenderRowHeight(frameHeight: number) {
 }
 
 function useHtmlRenderTheme() {
-  const { themeId, themeAppearance, themeVariables, systemColorsActive } =
+  const { themeId, themeAppearance, themeVariables, systemColorsActive, publishedThemes } =
     useAppearancePreferences();
   return mobileHtmlRenderTheme({
     themeId,
     appearance: themeAppearance,
     variables: themeVariables,
     systemColors: systemColorsActive,
+    publishedThemes,
     platform: Platform.OS,
   });
 }
