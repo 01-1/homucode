@@ -102,8 +102,14 @@ function writeBase(environmentId: EnvironmentId, base: SyncedClientSettings): vo
   }
 }
 
-async function applyLocally(values: SyncedValues): Promise<void> {
-  const patch = clientSettingsPatchFromSyncedValues(values);
+/** Patches only what the merge changed, so edits made meanwhile survive the retry. */
+async function applyLocally(values: SyncedValues, local: SyncedValues): Promise<void> {
+  const changed = Object.fromEntries(
+    Object.entries(values).filter(
+      ([key, value]) => !syncedValuesEqual({ value }, { value: local[key] }),
+    ),
+  );
+  const patch = clientSettingsPatchFromSyncedValues(changed);
   await persistClientSettingsUpdate((current) => ({ ...current, ...patch }));
 }
 
@@ -173,7 +179,7 @@ async function syncOnce(): Promise<void> {
   }
   choices = null;
   setPrompt(null);
-  if (!syncedValuesEqual(resolved, local)) await applyLocally(resolved);
+  if (!syncedValuesEqual(resolved, local)) await applyLocally(resolved, local);
   if (syncedValuesEqual(resolved, remote.values)) {
     writeBase(environmentId, remote);
     return;
