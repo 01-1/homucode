@@ -224,7 +224,17 @@ const make = Effect.gen(function* () {
             });
             yield* fileSystem.writeFileString(
               entryPath,
-              duetDesktopEntry(executable, environment.linuxDesktopEntryName),
+              // The main app's launcher installs its icon here (DesktopPreReadyPlatform).
+              duetDesktopEntry(
+                executable,
+                environment.path.join(
+                  environment.homeDirectory,
+                  ".local",
+                  "share",
+                  "icons",
+                  `${environment.linuxDesktopEntryName}.png`,
+                ),
+              ),
             );
           } else if (yield* fileSystem.exists(entryPath)) yield* fileSystem.remove(entryPath);
         } else if (environment.platform === "win32") {

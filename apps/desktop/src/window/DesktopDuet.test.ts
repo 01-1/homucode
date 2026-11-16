@@ -41,6 +41,9 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
     expect(files.get(file)).toContain("Name=T3 Duet");
     expect(files.get(file)).toContain('Exec="/opt/Homu Code.AppImage" --duet');
     expect(files.get(file)).toContain("StartupWMClass=t3code-duet");
+    expect(files.get(file)).toContain(
+      "Icon=/home/user/.local/share/icons/com.t3tools.T3Code.desktop.png",
+    );
     yield* duet.configure({ enabled: true, launcherEnabled: false, environmentId: "local" });
     expect(files.has(file)).toBe(false);
     yield* duet.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
