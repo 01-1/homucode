@@ -276,7 +276,13 @@ function useServerResults(
   progressive: boolean,
 ) {
   const skillLabels = skills.map(({ name, displayName }) => ({ name, displayName }));
-  const plainUserText = !useClientSettings((settings) => settings.userMessageMarkdownEnabled);
+  const userTextFormat = useClientSettings((settings) =>
+    !settings.userMessageMarkdownEnabled
+      ? ("plain" as const)
+      : settings.userMessagePlusBullets
+        ? ("markdown" as const)
+        : ("literal-plus" as const),
+  );
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, 100);
   const environmentId = thread?.environmentId;
@@ -291,7 +297,7 @@ function useServerResults(
             ...(start ? { start } : {}),
             ...(offset !== 0 ? { offset } : {}),
             skills: skillLabels,
-            ...(plainUserText ? { plainUserText } : {}),
+            ...(userTextFormat !== "markdown" ? { userTextFormat } : {}),
           },
         }
       : null;

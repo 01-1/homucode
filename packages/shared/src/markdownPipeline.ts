@@ -887,3 +887,29 @@ export function decodeMarkdownLinkEscapes(href: string): string {
   }
   return isWindowsAbsolutePath(href) ? href : href.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 }
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const QUOTE_PREFIX = /^(?:[ \t]*>[ \t]?)*/;
+
+/** Escapes `+` list markers outside fenced code so they render as typed. */
+export function escapePlusListMarkers(markdown: string): string {
+  if (!markdown.includes("+")) return markdown;
+  let fence: string | null = null;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const prefix = QUOTE_PREFIX.exec(line)?.[0] ?? "";
+      const rest = line.slice(prefix.length);
+      const marker = FENCE.exec(rest)?.[1];
+      if (fence) {
+        if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+        return line;
+      }
+      if (marker) {
+        fence = marker;
+        return line;
+      }
+      return prefix + rest.replace(/^([ \t]*)\+(?=[ \t]|$)/, "$1\\+");
+    })
+    .join("\n");
+}

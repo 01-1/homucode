@@ -555,6 +555,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.userMessageMarkdownEnabled !== DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled
       ? ["Format sent messages as Markdown"]
       : []),
+    ...(settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets
+      ? ["Lines starting with + become bullets"]
+      : []),
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? ["Send shortcut"] : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
       ? ["Follow-up behavior"]
@@ -692,6 +695,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
+      userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility,
@@ -1282,6 +1286,32 @@ export function ChatSettingsPanel() {
                 updateSettings({ userMessageMarkdownEnabled: Boolean(checked) })
               }
               aria-label="Format sent messages as Markdown"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("user-message-plus-bullets")}
+          description="Off keeps a + at the start of a line in your sent messages as you typed it."
+          resetAction={
+            settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets ? (
+              <SettingResetButton
+                label="+ bullets"
+                onClick={() =>
+                  updateSettings({
+                    userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.userMessagePlusBullets}
+              disabled={!settings.userMessageMarkdownEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ userMessagePlusBullets: Boolean(checked) })
+              }
+              aria-label="Lines starting with + become bullets"
             />
           }
         />

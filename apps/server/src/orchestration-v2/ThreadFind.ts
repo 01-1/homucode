@@ -72,14 +72,14 @@ class TextKey extends Data.Class<{
   hasContext: boolean;
   cwd: string | undefined;
   skills: NonNullable<OrchestrationV2SearchThreadInput["skills"]>;
-  plainUserText: boolean;
+  userTextFormat: NonNullable<OrchestrationV2SearchThreadInput["userTextFormat"]>;
 }> {}
 
 function textKey(
   item: OrchestrationV2TurnItem,
   cwd: string | undefined,
   skills: TextKey["skills"],
-  plainUserText: boolean,
+  userTextFormat: TextKey["userTextFormat"],
 ) {
   return new TextKey({
     text:
@@ -94,7 +94,7 @@ function textKey(
     hasContext: item.type === "user_message" && item.context !== undefined,
     cwd,
     skills,
-    plainUserText: plainUserText && item.type === "user_message",
+    userTextFormat: item.type === "user_message" ? userTextFormat : "markdown",
   });
 }
 
@@ -110,7 +110,7 @@ function parseText(key: TextKey): readonly string[] {
         },
         key.cwd,
         key.skills,
-        key.plainUserText,
+        key.userTextFormat,
       ) ?? []);
 }
 
@@ -211,7 +211,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         cwd: Schema.optional(Schema.String),
         query: Schema.optional(Schema.String),
         skills: OrchestrationV2SearchThreadInput.fields.skills,
-        plainUserText: Schema.Boolean,
+        userTextFormat: Schema.String,
       }),
     ),
   );
@@ -327,7 +327,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         cwd,
         query: input.query,
         skills: input.skills ?? [],
-        plainUserText: input.plainUserText === true,
+        userTextFormat: input.userTextFormat ?? "markdown",
       });
       const cached = scans.get(cacheKey);
       if (cached && cached.sequence === (yield* readRevision(cached.sourceThreadIds))) {
@@ -340,7 +340,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         threadId,
         cwd,
         skills: input.skills ?? [],
-        plainUserText: input.plainUserText === true,
+        userTextFormat: input.userTextFormat ?? "markdown",
       });
       const rendered = renderedSnapshot.current;
       if (
@@ -460,7 +460,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
               decoded.item,
               cwd,
               input.skills ?? [],
-              input.plainUserText === true,
+              input.userTextFormat ?? "markdown",
             );
             const segments =
               decoded.item.type === "assistant_message" &&

@@ -21,6 +21,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { useClientSettings } from "../../hooks/useSettings";
+import { escapePlusListMarkers } from "@t3tools/shared/markdownPipeline";
 import { memo, use, useState, type ReactNode } from "react";
 import {
   createMessageAttachmentPreviewProjector,
@@ -1219,6 +1220,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
 }) {
   const ctx = use(TimelineRowCtx);
   const markdownEnabled = useClientSettings((settings) => settings.userMessageMarkdownEnabled);
+  const plusBullets = useClientSettings((settings) => settings.userMessagePlusBullets);
   if (props.text.length === 0) {
     return null;
   }
@@ -1232,7 +1234,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   }
   return (
     <ChatMarkdown
-      text={props.text}
+      text={plusBullets ? props.text : escapePlusListMarkers(props.text)}
       cwd={props.markdownCwd}
       threadRef={ctx.threadRef ?? undefined}
       skills={props.skills}
