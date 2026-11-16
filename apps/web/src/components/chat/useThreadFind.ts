@@ -278,10 +278,10 @@ function useServerResults(
   const skillLabels = skills.map(({ name, displayName }) => ({ name, displayName }));
   const userTextFormat = useClientSettings((settings) =>
     !settings.userMessageMarkdownEnabled
-      ? "plain"
+      ? ("plain" as const)
       : settings.userMessagePlusBullets
-        ? "markdown"
-        : "literal-plus",
+        ? ("markdown" as const)
+        : ("literal-plus" as const),
   );
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, 100);
