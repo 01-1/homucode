@@ -150,7 +150,7 @@ function decide(pr, exemptions, now) {
 }
 
 function guideLink(context, anchor) {
-  return `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CONTRIBUTING.md#${anchor}`;
+  return `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/upstream_contributing.md#${anchor}`;
 }
 
 async function removeLabel(github, context, number, name) {

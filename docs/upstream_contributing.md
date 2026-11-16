@@ -51,7 +51,7 @@ Report bugs in issues. Put feature requests in
 ## Rules for a PR
 
 These rules apply to every PR from outside the team, drafts included. The team is the logins in
-[.github/TRIAGE_EXEMPTIONS.td](.github/TRIAGE_EXEMPTIONS.td). A PR that follows the rules can still be
+[.github/TRIAGE_EXEMPTIONS.td](../.github/TRIAGE_EXEMPTIONS.td). A PR that follows the rules can still be
 closed. We do not owe a review or a merge.
 
 <a id="prior-approval"></a>
@@ -106,7 +106,7 @@ again.
 A PR that conflicts with its base branch gets a `needs-rebase` label. If it still conflicts after 7
 days with no activity, it is closed.
 
-Vouched contributors in [.github/VOUCHED.td](.github/VOUCHED.td) are exempt from this rule and from
+Vouched contributors in [.github/VOUCHED.td](../.github/VOUCHED.td) are exempt from this rule and from
 the open PR limit.
 
 ## Bans
@@ -115,7 +115,7 @@ the open PR limit.
 - If you make our lives harder as reviewers and maintainers, you will be banned. Examples are repeated
   pings, a fight over a closure, and a second account to get around a limit.
 
-A banned account is denounced in [.github/VOUCHED.td](.github/VOUCHED.td). Any issue or PR it opens
+A banned account is denounced in [.github/VOUCHED.td](../.github/VOUCHED.td). Any issue or PR it opens
 is closed when it is opened.
 
 <a id="closure-and-reconsideration"></a>
@@ -130,4 +130,4 @@ the old one.
 
 ## Setup
 
-See the [development runbook](docs/operations/development.md#first-checkout).
+See the [development runbook](operations/development.md#first-checkout).
