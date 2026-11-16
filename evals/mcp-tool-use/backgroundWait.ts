@@ -30,6 +30,7 @@ import * as OrchestratorMcpService from "../../apps/server/src/mcp/OrchestratorM
 import * as ThreadMetadataMcpService from "../../apps/server/src/mcp/ThreadMetadataMcpService.ts";
 import * as OrchestratorHandlers from "../../apps/server/src/mcp/toolkits/orchestrator/handlers.ts";
 import { OrchestratorToolkit } from "../../apps/server/src/mcp/toolkits/orchestrator/tools.ts";
+import * as AutoreviewService from "../../apps/server/src/orchestration-v2/AutoreviewService.ts";
 import * as CommandReceiptStore from "../../apps/server/src/orchestration-v2/CommandReceiptStore.ts";
 import * as Orchestrator from "../../apps/server/src/orchestration-v2/Orchestrator.ts";
 import * as ProviderSessionManager from "../../apps/server/src/orchestration-v2/ProviderSessionManager.ts";
@@ -99,6 +100,7 @@ export const makeBackgroundWait = Effect.fn("evaluateMcpToolUse.makeBackgroundWa
   const context = yield* Layer.build(
     McpHttpServer.toolkitRegistration(OrchestratorToolkit, OrchestratorHandlers.layer).pipe(
       Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+      Layer.provide(Layer.mock(AutoreviewService.AutoreviewService)({})),
       Layer.provide(Layer.mock(OrchestratorMcpService.OrchestratorMcpService)({})),
       Layer.provide(Layer.mock(ThreadMetadataMcpService.ThreadMetadataMcpService)({})),
       Layer.provide(threads),
