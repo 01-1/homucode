@@ -1,6 +1,6 @@
-# Homu Code
+# HomuCode
 
-Homu Code is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
+HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
 
 What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summarized in the [README](README.md#changes-compared-to-t3-code). Keep the fork's changes easy to carry across upstream merges: prefer small, contained edits to upstream code over rewrites.
 
@@ -38,7 +38,7 @@ T3 Code has 3 key app surfaces: **web**, **desktop**, and **mobile**.
 
 ## A note from Theo
 
-Theo leads upstream T3 Code. His note holds for Homu Code too.
+Theo leads upstream T3 Code. His note holds for HomuCode too.
 
 I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
 
@@ -46,14 +46,14 @@ Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to ho
 
 The rest of this document is meant to help you navigate the codebase and make changes effectively. Think of these instructions less as "hard rules", more as "good defaults". The developer's preferences should be able to override anything here.
 
-Of note: Most Homu Code contributions will come from Homu Code itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
+Of note: Most HomuCode contributions will come from HomuCode itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
 
 ## A small glossary
 
 We need to be on the same page with terminology. When communicating, use this language:
 
 - **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Homura (GitHub `01-1`), who maintains Homu Code. This is who you are talking to now.
+- **we, us, and maintainers** mean Homura (GitHub `01-1`), who maintains HomuCode. This is who you are talking to now.
 - **upstream maintainers** mean Theo, Julius and the people building T3 Code at `pingdotgg/t3code`.
 - **user** means the person using T3 Code to direct coding agents.
 - **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
@@ -160,8 +160,8 @@ For mobile verification, a missing or outdated native client is an install step,
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
-- PRs go to Homu Code (`01-1/homucode`) unless the developer asks for upstream. A PR to the upstream T3 Code repo (`pingdotgg/t3code`) must follow [docs/upstream_contributing.md](docs/upstream_contributing.md), upstream's contribution policy, and must not carry Homu Code-only changes.
-- Every user-visible change to Homu Code adds or updates its entry in [CHANGES.md](CHANGES.md), and the short summary in the [README](README.md#changes-compared-to-t3-code) when it changes what that summary says. Do this in the same PR. Internal refactors, tests and CI need no entry.
+- PRs go to HomuCode (`01-1/homucode`) unless the developer asks for upstream. A PR to the upstream T3 Code repo (`pingdotgg/t3code`) must follow [docs/upstream_contributing.md](docs/upstream_contributing.md), upstream's contribution policy, and must not carry HomuCode-only changes.
+- Every user-visible change to HomuCode adds or updates its entry in [CHANGES.md](CHANGES.md), and the short summary in the [README](README.md#changes-compared-to-t3-code) when it changes what that summary says. Do this in the same PR. Internal refactors, tests and CI need no entry.
 - `origin` is not always GitHub. Check `git remote get-url origin` before your first forge command and use that forge's CLI and skill. See [Forge mirror](docs/operations/development.md#forge-mirror-optional).
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.

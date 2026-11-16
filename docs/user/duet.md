@@ -12,7 +12,7 @@ In the desktop app, enable Duet's desktop app toggle to add its launcher. `--due
 
 ## Install MadoHomu
 
-[MadoHomu](https://github.com/01-1/madohomu) is a thin launcher for Duet. Its implementation and installer live in Homu Code. Installing it adds only the MadoHomu launcher, with Homu Code as its runtime dependency. It shares T3 Code's server, settings and threads.
+[MadoHomu](https://github.com/01-1/madohomu) is a thin launcher for Duet. Its implementation and installer live in HomuCode. Installing it adds only the MadoHomu launcher, with HomuCode as its runtime dependency. It shares T3 Code's server, settings and threads.
 
 On Linux with Node.js 22 or newer:
 
@@ -20,12 +20,12 @@ On Linux with Node.js 22 or newer:
 curl -fsSL https://raw.githubusercontent.com/01-1/homucode/main/scripts/install-madohomu.mjs | node --input-type=module
 ```
 
-The installer uses the latest Homu Code AppImage release. Until a release is available, use an AppImage built from the Duet branch:
+The installer uses the latest HomuCode AppImage release. Until a release is available, use an AppImage built from the Duet branch:
 
 ```bash
-MADOHOMU_RUNTIME=/absolute/path/to/Homu-Code.AppImage node scripts/install-madohomu.mjs
+MADOHOMU_RUNTIME=/absolute/path/to/HomuCode.AppImage node scripts/install-madohomu.mjs
 ```
 
-On Windows and macOS, use the desktop app toggle in Duet settings with your Homu Code desktop build.
+On Windows and macOS, use the desktop app toggle in Duet settings with your HomuCode desktop build.
 
 To remove the Linux launcher and its downloaded runtime, run `node scripts/install-madohomu.mjs --uninstall`. Your shared threads and settings stay available in T3 Code.

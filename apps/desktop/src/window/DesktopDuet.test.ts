@@ -39,7 +39,7 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
     expect(files.size).toBe(0);
     yield* duet.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
     expect(files.get(file)).toContain("Name=T3 Duet");
-    expect(files.get(file)).toContain('Exec="/opt/Homu Code.AppImage" --duet');
+    expect(files.get(file)).toContain('Exec="/opt/My Apps/HomuCode.AppImage" --duet');
     expect(files.get(file)).toContain("StartupWMClass=t3code-duet");
     expect(files.get(file)).toContain(
       "Icon=/home/user/.local/share/icons/com.t3tools.T3Code.desktop.png",
@@ -54,7 +54,7 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
       DesktopDuet.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
-            layerDesktopEnvironment("/opt/Homu Code.AppImage"),
+            layerDesktopEnvironment("/opt/My Apps/HomuCode.AppImage"),
             Layer.mock(ElectronWindow.ElectronWindow, {}),
             Layer.mock(DesktopWindow.DesktopWindow, {}),
             Layer.mock(ElectronShell.ElectronShell, {}),
