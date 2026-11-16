@@ -3,9 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 
 import {
+  buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
+  parseEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   type ThreadActionMenuState,
 } from "./threadActionMenu.logic";
@@ -45,6 +47,38 @@ describe("buildThreadActionMenuItems", () => {
     expect(move?.children?.map((item) => item.id)).toEqual([
       "move-to-project:destination",
       "move-to-new-project",
+    ]);
+    const elsewhereItems = buildThreadActionMenuItems({
+      ...state,
+      copyProjectOptions: { environmentId: "here", projects: [{ id: "local", title: "Local" }] },
+      moveEnvironmentOptions: buildMoveEnvironmentOptions({
+        sourceEnvironmentId: "here",
+        projects: [
+          { environmentId: "here", id: "local", title: "Local" },
+          { environmentId: "laptop", id: "app", title: "App" },
+          { environmentId: "laptop", id: "old", title: "Old", archivedAt: "2026-01-01" },
+          { environmentId: "viewer", id: "docs", title: "Docs" },
+        ],
+        environmentLabel: (environmentId) => (environmentId === "laptop" ? "Laptop" : null),
+        canOperate: (environmentId) => environmentId !== "viewer",
+      }),
+    });
+    const laptop = elsewhereItems.find((item) => item.id === "move-to-project")?.children?.at(-1);
+    // Running threads cannot be archived, which the cross-environment move ends with.
+    expect(laptop).toMatchObject({ label: "On Laptop", disabled: true });
+    expect(laptop?.children?.map((item) => parseEnvironmentProjectMenuId(item.id))).toEqual([
+      { action: "move", environmentId: "laptop", projectId: "app" },
+    ]);
+    // A copy leaves the source alone, so it stays available while running.
+    const copy = elsewhereItems.find((item) => item.id === "copy-to-project");
+    expect(copy?.children?.at(-1)?.disabled).not.toBe(true);
+    expect(
+      copy?.children?.flatMap((item) =>
+        (item.children ?? [item]).map((child) => parseEnvironmentProjectMenuId(child.id)),
+      ),
+    ).toEqual([
+      { action: "copy", environmentId: "here", projectId: "local" },
+      { action: "copy", environmentId: "laptop", projectId: "app" },
     ]);
     const denied = buildThreadActionMenuItems({ ...state, canOperate: false }).find(
       (item) => item.id === "move-to-project",

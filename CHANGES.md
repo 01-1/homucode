@@ -12,6 +12,7 @@ Everything Homu Code changes compared to upstream [T3 Code](https://github.com/p
 ## Threads and subagents
 
 - **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.
+- **Move or copy to another device.** "Move to project" in the thread menus also lists the projects on every other connected device you can operate, and "Copy to project" puts a copy in any project on this device or another one. The conversation (your messages and the agent's replies, not tool activity, attachments or the worktree) is rebuilt there and handed to the agent on the first turn; it uses the thread's model if that provider is there, else that device's default. A move then archives the original, which Undo brings back, so it can't run while the thread is working; a copy leaves the original alone. Web and desktop only.
 - **Sidebar folders.** Thread folders in the sidebar, ported from upstream PR #26714 without its mobile part.
 - **Stop.** Stop stops only the current thread. Shift-click, the background-work Stop or `/stopall` also stops its subagents.
 - **Who stopped a run.** Interrupt notices say whether a human (the app's Stop), an agent (MCP tools) or an unknown sender (the `t3` CLI, or a client that names no surface) stopped the run, also when it was stopped before its provider started.

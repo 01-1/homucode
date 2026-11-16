@@ -16,12 +16,16 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  type OrchestrationV2ThreadTranscript,
+  type ProjectId,
   type ScopedThreadRef,
   ThreadId,
+  type ThreadTranscriptImportInput,
   sessionGrantsScope,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
 import { useRouter } from "@tanstack/react-router";
@@ -33,6 +37,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentServerConfigsAtom } from "../state/server";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { orchestrationEnvironment } from "../state/orchestration";
+import { threadTranscriptImport } from "../state/agentSessions";
 import { projectEnvironment } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
 import { vcsEnvironment } from "../state/vcs";
@@ -253,6 +258,23 @@ function clearDeletedThreadPanelState(ref: ScopedThreadRef) {
   usePreviewMiniPlayerStore.getState().removeThread(ref);
 }
 
+/** The conversation another environment can rebuild a thread from; tool activity stays behind. */
+export function transcriptImportMessages(
+  transcript: OrchestrationV2ThreadTranscript,
+): ThreadTranscriptImportInput["messages"] {
+  return transcript.items.flatMap(({ item }) =>
+    (item.type === "user_message" || item.type === "assistant_message") && item.text.trim() !== ""
+      ? [
+          {
+            role: item.type === "user_message" ? ("user" as const) : ("assistant" as const),
+            text: item.text,
+            createdAt: DateTime.formatIso(item.startedAt ?? item.updatedAt),
+          },
+        ]
+      : [],
+  );
+}
+
 /** A No project thread that already has its own folder, on a server that can promote it. */
 export function canTurnThreadIntoProject(threadRef: ScopedThreadRef): boolean {
   const thread = readThreadShell(threadRef);
@@ -329,6 +351,12 @@ export function useThreadActions() {
   });
   const markThreadUnread = useMarkThreadUnread();
   const createProjectFromThread = useAtomCommand(projectEnvironment.createFromThread, {
+    reportFailure: false,
+  });
+  const loadThreadTranscript = useAtomCommand(orchestrationEnvironment.threadTranscript, {
+    reportFailure: false,
+  });
+  const importThreadTranscript = useAtomCommand(threadTranscriptImport, {
     reportFailure: false,
   });
   const stopThreadSession = useOrchestrationCommand(threadEnvironment.stopSession);
@@ -1028,6 +1056,38 @@ export function useThreadActions() {
     return deleteThread(target);
   };
 
+  /** Rebuilds the conversation in a project on any environment and opens the copy there. */
+  const copyThreadToProject = async (
+    target: ScopedThreadRef,
+    environmentId: EnvironmentId,
+    projectId: ProjectId,
+  ) => {
+    const thread = readThreadShell(target);
+    if (!thread) return AsyncResult.success(null);
+    const transcript = await loadThreadTranscript({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId },
+    });
+    if (transcript._tag === "Failure") return transcript;
+    const imported = await importThreadTranscript({
+      environmentId,
+      input: {
+        projectId,
+        title: thread.title,
+        modelSelection: thread.modelSelection,
+        messages: transcriptImportMessages(transcript.value),
+      },
+    });
+    if (imported._tag === "Failure") return imported;
+    await settlePromise(() =>
+      router.navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams({ environmentId, threadId: imported.value.threadId }),
+      }),
+    );
+    return AsyncResult.success(imported.value.threadId);
+  };
+
   return {
     archiveThread,
     unarchiveThread,
@@ -1089,6 +1149,21 @@ export function useThreadActions() {
         environmentId: target.environmentId,
         input: { threadId: target.threadId, projectId },
       }),
+    /**
+     * Rebuilds the conversation in a project on another environment, opens it there, and
+     * archives the source, which Undo restores. The new thread's first turn gets the history.
+     */
+    moveThreadToEnvironmentProject: async (
+      target: ScopedThreadRef,
+      environmentId: EnvironmentId,
+      projectId: ProjectId,
+    ) => {
+      const permissionFailure = threadOperationFailure(target);
+      if (permissionFailure) return permissionFailure;
+      const copied = await copyThreadToProject(target, environmentId, projectId);
+      return copied._tag === "Failure" || copied.value === null ? copied : archiveThread(target);
+    },
+    copyThreadToProject,
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({
         environmentId: target.environmentId,

@@ -36,6 +36,11 @@ export type ThreadActionMenuId =
   | "move-to-new-project"
   | "move-to-project"
   | `move-to-project:${string}`
+  | `move-to-environment:${string}`
+  | `move-to-environment-project:${string}`
+  | "copy-to-project"
+  | `copy-to-environment:${string}`
+  | `copy-to-project:${string}`
   | "move-to-root"
   | "move-under"
   | `move-under:${string}`
@@ -114,6 +119,17 @@ export interface ThreadActionMenuState {
   readonly move?: ThreadMoveOptions | null;
   /** The thread has running subagents, which plain Stop leaves running. */
   readonly moveProjectOptions?: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  /** Projects on other connected environments; moving there copies the conversation. */
+  readonly moveEnvironmentOptions?: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly label: string;
+    readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  }>;
+  /** The thread's own environment and its live projects; copies may also go to `moveEnvironmentOptions`. */
+  readonly copyProjectOptions?: {
+    readonly environmentId: string;
+    readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  };
   readonly hasRunningSubagents?: boolean;
 }
 
@@ -242,6 +258,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
 export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
+  const copyOptions = state.copyProjectOptions;
   const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
     ...(state.canFind
       ? [{ id: "find" as const, label: "Find in thread", icon: "text-search" }]
@@ -342,6 +359,41 @@ export function buildThreadActionMenuItems(
                 label: project.title,
               })),
               { id: "move-to-new-project" as const, label: "New project…" },
+              ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
+                id: `move-to-environment:${environment.environmentId}` as const,
+                label: `On ${environment.label}`,
+                separatorBefore: index === 0,
+                // The source is archived after the copy, and archive rejects a running thread.
+                disabled: state.isRunning,
+                children: environment.projects.map((project) => ({
+                  id: environmentProjectMenuId("move", environment.environmentId, project.id),
+                  label: project.title,
+                })),
+              })),
+            ],
+          },
+        ]
+      : []),
+    ...(copyOptions !== undefined
+      ? [
+          {
+            id: "copy-to-project" as const,
+            label: "Copy to project",
+            icon: "copy" as const,
+            children: [
+              ...copyOptions.projects.map((project) => ({
+                id: environmentProjectMenuId("copy", copyOptions.environmentId, project.id),
+                label: project.title,
+              })),
+              ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
+                id: `copy-to-environment:${environment.environmentId}` as const,
+                label: `On ${environment.label}`,
+                separatorBefore: index === 0 && copyOptions.projects.length > 0,
+                children: environment.projects.map((project) => ({
+                  id: environmentProjectMenuId("copy", environment.environmentId, project.id),
+                  label: project.title,
+                })),
+              })),
             ],
           },
         ]
@@ -428,4 +480,61 @@ export function buildThreadActionMenuItems(
             }
           : item,
       );
+}
+
+const ENVIRONMENT_PROJECT_PREFIX = {
+  move: "move-to-environment-project:",
+  copy: "copy-to-project:",
+} as const;
+
+function environmentProjectMenuId<A extends keyof typeof ENVIRONMENT_PROJECT_PREFIX>(
+  action: A,
+  environmentId: string,
+  projectId: string,
+): `${(typeof ENVIRONMENT_PROJECT_PREFIX)[A]}${string}` {
+  return `${ENVIRONMENT_PROJECT_PREFIX[action]}${JSON.stringify([environmentId, projectId])}`;
+}
+
+/** A move to another environment's project, or a copy to any environment's project. */
+export function parseEnvironmentProjectMenuId(id: string): {
+  readonly action: keyof typeof ENVIRONMENT_PROJECT_PREFIX;
+  readonly environmentId: string;
+  readonly projectId: string;
+} | null {
+  for (const action of ["move", "copy"] as const) {
+    const prefix = ENVIRONMENT_PROJECT_PREFIX[action];
+    if (!id.startsWith(prefix)) continue;
+    const [environmentId, projectId] = JSON.parse(id.slice(prefix.length)) as [string, string];
+    return { action, environmentId, projectId };
+  }
+  return null;
+}
+
+/** Other connected environments' live projects, for moving a thread off its own environment. */
+export function buildMoveEnvironmentOptions<E extends string>(input: {
+  readonly sourceEnvironmentId: E;
+  readonly projects: ReadonlyArray<{
+    readonly environmentId: E;
+    readonly id: string;
+    readonly title: string;
+    readonly archivedAt?: unknown;
+  }>;
+  readonly environmentLabel: (environmentId: E) => string | null;
+  readonly canOperate: (environmentId: E) => boolean;
+}): NonNullable<ThreadActionMenuState["moveEnvironmentOptions"]> {
+  const byEnvironment = new Map<E, Array<{ readonly id: string; readonly title: string }>>();
+  for (const project of input.projects) {
+    if (project.environmentId === input.sourceEnvironmentId || project.archivedAt) continue;
+    if (!input.canOperate(project.environmentId)) continue;
+    const projects = byEnvironment.get(project.environmentId) ?? [];
+    projects.push({ id: project.id, title: project.title });
+    byEnvironment.set(project.environmentId, projects);
+  }
+  return [...byEnvironment]
+    .map(([environmentId, projects]) => ({
+      environmentId,
+      label: input.environmentLabel(environmentId) ?? "Remote",
+      projects,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }

@@ -208,9 +208,11 @@ import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
   buildDraftActionMenuItems,
+  buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
+  parseEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
@@ -1036,6 +1038,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     deleteThread,
     moveThread,
     moveThreadToProject,
+    moveThreadToEnvironmentProject,
+    copyThreadToProject,
     moveThreadToNewProject,
     stopThreadWithSubagents,
   } = useThreadActions();
@@ -3274,6 +3278,23 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     !project.archivedAt,
                 )
                 .map((project) => ({ id: project.id, title: project.title })),
+              copyProjectOptions: {
+                environmentId: threadRef.environmentId,
+                projects: [...projectByKey.values()]
+                  .filter(
+                    (project) =>
+                      project.environmentId === threadRef.environmentId && !project.archivedAt,
+                  )
+                  .map((project) => ({ id: project.id, title: project.title })),
+              },
+              moveEnvironmentOptions: buildMoveEnvironmentOptions({
+                sourceEnvironmentId: threadRef.environmentId,
+                projects: [...projectByKey.values()],
+                environmentLabel: (environmentId) =>
+                  environmentLabelById.get(environmentId) ?? null,
+                canOperate: (environmentId) =>
+                  readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
+              }),
               move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
               hasRunningSubagents: hasRunningSubagents(
                 thread.id,
@@ -3306,6 +3327,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }
         if (clicked.value === "move-to-new-project") {
           await moveThreadToNewProject(threadRef);
+          return;
+        }
+        const environmentProject = parseEnvironmentProjectMenuId(clicked.value);
+        if (environmentProject !== null) {
+          const moved = await (
+            environmentProject.action === "copy"
+              ? copyThreadToProject
+              : moveThreadToEnvironmentProject
+          )(
+            threadRef,
+            environmentProject.environmentId as EnvironmentId,
+            environmentProject.projectId as ProjectId,
+          );
+          if (moved._tag === "Failure" && !isAtomCommandInterrupted(moved)) {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: `Failed to ${environmentProject.action} thread`,
+                description: String(squashAtomCommandFailure(moved)),
+              }),
+            );
+          }
           return;
         }
         if (clicked.value.startsWith("move-to-project:")) {
