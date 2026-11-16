@@ -518,6 +518,7 @@ it.effect.each([
   "starting-other-request",
   "starting-own-request",
   "starting-scheduled",
+  "starting-memory",
   "starting-steered",
   "running",
   "running-delegated",
@@ -531,7 +532,10 @@ it.effect.each([
     : scenario.startsWith("running")
       ? "running"
       : scenario;
-  const resent = scenario === "starting-scheduled" || scenario === "running-delegated";
+  const resent =
+    scenario === "starting-scheduled" ||
+    scenario === "starting-memory" ||
+    scenario === "running-delegated";
   const terminalized =
     status === "preparing" ||
     scenario === "starting-own-request" ||
@@ -602,6 +606,9 @@ it.effect.each([
       {
         id: runId,
         status,
+        ...(scenario === "starting-memory"
+          ? { memoryWaiting: true, requestedAt: DateTime.makeUnsafe("2026-11-01T19:34:00.000Z") }
+          : {}),
         startedAt,
         rootNodeId,
         activeAttemptId: attemptId,

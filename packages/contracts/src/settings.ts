@@ -16,6 +16,7 @@ import {
   EnvironmentId,
   ForwardCompatibleNullable,
   NonNegativeInt,
+  PositiveInt,
   ForwardCompatibleOptional,
   OmittedWhenNull,
   ProjectId,
@@ -1420,7 +1421,28 @@ export const DuetThreadSettings = Schema.Struct({
 });
 export type DuetThreadSettings = typeof DuetThreadSettings.Type;
 
+export const AgentMemorySettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  perAgentHighBytes: PositiveInt.pipe(Schema.withDecodingDefault(Effect.succeed(6 * 1024 ** 3))),
+  perAgentMaxBytes: PositiveInt.pipe(Schema.withDecodingDefault(Effect.succeed(8 * 1024 ** 3))),
+  groupHighBytes: Schema.NullOr(PositiveInt).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  groupMaxBytes: Schema.NullOr(PositiveInt).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  minimumReservationBytes: PositiveInt.pipe(Schema.withDecodingDefault(Effect.succeed(1024 ** 3))),
+  headroomPercent: NonNegativeInt.check(Schema.isLessThanOrEqualTo(1000)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(10)),
+  ),
+  pollIntervalMs: PositiveInt.check(
+    Schema.isGreaterThanOrEqualTo(100),
+    Schema.isLessThanOrEqualTo(60_000),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(2000))),
+});
+export type AgentMemorySettings = typeof AgentMemorySettings.Type;
+export const DEFAULT_AGENT_MEMORY_SETTINGS = Schema.decodeSync(AgentMemorySettings)({});
+
 export const ServerSettings = Schema.Struct({
+  agentMemory: AgentMemorySettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS)),
+  ),
   syncedClientSettings: SyncedClientSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({ revision: 0, values: {} })),
   ),
@@ -1898,6 +1920,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  agentMemory: Schema.optionalKey(AgentMemorySettings.mapFields(Struct.map(Schema.optionalKey))),
   setModelFavorites: Schema.optionalKey(
     Schema.Array(Schema.Struct({ ...ModelFavorite.fields, favorite: Schema.Boolean })),
   ),

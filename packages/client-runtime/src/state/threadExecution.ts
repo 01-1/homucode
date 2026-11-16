@@ -110,6 +110,7 @@ function providerStartingLabel(
   projection: ThreadStructure,
   run: OrchestrationV2ThreadProjection["runs"][number],
 ): string {
+  if (run.memoryWaiting === true) return "Waiting for memory";
   const driver = projection.providerSessions.findLast(
     (session) => session.providerInstanceId === run.providerInstanceId,
   )?.driver;

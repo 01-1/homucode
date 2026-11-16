@@ -212,6 +212,7 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ServerSettings from "../serverSettings.ts";
+import { AgentMemory } from "@t3tools/shared/AgentScope";
 
 const isMessageQuestionAnswer = Schema.is(
   Schema.Union([TrimmedNonEmptyString, Schema.NonEmptyArray(TrimmedNonEmptyString)]),
@@ -1608,6 +1609,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const providerSessions = yield* ProviderSessionManagerV2;
   const providerSwitchService = yield* ProviderSwitchServiceV2;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const agentMemory = yield* AgentMemory;
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
@@ -1697,16 +1699,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   }) =>
     input.adapter.getCapabilities().pipe(
       Effect.flatMap((capabilities) =>
-        capabilities.sessions.supportsMultipleProviderThreadsPerSession
-          ? Effect.succeed(
-              idAllocator.derive.providerSession({
-                providerInstanceId: input.providerInstanceId,
-              }),
-            )
-          : idAllocator.allocate.providerSession({
-              providerInstanceId: input.providerInstanceId,
-              threadId: input.threadId,
-            }),
+        agentMemory.settings.pipe(
+          Effect.flatMap((memory) =>
+            capabilities.sessions.supportsMultipleProviderThreadsPerSession
+              ? Effect.succeed(
+                  idAllocator.derive.providerSession({
+                    providerInstanceId: input.providerInstanceId,
+                    ...(memory.enabled && input.adapter.driver === "codex"
+                      ? { threadId: input.threadId }
+                      : {}),
+                  }),
+                )
+              : idAllocator.allocate.providerSession({
+                  providerInstanceId: input.providerInstanceId,
+                  threadId: input.threadId,
+                }),
+          ),
+        ),
       ),
     );
 

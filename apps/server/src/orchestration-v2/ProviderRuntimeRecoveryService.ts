@@ -396,7 +396,7 @@ export const make = Effect.gen(function* () {
       const unstartedRuns = runs.filter(
         (run) =>
           run.status === "starting" &&
-          neverStarted(run) &&
+          (neverStarted(run) || run.memoryWaiting === true) &&
           !projection.providerTurns.some((turn) => turn.runAttemptId === run.activeAttemptId) &&
           !projection.runtimeRequests.some(
             (request) =>
@@ -441,12 +441,14 @@ export const make = Effect.gen(function* () {
           .map((message) => message.id),
       );
       // A saved user message the provider never accepted stays available through the held queue.
-      const retryableRuns = unstartedRuns.filter((run) =>
-        retryableMessageIds.has(run.userMessageId),
+      const retryableRuns = unstartedRuns.filter(
+        (run) => retryableMessageIds.has(run.userMessageId) && run.memoryWaiting !== true,
       );
       // Nobody reviews a delegated, agent-sent or scheduled prompt, so it is sent again instead.
-      const unattendedRuns = continueAfterRestart
-        ? unstartedRuns.filter((run) =>
+      const unattendedRuns = unstartedRuns.filter(
+        (run) =>
+          run.memoryWaiting === true ||
+          (continueAfterRestart &&
             queuedMessages.some(
               (message) =>
                 message.id === run.userMessageId &&
@@ -454,9 +456,8 @@ export const make = Effect.gen(function* () {
                 message.notification === undefined &&
                 message.delegatedCompletion === undefined &&
                 (message.scheduledTaskId !== undefined || message.creationSource === "mcp"),
-            ),
-          )
-        : [];
+            )),
+      );
       const resentRuns: Array<OrchestrationV2ThreadProjection["runs"][number]> = [];
       const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
       for (const run of unattendedRuns) {
@@ -486,7 +487,10 @@ export const make = Effect.gen(function* () {
           ),
         );
         // A prompt whose start keeps crashing the server would otherwise be sent forever.
-        if (earlierResends.filter((effect) => effect.attemptCount > 0).length >= MAX_RESENDS) {
+        if (
+          run.memoryWaiting !== true &&
+          earlierResends.filter((effect) => effect.attemptCount > 0).length >= MAX_RESENDS
+        ) {
           yield* Effect.logWarning("Not resending a prompt that restarts cut too many times", {
             threadId: projection.thread.id,
             runId: run.id,
@@ -499,6 +503,7 @@ export const make = Effect.gen(function* () {
           commandId: resendCommandId,
           threadId: projection.thread.id,
           request: { type: "provider-turn.start", runId: run.id },
+          ...(run.memoryWaiting === true ? { availableAt: run.requestedAt } : {}),
         });
       }
       for (const run of resentRuns) {

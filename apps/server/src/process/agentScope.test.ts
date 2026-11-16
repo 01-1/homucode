@@ -5,7 +5,8 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { AgentScope } from "@t3tools/shared/AgentScope";
+import { AgentScope, AgentMemory } from "@t3tools/shared/AgentScope";
+import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -67,11 +68,13 @@ const withFakeSystemd = <A, E>(
     stopFails = false,
     leftovers = false,
     liveOwner = false,
+    memorySettings,
   }: {
     readonly oomPolicy?: boolean;
     readonly stopFails?: boolean;
     readonly leftovers?: boolean;
     readonly liveOwner?: boolean;
+    readonly memorySettings?: AgentMemorySettings;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -126,6 +129,12 @@ const withFakeSystemd = <A, E>(
       units.set(ownedAgentSlice(stateDir), { activeState: "active", result: "success" });
     }
     const scope = yield* make.pipe(
+      Effect.provideService(AgentMemory, {
+        ...AgentMemory.defaultValue(),
+        settings: Effect.succeed(
+          memorySettings ?? { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false },
+        ),
+      }),
       Effect.provideService(ProviderProcesses.ProviderProcesses, { hasOtherLiveOwner: liveOwner }),
       Effect.provideService(ProcessRunner.ProcessRunner, runner),
       Effect.provideService(HostProcess.Platform, "linux"),
@@ -195,6 +204,35 @@ const launchCodex = (scope: Effect.Success<typeof make>, threadId: string) =>
   );
 
 describe("AgentScope service", () => {
+  it.effect("applies configurable scope caps underneath the group cap", () =>
+    withFakeSystemd(
+      ({ scope }) =>
+        Effect.gen(function* () {
+          const launch = yield* scope.wrap({
+            command: "agent",
+            args: [],
+            name: "claude",
+            threadId: "a",
+          });
+          expect(launch.args).toContain(`--property=MemoryHigh=${2 * GiB}`);
+          expect(launch.args).toContain(`--property=MemoryMax=${4 * GiB}`);
+          const terminal = yield* scope.wrap({
+            command: "agent",
+            args: [],
+            name: "terminal",
+            survivesRestart: true,
+          });
+          expect(terminal.args.some((arg) => arg.startsWith("--property=MemoryMax="))).toBe(false);
+        }),
+      {
+        memorySettings: {
+          ...DEFAULT_AGENT_MEMORY_SETTINGS,
+          groupHighBytes: 2 * GiB,
+          groupMaxBytes: 4 * GiB,
+        },
+      },
+    ),
+  );
   it.effect("labels a thread from its newest scope until its next session clears it", () =>
     withFakeSystemd(({ scope, units }) =>
       Effect.gen(function* () {

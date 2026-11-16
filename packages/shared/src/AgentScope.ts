@@ -1,5 +1,23 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tools/contracts";
+
+export class AgentMemory extends Context.Reference<{
+  readonly settings: Effect.Effect<AgentMemorySettings>;
+  readonly track: (unit: string, threadId: string | undefined) => Effect.Effect<void>;
+  readonly acquire: (input: {
+    readonly id: string;
+    readonly threadId: string;
+    readonly requestedAt: number;
+    readonly onWaiting: Effect.Effect<void>;
+  }) => Effect.Effect<Effect.Effect<void>>;
+}>("@t3tools/shared/AgentMemory", {
+  defaultValue: () => ({
+    settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false }),
+    track: () => Effect.void,
+    acquire: () => Effect.succeed(Effect.void),
+  }),
+}) {}
 
 export interface AgentScopeShape {
   readonly wrap: (input: {

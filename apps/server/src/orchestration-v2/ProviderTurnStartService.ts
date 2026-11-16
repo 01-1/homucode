@@ -2,6 +2,7 @@ import { duetThreadContext } from "./DuetThreadContext.ts";
 import { withSentFromLine } from "./MessageSentFrom.ts";
 import { withMessageTimestamp } from "./MessageTimestamp.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
+import { AgentMemory } from "@t3tools/shared/AgentScope";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import {
   CommandId,
@@ -203,6 +204,7 @@ export const layer: Layer.Layer<
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     const restoreMissingWorktree = yield* makeRestoreMissingWorktree;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
+    const memory = yield* AgentMemory;
 
     // Build draining callbacks outside startup scope so they cannot retain full thread history.
     const makeRunControls = (input: {
@@ -669,7 +671,16 @@ export const layer: Layer.Layer<
         return;
       }
       const inheritedBackgroundTurnItems = selectInheritedBackgroundItems(recoveryResult.success);
-      const providerSessionId = providerThread.providerSessionId;
+      const providerSessionId =
+        (yield* memory.settings).enabled &&
+        providerThread.driver === "codex" &&
+        providerThread.providerSessionId ===
+          idAllocator.derive.providerSession({ providerInstanceId: run.providerInstanceId })
+          ? idAllocator.derive.providerSession({
+              providerInstanceId: run.providerInstanceId,
+              threadId: input.threadId,
+            })
+          : providerThread.providerSessionId;
       const runControls = makeRunControls({
         threadId: projection.thread.id,
         runId: run.id,
@@ -1572,6 +1583,7 @@ export const layer: Layer.Layer<
       };
       const runningRun: OrchestrationV2Run = {
         ...run,
+        memoryWaiting: false,
         status: "running",
         startedAt: run.startedAt ?? now,
       };
@@ -1883,44 +1895,87 @@ export const layer: Layer.Layer<
           const captureStartingRun = (run: OrchestrationV2Run) => {
             startingRun = run;
           };
-          return yield* Effect.gen(function* () {
-            // Storage cleanup removes worktrees under the same lease. Only startup
-            // holds it; the provider turn runs after it is released.
-            const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
-            const cwd =
-              thread.worktreePath ??
-              (yield* projects
-                .getById(thread.projectId, { includeDeleted: true })
-                .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot)));
-            const providerTurn = yield* cwd === undefined
-              ? start(input, captureStartingRun)
-              : withTurnStartReservation(
-                  fileSystem,
-                  path,
-                  path.resolve(cwd),
-                  thread.worktreePath === null
-                    ? start(input, captureStartingRun)
-                    : withWorkspaceLease(
-                        path.resolve(thread.worktreePath),
-                        start(input, captureStartingRun),
-                      ),
-                );
-            if (providerTurn !== undefined) {
-              // Run execution owns finalization after the running write. A later
-              // failure must not settle a replacement attempt committed by steering.
-              yield* providerTurn.pipe(
-                Effect.catchCauseIf(
-                  (cause) => !Cause.hasInterruptsOnly(cause),
-                  (cause) =>
-                    Effect.logWarning(
-                      "Run execution failed after starting",
-                      { runId: input.runId },
-                      cause,
+          const acquireMemory = Effect.gen(function* () {
+            if (!(yield* memory.settings).enabled) return Effect.void;
+            const queuedRun = yield* projectionStore.getRun(input.threadId, input.runId);
+            if (queuedRun === undefined || queuedRun.status !== "starting") return Effect.void;
+            const onWaiting = Effect.gen(function* () {
+              const run = yield* projectionStore.getRun(input.threadId, input.runId);
+              if (
+                run === undefined ||
+                run.activeAttemptId === null ||
+                run.status !== "starting" ||
+                run.memoryWaiting === true
+              )
+                return;
+              const now = yield* DateTime.now;
+              yield* eventSink.writeIfRunCurrent({
+                threadId: input.threadId,
+                runId: input.runId,
+                activeAttemptId: run.activeAttemptId,
+                expectedStatus: "starting",
+                events: [
+                  {
+                    id: yield* idAllocator.allocate.event({ threadId: input.threadId }),
+                    type: "run.updated",
+                    threadId: input.threadId,
+                    runId: input.runId,
+                    occurredAt: now,
+                    payload: { ...run, memoryWaiting: true },
+                  },
+                ],
+              });
+            }).pipe(Effect.orDie);
+            return yield* memory.acquire({
+              id: input.runId,
+              threadId: input.threadId,
+              requestedAt: DateTime.toEpochMillis(queuedRun.requestedAt),
+              onWaiting,
+            });
+          });
+          return yield* Effect.acquireUseRelease(
+            acquireMemory,
+            () =>
+              Effect.gen(function* () {
+                // Storage cleanup removes worktrees under the same lease. Only startup
+                // holds it; the provider turn runs after it is released.
+                const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
+                const cwd =
+                  thread.worktreePath ??
+                  (yield* projects
+                    .getById(thread.projectId, { includeDeleted: true })
+                    .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot)));
+                const providerTurn = yield* cwd === undefined
+                  ? start(input, captureStartingRun)
+                  : withTurnStartReservation(
+                      fileSystem,
+                      path,
+                      path.resolve(cwd),
+                      thread.worktreePath === null
+                        ? start(input, captureStartingRun)
+                        : withWorkspaceLease(
+                            path.resolve(thread.worktreePath),
+                            start(input, captureStartingRun),
+                          ),
+                    );
+                if (providerTurn !== undefined) {
+                  // Run execution owns finalization after the running write. A later
+                  // failure must not settle a replacement attempt committed by steering.
+                  yield* providerTurn.pipe(
+                    Effect.catchCauseIf(
+                      (cause) => !Cause.hasInterruptsOnly(cause),
+                      (cause) =>
+                        Effect.logWarning(
+                          "Run execution failed after starting",
+                          { runId: input.runId },
+                          cause,
+                        ),
                     ),
-                ),
-              );
-            }
-          }).pipe(
+                  );
+                }
+              }),
+            (release) => release,
+          ).pipe(
             Effect.catchCauseIf(
               (cause) => !Cause.hasInterruptsOnly(cause),
               (cause) =>
