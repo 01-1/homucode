@@ -288,28 +288,27 @@ export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* 
   return (row?.latestId ?? 0) < latestMigrationId || (row?.previewRows ?? 0) > 0;
 });
 
+const LEGACY_HOMU_MIGRATIONS = new Map<number, string>([
+  [82, "ThreadCompletionOutbox"],
+  [83, "WorkAssistanceContinuity"],
+  [84, "ProjectRouterNotices"],
+  [85, "ThreadFolders"],
+  [86, "ThreadFolderRules"],
+]);
+
+// Older Homu builds recorded their own migrations at 82-86; drop those rows so they rerun as 96-100.
 export function reconciledHomuMigrationHistory(
   recorded: ReadonlyArray<{ readonly id: number; readonly name: string }>,
 ) {
-  const legacy = [
-    [82, "ThreadCompletionOutbox"],
-    [83, "WorkAssistanceContinuity"],
-    [84, "ProjectRouterNotices"],
-    [85, "ThreadFolders"],
-    [86, "ThreadFolderRules"],
-  ] as const;
-  const suffix = recorded.filter(({ id }) => id > 80).toSorted((a, b) => a.id - b.id);
-  const prefix = recorded.filter(({ id }) => id <= 80);
+  const kept = recorded.filter(({ id, name }) => LEGACY_HOMU_MIGRATIONS.get(id) !== name);
   if (
-    suffix.length === 0 ||
-    !suffix.every(
-      (row, index) => row.id === legacy[index]?.[0] && row.name === legacy[index]?.[1],
-    ) ||
-    !prefix.some(({ id }) => id === 80) ||
-    skippedV2Migrations(prefix).length > 0
+    recorded.length - kept.length !== LEGACY_HOMU_MIGRATIONS.size ||
+    !kept.some(({ id }) => id === 80) ||
+    kept.some(({ id }) => id > 81) ||
+    skippedV2Migrations(kept).length > 0
   )
     return recorded;
-  return prefix;
+  return kept;
 }
 
 const reconcileHomuMigrationHistory = Effect.fn("reconcileHomuMigrationHistory")(function* () {
@@ -327,7 +326,7 @@ const reconcileHomuMigrationHistory = Effect.fn("reconcileHomuMigrationHistory")
     Effect.gen(function* () {
       const current = yield* history;
       if (reconciledHomuMigrationHistory(current) === current) return;
-      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id > 80`;
+      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id BETWEEN 82 AND 86`;
     }),
   );
 });
