@@ -82,6 +82,8 @@ export function composerCommandKeyHandler(input: {
     dispatchMode: ComposerDispatchMode,
     submissionIntent: ComposerSubmissionIntent,
   ) => void;
+  /** Ctrl+Enter on an empty composer steers the whole queue; true when it did. */
+  readonly steerAllQueued: () => boolean;
   /** Predicted next prompt that Tab fills into an empty composer; Escape dismisses it. */
   readonly promptSuggestion: string | null;
   readonly dismissPromptSuggestion: () => void;
@@ -120,6 +122,7 @@ export function composerCommandKeyHandler(input: {
     readComposerSnapshot,
     applyPromptReplacement,
     submitComposer,
+    steerAllQueued,
     promptSuggestion,
     dismissPromptSuggestion,
   } = input;
@@ -260,6 +263,7 @@ export function composerCommandKeyHandler(input: {
     if ((key === "ArrowUp" || key === "ArrowDown") && submissionIntent === null) {
       return navigatePromptHistory(key === "ArrowUp" ? "backward" : "forward", event);
     }
+    if (submissionIntent === "alternate" && steerAllQueued()) return true;
     if (submissionIntent) {
       submitComposer(
         undefined,

@@ -1,13 +1,14 @@
 import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import * as DateTime from "effect/DateTime";
-import type { ComponentProps } from "react";
+import { createRef, type ComponentProps } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 const state = vi.hoisted(() => ({
   projection: null as unknown,
   workflow: null as unknown,
+  commandInputs: [] as unknown[],
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -31,7 +32,10 @@ vi.mock(import("../../state/query"), async (importOriginal) => ({
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => async () => undefined) as never,
+  useAtomCommand: (() => async (value: unknown) => {
+    state.commandInputs.push(value);
+    return { _tag: "Success" };
+  }) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -42,11 +46,12 @@ vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
 
 import "~/index.css";
 import { render as renderUi } from "../../../test/render";
-import { QueuedRunsControl } from "./QueuedRunsControl";
+import { QueuedRunsControl, type QueuedRunsControlHandle } from "./QueuedRunsControl";
 
 function setup() {
   state.projection = null;
   state.workflow = null;
+  state.commandInputs = [];
 }
 
 const baseProps = {
@@ -202,4 +207,35 @@ it("stays inside the timeline scroller instead of growing the chat column", asyn
   await expect.element(page.getByText("Later", { exact: true })).toBeInTheDocument();
   const column = screen.getByTestId("column").element();
   expect(column.scrollHeight).toBe(column.clientHeight);
+});
+
+it("steers the whole queue in order and stops before a message that starts its own turn", async () => {
+  setup();
+  state.projection = { projection: { messages: [] } };
+  const queuedRun = (id: string, run: object = {}) => ({
+    run: { id, userMessageId: `message:${id}`, ...run },
+    text: id,
+    attachments: [],
+  });
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: [
+      queuedRun("run:first"),
+      queuedRun("run:second"),
+      queuedRun("run:fresh", { freshContext: true }),
+      queuedRun("run:after-fresh"),
+    ],
+  };
+  const ref = createRef<QueuedRunsControlHandle>();
+  await using _screen = await renderQueue({ ref });
+
+  expect(ref.current?.steerAll()).toBe(true);
+  await vi.waitFor(() => expect(state.commandInputs).toHaveLength(2));
+  expect(state.commandInputs).toEqual(
+    ["run:first", "run:second"].map((queuedRunId) => ({
+      environmentId: "environment:test",
+      input: { threadId: "thread:test", queuedRunId, targetRunId: "run:active" },
+    })),
+  );
 });

@@ -63,6 +63,7 @@ const QUEUE_VISIBLE_ROWS = 3;
 
 export interface QueuedRunsControlHandle {
   steerNext: (repeat: boolean) => boolean;
+  steerAll: () => boolean;
   editLatest: (repeat: boolean) => boolean;
 }
 
@@ -195,11 +196,38 @@ export function QueuedRunsControl({
     setBusyRunId(null);
   };
 
+  // Steers in queue order and stops at a message that must start its own turn, so order holds.
+  const steerAllQueued = async (runIds: ReadonlyArray<RunId>, targetRunId: RunId) => {
+    steerInFlightRef.current = true;
+    for (const queuedRunId of runIds) {
+      setBusyRunId(queuedRunId);
+      const result = await promote({
+        environmentId: props.environmentId,
+        input: { threadId: props.threadId, queuedRunId, targetRunId },
+      });
+      if (result._tag === "Failure") break;
+    }
+    steerInFlightRef.current = false;
+    setBusyRunId(null);
+  };
+
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
       const next = queued[0];
       if (!next || !canSendRun(startsOwnTurn(next.run))) return false;
       if (!repeat && busyRunId === null) void sendQueuedMessage(next.run.id);
+      return true;
+    },
+    steerAll() {
+      if (activeRun === null || workflow?.canPromoteToSteer !== true) return false;
+      const firstOwnTurn = queued.findIndex(({ run }) => startsOwnTurn(run));
+      const steerable = (firstOwnTurn === -1 ? queued : queued.slice(0, firstOwnTurn)).map(
+        ({ run }) => run.id,
+      );
+      if (steerable.length === 0) return false;
+      if (busyRunId === null && !steerInFlightRef.current) {
+        void steerAllQueued(steerable, activeRun.id);
+      }
       return true;
     },
     // Leave the key to caret navigation while editing.
