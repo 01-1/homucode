@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - runs the real installer script against a temporary home.
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
