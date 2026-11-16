@@ -75,9 +75,13 @@ type ClerkListener = (resources: { readonly user: { readonly id: string } | null
 function fakeClerk() {
   const listeners = new Set<ClerkListener>();
   let loaded = false;
+  let user: { readonly id: string } | null = null;
   const clerk = {
     get loaded() {
       return loaded;
+    },
+    get user() {
+      return user;
     },
     session: { getToken: vi.fn(async () => "clerk-token") },
     addListener: (listener: ClerkListener) => {
@@ -87,7 +91,8 @@ function fakeClerk() {
   } as unknown as Parameters<typeof cloudAccountService.attach>[0];
   const emit = (userId: string | null) => {
     loaded = true;
-    for (const listener of listeners) listener({ user: userId === null ? null : { id: userId } });
+    user = userId === null ? null : { id: userId };
+    for (const listener of listeners) listener({ user });
   };
   return { clerk, emit };
 }
@@ -183,10 +188,14 @@ describe("restoreLastCloudAccount", () => {
 
   it("drops the restored account at once when Clerk loads another account", async () => {
     using launch = await launchWithStoredAccount("account-1");
+    const readToken = vi.mocked(setAgentAwarenessRelayTokenProvider).mock.lastCall?.[0];
+    const token = readToken!();
 
     launch.emit("account-2");
 
     expect(appAtomRegistry.get(managedRelaySessionAtom)).toBeNull();
+    // A read started for the restored account never returns the other account's token.
+    await expect(token).resolves.toBeNull();
     await vi.waitFor(() =>
       expect(appAtomRegistry.get(managedRelaySessionAtom)?.accountId).toBe("account-2"),
     );

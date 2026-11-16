@@ -76,9 +76,12 @@ export async function restoreLastCloudAccount(clerk: ClerkInstance): Promise<voi
     }),
   );
   const readToken = clerkTokenReader(clerk);
+  const isRestoredAccount = () => clerk.user?.id === accountId;
   activateCloudRelayAccount(accountId, async () => {
     if (!clerk.loaded) await loaded;
-    return readToken();
+    if (!isRestoredAccount()) return null;
+    const token = await readToken();
+    return isRestoredAccount() ? token : null;
   });
 }
 
