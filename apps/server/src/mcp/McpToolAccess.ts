@@ -391,7 +391,7 @@ export const writesEnvironment = <P, A, E, R>(
   ) => Effect.Effect<A, E, R>,
   options: {
     /** What the user approves when the calling thread is below full access. */
-    readonly approval: (params: P) => string;
+    readonly approval: (params: NoInfer<P>) => string;
     /**
      * Whether a linked caller may make it, as for adding a project: it leaves
      * everything already here as it was.
