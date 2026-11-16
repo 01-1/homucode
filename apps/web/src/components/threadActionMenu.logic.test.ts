@@ -3,9 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 
 import {
+  buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
+  parseMoveToEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   type ThreadActionMenuState,
 } from "./threadActionMenu.logic";
@@ -45,6 +47,26 @@ describe("buildThreadActionMenuItems", () => {
     expect(move?.children?.map((item) => item.id)).toEqual([
       "move-to-project:destination",
       "move-to-new-project",
+    ]);
+    const elsewhere = buildThreadActionMenuItems({
+      ...state,
+      moveEnvironmentOptions: buildMoveEnvironmentOptions({
+        sourceEnvironmentId: "here",
+        projects: [
+          { environmentId: "here", id: "local", title: "Local" },
+          { environmentId: "laptop", id: "app", title: "App" },
+          { environmentId: "laptop", id: "old", title: "Old", archivedAt: "2026-01-01" },
+          { environmentId: "viewer", id: "docs", title: "Docs" },
+        ],
+        environmentLabel: (environmentId) => (environmentId === "laptop" ? "Laptop" : null),
+        canOperate: (environmentId) => environmentId !== "viewer",
+      }),
+    }).find((item) => item.id === "move-to-project");
+    const laptop = elsewhere?.children?.at(-1);
+    // Running threads cannot be archived, which the cross-environment move ends with.
+    expect(laptop).toMatchObject({ label: "On Laptop", disabled: true });
+    expect(laptop?.children?.map((item) => parseMoveToEnvironmentProjectMenuId(item.id))).toEqual([
+      { environmentId: "laptop", projectId: "app" },
     ]);
     const denied = buildThreadActionMenuItems({ ...state, canOperate: false }).find(
       (item) => item.id === "move-to-project",

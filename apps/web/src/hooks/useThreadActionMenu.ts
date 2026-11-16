@@ -10,6 +10,8 @@ import {
 import { canSnooze, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
   AuthOrchestrationOperateScope,
+  type EnvironmentId,
+  type ProjectId,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -17,9 +19,11 @@ import { useRouter } from "@tanstack/react-router";
 
 import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {
+  buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
+  parseMoveToEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
   type ThreadActionMenuId,
@@ -39,7 +43,7 @@ import {
   readThreadShells,
   useProjects,
 } from "../state/entities";
-import { usePrimaryEnvironmentId } from "../state/environments";
+import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "../state/environments";
 import { readLocalApi } from "../localApi";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import {
@@ -79,6 +83,7 @@ export function useThreadActionMenu(input: {
   const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
   const router = useRouter();
   const projects = useProjects();
+  const environments = useEnvironmentIdentities();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const logicalProjectKeyByPhysicalKey = buildPhysicalToLogicalProjectKeyMap({
@@ -99,6 +104,7 @@ export function useThreadActionMenu(input: {
     markThreadUnread,
     moveThread,
     moveThreadToProject,
+    moveThreadToEnvironmentProject,
     moveThreadToNewProject,
     stopThreadWithSubagents,
     turnThreadIntoProject,
@@ -175,6 +181,15 @@ export function useThreadActionMenu(input: {
               !project.archivedAt,
           )
           .map((project) => ({ id: project.id, title: project.title })),
+        moveEnvironmentOptions: buildMoveEnvironmentOptions({
+          sourceEnvironmentId: threadRef.environmentId,
+          projects,
+          environmentLabel: (environmentId) =>
+            environments.find((environment) => environment.environmentId === environmentId)
+              ?.label ?? null,
+          canOperate: (environmentId) =>
+            readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
+        }),
         move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
         hasRunningSubagents: hasRunningSubagents(
           thread.id,
@@ -230,6 +245,17 @@ export function useThreadActionMenu(input: {
       };
       if (action === "move-to-new-project") {
         await moveThreadToNewProject(threadRef);
+        return;
+      }
+      const environmentMove = parseMoveToEnvironmentProjectMenuId(action);
+      if (environmentMove !== null) {
+        await reportFailure("Failed to move thread", () =>
+          moveThreadToEnvironmentProject(
+            threadRef,
+            environmentMove.environmentId as EnvironmentId,
+            environmentMove.projectId as ProjectId,
+          ),
+        );
         return;
       }
       if (action.startsWith("move-to-project:")) {

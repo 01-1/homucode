@@ -265,9 +265,10 @@ const makeImporter = Effect.fn(function* (
                   ),
                 ),
           }),
-          Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)(
-            getAdapter === undefined ? {} : { get: getAdapter },
-          ),
+          Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
+            list: () => Effect.succeed([CODEX_MODEL_SELECTION.instanceId]),
+            ...(getAdapter === undefined ? {} : { get: getAdapter }),
+          }),
           Layer.succeed(
             ThreadCommandExecutor.ThreadCommandExecutor,
             threadCommands ?? (yield* ThreadCommandExecutor.make),
@@ -280,6 +281,7 @@ const makeImporter = Effect.fn(function* (
   return {
     run: importer.importRecentAgentThreads({ projectId }),
     importNativeHistory: importer.importNativeHistory,
+    importThreadTranscript: importer.importThreadTranscript,
     published,
   };
 });
@@ -957,6 +959,34 @@ it.effect("imports under a policy ceiling in the project's default, kept under t
     expect(Option.getOrThrow(yield* runtimes.getByThreadId({ threadId })).runtimeMode).toBe(
       "auto-accept-edits",
     );
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("imports another environment's transcript as history the first turn receives", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const importer = yield* makeImporter([]);
+    const { threadId } = yield* importer.importThreadTranscript({
+      projectId,
+      title: "Moved thread",
+      modelSelection: CODEX_MODEL_SELECTION,
+      messages: [
+        { role: "user", text: "Fix it", createdAt: timestamp },
+        { role: "assistant", text: "Fixed", createdAt: timestamp },
+      ],
+    });
+    const records = yield* projections.getThreadRecords(threadId, ["messages"]);
+    expect(records.thread).toMatchObject({
+      projectId,
+      title: "Moved thread",
+      modelSelection: CODEX_MODEL_SELECTION,
+      historyOrigin: "v1_import",
+      activeProviderThreadId: null,
+    });
+    expect(records.messages.map(({ role, text, runId }) => ({ role, text, runId }))).toEqual([
+      { role: "user", text: "Fix it", runId: null },
+      { role: "assistant", text: "Fixed", runId: null },
+    ]);
   }).pipe(Effect.scoped, Effect.provide(persistence)),
 );
 

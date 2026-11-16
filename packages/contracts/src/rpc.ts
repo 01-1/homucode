@@ -101,6 +101,9 @@ import {
   AgentSessionScanInput,
   AgentSessionScanResult,
   AgentSessionScanError,
+  ThreadTranscriptImportError,
+  ThreadTranscriptImportInput,
+  ThreadTranscriptImportResult,
 } from "./agentSessions.ts";
 import {
   AssetAccessError,
@@ -441,6 +444,7 @@ export const WS_METHODS = {
   filesystemGetMetadata: "filesystem.getMetadata",
   agentSessionsScan: "agentSessions.scan",
   agentSessionsImport: "agentSessions.import",
+  threadsImportTranscript: "threads.importTranscript",
   assetsCreateUrl: "assets.createUrl",
   assetsPersistChatAttachments: "assets.persistChatAttachments",
   attachmentsCreateUploadUrl: "attachments.createUploadUrl",
@@ -1485,6 +1489,16 @@ const WsAgentSessionsImportRpc = Rpc.make(WS_METHODS.agentSessionsImport, {
   ]),
 });
 
+const WsThreadsImportTranscriptRpc = Rpc.make(WS_METHODS.threadsImportTranscript, {
+  payload: ThreadTranscriptImportInput,
+  success: ThreadTranscriptImportResult,
+  error: Schema.Union([
+    AgentSessionImportProjectNotFoundError,
+    ThreadTranscriptImportError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
 const WsAssetsCreateUrlRpc = Rpc.make(WS_METHODS.assetsCreateUrl, {
   payload: AssetCreateUrlInput,
   success: AssetCreateUrlResult,
@@ -2292,6 +2306,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsFilesystemGetMetadataRpc,
   WsAgentSessionsScanRpc,
   WsAgentSessionsImportRpc,
+  WsThreadsImportTranscriptRpc,
   WsAssetsCreateUrlRpc,
   WsAssetsPersistChatAttachmentsRpc,
   WsAttachmentsCreateUploadUrlRpc,

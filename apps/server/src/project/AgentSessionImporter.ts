@@ -14,13 +14,16 @@ import {
   ProviderDriverKind,
   ThreadId,
   TurnItemId,
+  ThreadTranscriptImportError,
   type AgentSessionImportInput,
   type AgentSessionImportResult,
+  type ThreadTranscriptImportInput,
   type OrchestrationV2AppThread,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2TurnItem,
+  type Project,
 } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -205,6 +208,18 @@ const make = Effect.gen(function* () {
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const ceiling = settingsService.managedPolicy?.limits?.maxRuntimeMode;
+  // Imports run in full access, except under a policy ceiling: then in the project's default,
+  // which the policy keeps under it, so imported threads never sit above the ceiling.
+  const importRuntimeMode = (project: Project) =>
+    ceiling === undefined
+      ? Effect.succeed(DEFAULT_RUNTIME_MODE)
+      : settingsService.getSettings.pipe(
+          Effect.map((settings) => {
+            const mode = resolveProjectSettings(settings, project.id, project).settings
+              .defaultRuntimeMode;
+            return isRuntimeModeAbove(mode, ceiling) ? ceiling : mode;
+          }),
+        );
   const importRecentAgentThreads = Effect.fn("importRecentAgentThreadsV2")(function* (
     input: AgentSessionImportInput,
   ) {
@@ -225,21 +240,9 @@ const make = Effect.gen(function* () {
     ) {
       return yield* new AgentSessionImportProjectChangedError({ projectId: input.projectId });
     }
-    // Imports run in full access, except under a policy ceiling: then in the project's default,
-    // which the policy keeps under it, so imported threads never sit above the ceiling.
-    const runtimeMode =
-      ceiling === undefined
-        ? DEFAULT_RUNTIME_MODE
-        : yield* settingsService.getSettings.pipe(
-            Effect.mapError(
-              (cause) => new AgentSessionScanError({ operation: "read-settings", cause }),
-            ),
-            Effect.map((settings) => {
-              const mode = resolveProjectSettings(settings, input.projectId, project).settings
-                .defaultRuntimeMode;
-              return isRuntimeModeAbove(mode, ceiling) ? ceiling : mode;
-            }),
-          );
+    const runtimeMode = yield* importRuntimeMode(project).pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
+    );
     const runtimeRows = yield* runtimes
       .list()
       .pipe(
@@ -596,7 +599,89 @@ const make = Effect.gen(function* () {
     return yield* commit(messages);
   });
 
-  return { importRecentAgentThreads, importNativeHistory };
+  /**
+   * Creates a thread holding another environment's conversation as run-less history. The
+   * `v1_import` origin hands that history to the agent on the thread's first turn.
+   */
+  const importThreadTranscript = Effect.fn("AgentSessionImporter.importThreadTranscript")(
+    function* (input: ThreadTranscriptImportInput) {
+      const project = yield* projects.getById(input.projectId).pipe(
+        Effect.mapError((cause) => new ThreadTranscriptImportError({ cause })),
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.fail(
+                new AgentSessionImportProjectNotFoundError({ projectId: input.projectId }),
+              ),
+            onSome: Effect.succeed,
+          }),
+        ),
+      );
+      return yield* Effect.gen(function* () {
+        const runtimeMode = yield* importRuntimeMode(project);
+        const instances = yield* registry.list();
+        const modelSelection =
+          instances.includes(input.modelSelection.instanceId) ||
+          project.defaultModelSelection === null
+            ? input.modelSelection
+            : project.defaultModelSelection;
+        const threadId = yield* idAllocator.allocate.thread({ projectId: input.projectId });
+        const now = yield* DateTime.now;
+        const createdAt =
+          input.messages[0] === undefined ? now : dateTime(input.messages[0].createdAt);
+        const appThread: OrchestrationV2AppThread = {
+          createdBy: "user",
+          creationSource: "server",
+          id: threadId,
+          projectId: input.projectId,
+          title: input.title,
+          providerInstanceId: modelSelection.instanceId,
+          modelSelection,
+          runtimeMode,
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          branch: null,
+          worktreePath: null,
+          linkedPullRequest: null,
+          branchPullRequest: null,
+          activeProviderThreadId: null,
+          historyOrigin: "v1_import",
+          lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+          forkedFrom: null,
+          createdAt,
+          updatedAt: now,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          unsettledAt: null,
+          snoozedUntil: null,
+          snoozedAt: null,
+          pinnedAt: null,
+          pinOrderKey: null,
+          activeOrderKey: null,
+          lastVisitedAt: now,
+          deletedAt: null,
+        };
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${threadId}:created`),
+              type: "thread.created",
+              threadId,
+              providerInstanceId: modelSelection.instanceId,
+              occurredAt: now,
+              payload: appThread,
+            },
+            ...input.messages.flatMap((message, index) =>
+              messageEvents({ threadId, index, message }),
+            ),
+          ],
+        });
+        return { threadId };
+      }).pipe(Effect.mapError((cause) => new ThreadTranscriptImportError({ cause })));
+    },
+  );
+
+  return { importRecentAgentThreads, importNativeHistory, importThreadTranscript };
 });
 
 type AgentSessionImporterShape = Effect.Success<typeof make>;

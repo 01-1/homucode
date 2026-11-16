@@ -208,9 +208,11 @@ import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
   buildDraftActionMenuItems,
+  buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
   moveParentFromMenuId,
+  parseMoveToEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
@@ -1036,6 +1038,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     deleteThread,
     moveThread,
     moveThreadToProject,
+    moveThreadToEnvironmentProject,
     moveThreadToNewProject,
     stopThreadWithSubagents,
   } = useThreadActions();
@@ -3274,6 +3277,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     !project.archivedAt,
                 )
                 .map((project) => ({ id: project.id, title: project.title })),
+              moveEnvironmentOptions: buildMoveEnvironmentOptions({
+                sourceEnvironmentId: threadRef.environmentId,
+                projects: [...projectByKey.values()],
+                environmentLabel: (environmentId) =>
+                  environmentLabelById.get(environmentId) ?? null,
+                canOperate: (environmentId) =>
+                  readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
+              }),
               move: configLoaded ? resolveThreadMoveOptions(thread, readQuietThreadShells()) : null,
               hasRunningSubagents: hasRunningSubagents(
                 thread.id,
@@ -3306,6 +3317,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }
         if (clicked.value === "move-to-new-project") {
           await moveThreadToNewProject(threadRef);
+          return;
+        }
+        const environmentMove = parseMoveToEnvironmentProjectMenuId(clicked.value);
+        if (environmentMove !== null) {
+          const moved = await moveThreadToEnvironmentProject(
+            threadRef,
+            environmentMove.environmentId as EnvironmentId,
+            environmentMove.projectId as ProjectId,
+          );
+          if (moved._tag === "Failure" && !isAtomCommandInterrupted(moved)) {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to move thread",
+                description: String(squashAtomCommandFailure(moved)),
+              }),
+            );
+          }
           return;
         }
         if (clicked.value.startsWith("move-to-project:")) {

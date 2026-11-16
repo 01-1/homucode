@@ -1,5 +1,12 @@
 import * as Schema from "effect/Schema";
-import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
+import { ModelSelection } from "./modelSelection.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const AgentSessionSource = Schema.Literals(["claudeAgent", "codex", "pi"]);
@@ -87,5 +94,32 @@ export class AgentSessionScanError extends Schema.TaggedError<AgentSessionScanEr
 ) {
   override get message(): string {
     return `Failed to scan agent sessions during ${this.operation}.`;
+  }
+}
+
+/** A thread's conversation, carried from another environment into one of this one's projects. */
+export const ThreadTranscriptImportInput = Schema.Struct({
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  modelSelection: ModelSelection,
+  messages: Schema.Array(
+    Schema.Struct({
+      role: Schema.Literals(["user", "assistant"]),
+      text: Schema.String,
+      createdAt: IsoDateTime,
+    }),
+  ),
+});
+export type ThreadTranscriptImportInput = typeof ThreadTranscriptImportInput.Type;
+
+export const ThreadTranscriptImportResult = Schema.Struct({ threadId: ThreadId });
+export type ThreadTranscriptImportResult = typeof ThreadTranscriptImportResult.Type;
+
+export class ThreadTranscriptImportError extends Schema.TaggedError<ThreadTranscriptImportError>()(
+  "ThreadTranscriptImportError",
+  { cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return "Failed to import the thread.";
   }
 }

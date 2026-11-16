@@ -36,6 +36,8 @@ export type ThreadActionMenuId =
   | "move-to-new-project"
   | "move-to-project"
   | `move-to-project:${string}`
+  | `move-to-environment:${string}`
+  | `move-to-environment-project:${string}`
   | "move-to-root"
   | "move-under"
   | `move-under:${string}`
@@ -114,6 +116,12 @@ export interface ThreadActionMenuState {
   readonly move?: ThreadMoveOptions | null;
   /** The thread has running subagents, which plain Stop leaves running. */
   readonly moveProjectOptions?: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  /** Projects on other connected environments; moving there copies the conversation. */
+  readonly moveEnvironmentOptions?: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly label: string;
+    readonly projects: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  }>;
   readonly hasRunningSubagents?: boolean;
 }
 
@@ -342,6 +350,17 @@ export function buildThreadActionMenuItems(
                 label: project.title,
               })),
               { id: "move-to-new-project" as const, label: "New project…" },
+              ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
+                id: `move-to-environment:${environment.environmentId}` as const,
+                label: `On ${environment.label}`,
+                separatorBefore: index === 0,
+                // The source is archived after the copy, and archive rejects a running thread.
+                disabled: state.isRunning,
+                children: environment.projects.map((project) => ({
+                  id: moveToEnvironmentProjectMenuId(environment.environmentId, project.id),
+                  label: project.title,
+                })),
+              })),
             ],
           },
         ]
@@ -428,4 +447,49 @@ export function buildThreadActionMenuItems(
             }
           : item,
       );
+}
+
+function moveToEnvironmentProjectMenuId(
+  environmentId: string,
+  projectId: string,
+): `move-to-environment-project:${string}` {
+  return `move-to-environment-project:${JSON.stringify([environmentId, projectId])}`;
+}
+
+export function parseMoveToEnvironmentProjectMenuId(
+  id: string,
+): { readonly environmentId: string; readonly projectId: string } | null {
+  const prefix = "move-to-environment-project:";
+  if (!id.startsWith(prefix)) return null;
+  const [environmentId, projectId] = JSON.parse(id.slice(prefix.length)) as [string, string];
+  return { environmentId, projectId };
+}
+
+/** Other connected environments' live projects, for moving a thread off its own environment. */
+export function buildMoveEnvironmentOptions<E extends string>(input: {
+  readonly sourceEnvironmentId: E;
+  readonly projects: ReadonlyArray<{
+    readonly environmentId: E;
+    readonly id: string;
+    readonly title: string;
+    readonly archivedAt?: unknown;
+  }>;
+  readonly environmentLabel: (environmentId: E) => string | null;
+  readonly canOperate: (environmentId: E) => boolean;
+}): NonNullable<ThreadActionMenuState["moveEnvironmentOptions"]> {
+  const byEnvironment = new Map<E, Array<{ readonly id: string; readonly title: string }>>();
+  for (const project of input.projects) {
+    if (project.environmentId === input.sourceEnvironmentId || project.archivedAt) continue;
+    if (!input.canOperate(project.environmentId)) continue;
+    const projects = byEnvironment.get(project.environmentId) ?? [];
+    projects.push({ id: project.id, title: project.title });
+    byEnvironment.set(project.environmentId, projects);
+  }
+  return [...byEnvironment]
+    .map(([environmentId, projects]) => ({
+      environmentId,
+      label: input.environmentLabel(environmentId) ?? "Remote",
+      projects,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
