@@ -2709,15 +2709,11 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               mcpServers !== undefined && mcpSession?.capabilities?.has("device") === true;
             const preferNativeSubagents = mcpSession?.preferNativeSubagents ?? false;
             const known = yield* Ref.get(told);
-            // A conversation this process has not sent to was told on its first run.
             const delivered =
               known?.agent === agent.nativeThreadId &&
               known.preferNativeSubagents === preferNativeSubagents
                 ? known
-                : {
-                    orchestration: known?.agent !== agent.nativeThreadId && turnInput.runOrdinal > 1,
-                    device: false,
-                  };
+                : { orchestration: false, device: false };
             const interrupted = yield* Ref.get(interruptedPrompt);
             const runCheckpointed = (runId?: string) =>
               agent.session.runCheckpointed?.(runId) ?? Effect.succeed(false);
