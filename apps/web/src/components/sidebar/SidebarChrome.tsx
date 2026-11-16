@@ -1,3 +1,4 @@
+import { duetDestinationEnvironmentIdAtom } from "../../duet";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
@@ -226,6 +227,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const duetEnvironmentId = useAtomValue(duetDestinationEnvironmentIdAtom);
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -276,6 +278,16 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               icon={<PullRequestGlyph.pullRequest />}
               label="Pull requests"
               onClick={handlePullRequestsClick}
+            />
+          ) : null}
+          {duetEnvironmentId ? (
+            <SidebarUtilityItem
+              icon={<span>✦</span>}
+              label="Open Duet"
+              onClick={() => {
+                closeMobileSidebar();
+                void navigate({ to: "/duet", search: { environmentId: duetEnvironmentId! } });
+              }}
             />
           ) : null}
           <SidebarUtilityItem

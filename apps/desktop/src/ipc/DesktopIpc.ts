@@ -185,13 +185,15 @@ export const layer = (ipcMain: DesktopIpcMain) =>
     Effect.gen(function* () {
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       return make(ipcMain, (event) =>
-        Effect.map(
-          electronWindow.main,
-          (main) =>
-            Option.isSome(main) &&
-            main.value.webContents.id === event.sender.id &&
-            main.value.webContents.mainFrame === event.senderFrame,
-        ),
+        Effect.gen(function* () {
+          const main = yield* electronWindow.main;
+          const auxiliary = yield* electronWindow.appWindows;
+          return [...Option.toArray(main), ...auxiliary].some(
+            (window) =>
+              window.webContents.id === event.sender.id &&
+              window.webContents.mainFrame === event.senderFrame,
+          );
+        }),
       );
     }),
   );

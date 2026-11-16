@@ -1,4 +1,6 @@
+import * as ServerSettingsService from "../serverSettings.ts";
 import {
+  type ServerSettings,
   CommandId,
   MessageId,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
@@ -258,6 +260,9 @@ interface WebhookDeliveryRow {
 export class ScheduledTaskService extends Context.Service<
   ScheduledTaskService,
   {
+    readonly reconcileDuet: (
+      settings: Pick<ServerSettings, "duetEnabled" | "duetProjectId" | "duetMorningBriefTaskId">,
+    ) => Effect.Effect<void, ScheduledTaskError>;
     readonly list: () => Effect.Effect<ScheduledTaskListResult, ScheduledTaskError>;
     readonly subscribeList: () => Stream.Stream<ScheduledTaskListResult, ScheduledTaskError>;
     readonly upsert: (
@@ -1633,6 +1638,16 @@ export const layer = Layer.effect(
       };
     });
 
+    const reconcileDuet = Effect.fn("ScheduledTaskService.reconcileDuet")(function* (
+      settings: Pick<ServerSettings, "duetEnabled" | "duetProjectId" | "duetMorningBriefTaskId">,
+    ) {
+      if (!settings.duetMorningBriefTaskId) return;
+      const task = yield* findTask(settings.duetMorningBriefTaskId);
+      if (task?.enabled && (!settings.duetEnabled || settings.duetProjectId !== task.projectId)) {
+        yield* setEnabled({ id: task.id, enabled: false });
+      }
+    });
+
     const forgetWebhookTask = (id: ScheduledTaskId) =>
       Effect.all(
         [
@@ -2641,6 +2656,7 @@ export const layer = Layer.effect(
     yield* scheduler.register("webhook-coalescing", dispatchPending());
 
     return ScheduledTaskService.of({
+      reconcileDuet,
       list,
       subscribeList,
       upsert,
@@ -2654,5 +2670,23 @@ export const layer = Layer.effect(
       getWebhookDelivery,
       triggerWebhook,
     });
+  }),
+);
+
+export const layerDuetSettings = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const settings = yield* ServerSettingsService.ServerSettingsService;
+    const tasks = yield* ScheduledTaskService;
+    const changes = yield* settings.subscribeChanges;
+    const reconcile = Effect.fn("ScheduledTaskService.reconcileDuetSettings")(
+      function* () {
+        yield* tasks.reconcileDuet(yield* settings.getSettings);
+      },
+      Effect.catchCause((cause) =>
+        Effect.logError("Could not reconcile Duet morning brief", cause),
+      ),
+    );
+    yield* reconcile();
+    yield* Stream.runForEach(changes, () => reconcile()).pipe(Effect.forkScoped);
   }),
 );

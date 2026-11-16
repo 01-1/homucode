@@ -145,3 +145,7 @@ export const TAKE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:take-legacy-local-stor
 export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-local-storage";
 
 export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
+
+export const CONFIGURE_DUET_CHANNEL = "desktop:configure-duet";
+export const DUET_WINDOW_MODE_CHANNEL = "desktop:duet-window-mode";
+export const DUET_NAVIGATE_CHANNEL = "desktop:duet-navigate";

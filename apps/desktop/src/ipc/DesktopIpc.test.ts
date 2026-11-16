@@ -9,9 +9,10 @@ vi.mock("electron", () => ({}));
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
 
-it.effect("answers only the main window's top frame", () =>
+it.effect("answers only the top frames of the main and Duet app windows", () =>
   Effect.gen(function* () {
     const mainFrame = {};
+    const duetFrame = {};
     const invoke = new Map<string, DesktopIpc.DesktopIpcHandleListener>();
     const sync = new Map<string, DesktopIpc.DesktopIpcSyncListener>();
     const ipc = yield* DesktopIpc.DesktopIpc.pipe(
@@ -24,6 +25,11 @@ it.effect("answers only the main window's top frame", () =>
         }).pipe(
           Layer.provide(
             Layer.mock(ElectronWindow.ElectronWindow, {
+              appWindows: Effect.succeed([
+                {
+                  webContents: { id: 3, mainFrame: duetFrame },
+                } as unknown as Electron.BrowserWindow,
+              ]),
               main: Effect.succeedSome({
                 webContents: { id: 1, mainFrame },
               } as unknown as Electron.BrowserWindow),
@@ -44,6 +50,8 @@ it.effect("answers only the main window's top frame", () =>
 
     const senders = {
       app: { sender: { id: 1 }, senderFrame: mainFrame },
+      duet: { sender: { id: 3 }, senderFrame: duetFrame },
+      duetSubframe: { sender: { id: 3 }, senderFrame: {} },
       appSubframe: { sender: { id: 1 }, senderFrame: {} },
       previewGuest: { sender: { id: 2 }, senderFrame: {} },
     };
@@ -60,6 +68,8 @@ it.effect("answers only the main window's top frame", () =>
     }
     assert.deepEqual(results, {
       app: ["secret", "secret"],
+      duet: ["secret", "secret"],
+      duetSubframe: ["rejected", undefined],
       appSubframe: ["rejected", undefined],
       previewGuest: ["rejected", undefined],
     });

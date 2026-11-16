@@ -42,6 +42,7 @@ import type {
   EnvironmentConnectionLease,
   RouteCheck,
 } from "@t3tools/client-runtime/connection";
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import type { WsRpcProtocolClient } from "@t3tools/client-runtime/rpc";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { APP_VERSION } from "~/branding";
@@ -119,7 +120,8 @@ const makeServerConfig = (providers: ReadonlyArray<unknown>): ServerConfig => ({
       otlpTracesEnabled: false,
       otlpMetricsEnabled: false,
     },
-    settings: {},
+    // An established server: the one-time feature offers would cover the app.
+    settings: { featureOffersSeen: FEATURE_OFFERS.map((offer) => offer.id) },
     threadSnapshotPagination: true,
     threadResumeCompletionMarker: true,
     shellResumeCompletionMarker: true,

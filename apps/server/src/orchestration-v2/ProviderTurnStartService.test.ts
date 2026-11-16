@@ -3,6 +3,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";
 import { it as effectIt } from "@effect/vitest";
 import {
+  ScheduledTaskId,
   CheckpointScopeId,
   CommandId,
   ContextHandoffId,
@@ -92,11 +93,14 @@ const normalize = (target: string) => {
   }
   return `/${parts.join("/")}`;
 };
-const layerWorktreeLocation = (worktreesDir = managedWorktreesDir) =>
+const layerWorktreeLocation = (
+  worktreesDir = managedWorktreesDir,
+  settings: Parameters<typeof ServerSettings.layerTest>[0] = {},
+) =>
   Layer.mergeAll(
     Path.layer,
     Layer.mock(ServerConfig.ServerConfig)({ worktreesDir } as ServerConfig.ServerConfig["Service"]),
-    ServerSettings.layerTest(),
+    ServerSettings.layerTest(settings),
   );
 
 function startWithMissingWorktree(
@@ -389,6 +393,7 @@ it.each([
 });
 
 function makeLocalCommandHarness(input: {
+  readonly duet?: boolean;
   readonly text: string;
   /** The provider the new provider thread runs on. */
   readonly driver?: string;
@@ -1264,7 +1269,19 @@ function makeLocalCommandHarness(input: {
         }),
         IdAllocator.layer,
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
-        layerWorktreeLocation(input.worktreesDir),
+        layerWorktreeLocation(
+          input.worktreesDir,
+          input.duet
+            ? {
+                duetEnabled: true,
+                duetProjectId: projection.thread.projectId,
+                duetMorningBriefTaskId: ScheduledTaskId.make("duet-brief"),
+                duetThreads: {
+                  [threadId]: { icon: "lucide:leaf", prompt: "Keep the garden healthy" },
+                },
+              }
+            : {},
+        ),
         input.fileSystem === undefined
           ? FileSystem.layerNoop({ exists: () => Effect.succeed(true) })
           : Layer.succeed(FileSystem.FileSystem, input.fileSystem),
@@ -3045,3 +3062,29 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
       }),
   );
 }
+
+effectIt.effect(
+  "adds Duet title and prompt only to provider context, leaving the transcript untouched",
+  () =>
+    Effect.gen(function* () {
+      const harness = makeLocalCommandHarness({
+        text: "Continue",
+        duet: true,
+        driver: "codex",
+        message: { scheduledTaskId: ScheduledTaskId.make("duet-brief") },
+      });
+      yield* harness.start;
+      const delivered = harness.startTurn.mock.calls[0]?.[0];
+      expect(delivered?.message.text).toContain(
+        `Duet thread ${JSON.stringify(harness.projection().thread.title)}`,
+      );
+      expect(delivered?.message.text).toContain("Keep the garden healthy");
+      expect(delivered?.message.text).toContain("Icon: lucide:leaf");
+      expect(delivered?.inlineContextLength).toBeGreaterThan(0);
+      expect(harness.resolveRuntimePolicy.mock.calls[0]?.[0].thread).toMatchObject({
+        runtimeMode: "approval-required",
+        interactionMode: "plan",
+      });
+      expect(harness.projection().messages.map((message) => message.text)).toEqual(["Continue"]);
+    }),
+);

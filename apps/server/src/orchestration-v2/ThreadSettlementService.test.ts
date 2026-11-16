@@ -138,6 +138,34 @@ function persistedLink(
 }
 
 describe("isAutoSettlementCandidate", () => {
+  it("keeps threads Duet keeps, only while Duet is on for their project", () => {
+    const kept = {
+      ...DEFAULT_SERVER_SETTINGS,
+      duetEnabled: true,
+      duetProjectId: ProjectId.make("project-1"),
+      duetThreads: { [ThreadId.make("thread-1")]: { icon: null, prompt: "" } },
+    };
+    expect(ThreadSettlementService.isDuetKeptThread(kept, shell())).toBe(true);
+    expect(
+      ThreadSettlementService.isDuetKeptThread(
+        {
+          ...kept,
+          duetThreads: { [ThreadId.make("thread-1")]: { icon: null, prompt: "", pinned: false } },
+        },
+        shell(),
+      ),
+    ).toBe(false);
+    expect(ThreadSettlementService.isDuetKeptThread({ ...kept, duetEnabled: false }, shell())).toBe(
+      false,
+    );
+    expect(
+      ThreadSettlementService.isDuetKeptThread(
+        kept,
+        shell({ projectId: ProjectId.make("project-2") }),
+      ),
+    ).toBe(false);
+  });
+
   it("settles a thread whose only background work is a command left running", () => {
     expect(
       ThreadSettlementService.isAutoSettlementCandidate(

@@ -1,3 +1,5 @@
+import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as NodeUtil from "node:util";
 
@@ -1076,4 +1078,69 @@ it.effect("a run interrupted right after it reserves the task does not block the
       assert.equal(yield* Ref.get(launches), 1);
     }).pipe(Effect.provide(layer));
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect(
+  "disables the marked Duet brief after server settings disable Duet or change its project",
+  () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const now = "2026-09-09T12:00:00.000Z";
+      yield* insertRow(sql, { id: "brief", next: now, enabled: 1, status: "never" }, now);
+      yield* insertRow(sql, { id: "other", next: now, enabled: 1, status: "never" }, now);
+      const current = {
+        ...DEFAULT_SERVER_SETTINGS,
+        duetEnabled: true,
+        duetProjectId: ProjectId.make("project:test"),
+        duetMorningBriefTaskId: ScheduledTaskId.make("brief"),
+      };
+      const changed = yield* Deferred.make<void>();
+      const settings = yield* Ref.make(current);
+      const layer = ScheduledTaskService.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            ManagedPolicy.layerTest(),
+            Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
+            Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+            Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+              namedProjectsRoot: "/projects",
+            }),
+            Layer.mock(SecretRequests.SecretRequests)({}),
+            Layer.mock(Scheduler.Scheduler)({ register: () => Effect.void }),
+          ),
+        ),
+      );
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const context = yield* Layer.build(layer);
+          yield* ScheduledTaskService.layerDuetSettings.pipe(
+            Layer.provide(Layer.succeedContext(context)),
+            Layer.provide(
+              Layer.mock(ServerSettings.ServerSettingsService)({
+                getSettings: Ref.get(settings),
+                subscribeChanges: Effect.succeed(
+                  Stream.fromEffect(Deferred.await(changed)).pipe(
+                    Stream.mapEffect(() => Ref.get(settings)),
+                  ),
+                ),
+              }),
+            ),
+            Layer.build,
+          );
+          const tasks = yield* Effect.provide(ScheduledTaskService.ScheduledTaskService, context);
+          assert.isTrue((yield* tasks.list()).tasks.find((t) => t.id === "brief")?.enabled);
+          const events = yield* tasks.subscribeList().pipe(Stream.toPull);
+          yield* events;
+          yield* Ref.set(settings, { ...current, duetEnabled: false });
+          yield* Deferred.succeed(changed, undefined);
+          yield* events;
+          assert.isFalse((yield* tasks.list()).tasks.find((t) => t.id === "brief")?.enabled);
+          yield* tasks.setEnabled({ id: current.duetMorningBriefTaskId, enabled: true });
+          yield* tasks.reconcileDuet({ ...current, duetProjectId: ProjectId.make("different") });
+          const after = yield* tasks.list();
+          assert.isFalse(after.tasks.find((t) => t.id === "brief")?.enabled);
+          assert.isTrue(after.tasks.find((t) => t.id === "other")?.enabled);
+        }),
+      );
+    }).pipe(Effect.provide(Layer.mergeAll(SqlitePersistence.layerMemory, NodeCrypto.layer))),
 );

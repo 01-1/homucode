@@ -1,0 +1,104 @@
+import {
+  BookOpenIcon,
+  CalendarDaysIcon,
+  CodeIcon,
+  HeartIcon,
+  InboxIcon,
+  LeafIcon,
+  ListTodoIcon,
+  MessageCircleIcon,
+  SunIcon,
+} from "lucide-react";
+import { DEFAULT_DUET_ICON } from "@t3tools/contracts";
+import { DUET_ICON_COLORS } from "@t3tools/client-runtime/duet";
+import { ProviderAccentColorPicker } from "../settings/ProviderAccentColorPicker";
+import { Input } from "../ui/input";
+
+const ICONS = [
+  { id: "lucide:message-circle", label: "Chat", component: MessageCircleIcon },
+  { id: "lucide:list-todo", label: "Tasks", component: ListTodoIcon },
+  { id: "lucide:calendar-days", label: "Calendar", component: CalendarDaysIcon },
+  { id: "lucide:inbox", label: "Inbox", component: InboxIcon },
+  { id: "lucide:code", label: "Code", component: CodeIcon },
+  { id: "lucide:leaf", label: "Leaf", component: LeafIcon },
+  { id: "lucide:heart", label: "Heart", component: HeartIcon },
+  { id: "lucide:book-open", label: "Book", component: BookOpenIcon },
+  { id: "lucide:sun", label: "Sun", component: SunIcon },
+];
+
+export function DuetIcon({ icon, color }: { icon: string | null; color: string }) {
+  const choice = ICONS.find((item) => item.id === (icon ?? DEFAULT_DUET_ICON));
+  return (
+    <span
+      className="inline-flex size-5 shrink-0 items-center justify-center"
+      style={{ color, backgroundColor: `${color}22` }}
+    >
+      {choice ? (
+        <choice.component className="size-4" aria-label={choice.label} />
+      ) : (
+        <span>{icon}</span>
+      )}
+    </span>
+  );
+}
+
+export function DuetIconPicker({
+  icon,
+  color,
+  onIconChange,
+  onColorChange,
+}: {
+  icon: string;
+  color: string;
+  onIconChange: (icon: string) => void;
+  onColorChange: (color: string) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <span className="text-sm">Icon</span>
+      <div className="flex flex-wrap gap-1">
+        {ICONS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-label={item.label}
+            aria-pressed={(icon || DEFAULT_DUET_ICON) === item.id}
+            className="rounded-md border p-2 hover:bg-muted aria-pressed:bg-muted"
+            onClick={() => onIconChange(item.id)}
+          >
+            <item.component className="size-5" style={{ color }} />
+          </button>
+        ))}
+      </div>
+      <label className="grid gap-1 text-sm">
+        Custom emoji
+        <Input
+          value={icon.startsWith("lucide:") ? "" : icon}
+          placeholder="☀️"
+          maxLength={16}
+          onChange={(event) => onIconChange(event.target.value)}
+        />
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm">Color</span>
+        {DUET_ICON_COLORS.map((swatch) => (
+          <button
+            key={swatch}
+            type="button"
+            className="size-6 rounded-full border-2 border-transparent aria-pressed:border-foreground"
+            style={{ backgroundColor: swatch }}
+            aria-label={`Icon color ${swatch}`}
+            aria-pressed={color.toLowerCase() === swatch}
+            onClick={() => onColorChange(swatch)}
+          />
+        ))}
+        <ProviderAccentColorPicker
+          displayName="Duet icon"
+          layout="inline"
+          value={color}
+          onCommit={onColorChange}
+        />
+      </div>
+    </div>
+  );
+}

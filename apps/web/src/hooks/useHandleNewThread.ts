@@ -1,3 +1,5 @@
+import { readDuetContext, startDuetThread } from "../duet";
+import { useLocation } from "@tanstack/react-router";
 import {
   scopedProjectKey,
   scopeProjectRef,
@@ -107,6 +109,15 @@ export function createNewThreadHandler(router: AnyRouter) {
       prompt?: string;
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
+    const duet = readDuetContext(router);
+    if (
+      duet &&
+      options === undefined &&
+      projectRef.environmentId === duet.environmentId &&
+      projectRef.projectId === duet.project.id
+    ) {
+      return startDuetThread(router).then(() => null);
+    }
     const projects = readProjects();
     const projectGroupingSettings = selectProjectGroupingSettings(getClientSettings());
     // Read at call time; status pushes replace the config map and would recreate every sidebar handler.
@@ -491,8 +502,11 @@ export function useHandleNewThread() {
   const defaultProjectFallbackReady = useAtomValue(
     defaultProjectFallbackReadyAtom(lastUsedProjectKey),
   );
+  useLocation();
+  const duet = readDuetContext(useRouter());
   const routeTarget = useThreadRouteTarget();
-  const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
+  const routeThreadRef =
+    routeTarget?.kind === "server" ? routeTarget.threadRef : (duet?.threadRef ?? null);
   const routeDraftId = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const activeThread = useQuietThreadShell(routeThreadRef);
   const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
@@ -505,12 +519,14 @@ export function useHandleNewThread() {
   );
   const projects = useProjects();
   const handleNewThread = useNewThreadHandler();
-  const defaultProjectRef = resolveDefaultProjectRef(
-    projects,
-    projectOrder,
-    lastUsedProjectKey,
-    defaultProjectFallbackReady,
-  );
+  const defaultProjectRef = duet
+    ? scopeProjectRef(duet.environmentId, duet.project.id)
+    : resolveDefaultProjectRef(
+        projects,
+        projectOrder,
+        lastUsedProjectKey,
+        defaultProjectFallbackReady,
+      );
 
   return {
     activeDraftThread,

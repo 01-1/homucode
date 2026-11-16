@@ -1,3 +1,4 @@
+import * as DesktopDuet from "../window/DesktopDuet.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalFetchInEffect:off - Hosted handoff test uses a real localhost listener without an OpenAI account.
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
@@ -174,9 +175,14 @@ describe("DesktopClerk", () => {
     },
   );
 
-  it.effect.each(["before configure", "after configure"] as const)(
-    "reveals the running window when a second instance launches %s",
-    (entry) => {
+  it.effect.each([
+    ["before configure", false],
+    ["after configure", false],
+    ["before configure", true],
+    ["after configure", true],
+  ] as const)(
+    "reveals the requested window when a second instance launches %s (Duet: %s)",
+    ([entry, isDuet]) => {
       storageMock.mockReturnValue(storageAdapter);
       createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: true });
       const quit = vi.fn();
@@ -197,12 +203,20 @@ describe("DesktopClerk", () => {
 
       return Effect.gen(function* () {
         const clerk = yield* DesktopClerk.DesktopClerk;
-        if (entry === "before configure") listeners.get("second-instance")?.({}, ["t3"]);
-        yield* clerk.configure;
+        if (entry === "before configure")
+          listeners.get("second-instance")?.({}, isDuet ? ["t3", "--duet"] : ["t3"]);
+        yield* clerk.configure.pipe(
+          Effect.provideService(DesktopDuet.DesktopDuet, {
+            open: Effect.sync(() => revealed.resolve("duet")),
+            configure: () => Effect.void,
+            setWindowMode: () => Effect.void,
+          }),
+        );
 
         assert.equal(quit.mock.calls.length, 0);
-        if (entry === "after configure") listeners.get("second-instance")!({}, ["t3"]);
-        assert.strictEqual(yield* Effect.promise(() => revealed.promise), window);
+        if (entry === "after configure")
+          listeners.get("second-instance")!({}, isDuet ? ["t3", "--duet"] : ["t3"]);
+        assert.strictEqual(yield* Effect.promise(() => revealed.promise), isDuet ? "duet" : window);
       }).pipe(
         Effect.scoped,
         Effect.provide(layerDesktopClerk(true, [], "darwin", undefined, undefined, listeners)),
@@ -237,7 +251,13 @@ describe("DesktopClerk", () => {
       listeners.get("open-url")?.({ preventDefault: () => undefined }, launchPair);
       assert.deepEqual(received, []);
 
-      yield* clerk.configure;
+      yield* clerk.configure.pipe(
+        Effect.provideService(DesktopDuet.DesktopDuet, {
+          open: Effect.void,
+          configure: () => Effect.void,
+          setWindowMode: () => Effect.void,
+        }),
+      );
       listeners.get("second-instance")!({}, ["t3", later]);
       yield* Effect.promise(() => delivered.promise);
 
@@ -315,7 +335,13 @@ it.effect(
     } as unknown as ElectronWindow.ElectronWindow["Service"];
     return Effect.gen(function* () {
       const clerk = yield* DesktopClerk.DesktopClerk;
-      yield* clerk.configure;
+      yield* clerk.configure.pipe(
+        Effect.provideService(DesktopDuet.DesktopDuet, {
+          open: Effect.void,
+          configure: () => Effect.void,
+          setWindowMode: () => Effect.void,
+        }),
+      );
       const event = { preventDefault: vi.fn() };
       listeners.get("open-url")!(event, "t3code-dev://app/auth/callback?code=clerk-code");
       listeners.get("open-url")!(event, "t3code://app/welcome");
@@ -403,7 +429,13 @@ it.effect.each(["startup", "open-url", "early-second-instance"] as const)(
         if (entry === "early-second-instance") {
           listeners.get("second-instance")?.({}, ["t3", link]);
         }
-        yield* clerk.configure;
+        yield* clerk.configure.pipe(
+          Effect.provideService(DesktopDuet.DesktopDuet, {
+            open: Effect.void,
+            configure: () => Effect.void,
+            setWindowMode: () => Effect.void,
+          }),
+        );
         if (entry === "open-url") {
           const event = { preventDefault: vi.fn() };
           listeners.get("open-url")!(event, link);
@@ -443,7 +475,13 @@ it.effect("hands web and app links to the renderer and leaves other links alone"
     const pairLink = "t3code://pair?pairingUrl=https%3A%2F%2Fvps.example.com%2F%23token%3Dabc";
     yield* Effect.gen(function* () {
       const clerk = yield* DesktopClerk.DesktopClerk;
-      yield* clerk.configure;
+      yield* clerk.configure.pipe(
+        Effect.provideService(DesktopDuet.DesktopDuet, {
+          open: Effect.void,
+          configure: () => Effect.void,
+          setWindowMode: () => Effect.void,
+        }),
+      );
       const open = (url: string) => {
         const event = { preventDefault: vi.fn() };
         listeners.get("open-url")!(event, url);

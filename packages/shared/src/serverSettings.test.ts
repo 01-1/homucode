@@ -1,5 +1,6 @@
 import {
   DEFAULT_SERVER_SETTINGS,
+  ThreadId,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -1114,4 +1115,24 @@ describe("resolveSpeechPostProcessingModelSelection", () => {
         .speechPostProcessingModelSelection,
     ).toBeNull();
   });
+});
+
+it("merges Duet thread entries without losing pin state or other threads and allows clearing icon, color and prompt", () => {
+  const one = ThreadId.make("one");
+  const two = ThreadId.make("two");
+  const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+    duetThreads: {
+      [one]: { icon: "☀️", prompt: "Daily brief", color: "#ff0055", pinned: false },
+      [two]: { icon: "lucide:code", prompt: "Keep this prompt" },
+    },
+  });
+  const updated = applyServerSettingsPatch(initial, {
+    duetThreads: { [one]: { icon: null, prompt: "", color: null } },
+  });
+  expect(updated.duetThreads[one]).toEqual({ icon: null, prompt: "", color: null, pinned: false });
+  expect(updated.duetThreads[two]).toEqual(initial.duetThreads[two]);
+  const kept = applyServerSettingsPatch(updated, {
+    duetThreads: { [one]: { ...updated.duetThreads[one]!, pinned: true } },
+  });
+  expect(kept.duetThreads[one]).toEqual({ icon: null, prompt: "", color: null, pinned: true });
 });

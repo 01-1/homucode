@@ -40,6 +40,7 @@ import {
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
+import { DuetSidebar } from "./duet/DuetPage";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
@@ -487,7 +488,11 @@ export function AppSidebarLayout({
               }}
               style={windowControlsInsetStyle}
             >
-              <ThreadSidebar routeReveal={sidebarRouteReveal} />
+              {pathname === "/duet" ? (
+                <DuetSidebar />
+              ) : (
+                <ThreadSidebar routeReveal={sidebarRouteReveal} />
+              )}
               <SidebarRail onDoubleClick={resetSidebarWidth} />
             </Sidebar>
           </>

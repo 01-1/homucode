@@ -1,3 +1,4 @@
+import * as DesktopDuet from "./window/DesktopDuet.ts";
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 import { handleStdioError } from "./app/stdioErrors.ts";
 
@@ -220,6 +221,7 @@ const layerDesktopLocalEnvironmentAuth = DesktopLocalEnvironmentAuth.layer.pipe(
 );
 
 const layerDesktopApplication = Layer.mergeAll(
+  DesktopDuet.layer,
   DesktopLifecycle.layer,
   layerDesktopAppActivation,
   DesktopWebLinks.layer,
