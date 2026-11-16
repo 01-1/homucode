@@ -98,7 +98,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/electron
-          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
 
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
@@ -167,7 +167,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/electron
-          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
 
       - name: Ensure Electron runtime is installed
         id: electron
@@ -237,7 +237,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}
+          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}
 
       - name: Install Chromium for the built web client boot check
         if: ${{ !cancelled() && steps.build.outcome == 'success' && needs.changes.outputs.test_web != 'false' && steps.chromium_cache.outputs.cache-hit != 'true' }}
@@ -320,7 +320,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/electron
-          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('node_modules/.pnpm/electron@*/node_modules/electron/package.json') }}
 
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
@@ -400,7 +400,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}
+          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}
 
       - name: Install Chromium for web browser tests
         if: steps.chromium_cache.outputs.cache-hit != 'true'
@@ -475,7 +475,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}
+          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.playwright_version.outputs.version }}
 
       - name: Install Chromium for server browser integration tests
         if: steps.changes.outputs.test_server != 'false' && steps.chromium_cache.outputs.cache-hit != 'true'

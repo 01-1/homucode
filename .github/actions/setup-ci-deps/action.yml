@@ -38,7 +38,7 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.vite-plus
-        key: vite-plus-home-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.vp.outputs.version }}-node${{ steps.vp.outputs.node }}-${{ steps.vp.outputs.pnpm }}
+        key: vite-plus-home-v2-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ steps.vp.outputs.version }}-node${{ steps.vp.outputs.node }}-${{ steps.vp.outputs.pnpm }}
 
     # setup-vp always runs the installer, which fetches vp from npm even when
     # this exact version is installed. A cache hit already has everything, so
@@ -95,11 +95,11 @@ runs:
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pnpm_store.outputs.path }}
-        key: pnpm-${{ steps.pnpm_store.outputs.namespace }}-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
+        key: pnpm-${{ steps.pnpm_store.outputs.namespace }}-v1-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
         restore-keys: |
-          pnpm-full-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
-          pnpm-${{ steps.pnpm_store.outputs.namespace }}-v1-${{ runner.os }}-${{ runner.arch }}-
-          pnpm-full-v1-${{ runner.os }}-${{ runner.arch }}-
+          pnpm-full-v1-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json') }}
+          pnpm-${{ steps.pnpm_store.outputs.namespace }}-v1-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
+          pnpm-full-v1-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
 
     # pnpm accepts an earlier pass for the same lockfile and policy at any age, so
     # a cached record skips fetching registry metadata for every package.
