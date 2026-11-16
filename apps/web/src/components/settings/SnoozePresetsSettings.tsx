@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   DEFAULT_SNOOZE_PRESETS,
+  MAX_SNOOZE_PRESET_DAYS_AHEAD,
   MAX_SNOOZE_PRESET_MINUTES,
   MAX_SNOOZE_PRESETS,
   SnoozePresetDay,
@@ -49,10 +50,11 @@ const SINGULAR_UNIT_LABELS: Record<DurationUnit, string> = {
   days: "day",
 };
 
-const WHEN_LABELS: Record<"after" | SnoozePresetDay, string> = {
+const WHEN_LABELS: Record<"after" | "days" | SnoozePresetDay, string> = {
   after: "In",
   today: "Today",
   tomorrow: "Tomorrow",
+  days: "Days ahead",
   monday: "Monday",
   tuesday: "Tuesday",
   wednesday: "Wednesday",
@@ -61,7 +63,7 @@ const WHEN_LABELS: Record<"after" | SnoozePresetDay, string> = {
   saturday: "Saturday",
   sunday: "Sunday",
 };
-const WHEN_VALUES = ["after", ...SnoozePresetDay.literals] as const;
+const WHEN_VALUES = ["after", "today", "tomorrow", "days", ...SnoozePresetDay.literals.slice(2)] as const;
 
 // Offered in order when adding, skipping any already in the list.
 const ADD_CANDIDATES: ReadonlyArray<SnoozePresetSetting> = [
@@ -115,8 +117,10 @@ function withWhen(
   if (when === "after") {
     return preset.kind === "after" ? preset : { kind: "after", minutes: memory.minutes };
   }
+  const time = preset.kind === "at" ? preset.time : memory.time;
+  if (when === "days") return "days" in preset ? preset : { kind: "at", days: 2, time };
   if (!isSnoozePresetDay(when)) return null;
-  return { kind: "at", day: when, time: preset.kind === "at" ? preset.time : memory.time };
+  return { kind: "at", day: when, time };
 }
 
 /**
@@ -336,7 +340,7 @@ function SnoozePresetFields(props: {
   onChange: (preset: SnoozePresetSetting) => void;
 }) {
   const { preset, onChange } = props;
-  const when = preset.kind === "after" ? "after" : preset.day;
+  const when = preset.kind === "after" ? "after" : "days" in preset ? "days" : preset.day;
   // Switching between a duration and a set time keeps the other kind's last value, so a
   // misclick on "When" can be undone without retyping it.
   const [memory, setMemory] = useState<KindMemory>({ minutes: 60, time: "09:00" });
@@ -376,6 +380,14 @@ function SnoozePresetFields(props: {
         />
       ) : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {"days" in preset ? (
+            <AmountField
+              value={preset.days}
+              max={MAX_SNOOZE_PRESET_DAYS_AHEAD}
+              label="Days"
+              onChange={(days) => onChange({ ...preset, days })}
+            />
+          ) : null}
           <span className="text-xs text-muted-foreground">at</span>
           <Input
             nativeInput
@@ -402,50 +414,15 @@ function DurationFields(props: { minutes: number; onChange: (minutes: number) =>
   const unit =
     props.minutes % UNIT_MINUTES[chosenUnit] === 0 ? chosenUnit : splitMinutes(props.minutes).unit;
   const amount = props.minutes / UNIT_MINUTES[unit];
-  const maxAmount = Math.floor(MAX_SNOOZE_PRESET_MINUTES / UNIT_MINUTES[unit]);
-  // Typing stays local until the field commits (blur, Enter, or a step), so half-typed
-  // values never reach the server.
-  const [draft, setDraft] = useState<number | null>(amount);
-  const [draftSource, setDraftSource] = useState(`${props.minutes}:${unit}`);
-  if (draftSource !== `${props.minutes}:${unit}`) {
-    setDraftSource(`${props.minutes}:${unit}`);
-    setDraft(amount);
-  }
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <NumberField
-        size="sm"
-        className="w-32"
-        min={1}
-        max={maxAmount}
-        step={1}
-        value={draft}
-        onValueChange={setDraft}
-        onValueCommitted={(value) => {
-          if (value === null) {
-            setDraft(amount);
-            return;
-          }
-          const next = Math.min(maxAmount, Math.max(1, Math.round(value)));
-          setDraft(next);
-          if (next !== amount) props.onChange(next * UNIT_MINUTES[unit]);
-        }}
-      >
-        <NumberFieldGroup>
-          <NumberFieldDecrement aria-label="Decrease" />
-          <NumberFieldInput
-            aria-label="Amount"
-            // Base UI commits on blur but not on Enter; refocus so keyboard users stay put.
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              const input = event.currentTarget;
-              input.blur();
-              input.focus();
-            }}
-          />
-          <NumberFieldIncrement aria-label="Increase" />
-        </NumberFieldGroup>
-      </NumberField>
+      <AmountField
+        key={unit}
+        value={amount}
+        max={Math.floor(MAX_SNOOZE_PRESET_MINUTES / UNIT_MINUTES[unit])}
+        label="Amount"
+        onChange={(next) => props.onChange(next * UNIT_MINUTES[unit])}
+      />
       <Select
         value={unit}
         items={amount === 1 ? SINGULAR_UNIT_LABELS : UNIT_LABELS}
@@ -468,5 +445,56 @@ function DurationFields(props: { minutes: number; onChange: (minutes: number) =>
         </SelectPopup>
       </Select>
     </div>
+  );
+}
+
+function AmountField(props: {
+  value: number;
+  max: number;
+  label: string;
+  onChange: (value: number) => void;
+}) {
+  // Typing stays local until the field commits (blur, Enter, or a step), so half-typed
+  // values never reach the server.
+  const [draft, setDraft] = useState<number | null>(props.value);
+  const [draftSource, setDraftSource] = useState(props.value);
+  if (draftSource !== props.value) {
+    setDraftSource(props.value);
+    setDraft(props.value);
+  }
+  return (
+    <NumberField
+      size="sm"
+      className="w-32"
+      min={1}
+      max={props.max}
+      step={1}
+      value={draft}
+      onValueChange={setDraft}
+      onValueCommitted={(value) => {
+        if (value === null) {
+          setDraft(props.value);
+          return;
+        }
+        const next = Math.min(props.max, Math.max(1, Math.round(value)));
+        setDraft(next);
+        if (next !== props.value) props.onChange(next);
+      }}
+    >
+      <NumberFieldGroup>
+        <NumberFieldDecrement aria-label="Decrease" />
+        <NumberFieldInput
+          aria-label={props.label}
+          // Base UI commits on blur but not on Enter; refocus so keyboard users stay put.
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            const input = event.currentTarget;
+            input.blur();
+            input.focus();
+          }}
+        />
+        <NumberFieldIncrement aria-label="Increase" />
+      </NumberFieldGroup>
+    </NumberField>
   );
 }

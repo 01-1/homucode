@@ -103,7 +103,8 @@ export type SidebarAutoSettleAfterDays = typeof SidebarAutoSettleAfterDays.Type;
 const DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS: SidebarAutoSettleAfterDays = 7;
 
 export const MAX_SNOOZE_PRESET_MINUTES = 30 * 24 * 60;
-export const MAX_SNOOZE_PRESETS = 12;
+export const MAX_SNOOZE_PRESETS = 16;
+export const MAX_SNOOZE_PRESET_DAYS_AHEAD = 30;
 export const SnoozePresetDay = Schema.Literals([
   "today",
   "tomorrow",
@@ -116,7 +117,11 @@ export const SnoozePresetDay = Schema.Literals([
   "sunday",
 ]);
 export type SnoozePresetDay = typeof SnoozePresetDay.Type;
-/** `after` wakes a fixed time from now. `at` wakes at a local time; a weekday is its next occurrence after today. */
+const SnoozePresetTime = Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):[0-5]\d$/));
+/**
+ * `after` wakes a fixed time from now. `at` wakes at a local time on `day` (a weekday is its
+ * next occurrence after today) or `days` calendar days after today.
+ */
 export const SnoozePresetSetting = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("after"),
@@ -125,7 +130,12 @@ export const SnoozePresetSetting = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("at"),
     day: SnoozePresetDay,
-    time: Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):[0-5]\d$/)),
+    time: SnoozePresetTime,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("at"),
+    days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_SNOOZE_PRESET_DAYS_AHEAD })),
+    time: SnoozePresetTime,
   }),
 ]);
 export type SnoozePresetSetting = typeof SnoozePresetSetting.Type;

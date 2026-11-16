@@ -262,6 +262,7 @@ function snoozePresetDaysAhead(
   setting: Extract<SnoozePresetSetting, { kind: "at" }>,
   now: Date,
 ): number {
+  if ("days" in setting) return setting.days;
   if (setting.day === "today") return 0;
   if (setting.day === "tomorrow") return 1;
   return (WEEKDAY_INDEX[setting.day] - now.getDay() + 7) % 7 || 7;
@@ -275,6 +276,7 @@ function snoozePresetLabel(setting: SnoozePresetSetting, daysAhead: number): str
     return hour < 12 ? "This morning" : hour < 17 ? "This afternoon" : "This evening";
   }
   if (daysAhead === 1) return "Tomorrow";
+  if ("days" in setting) return `In ${pluralize(daysAhead, "day")}`;
   if (setting.day === "monday") return "Next week";
   return daysAhead === 7 ? `Next ${capitalize(setting.day)}` : capitalize(setting.day);
 }
@@ -282,7 +284,9 @@ function snoozePresetLabel(setting: SnoozePresetSetting, daysAhead: number): str
 export function snoozePresetId(setting: SnoozePresetSetting): string {
   return setting.kind === "after"
     ? `after:${setting.minutes}`
-    : `at:${setting.day}:${setting.time}`;
+    : "days" in setting
+      ? `at:${setting.days}d:${setting.time}`
+      : `at:${setting.day}:${setting.time}`;
 }
 
 export function resolveSnoozePreset(
@@ -302,16 +306,24 @@ export function resolveSnoozePreset(
     if (wake.getTime() <= now.getTime()) return null;
   }
   const label = snoozePresetLabel(setting, daysAhead);
-  // Durations and "Next week" don't name the wake day, so a wake on another day shows it.
-  const labelNamesDay = setting.kind === "at" && label !== "Next week";
+  // Durations, "In 2 days" and "Next week" don't name the wake day, so a wake on another day
+  // shows it, with the date once the weekday alone could mean two different days.
+  const labelNamesDay =
+    setting.kind === "at" && !("days" in setting && daysAhead > 1) && label !== "Next week";
   const time = formatTime(wake);
+  const weekOrMoreAhead = wake.getTime() >= addSnoozeDays(now, 7).setHours(0, 0, 0, 0);
   return {
     id: snoozePresetId(setting),
     label,
     whenLabel:
       labelNamesDay || wake.toDateString() === now.toDateString()
         ? time
-        : `${wake.toLocaleDateString(undefined, { weekday: "short" })} ${time}`,
+        : `${wake.toLocaleDateString(
+            undefined,
+            weekOrMoreAhead
+              ? { weekday: "short", month: "short", day: "numeric" }
+              : { weekday: "short" },
+          )} ${time}`,
     snoozedUntil: wake.toISOString(),
   };
 }
