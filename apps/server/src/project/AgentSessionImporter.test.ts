@@ -1021,7 +1021,7 @@ it.effect("imports another environment's transcript as history the first turn re
     });
     expect((yield* projections.getThread(unconfigured.threadId)).modelSelection).toEqual({
       instanceId: CODEX_MODEL_SELECTION.instanceId,
-      model: DEFAULT_MODEL_BY_PROVIDER.codex,
+      model: DEFAULT_MODEL_BY_PROVIDER[ProviderDriverKind.make("codex")],
     });
   }).pipe(Effect.scoped, Effect.provide(persistence)),
 );

@@ -612,7 +612,9 @@ const make = Effect.gen(function* () {
           : undefined;
       if (model !== undefined) return { instanceId, model };
     }
-    return yield* Effect.fail(new Error("No provider on this environment can run the thread."));
+    return yield* new ThreadTranscriptImportError({
+      cause: "No provider on this environment can run the thread.",
+    });
   });
 
   /**
