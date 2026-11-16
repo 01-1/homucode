@@ -21,6 +21,7 @@ import {
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   THEME_HALVES_STORAGE_KEY,
+  THEME_STORAGE_KEY as STORAGE_KEY,
   ThemePreference,
   type ThemeAppearance,
   type ThemeHalves,
@@ -39,7 +40,6 @@ type ThemeSnapshot = {
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
-const STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: DEFAULT_THEME_ID,

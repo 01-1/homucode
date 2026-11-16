@@ -8,6 +8,7 @@ import {
   useSettingsSyncPrompt,
 } from "../settingsSync";
 import { updateClientSettings } from "../hooks/useSettings";
+import { THEME_SYNC_LABELS } from "../themeSync";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -21,12 +22,14 @@ import {
 import { Toggle, ToggleGroup } from "./ui/toggle-group";
 
 function settingLabel(key: string): string {
+  const themeLabel = THEME_SYNC_LABELS[key];
+  if (themeLabel !== undefined) return themeLabel;
   const words = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function formatValue(value: unknown): string {
-  if (value === undefined) return "not set";
+  if (value === undefined || value === null) return "not set";
   const text = typeof value === "string" ? value || "empty" : JSON.stringify(value);
   return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 }

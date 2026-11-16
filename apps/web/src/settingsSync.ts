@@ -24,9 +24,12 @@ import {
   subscribeClientSettings,
   subscribeClientSettingsHydration,
 } from "~/hooks/useSettings";
+import { refreshTheme, subscribeRenderedAppearance } from "~/hooks/useTheme";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 import { primaryServerConfigAtom, serverEnvironment } from "~/state/server";
+import { invalidateCustomThemes, subscribeToCustomThemes } from "~/themePalette";
+import { readThemeSyncValues, writeThemeSyncValues } from "~/themeSync";
 
 const BASE_STORAGE_PREFIX = "t3code:client-settings-sync-base:v1:";
 const LOCAL_CHANGE_DELAY_MS = 800;
@@ -102,6 +105,17 @@ function writeBase(environmentId: EnvironmentId, base: SyncedClientSettings): vo
   }
 }
 
+/** Client settings plus the theme choice, which lives in localStorage rather than client settings. */
+function readLocalSyncedValues(): SyncedValues {
+  let theme: SyncedValues = {};
+  try {
+    theme = readThemeSyncValues(localStorage);
+  } catch {
+    // Unreadable storage leaves the theme out of this sync.
+  }
+  return { ...syncedValuesFromClientSettings(getClientSettings()), ...theme };
+}
+
 /** Patches only what the merge changed, so edits made meanwhile survive the retry. */
 async function applyLocally(values: SyncedValues, local: SyncedValues): Promise<void> {
   const changed = Object.fromEntries(
@@ -109,6 +123,16 @@ async function applyLocally(values: SyncedValues, local: SyncedValues): Promise<
       ([key, value]) => !syncedValuesEqual({ value }, { value: local[key] }),
     ),
   );
+  let themeChanged = false;
+  try {
+    themeChanged = writeThemeSyncValues(localStorage, changed);
+  } catch (error) {
+    console.warn("[SETTINGS_SYNC] could not apply the synced theme", error);
+  }
+  if (themeChanged) {
+    invalidateCustomThemes();
+    refreshTheme();
+  }
   const patch = clientSettingsPatchFromSyncedValues(changed);
   await persistClientSettingsUpdate((current) => ({ ...current, ...patch }));
 }
@@ -160,7 +184,7 @@ async function syncOnce(): Promise<void> {
   // Without the loaded config the default revision 0 would read as an empty server.
   if (promptDeferred || environmentId === null || config === null) return;
   const remote = config.settings.syncedClientSettings;
-  const local = syncedValuesFromClientSettings(settings);
+  const local = readLocalSyncedValues();
   const base = readBase(environmentId);
   if (base?.revision === remote.revision && syncedValuesEqual(local, base.values)) return;
 
@@ -224,6 +248,8 @@ export function startClientSettingsSync(): () => void {
     appAtomRegistry.subscribe(primaryServerConfigAtom, requestSync),
     subscribeClientSettingsHydration(requestSync),
     subscribeClientSettings(onLocalChange),
+    subscribeRenderedAppearance(onLocalChange),
+    subscribeToCustomThemes(onLocalChange),
   ];
   requestSync();
   return () => {
