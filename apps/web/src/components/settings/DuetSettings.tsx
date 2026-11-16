@@ -70,7 +70,7 @@ function EnvironmentDuetSettings({ environmentId }: { environmentId: Environment
           </SettingsRow>
           <SettingsRow
             {...searchableSetting("duet-morning-brief")}
-            description="A daily summary of work in progress, decisions for Homura, and proposed next steps. The agent plans and asks for approval before acting."
+            description="A daily summary of work in progress, decisions waiting on you, and proposed next steps. The agent plans and asks for approval before acting."
             control={
               <Switch
                 aria-label="Morning brief"

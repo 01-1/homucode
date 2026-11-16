@@ -26,7 +26,7 @@ export function duetIconColor(threadId: string, color?: string | null): string {
   return DUET_ICON_COLORS[index]!;
 }
 export const MORNING_BRIEF_PROMPT =
-  "Prepare Homura's morning brief for this project. Summarise what is in progress, what needs Homura's decision, and propose next steps. Do not carry out those steps or make changes. Ask for approval before acting.";
+  "Prepare the user's morning brief for this project. Summarise what is in progress, what needs the user's decision, and propose next steps. Do not carry out those steps or make changes. Ask for approval before acting.";
 
 export function findDuetMorningBriefThread<
   T extends Pick<
