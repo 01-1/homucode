@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   BUILT_IN_THEME_IDS,
   BUILT_IN_THEMES,
+  DEFAULT_THEME_ID,
   T3_CHAT_THEME,
   T3_CODE_LIGHT_THEME_COLORS,
   T3_CODE_DARK_THEME_COLORS,
@@ -233,9 +234,10 @@ describe("mobile themes", () => {
       resolveMobileThemeIds({ themeId: "grove", lightThemeId: "iris", darkThemeId: "ocean" }),
     ).toEqual({ light: "iris", dark: "ocean" });
     expect(resolveMobileThemeIds({ themeId: "grove", lightThemeId: "missing" })).toEqual({
-      light: DEFAULT_MOBILE_THEME_ID,
+      light: DEFAULT_THEME_ID,
       dark: "grove",
     });
+    expect(resolveMobileThemeIds({})).toEqual({ light: DEFAULT_THEME_ID, dark: DEFAULT_THEME_ID });
   });
 
   it("changes either theme without switching the active appearance", () => {

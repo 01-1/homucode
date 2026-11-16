@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { BUILT_IN_THEMES, LAVENDER_THEME } from "@t3tools/shared/themePalettes";
 import indexHtml from "../index.html?raw";
+import { readAppearanceModePreference, readThemePreference } from "./hooks/useTheme";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
   ENVIRONMENT_THEMES_STORAGE_KEY,
   getDefaultThemeColors,
   getThemeColorsForMode,
   invalidateCustomThemes,
-  isKnownThemePreference,
   publishedThemeDefinitions,
   resolveThemeAppearance,
   T3_CHAT_THEME,
-  EMBER_THEME,
   GROVE_THEME,
-  IRIS_THEME,
-  OCEAN_THEME,
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   toCanonicalThemeColor,
@@ -111,22 +109,10 @@ function runtimeResolvedAppearance(
   });
   invalidateCustomThemes();
   try {
-    const raw = storage[THEME_STORAGE_KEY] ?? null;
-    const theme = raw !== null && isKnownThemePreference(raw) ? raw : "system";
-    const followRaw = storage[THEME_FOLLOW_SYSTEM_STORAGE_KEY] ?? null;
-    const appearanceRaw = storage[THEME_APPEARANCE_MODE_STORAGE_KEY] ?? null;
-    const appearanceMode =
-      appearanceRaw === "light" || appearanceRaw === "dark" || appearanceRaw === "system"
-        ? appearanceRaw
-        : followRaw === "true"
-          ? "system"
-          : followRaw === "false"
-            ? null
-            : theme === "system"
-              ? "system"
-              : null;
+    const theme = readThemePreference();
+    const appearanceMode = readAppearanceModePreference(theme);
     const followSystem = appearanceMode === "system";
-    return resolveThemeAppearance(theme, prefersDark, followSystem, appearanceMode ?? undefined);
+    return resolveThemeAppearance(theme, prefersDark, followSystem, appearanceMode);
   } finally {
     vi.unstubAllGlobals();
     invalidateCustomThemes();
@@ -189,6 +175,11 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
+      name: "a stored default palette with no appearance setting follows the OS",
+      storage: { [THEME_STORAGE_KEY]: "lavender" },
+      prefersDark: true,
+    },
+    {
       name: "a legacy t3-grove preference resolves through the alias",
       storage: { [THEME_STORAGE_KEY]: "t3-grove", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
@@ -225,7 +216,7 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
-      name: "a removed custom theme falls back to system",
+      name: "a removed custom theme falls back to the default palette",
       storage: { [THEME_STORAGE_KEY]: "gone-theme" },
       prefersDark: true,
     },
@@ -310,7 +301,7 @@ describe("index.html boot script", () => {
   });
 
   it("keeps every built-in boot splash in sync with the real palettes", () => {
-    for (const theme of [T3_CHAT_THEME, GROVE_THEME, OCEAN_THEME, EMBER_THEME, IRIS_THEME]) {
+    for (const theme of BUILT_IN_THEMES) {
       expect(theme.appearance).toBe("light");
       for (const mode of ["light", "dark"] as const) {
         const colors = getThemeColorsForMode(theme, mode);
@@ -330,6 +321,17 @@ describe("index.html boot script", () => {
         expect(boot.backgroundColor).toBe(colors!.chrome);
         expect(boot.metaContent).toBe(colors!.chrome);
       }
+    }
+  });
+
+  it("paints the default palette when nothing is stored, following the OS", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const colors = getThemeColorsForMode(LAVENDER_THEME, mode)!;
+      const boot = runBootScript({ storage: {}, prefersDark: mode === "dark" });
+      expect(boot.themeId).toBe(LAVENDER_THEME.id);
+      expect(boot.isDark).toBe(mode === "dark");
+      expect(boot.bootVariables["--boot-background"]).toBe(colors.canvas);
+      expect(boot.backgroundColor).toBe(colors.chrome);
     }
   });
 
