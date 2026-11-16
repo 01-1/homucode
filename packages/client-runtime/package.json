@@ -323,6 +323,10 @@
       "types": "./src/state/clientSettingsSync.ts",
       "default": "./src/state/clientSettingsSync.ts"
     },
+    "./state/client-settings-sync-runner": {
+      "types": "./src/state/clientSettingsSyncRunner.ts",
+      "default": "./src/state/clientSettingsSyncRunner.ts"
+    },
     "./state/shared-settings": {
       "types": "./src/state/sharedSettings.ts",
       "default": "./src/state/sharedSettings.ts"

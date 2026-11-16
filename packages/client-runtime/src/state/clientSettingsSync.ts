@@ -139,3 +139,24 @@ export function resolveClientSettingsSync(
   }
   return values;
 }
+
+/** Synced settings that are not client settings, named for people. */
+const SYNCED_SETTING_LABELS: Readonly<Record<string, string>> = {
+  theme: "Theme",
+  themeAppearanceMode: "Appearance",
+  themeHalves: "Light and dark themes",
+  customThemes: "Theme library",
+};
+
+export function syncedSettingLabel(key: string): string {
+  const label = SYNCED_SETTING_LABELS[key];
+  if (label !== undefined) return label;
+  const words = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function formatSyncedSettingValue(value: unknown): string {
+  if (value === undefined || value === null) return "not set";
+  const text = typeof value === "string" ? value || "empty" : JSON.stringify(value);
+  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+}

@@ -96,6 +96,7 @@ import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteSc
 import { SettingsEnvironmentDetailRouteScreen } from "./features/settings/SettingsEnvironmentDetailRouteScreen";
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsFollowUpRouteScreen } from "./features/settings/SettingsFollowUpRouteScreen";
+import { SettingsSyncSheet } from "./features/settings/SettingsSyncSheet";
 import { SettingsLanguageRouteScreen } from "./features/settings/SettingsLanguageRouteScreen";
 import {
   SettingsEnvironmentMaintenanceRouteScreen,
@@ -709,6 +710,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
       options: sheetRoute({ detent: 0.55, maxDetent: 0.7, androidFit: true }),
     }),
     ...SETTINGS_SCREENS,
+    SettingsSync: createNativeStackScreen({
+      screen: SettingsSyncSheet,
+      linking: "settings/sync",
+      options: sheetRoute({ detent: 0.75, androidFit: true }),
+    }),
     SettingsLegal: createNativeStackScreen({
       screen: SettingsLegalRouteScreen,
       linking: "settings/legal",

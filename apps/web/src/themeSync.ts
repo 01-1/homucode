@@ -13,13 +13,6 @@ const THEME_SYNC_STORAGE_KEYS = {
   customThemes: CUSTOM_THEMES_STORAGE_KEY,
 } as const;
 
-export const THEME_SYNC_LABELS: Readonly<Record<string, string>> = {
-  theme: "Theme",
-  themeAppearanceMode: "Appearance",
-  themeHalves: "Light and dark themes",
-  customThemes: "Theme library",
-};
-
 type ThemeStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 /** Unset is null, not absent: the merge reads an absent key as no opinion, so clearing would never sync. */

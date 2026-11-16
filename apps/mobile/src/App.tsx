@@ -105,6 +105,7 @@ import {
 import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
+import { installClientSettingsSync } from "./features/settings/settingsSync";
 
 import "../global.css";
 
@@ -213,6 +214,7 @@ const appServiceDisposers = [
   installAppShortcuts(linkToAppPath),
   installAppUpdateChecks(),
   installShowcaseCapture(rootPathnameFromState),
+  installClientSettingsSync(() => linkToAppPath("/settings/sync")),
 ];
 disposeOnFoundationReplace(typeof module === "undefined" ? undefined : module.hot, () => {
   for (const dispose of appServiceDisposers) dispose();
