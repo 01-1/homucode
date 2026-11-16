@@ -31,8 +31,7 @@ describe("mutateProjectWithClone", () => {
       const result = yield* mutateProjectWithClone(
         {
           bootstrap: () => Effect.die("unused"),
-          bootstrap: () => Effect.die("unused"),
-        create: () => Effect.die("unused"),
+          create: () => Effect.die("unused"),
           update: () => Effect.die("unused"),
           delete: () => Effect.fail(rejected),
         },
