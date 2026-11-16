@@ -598,6 +598,12 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.ghqCloneLayout !== DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout
       ? ["Clone into host folders"]
       : []),
+    ...(settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled
+      ? ["Status line"]
+      : []),
+    ...(settings.statusLineCommand !== DEFAULT_UNIFIED_SETTINGS.statusLineCommand
+      ? ["Status line command"]
+      : []),
     ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
       ? ["Unpin confirmation"]
       : []),
@@ -727,6 +733,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       newWorktreesStartFromOrigin: DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       ghqCloneLayout: DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout,
+      statusLineEnabled: DEFAULT_UNIFIED_SETTINGS.statusLineEnabled,
+      statusLineCommand: DEFAULT_UNIFIED_SETTINGS.statusLineCommand,
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
@@ -1233,9 +1241,64 @@ export function ChatSettingsPanel() {
   ] as const;
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const mixedStatusLineCommand = useScopedSettingsMixed(["statusLineCommand"]);
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="status-line" title="Status line">
+        <SettingsRow
+          serverScoped
+          settingKeys={["statusLineEnabled"]}
+          {...searchableSetting("status-line")}
+          description="Show a line under the composer with the model, context, and usage limits, like Claude Code's status line."
+          resetAction={
+            settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled ? (
+              <SettingResetButton
+                label="status line"
+                onClick={() =>
+                  updateSettings({ statusLineEnabled: DEFAULT_UNIFIED_SETTINGS.statusLineEnabled })
+                }
+              />
+            ) : null
+          }
+          control={
+            <ScopedSwitch
+              settingKeys={["statusLineEnabled"]}
+              checked={settings.statusLineEnabled}
+              onCheckedChange={(checked) => updateSettings({ statusLineEnabled: Boolean(checked) })}
+              aria-label="Show the status line"
+            />
+          }
+        />
+        <SettingsRow
+          serverScoped
+          settingKeys={["statusLineCommand"]}
+          {...searchableSetting("status-line-command")}
+          description="A command that reads Claude Code's status line JSON on stdin and prints the line. Leave empty for the built-in 01-1/statusline script, which needs bash and jq."
+          resetAction={
+            settings.statusLineCommand !== DEFAULT_UNIFIED_SETTINGS.statusLineCommand ? (
+              <SettingResetButton
+                label="status line command"
+                onClick={() =>
+                  updateSettings({ statusLineCommand: DEFAULT_UNIFIED_SETTINGS.statusLineCommand })
+                }
+              />
+            ) : null
+          }
+          control={
+            <DraftInput
+              size="sm"
+              className="w-full sm:w-72"
+              value={mixedStatusLineCommand ? "" : settings.statusLineCommand}
+              onCommit={(next) => updateSettings({ statusLineCommand: next.trim() })}
+              placeholder={mixedStatusLineCommand ? "Mixed" : "Built-in"}
+              spellCheck={false}
+              aria-label="Status line command"
+            />
+          }
+        />
+      </SettingsSection>
+
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
           {...searchableSetting("composer-rich-text")}

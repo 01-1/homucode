@@ -25,6 +25,8 @@ export interface ProcessRunInput {
   readonly timeout?: Duration.Input | undefined;
   readonly env?: NodeJS.ProcessEnv | undefined;
   readonly stdin?: string | undefined;
+  /** For commands free to exit without reading stdin, whose early close would fail the write. */
+  readonly ignoreStdinErrors?: boolean | undefined;
   /** Receives every stdout chunk, including bytes beyond the buffered output limit. */
   readonly onStdoutChunk?: ((chunk: Uint8Array) => void) | undefined;
   /** Runs after successful spawn, before cancellation can interrupt acquisition. */
@@ -336,6 +338,7 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
                 cause,
               }),
           ),
+          input.ignoreStdinErrors === true ? Effect.ignore : (effect) => effect,
         );
 
   const [stdout, stderr] = yield* Effect.all(

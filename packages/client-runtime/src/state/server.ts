@@ -1836,6 +1836,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:check-secret-source",
       tag: WS_METHODS.serverCheckSecretSource,
     }),
+    renderStatusLine: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:render-status-line",
+      tag: WS_METHODS.serverRenderStatusLine,
+      concurrency: {
+        mode: "latest",
+        key: ({ environmentId, input }) => `${environmentId}:${String(input.input.session_id)}`,
+      },
+    }),
     listTextGeneratorModels: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:list-text-generator-models",
       tag: WS_METHODS.serverListTextGeneratorModels,
