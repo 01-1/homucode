@@ -8,6 +8,7 @@ import {
   type ProviderReplayEntry,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 
 import { ClaudeOrchestratorReplayHarness } from "../Adapters/ClaudeAdapterV2.testkit.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -17,9 +18,11 @@ import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import { subagentInput } from "./fixtures/subagent/input.ts";
 import { runOrchestratorV2Scenario } from "./OrchestratorScenario.ts";
 import * as ProviderReplayHarness from "./ProviderReplayHarness.ts";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 import {
   CLAUDE_MODEL_SELECTION,
+  SUBAGENT_PROMPT,
   materializeFixtureInput,
   projectionFor,
 } from "./fixtures/shared.ts";
@@ -50,10 +53,13 @@ describe("Claude Agent SDK replay fixtures", () => {
     Effect.gen(function* () {
       const raw = yield* readClaudeTranscriptFixture("subagent");
       const transcript = yield* ClaudeOrchestratorReplayHarness.decodeTranscript(
-        materializeReplayTranscriptRuntimeInstructions(raw, {
-          driver: ProviderDriverKind.make("claudeAgent"),
-          model: CLAUDE_MODEL_SELECTION.model,
-        }),
+        materializeReplayTranscriptRuntimeInstructions(
+          materializeReplayPromptTimestamps(raw, [SUBAGENT_PROMPT], DateTime.makeUnsafe(0)),
+          {
+            driver: ProviderDriverKind.make("claudeAgent"),
+            model: CLAUDE_MODEL_SELECTION.model,
+          },
+        ),
       );
       const materialized = yield* materializeFixtureInput({
         scenario: "subagent",

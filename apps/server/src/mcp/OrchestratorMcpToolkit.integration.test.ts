@@ -20,6 +20,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -27,6 +28,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
 import { McpSchema, McpServer } from "effect/ai";
+import { TestClock } from "effect/testing";
 
 import { CodexOrchestratorReplayHarness } from "../orchestration-v2/Adapters/CodexAdapterV2.testkit.ts";
 import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
@@ -55,6 +57,9 @@ import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../peer/PeerLinkRequests.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
+
+import { materializeReplayPromptTimestamps } from "../orchestration-v2/testkit/ReplayMessageTimestamps.ts";
+import { provideDeterministicTestRuntime } from "../orchestration-v2/testkit/DeterministicRuntime.ts";
 
 const layerOrchestratorToolkit = McpHttpServer.layerOrchestratorToolkit.pipe(
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
@@ -109,10 +114,14 @@ const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTran
     // The recording ends when the recorder closes the app-server while the parent
     // turn is still open. This test keeps acting as that parent afterwards, and
     // replaying the exit would kill the shared process and fail the parent run.
-    return {
-      ...transcript,
-      entries: transcript.entries.filter((entry) => entry.type !== "runtime_exit"),
-    };
+    return materializeReplayPromptTimestamps(
+      {
+        ...transcript,
+        entries: transcript.entries.filter((entry) => entry.type !== "runtime_exit"),
+      },
+      [parentPrompt, delegatedPrompt, cancellationPrompt, queuedFollowupPrompt],
+      DateTime.makeUnsafe(0),
+    );
   },
   Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
@@ -441,6 +450,8 @@ describe("orchestrator MCP toolkit", () => {
             ),
           );
 
+        // Task projections order follow-ups by their creation time.
+        yield* TestClock.adjust("1 millis");
         const queuedFollowupCall = yield* invoke("t3_thread_send", {
           threadId: localChild(delegated.childThreadId),
           message: queuedFollowupPrompt,
@@ -801,6 +812,6 @@ describe("orchestrator MCP toolkit", () => {
             .map(({ threadId }) => threadId),
         ).toEqual([delegated.childThreadId]);
       }).pipe(Effect.provide(layerTest));
-    }),
+    }).pipe(provideDeterministicTestRuntime),
   );
 });

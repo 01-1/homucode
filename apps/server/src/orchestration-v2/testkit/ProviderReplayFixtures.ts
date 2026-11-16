@@ -2,6 +2,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import type { OrchestrationV2DomainEvent, ProviderReplayTranscript } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
@@ -20,6 +22,7 @@ import {
   runOrchestratorV2ProviderReplayScenario,
   type OrchestratorV2ProviderReplayHarness,
 } from "./ProviderReplayHarness.ts";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 
 // Each driver's fixtures run from its own <Provider>ReplayFixtures.integration.test.ts,
@@ -115,12 +118,29 @@ const runFixtureProvider = Effect.fn("runOrchestratorReplayFixture")(function* <
   WorkspaceError,
 >(input: ReplayFixtureRun<Transcript, Error, WorkspaceError>) {
   const recordedTranscript = yield* readReplayFixtureTranscript(input.driver.transcriptFile);
-  const rawTranscript = input.transformTranscript?.(recordedTranscript) ?? recordedTranscript;
+  const fixtureInput = input.buildInput();
+  let timestampedTranscript = recordedTranscript;
+  let elapsedMillis = 0;
+  for (const step of fixtureInput.steps) {
+    if (step.type === "advance_clock")
+      elapsedMillis += Duration.toMillis(Duration.fromInputUnsafe(step.duration));
+    if (
+      "text" in step &&
+      !step.text.trimStart().startsWith("/") &&
+      !step.text.trimStart().startsWith("$")
+    ) {
+      timestampedTranscript = materializeReplayPromptTimestamps(
+        timestampedTranscript,
+        [step.text],
+        DateTime.makeUnsafe(elapsedMillis),
+      );
+    }
+  }
+  const rawTranscript = input.transformTranscript?.(timestampedTranscript) ?? timestampedTranscript;
   const replayTranscript = materializeReplayTranscriptRuntimeInstructions(
     transcriptEntriesThroughLabel(rawTranscript, input.driver.transcriptEntriesThroughLabel),
     { driver: input.driver.driver, model: input.driver.modelSelection.model },
   );
-  const fixtureInput = input.buildInput();
   const workspace = yield* checkpointWorkspace(input.fixtureName, fixtureInput.workspaceFiles);
   const transcript = yield* input.harness.decodeTranscript(
     input.materializeWorkspace === undefined
