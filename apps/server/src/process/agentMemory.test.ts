@@ -245,7 +245,7 @@ describe("agent reservations", () => {
       Effect.gen(function* () {
         yield* memory.setLimitUpdater(
           Effect.gen(function* () {
-            const config = (yield* settings.getSettings).agentMemory;
+            const config = yield* memory.settings;
             NodeFS.writeFileSync(NodePath.join(root, "memory.max"), String(config.groupMaxBytes));
           }),
         );
