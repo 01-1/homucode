@@ -57,6 +57,10 @@ vi.mock("../connection/runtime", async () => {
     ),
   };
 });
+vi.mock("./threads", async () => {
+  const { Atom } = await import("effect/reactivity");
+  return { environmentThreadShells: { threadShellsAtom: Atom.make([]) } };
+});
 vi.mock("./server", async () => {
   const { Atom } = await import("effect/reactivity");
   const config = Atom.make({ environment: { capabilities: { threadPullRequests: true } } });

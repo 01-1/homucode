@@ -144,6 +144,7 @@ vi.mock("../state/entities", () => ({
   readProject: () => ({ workspaceRoot: "/project" }),
   readDelegatedUnderParent: () => new Set(),
 }));
+vi.mock("../components/NewProjectMoveDialog", () => ({ requestNewProjectMove: vi.fn() }));
 vi.mock("../components/Sidebar.logic", () => ({
   getFallbackThreadIdAfterDelete: () => null,
   pinOrderKeyBetween: () => "a",
