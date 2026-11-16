@@ -1864,6 +1864,9 @@ export default function ChatView(props: ChatViewProps) {
   };
   const sendAppMessageStable = useStableCallback(sendAppMessage);
   const queuedRunsControlRef = useRef<QueuedRunsControlHandle>(null);
+  const steerAllQueuedStable = useStableCallback(
+    () => routeKind !== "draft" && queuedRunsControlRef.current?.steerAll() === true,
+  );
 
   const {
     activatePanelTerminalStable,
@@ -3590,6 +3593,7 @@ export default function ChatView(props: ChatViewProps) {
                                 }
                                 phase={phase}
                                 isCompacting={isCompacting}
+                                onSteerAllQueued={steerAllQueuedStable}
                                 canInterrupt={canInterruptRunningThread}
                                 isSendBusy={
                                   (isSendBusy && !sendQueuesBehindSetup) ||

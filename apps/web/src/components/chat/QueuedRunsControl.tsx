@@ -24,7 +24,15 @@ import {
   XIcon,
 } from "lucide-react";
 import * as DateTime from "effect/DateTime";
-import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
 import { threadEnvironment } from "../../state/threads";
@@ -63,6 +71,7 @@ const QUEUE_VISIBLE_ROWS = 3;
 
 export interface QueuedRunsControlHandle {
   steerNext: (repeat: boolean) => boolean;
+  steerAll: () => boolean;
   editLatest: (repeat: boolean) => boolean;
 }
 
@@ -103,12 +112,22 @@ export function QueuedRunsControl({
     scopeThreadRef(props.environmentId, props.threadId),
   )?.projection;
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun);
+  // A steer-all promote can race a restart steer the projection has not shown yet; it retries.
+  const promoteQuietly = useAtomCommand(threadEnvironment.promoteQueuedRun, {
+    reportFailure: false,
+  });
   const resume = useAtomCommand(threadEnvironment.resumeThreadQueue);
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun);
   const [showAll, setShowAll] = useState(false);
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
   const steerInFlightRef = useRef(false);
+  const steerAllRef = useRef<{
+    targetRunId: RunId;
+    runIds: ReadonlyArray<RunId>;
+    failures: number;
+    refusedAt?: unknown;
+  } | null>(null);
   // Run-only acknowledgements can resurrect pending rows after cancellation or startup.
   const acknowledgedMessageIds = new Set((projection?.messages ?? []).map((message) => message.id));
   const queuedImageAttachmentResources = queuedImageResources(projection);
@@ -195,11 +214,58 @@ export function QueuedRunsControl({
     setBusyRunId(null);
   };
 
+  // Steers one message at a time: a restart steer leaves the turn starting until it runs again.
+  const continueSteerAll = async () => {
+    const pending = steerAllRef.current;
+    if (pending === null || steerInFlightRef.current) return;
+    const runIds = pending.runIds.filter((id) => queued.some(({ run }) => run.id === id));
+    const queuedRunId = runIds[0];
+    if (queuedRunId === undefined || activeRun?.id !== pending.targetRunId) {
+      steerAllRef.current = null;
+      return;
+    }
+    if (!canSendRun(false) || workflow?.canSendNow === true || pending.refusedAt === projection) {
+      return;
+    }
+    steerInFlightRef.current = true;
+    setBusyRunId(queuedRunId);
+    const result = await promoteQuietly({
+      environmentId: props.environmentId,
+      input: { threadId: props.threadId, queuedRunId, targetRunId: pending.targetRunId },
+    });
+    steerAllRef.current =
+      result._tag === "Success"
+        ? { ...pending, runIds: runIds.slice(1), failures: 0 }
+        : pending.failures < 2
+          ? { ...pending, runIds, failures: pending.failures + 1, refusedAt: projection }
+          : null;
+    steerInFlightRef.current = false;
+    setBusyRunId(null);
+    if (result._tag === "Success") void continueSteerAll();
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a steer-all sends its next message once the server shows the turn can take it
+  useEffect(() => {
+    void continueSteerAll();
+  });
+
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
       const next = queued[0];
       if (!next || !canSendRun(startsOwnTurn(next.run))) return false;
       if (!repeat && busyRunId === null) void sendQueuedMessage(next.run.id);
+      return true;
+    },
+    steerAll() {
+      if (activeRun === null || workflow?.canPromoteToSteer !== true) return false;
+      const firstOwnTurn = queued.findIndex(({ run }) => startsOwnTurn(run));
+      const steerable = (firstOwnTurn === -1 ? queued : queued.slice(0, firstOwnTurn)).map(
+        ({ run }) => run.id,
+      );
+      if (steerable.length === 0) return false;
+      if (steerAllRef.current === null && busyRunId === null) {
+        steerAllRef.current = { targetRunId: activeRun.id, runIds: steerable, failures: 0 };
+        void continueSteerAll();
+      }
       return true;
     },
     // Leave the key to caret navigation while editing.

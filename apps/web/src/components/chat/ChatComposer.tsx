@@ -363,6 +363,8 @@ export interface ChatComposerProps {
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
   isCompacting: boolean;
+  /** Steers every queued message into the running turn; false when none can steer. */
+  onSteerAllQueued?: (() => boolean) | undefined;
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
@@ -508,6 +510,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     sendDisabledReason: externalSendDisabledReason,
     isPreparingWorktree,
     isCompacting,
+    onSteerAllQueued,
     environmentUnavailable,
     activePendingApproval: incomingPendingApproval,
     pendingApprovals,
@@ -2286,6 +2289,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       readComposerSnapshot,
       applyPromptReplacement,
       submitComposer,
+      steerAllQueued: () => !composerSendState.hasSendableContent && onSteerAllQueued?.() === true,
       promptSuggestion: offeredPromptSuggestion,
       dismissPromptSuggestion,
     })(key, event, isTaskItem);
