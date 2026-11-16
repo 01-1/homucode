@@ -227,9 +227,13 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     startTransition(() => savePreferences(patch));
   };
 
-  // A theme picked here replaces a synced one the phone could not show.
   const updateThemePreferences = (patch: Partial<Preferences>) => {
-    savePreferences({ ...patch, settingsSyncTheme: undefined });
+    savePreferences(patch);
+  };
+
+  // A theme picked here replaces a synced one the phone could not show.
+  const pickTheme = (patch: Partial<Preferences>) => {
+    updateThemePreferences({ ...patch, settingsSyncTheme: undefined });
   };
 
   const setThemeIdForAppearance = (appearance: MobileThemeAppearance, value: MobileThemeId) => {
@@ -238,13 +242,11 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     const selected = resolveMobileThemeIds(
       storedPreferencesOf(appAtomRegistry.get(mobilePreferencesAtom)) ?? {},
     );
-    updateThemePreferences(
-      createMobileThemeSelectionPatch(selected, themeAppearance, appearance, value),
-    );
+    pickTheme(createMobileThemeSelectionPatch(selected, themeAppearance, appearance, value));
   };
 
   const setThemeIdForBothAppearances = (value: MobileThemeId) => {
-    updateThemePreferences(createMobileThemePairPatch(value));
+    pickTheme(createMobileThemePairPatch(value));
   };
 
   const setThemeMode = (value: MobileThemeMode) => {
