@@ -1016,17 +1016,19 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
         assert.deepEqual(resumes, [
           { instanceId: targetId, nativeId: originalThread.nativeThreadRef?.nativeId },
         ]);
-        assert.deepEqual(
-          messages,
-          ["first", "second"].map((text) => {
-            const message = second.messages.find((message) => message.text === text)!;
+        const timestampedMessages = (
+          texts: ReadonlyArray<string>,
+          projection: OrchestrationV2ThreadProjection,
+        ) =>
+          texts.map((text) => {
+            const message = projection.messages.find((message) => message.text === text)!;
             const sent = DateTime.toDateUtc(message.createdAt);
             const local = DateTime.formatIso(
               DateTime.add(message.createdAt, { minutes: -sent.getTimezoneOffset() }),
             ).slice(0, 19);
             return `${local}: ${text}`;
-          }),
-        );
+          });
+        assert.deepEqual(messages, timestampedMessages(["first", "second"], second));
         assert.equal((yield* Ref.get(state)).closedSessionCount, mode === "pooled" ? 0 : 1);
         if (mode === "pooled") {
           assert.isFalse(
@@ -1043,7 +1045,7 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
         assert.deepEqual(returnedThread.nativeThreadRef, originalThread.nativeThreadRef);
         assert.equal(returnedThread.providerInstanceId, providerInstanceId);
         assert.isEmpty(third.contextHandoffs);
-        assert.deepEqual(messages, ["first", "second", "third"]);
+        assert.deepEqual(messages, timestampedMessages(["first", "second", "third"], third));
       }).pipe(Effect.provide(ProviderReplayHarness.layerWithRegistry({ name }, layerRegistry)));
     }),
 );

@@ -2721,37 +2721,37 @@ describe("UsageService", () => {
       }),
   );
 
-  it.effect(
-    "reports unreadable transcripts as partial and recovers once they can be read",
-    () =>
-      Effect.gen(function* () {
-        const { transcript, settings, home } = yield* setup;
-        const unreadable = NodePath.join(NodePath.dirname(transcript), "other.jsonl");
-        yield* Effect.promise(async () => {
-          await NodeFSP.writeFile(transcript, claudeLine(1, 5));
-          await NodeFSP.writeFile(unreadable, claudeLine(2, 7));
-        });
-        yield* Effect.gen(function* () {
-          const open = NodeFSP.open;
-          using unreadableFile = vi.spyOn(NodeFSP, "open").mockImplementation((file, flags, mode) =>
+  it.effect("reports unreadable transcripts as partial and recovers once they can be read", () =>
+    Effect.gen(function* () {
+      const { transcript, settings, home } = yield* setup;
+      const unreadable = NodePath.join(NodePath.dirname(transcript), "other.jsonl");
+      yield* Effect.promise(async () => {
+        await NodeFSP.writeFile(transcript, claudeLine(1, 5));
+        await NodeFSP.writeFile(unreadable, claudeLine(2, 7));
+      });
+      yield* Effect.gen(function* () {
+        const { open } = yield* Effect.promise(() =>
+          vi.importActual<typeof NodeFSP>("node:fs/promises"),
+        );
+        using unreadableFile = vi
+          .spyOn(NodeFSP, "open")
+          .mockImplementation((file, flags, mode) =>
             file === unreadable
               ? Promise.reject(Object.assign(new Error("Permission denied"), { code: "EACCES" }))
               : open(file, flags, mode),
           );
-          const service = yield* UsageService.make;
-          const partial = yield* service.readSummary(WINDOW);
-          assert.strictEqual(totalOutputTokens(partial), 5);
-          assert.strictEqual(partial.sources[0]?.status, "partial");
+        const service = yield* UsageService.make;
+        const partial = yield* service.readSummary(WINDOW);
+        assert.strictEqual(totalOutputTokens(partial), 5);
+        assert.strictEqual(partial.sources[0]?.status, "partial");
 
-          unreadableFile.mockRestore();
-          const healthy = yield* service.readSummary(WINDOW);
-          assert.strictEqual(totalOutputTokens(healthy), 12);
-          assert.strictEqual(healthy.sources[0]?.status, "ok");
-          assert.isNull(healthy.sources[0]?.message);
-        }).pipe(
-          Effect.provide(layerService({ prefix: "usage-service-unreadable", home, settings })),
-        );
-      }),
+        unreadableFile.mockRestore();
+        const healthy = yield* service.readSummary(WINDOW);
+        assert.strictEqual(totalOutputTokens(healthy), 12);
+        assert.strictEqual(healthy.sources[0]?.status, "ok");
+        assert.isNull(healthy.sources[0]?.message);
+      }).pipe(Effect.provide(layerService({ prefix: "usage-service-unreadable", home, settings })));
+    }),
   );
 
   it.effect(

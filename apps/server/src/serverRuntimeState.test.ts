@@ -17,6 +17,8 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vite-plus/test";
 
+vi.mock("node:fs", { spy: true });
+
 import { renderBootServicePlist, renderBootServiceUnit } from "./cloud/bootService.ts";
 import { ServiceLauncherHostProcess } from "./cloud/serviceLauncherClient.ts";
 import { SERVICE_LAUNCHER_CONTEXT_ENV } from "./cloud/serviceProtocol.ts";
