@@ -4144,7 +4144,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled"
+                                : section === "settled" || settledThreadKeys.has(threadKey)
                                   ? "unsettle"
                                   : "settle"
                             }
