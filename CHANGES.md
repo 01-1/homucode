@@ -57,6 +57,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 - **Android undo notice.** The thread undo notice shows at the top of the screen on Android.
 - **Find in thread on mobile.** The magnifying glass in a thread's header bar opens a find bar that searches the thread's messages and plans, shows the match count, and steps through matches newest first, scrolling to each one and loading earlier history when needed. Upstream has find in thread on web and desktop only.
 - **Faster Android start.** On Android the app starts running about 0.4 seconds sooner at launch. The release app loads each part of its code when it is first used; upstream loads all of it at launch.
+- **Faster phone start.** The phone app starts about a second sooner. Upstream ran a language-support check at every launch whose result never changes on the phone; HomuCode skips it.
 
 ## Add-ons
 
