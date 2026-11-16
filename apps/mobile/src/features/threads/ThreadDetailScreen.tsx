@@ -1554,7 +1554,6 @@ function ThreadDetailBody(
 
       {showContent && findOpen ? (
         <ThreadFindBar
-          key={selectedThreadKey}
           environmentId={props.environmentId}
           threadId={props.selectedThread.id}
           threadKey={selectedThreadKey}
