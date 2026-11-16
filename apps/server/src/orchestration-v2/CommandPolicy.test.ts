@@ -267,6 +267,21 @@ it.each(["/compact", " /LOGOUT "])("queues a steer sent while %s runs", (text) =
   );
 });
 
+it.each([
+  ["stop", true],
+  [" STOP ", true],
+  ["STPO STOp", true],
+  ["Wait!", true],
+  ["sto.", true],
+  ["wait no", false],
+  ["stop the build", false],
+  ["stop stop stop stop", false],
+  ["stopwatch", false],
+  ["", false],
+] as const)("treats %j as a halt message: %s", (text, halts) => {
+  assert.equal(CommandPolicy.isHaltMessage({ text, attachments: [] }), halts);
+});
+
 const layer = it.layer(CommandPolicy.layer);
 
 layer("CommandPolicyV2", (it) => {

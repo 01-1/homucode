@@ -121,6 +121,7 @@ import {
   followUpOwnerRun,
   goalCommandStopsActiveRun,
   isActiveRun,
+  isHaltMessage,
   isNativeMaintenanceCommand,
   resolveMessageDispatchIntent,
 } from "./CommandPolicy.ts";
@@ -7776,6 +7777,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         dispatchMode = { type: "queue_after_active" };
       }
     }
+    // A bare "stop" or "wait" from the user stops the live turn and goes first in the queue,
+    // like a goal command, whichever delivery the client asked for.
+    if (
+      queuedRunStop === undefined &&
+      goalCommand === null &&
+      dispatchMode.type !== "restart_active" &&
+      command.createdBy === "user" &&
+      isHaltMessage(command)
+    ) {
+      const target = projection.runs.findLast(isLiveRun);
+      const targetMessage = projection.messages.find(
+        (message) => message.id === target?.userMessageId,
+      );
+      if (
+        target !== undefined &&
+        (targetMessage === undefined || !isNativeMaintenanceCommand(targetMessage)) &&
+        !(yield* stopReachedRun(command, command.threadId, target.id))
+      ) {
+        queuedRunStop = { runId: target.id, reason: RunExecutionService.USER_STOP_REASON };
+        dispatchMode = { type: "queue_after_active" };
+      }
+    }
     // Steer mailbox deliveries, delegated task questions, and command notices
     // into an active goal under the thread lock: queued behind a long turn or a
     // goal run, they are never seen. Never interrupt/restart a turn for one.
@@ -8181,6 +8204,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         command.turnOnlyModelSelection !== true &&
         !freshContext &&
         goalCommand === null &&
+        queuedRunStop === undefined &&
         worktreeMissingRun === undefined &&
         stoppedRunHoldingFindings === undefined
           ? { autoSteer: true }
