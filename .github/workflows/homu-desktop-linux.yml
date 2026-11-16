@@ -99,8 +99,15 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           files=(release/*.AppImage release/*.blockmap release/latest-linux.yml)
+          # A rerun of an older run must not take "latest" back from a newer build.
+          current=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          current=${current#v}
+          latest=true
+          if [[ -n "$current" && "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; then
+            latest=false
+          fi
           gh release create "v$VERSION" "${files[@]}" \
             --target "$GITHUB_SHA" \
             --title "Homu $VERSION (${GITHUB_SHA::12})" \
             --notes "Linux AppImage built from $GITHUB_SHA on main." \
-            --latest
+            --latest="$latest"
