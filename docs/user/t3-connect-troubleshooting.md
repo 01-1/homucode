@@ -124,3 +124,47 @@ an active link between your account and the host.
   the host. See [Approve new devices](./remote-access.md#approve-new-devices).
 - **This device is not signed in to T3 Connect.** Sign in on this device with
   the same account as the host. T3 Code reconnects once you do.
+- **Your account reached its tunnel limit.** Remove an environment you do not
+  use from your T3 account's T3 Connect page, or
+  [link a paid T3 Chat account](./remote-access.md#more-machines-with-t3-chat)
+  for a higher limit. Then restart T3 Code on the host.
+
+## The clock is off
+
+T3 Connect signs requests with short-lived proofs. When the clock on this
+device or the host is a few minutes wrong, T3 Connect rejects them. Turn on
+automatic date and time on both devices, then retry.
+
+## The host runs an older T3 Code
+
+This app needs a newer T3 Code on the host. Update T3 Code on the host. See
+[Updating T3 Code](./updating.md).
+
+## T3 Connect returned an error
+
+| Error                                                     | Fix                                                                                                                                                                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `environment_link_limit_exceeded` or managed tunnel limit | Remove an unused environment or link a paid T3 Chat account, then restart T3 Code on the host.                                                                                                       |
+| `auth_invalid` or `invalid_bearer`                        | Run `t3 connect login`. If credentials were revoked, run `t3 connect logout`, then `t3 connect` again. Restart the server after signing in.                                                          |
+| Expired or invalid link proof                             | Check the host's date and time, update T3 Code, then restart it.                                                                                                                                     |
+| HTTP 403 without a recognized error                       | If the host requires approval for new devices, update T3 Code on this device and approve it. Otherwise check relay access, proxies, and firewall rules. Keep any Cloudflare Ray ID for a bug report. |
+| HTTP 408, 429, or 5xx                                     | Wait a few minutes. T3 Code retries temporary failures on its own.                                                                                                                                   |
+
+After you fix a permanent rejection, restart the host's server with
+`t3 service restart`. For a foreground server, stop it and run `t3 serve` again.
+
+If T3 Code on the host disappears when SSH closes, see
+[background-service troubleshooting](./background-service.md#troubleshooting).
+
+## Report a problem
+
+If none of this helps, open an issue on
+[GitHub](https://github.com/pingdotgg/t3code/issues). Include:
+
+- The text from **Copy diagnostics** in the environment's **Details**.
+- The output of `t3 connect status` on the host.
+- The trace ID, if one is shown.
+- If the tunnel dropped earlier, the host's tunnel log, `relay-client.ndjson`
+  in the logs folder (`~/.t3/userdata/logs` by default). It records when the
+  tunnel connected, warned, exited, and restarted, with the tunnel token
+  removed.

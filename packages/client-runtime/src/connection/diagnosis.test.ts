@@ -174,3 +174,26 @@ describe("presentConnectionDiagnosis", () => {
     expect(diagnosis?.headline).toBe("This device is not signed in to T3 Connect");
     expect(diagnosis?.hops.find((hop) => hop.result === "failed")?.hop).toBe("device");
     expect(diagnosis?.moreInfoUrl).toContain("sign-in-account-or-link-problems");
+  });
+
+  it("does not report hops as working when the failure names none", () => {
+    const failure = new ConnectionBlockedError({
+      reason: "authentication",
+      detail: "Your cloud sign-in changed. Sign in again to authorize the environment.",
+    });
+    expect(results(backoff(failure))).not.toContainEqual(expect.stringMatching(/:ok$/));
+  });
+
+  it("keeps the relay health status out of a failure that has its own cause", () => {
+    const failure = mapRemoteEnvironmentError(
+      new RemoteEnvironmentAuthFetchError({ message: "Failed to fetch", cause: new TypeError() }),
+    );
+    const diagnosis = presentConnectionDiagnosis({
+      hostLabel: "Mac mini",
+      state: backoff(failure),
+      via: "direct",
+      relayStatus: { status: "offline", endpointFailure: "tunnel_down", endpointStatus: 530 },
+    });
+    expect(diagnosis?.facts.map(([label]) => label)).not.toContain("HTTP status");
+  });
+});
