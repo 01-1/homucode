@@ -9,6 +9,7 @@ import {
   type ProviderReplayTranscript,
   ThreadId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -19,6 +20,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { ClaudeOrchestratorReplayHarness } from "../Adapters/ClaudeAdapterV2.testkit.ts";
 import { CodexOrchestratorReplayHarness } from "../Adapters/CodexAdapterV2.testkit.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import {
   THREAD_FORK_NATIVE_PRIOR_TURN_ALPHA_PROMPT,
@@ -103,7 +105,18 @@ function readTranscript(transcriptPath: string) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(transcriptPath);
-    return yield* decodeProviderReplayNdjson(text);
+    const transcript = yield* decodeProviderReplayNdjson(text);
+    return materializeReplayPromptTimestamps(
+      transcript,
+      transcript.provider === "codex"
+        ? [
+            THREAD_FORK_NATIVE_PRIOR_TURN_ALPHA_PROMPT,
+            THREAD_FORK_NATIVE_PRIOR_TURN_BETA_PROMPT,
+            THREAD_FORK_NATIVE_PRIOR_TURN_REPEAT_PROMPT,
+          ]
+        : metadataStringArray(transcript, "prompts"),
+      DateTime.makeUnsafe(0),
+    );
   });
 }
 

@@ -12,10 +12,12 @@ import {
   type ProviderReplayTranscript,
   ThreadId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 
 import { ClaudeOrchestratorReplayHarness } from "../Adapters/ClaudeAdapterV2.testkit.ts";
 import { CodexOrchestratorReplayHarness } from "../Adapters/CodexAdapterV2.testkit.ts";
@@ -404,7 +406,7 @@ describe("orchestration V2 merge-back provider replay", () => {
           forkUserText: THREAD_MERGE_BACK_SIBLINGS_SECOND_FORK_PROMPT,
           forkAssistantText: "second merge sibling stored",
         });
-        const transcript = parameterizeHandoffs(rawTranscript, [
+        const handoffTranscript = parameterizeHandoffs(rawTranscript, [
           [
             THREAD_MERGE_BACK_SIBLINGS_FIRST_HANDOFF_PROMPT,
             variant.driver === "codex"
@@ -418,6 +420,22 @@ describe("orchestration V2 merge-back provider replay", () => {
               : providerMessage(secondSummary, SECOND_SIBLING_MERGE_USER_TEXT),
           ],
         ]);
+        const transcript = materializeReplayPromptTimestamps(
+          handoffTranscript,
+          [
+            THREAD_MERGE_BACK_SIBLINGS_SOURCE_PROMPT,
+            THREAD_MERGE_BACK_SIBLINGS_FIRST_FORK_PROMPT,
+            THREAD_MERGE_BACK_SIBLINGS_SECOND_FORK_PROMPT,
+            variant.driver === "codex"
+              ? FIRST_SIBLING_MERGE_USER_TEXT
+              : providerMessage(firstSummary, FIRST_SIBLING_MERGE_USER_TEXT),
+            variant.driver === "codex"
+              ? SECOND_SIBLING_MERGE_USER_TEXT
+              : providerMessage(secondSummary, SECOND_SIBLING_MERGE_USER_TEXT),
+            THREAD_MERGE_BACK_SIBLINGS_RECALL_PROMPT,
+          ],
+          DateTime.makeUnsafe(0),
+        );
         const cwd = yield* Effect.acquireRelease(
           Effect.promise(() => makeCheckpointWorkspace(`merge-back-siblings-${variant.driver}`)),
           (directory) =>

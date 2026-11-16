@@ -81,6 +81,7 @@ import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2Pe
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
+import { timestampedPrompt } from "../testkit/ReplayMessageTimestamps.ts";
 
 import * as PortScanner from "../../preview/PortScanner.ts";
 import { attachmentRelativePath } from "../../attachmentStore.ts";
@@ -11418,7 +11419,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
               type: "prompt.offer",
               message: {
                 type: "user",
-                message: { role: "user", content: prompt },
+                message: {
+                  role: "user",
+                  content: timestampedPrompt(prompt, DateTime.makeUnsafe(0)),
+                },
                 parent_tool_use_id: null,
               },
             },

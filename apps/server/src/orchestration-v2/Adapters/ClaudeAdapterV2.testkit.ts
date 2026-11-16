@@ -11,6 +11,7 @@ import {
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { preserveMessageTimestamp } from "@t3tools/shared/messageTimestamp";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import {
   ProviderReplayEntry,
@@ -291,16 +292,18 @@ function stableStringify(value: unknown): string {
 }
 
 function normalizeContextHandoffText(value: string): string {
-  if (!value.startsWith("Context handoff (")) {
-    return value;
-  }
-  const userMessageMarker = "\n\nUser message:\n";
-  const userMessageIndex = value.indexOf(userMessageMarker);
-  const headerEndIndex = value.indexOf(":\n");
-  if (headerEndIndex === -1 || userMessageIndex === -1 || headerEndIndex >= userMessageIndex) {
-    return value;
-  }
-  return `${value.slice(0, headerEndIndex + 2)}<dynamic-summary>${value.slice(userMessageIndex)}`;
+  return preserveMessageTimestamp(value, (text) => {
+    if (!text.startsWith("Context handoff (")) {
+      return text;
+    }
+    const userMessageMarker = "\n\nUser message:\n";
+    const userMessageIndex = text.indexOf(userMessageMarker);
+    const headerEndIndex = text.indexOf(":\n");
+    if (headerEndIndex === -1 || userMessageIndex === -1 || headerEndIndex >= userMessageIndex) {
+      return text;
+    }
+    return `${text.slice(0, headerEndIndex + 2)}<dynamic-summary>${text.slice(userMessageIndex)}`;
+  });
 }
 
 function normalizeReplayFrame(value: unknown): unknown {
