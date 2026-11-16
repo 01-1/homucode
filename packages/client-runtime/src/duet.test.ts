@@ -1,6 +1,72 @@
 import { describe, expect, it } from "vitest";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { duetTaskLabel, orderDuetTasks, selectDuetEnvironment } from "./duet.ts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ScheduledTaskId,
+  ThreadId,
+} from "@t3tools/contracts";
+import {
+  duetMorningBriefInput,
+  duetTaskLabel,
+  findDuetMorningBriefThread,
+  MORNING_BRIEF_PROMPT,
+  orderDuetTasks,
+  selectDuetEnvironment,
+} from "./duet.ts";
+
+it("reuses a renamed bound brief thread within the Duet project, excluding other environments and closed threads", () => {
+  const environmentId = EnvironmentId.make("duet-environment");
+  const projectId = ProjectId.make("duet-project");
+  const row = {
+    environmentId,
+    projectId,
+    id: ThreadId.make("fallback"),
+    title: "Morning brief",
+    archivedAt: null,
+    deletedAt: null,
+  };
+  const bound = { ...row, id: ThreadId.make("bound"), title: "Daily update" };
+  const unavailable = [
+    { ...row, environmentId: EnvironmentId.make("other-environment") },
+    { ...row, projectId: ProjectId.make("other-project") },
+    { ...row, archivedAt: "2026-11-16" },
+    { ...row, deletedAt: "2026-11-16" },
+  ];
+  const threads = [...unavailable, row, bound];
+  expect(findDuetMorningBriefThread(threads, environmentId, projectId, bound.id)).toBe(bound);
+  expect(findDuetMorningBriefThread(threads, environmentId, projectId, null)).toBe(row);
+  expect(findDuetMorningBriefThread(unavailable, environmentId, projectId, row.id)).toBeUndefined();
+});
+
+it.each(["web", "mobile"] as const)(
+  "creates an approval-required daily brief for %s that continues its pinned thread",
+  (creationSource) => {
+    const input = {
+      id: ScheduledTaskId.make("morning-brief"),
+      projectId: ProjectId.make("duet-project"),
+      threadId: ThreadId.make("brief-thread"),
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" },
+      timeOfDay: "08:30",
+      creationSource,
+    };
+    expect(duetMorningBriefInput(input)).toEqual({
+      id: input.id,
+      title: "Morning brief",
+      prompt: MORNING_BRIEF_PROMPT,
+      enabled: true,
+      schedule: { type: "fixed_time", timeOfDay: "08:30" },
+      projectId: input.projectId,
+      threadId: input.threadId,
+      threadMode: "continue",
+      workspaceStrategy: { type: "root" },
+      modelSelection: input.modelSelection,
+      runtimeMode: "approval-required",
+      interactionMode: "plan",
+      creationSource,
+    });
+  },
+);
 
 describe("Duet tasks", () => {
   it("puts decisions before running work and recent threads, newest first within each group", () => {

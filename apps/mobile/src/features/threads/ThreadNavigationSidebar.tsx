@@ -76,6 +76,7 @@ import {
 } from "./threadListV2";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
+import { DuetEntries } from "../duet/DuetEntries";
 
 type SidebarListItem =
   | ThreadListV2ListItem
@@ -631,6 +632,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={<DuetEntries />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
@@ -656,7 +658,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         }}
       >
         {listItems.length === 0 ? (
-          <View className="flex-1 items-center justify-center">{listEmpty}</View>
+          <>
+            <DuetEntries />
+            <View className="flex-1 items-center justify-center">{listEmpty}</View>
+          </>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
@@ -684,6 +689,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={<DuetEntries />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { MORNING_BRIEF_PROMPT } from "@t3tools/client-runtime/duet";
+import { duetMorningBriefInput, findDuetMorningBriefThread } from "@t3tools/client-runtime/duet";
 import {
   ScheduledTaskId,
   type EnvironmentId,
@@ -61,13 +61,11 @@ export function useDuetActions(environmentId: EnvironmentId) {
   const setMorningBrief = async (enabled: boolean, timeOfDay: string) => {
     if (!enabled) return disableBrief();
     if (!project || !modelSelection) return false;
-    const existing = threads.find(
-      (t) =>
-        t.environmentId === environmentId &&
-        t.projectId === project.id &&
-        t.deletedAt === null &&
-        t.archivedAt === null &&
-        (t.id === task?.threadId || t.title === "Morning brief"),
+    const existing = findDuetMorningBriefThread(
+      threads,
+      environmentId,
+      project.id,
+      task?.threadId ?? null,
     );
     const threadId = existing?.id ?? (await createThread("Morning brief", "☀️"));
     if (!threadId) return false;
@@ -84,22 +82,15 @@ export function useDuetActions(environmentId: EnvironmentId) {
     }
     const result = await upsert({
       environmentId,
-      input: {
+      input: duetMorningBriefInput({
         id:
           task?.id ?? settings.duetMorningBriefTaskId ?? ScheduledTaskId.make(crypto.randomUUID()),
-        title: "Morning brief",
-        prompt: MORNING_BRIEF_PROMPT,
-        enabled: true,
-        schedule: { type: "fixed_time", timeOfDay },
+        timeOfDay,
         projectId: project.id,
         threadId,
-        threadMode: "continue",
-        workspaceStrategy: { type: "root" },
         modelSelection,
-        runtimeMode: "approval-required",
-        interactionMode: "plan",
         creationSource: "web",
-      },
+      }),
     });
     if (result._tag !== "Success") return false;
     return save({ duetMorningBriefTaskId: result.value.task.id });

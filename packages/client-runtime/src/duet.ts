@@ -1,4 +1,11 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ModelSelection,
+  ProjectId,
+  ScheduledTaskId,
+  ScheduledTaskUpsertInput,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "./state/models.ts";
 
 export const DUET_ICON_COLORS = [
@@ -20,6 +27,55 @@ export function duetIconColor(threadId: string, color?: string | null): string {
 }
 export const MORNING_BRIEF_PROMPT =
   "Prepare Homura's morning brief for this project. Summarise what is in progress, what needs Homura's decision, and propose next steps. Do not carry out those steps or make changes. Ask for approval before acting.";
+
+export function findDuetMorningBriefThread<
+  T extends Pick<
+    EnvironmentThreadShell,
+    "id" | "environmentId" | "projectId" | "title" | "deletedAt" | "archivedAt"
+  >,
+>(
+  threads: ReadonlyArray<T>,
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  taskThreadId: ThreadId | null,
+): T | undefined {
+  const available = threads.filter(
+    (thread) =>
+      thread.environmentId === environmentId &&
+      thread.projectId === projectId &&
+      thread.deletedAt === null &&
+      thread.archivedAt === null,
+  );
+  return (
+    available.find((thread) => thread.id === taskThreadId) ??
+    available.find((thread) => thread.title === "Morning brief")
+  );
+}
+
+export function duetMorningBriefInput(input: {
+  readonly id: ScheduledTaskId;
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId;
+  readonly modelSelection: ModelSelection;
+  readonly timeOfDay: string;
+  readonly creationSource: "web" | "mobile";
+}): ScheduledTaskUpsertInput {
+  return {
+    id: input.id,
+    title: "Morning brief",
+    prompt: MORNING_BRIEF_PROMPT,
+    enabled: true,
+    schedule: { type: "fixed_time", timeOfDay: input.timeOfDay },
+    projectId: input.projectId,
+    threadId: input.threadId,
+    threadMode: "continue",
+    workspaceStrategy: { type: "root" },
+    modelSelection: input.modelSelection,
+    runtimeMode: "approval-required",
+    interactionMode: "plan",
+    creationSource: input.creationSource,
+  };
+}
 
 type DuetTask = Pick<
   EnvironmentThreadShell,

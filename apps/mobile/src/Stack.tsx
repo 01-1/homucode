@@ -129,6 +129,9 @@ import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
+import { SettingsDuetRouteScreen } from "./features/settings/SettingsDuetRouteScreen";
+import { DuetRouteScreen } from "./features/duet/DuetRouteScreen";
+import { FeatureOffersSheet } from "./features/onboarding/FeatureOffersSheet";
 import { SettingsLabsRouteScreen } from "./features/settings/ThreadSettingsSections";
 import { SettingsEnvironmentFilterProvider } from "./features/settings/settings-environment-filter";
 import { openSettings, settingsOpenIn } from "./features/settings/settings-navigation";
@@ -258,6 +261,11 @@ const SETTINGS_SCREENS = {
     screen: SettingsProjectGroupingRouteScreen,
     linking: "settings/organization",
     options: settingsPage("General"),
+  }),
+  SettingsDuet: createNativeStackScreen({
+    screen: SettingsDuetRouteScreen,
+    linking: "settings/duet",
+    options: settingsPage("Duet"),
   }),
   SettingsLanguage: createNativeStackScreen({
     screen: SettingsLanguageRouteScreen,
@@ -424,6 +432,9 @@ function RootStackLayout(props: {
                 workspaceRouteName={workspaceLocation.routeName}
               >
                 {props.children}
+                <FeatureOffersSheet
+                  active={props.state.routes[props.state.index]?.name === "Home"}
+                />
                 <HardwareKeyboardCommandOverlay />
               </AdaptiveWorkspaceLayout>
             </AndroidWorkspaceTabsProvider>
@@ -552,6 +563,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
     PullRequestEdit: createNativeStackScreen({
       screen: PullRequestEditScreen,
       options: sheetRoute({ detent: 0.75, androidFit: true }),
+    }),
+    Duet: createNativeStackScreen({
+      screen: DuetRouteScreen,
+      linking: "duet/:environmentId",
+      options: pageRoute({ title: "Duet" }),
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,
