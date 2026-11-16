@@ -5,6 +5,9 @@ import { itRunsReplayFixtures, runReplayFixture } from "./ProviderReplayFixtures
 
 describe("fx replay fixtures", () => {
   itRunsReplayFixtures("fx", (input) =>
-    runReplayFixture({ ...input, harness: FxOrchestratorReplayHarness }),
+    runReplayFixture({
+      ...input,
+      harness: FxOrchestratorReplayHarness,
+    }),
   );
 });

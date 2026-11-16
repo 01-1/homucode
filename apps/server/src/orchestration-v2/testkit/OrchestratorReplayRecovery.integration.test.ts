@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -58,6 +59,7 @@ import {
   runOrchestratorV2ProviderReplayScenario,
 } from "./ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
+import { materializeReplayPromptTimestamps, timestampedPrompt } from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 import {
   materializeReplayTranscriptWorkspace,
@@ -71,7 +73,15 @@ const decodeCodexTranscript = Schema.decodeUnknownEffect(
   CodexReplay.CodexAppServerReplayTranscript,
 );
 const readRawTranscript = Effect.fn("readRecoveryTranscript")(function* (file: URL) {
-  return yield* readProviderReplayTranscript(file);
+  const transcript = yield* readProviderReplayTranscript(file);
+  const prompts = transcript.metadata?.prompts;
+  return materializeReplayPromptTimestamps(
+    transcript,
+    Array.isArray(prompts)
+      ? prompts.filter((prompt): prompt is string => typeof prompt === "string")
+      : [PROVIDER_THREAD_RESUME_FIRST_PROMPT, PROVIDER_THREAD_RESUME_SECOND_PROMPT],
+    DateTime.makeUnsafe(0),
+  );
 });
 const readCodexTranscript = Effect.fn("readCodexRecoveryTranscript")(function* (workspace: string) {
   const transcript = yield* readRawTranscript(
@@ -96,7 +106,7 @@ const readClaudeSubagentResumeTranscript = Effect.fn("readClaudeSubagentResumeTr
 const readClaudeCancelledSubagentResumeTranscript = Effect.fn(
   "readClaudeCancelledSubagentResumeTranscript",
 )(function* () {
-  const recorded = yield* readRawTranscript(
+  const recorded = yield* readProviderReplayTranscript(
     new URL(
       "./fixtures/claude_subagent_resume_after_restart/claude_transcript.ndjson",
       import.meta.url,
@@ -137,19 +147,25 @@ const readClaudeCancelledSubagentResumeTranscript = Effect.fn(
             ...frame.message,
             message: {
               ...frame.message.message,
-              content: [
-                "Note: the T3 server restarted, and this background work was cancelled before it finished. It will not report back on its own, so resume or restart what you still need and wait for its result:",
-                "- subagent: Audit src/math.ts (id a44c0ed810da9e4f3)",
-                "",
-                "User message:",
-                frame.message.message.content,
-              ].join("\n"),
+              content: timestampedPrompt(
+                [
+                  "Note: the T3 server restarted, and this background work was cancelled before it finished. It will not report back on its own, so resume or restart what you still need and wait for its result:",
+                  "- subagent: Audit src/math.ts (id a44c0ed810da9e4f3)",
+                  "",
+                  "User message:",
+                  frame.message.message.content,
+                ].join("\n"),
+                DateTime.makeUnsafe(0),
+              ),
             },
           },
         },
       };
     });
-  return yield* ClaudeOrchestratorReplayHarness.decodeTranscript({ ...recorded, entries });
+  const prompts = yield* decodePromptPair(recorded.metadata?.prompts);
+  return yield* ClaudeOrchestratorReplayHarness.decodeTranscript(
+    materializeReplayPromptTimestamps({ ...recorded, entries }, prompts, DateTime.makeUnsafe(0)),
+  );
 });
 const readCursorTranscript = Effect.fn("readCursorRecoveryTranscript")(function* () {
   const transcript = yield* readRawTranscript(

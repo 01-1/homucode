@@ -128,6 +128,7 @@ const webhookTaskInput = (overrides: Record<string, unknown> = {}) =>
     prompt: "Review this PR: {{body.pull_request.url}}",
     enabled: true,
     schedule: { type: "webhook" },
+    threadMode: "new_thread",
     projectId: "project-webhook",
     workspaceStrategy: { type: "root" },
     modelSelection: { instanceId: "codex", model: "gpt-5.4" },

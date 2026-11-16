@@ -14,6 +14,7 @@ import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/cli";
 
 import { cli } from "../binCli.ts";
+import { chmodDeniesAccess } from "../testUtils/filePermissions.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
@@ -191,20 +192,22 @@ describe("t3 theme", () => {
     }),
   );
 
-  it.effect.skipIf(windowsHost)("refuses to write when the settings file cannot be read", () =>
-    Effect.gen(function* () {
-      const baseDir = makeBaseDir();
-      writeSettings(baseDir, { enableProviderUpdateChecks: false });
-      NodeFS.chmodSync(settingsPathFor(baseDir), 0o000);
+  it.effect.skipIf(!chmodDeniesAccess)(
+    "refuses to write when the settings file cannot be read",
+    () =>
+      Effect.gen(function* () {
+        const baseDir = makeBaseDir();
+        writeSettings(baseDir, { enableProviderUpdateChecks: false });
+        NodeFS.chmodSync(settingsPathFor(baseDir), 0o000);
 
-      const failure = yield* runCli(["theme", "set", "ocean", "--base-dir", baseDir]).pipe(
-        Effect.flip,
-      );
+        const failure = yield* runCli(["theme", "set", "ocean", "--base-dir", baseDir]).pipe(
+          Effect.flip,
+        );
 
-      NodeFS.chmodSync(settingsPathFor(baseDir), 0o644);
-      assert.include(String(failure), "Could not read");
-      assert.equal(readSettings(baseDir).enableProviderUpdateChecks, false);
-      assert.equal(Object.hasOwn(readSettings(baseDir), "defaultTheme"), false);
-    }),
+        NodeFS.chmodSync(settingsPathFor(baseDir), 0o644);
+        assert.include(String(failure), "Could not read");
+        assert.equal(readSettings(baseDir).enableProviderUpdateChecks, false);
+        assert.equal(Object.hasOwn(readSettings(baseDir), "defaultTheme"), false);
+      }),
   );
 });

@@ -208,6 +208,9 @@ describe("ACP registry replay fixtures", () => {
   );
 
   itRunsReplayFixtures("acpRegistry", (input) =>
-    runReplayFixture({ ...input, harness: AcpRegistryOrchestratorReplayHarness }),
+    runReplayFixture({
+      ...input,
+      harness: AcpRegistryOrchestratorReplayHarness,
+    }),
   );
 });

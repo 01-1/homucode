@@ -30,6 +30,7 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnControlService from "./ProviderTurnControlService.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
+import { timestampedPrompt } from "./testkit/ReplayMessageTimestamps.ts";
 
 const threadId = ThreadId.make("thread:control-reads");
 const providerThreadId = ProviderThreadId.make("provider-thread:control-reads");
@@ -333,7 +334,11 @@ it.effect.each(storageCases)(
           messageId,
         });
         yield* reply.respond({ threadId, providerSessionId, requestId, decision: "accept" });
-        assert.deepEqual(calls, ["interrupt", "Use the smaller fix.", "reply"]);
+        assert.deepEqual(calls, [
+          "interrupt",
+          timestampedPrompt("Use the smaller fix.", now),
+          "reply",
+        ]);
         const wrongSession = ProviderSessionId.make("session:wrong");
         assert.equal(
           (yield* Effect.exit(
@@ -385,7 +390,7 @@ it.effect.each(storageCases)(
         yield* interrupt;
         assert.deepEqual(calls, [
           "interrupt",
-          "Use the smaller fix.",
+          timestampedPrompt("Use the smaller fix.", now),
           "reply",
           "interrupt",
           "interrupt",

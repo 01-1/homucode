@@ -18,6 +18,7 @@ import * as EffectWorker from "../EffectWorker.ts";
 import * as EventSink from "../EventSink.ts";
 import * as Orchestrator from "../Orchestrator.ts";
 import * as SqlitePersistence from "../../persistence/Sqlite.ts";
+import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import { CLAUDE_BACKGROUND_SUBAGENT_AFTER_ROOT_PROMPT } from "./fixtures/claude_background_subagent_after_root/input.ts";
 import {
@@ -114,19 +115,25 @@ const readRestartTranscript = Effect.fn("readRestartTranscript")(function* (
       },
     },
   ];
-  return yield* ClaudeOrchestratorReplayHarness.decodeTranscript({
-    ...recorded,
-    entries: [
-      ...recorded.entries.slice(0, rootResult + 1),
-      // Keep the query alive until the crash snapshot is captured.
+  return yield* ClaudeOrchestratorReplayHarness.decodeTranscript(
+    materializeReplayPromptTimestamps(
       {
-        type: "expect_outbound",
-        label: "query.open:resume",
-        frame: { type: "query.open", options: { ...resumeOptions, resume: SESSION_ID } },
+        ...recorded,
+        entries: [
+          ...recorded.entries.slice(0, rootResult + 1),
+          // Keep the query alive until the crash snapshot is captured.
+          {
+            type: "expect_outbound",
+            label: "query.open:resume",
+            frame: { type: "query.open", options: { ...resumeOptions, resume: SESSION_ID } },
+          },
+          ...resumedPrompts.flatMap((prompt, index) => resumedTurn(String(index + 1), prompt)),
+        ],
       },
-      ...resumedPrompts.flatMap((prompt, index) => resumedTurn(String(index + 1), prompt)),
-    ],
-  });
+      [CLAUDE_BACKGROUND_SUBAGENT_AFTER_ROOT_PROMPT, ...resumedPrompts],
+      DateTime.makeUnsafe(0),
+    ),
+  );
 });
 
 const runRestart = Effect.fn("runRestart")(function* (input: {

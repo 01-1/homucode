@@ -31,6 +31,7 @@ import * as EventSink from "./EventSink.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
+import { timestampedPrompt } from "./testkit/ReplayMessageTimestamps.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
@@ -1016,7 +1017,18 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
         assert.deepEqual(resumes, [
           { instanceId: targetId, nativeId: originalThread.nativeThreadRef?.nativeId },
         ]);
-        assert.deepEqual(messages, ["first", "second"]);
+        assert.deepEqual(
+          second.messages
+            .filter((message) => message.role === "user")
+            .map((message) => message.text),
+          ["first", "second"],
+        );
+        assert.deepEqual(
+          messages,
+          second.messages
+            .filter((message) => message.role === "user")
+            .map((message) => timestampedPrompt(message.text, message.createdAt)),
+        );
         assert.equal((yield* Ref.get(state)).closedSessionCount, mode === "pooled" ? 0 : 1);
         if (mode === "pooled") {
           assert.isFalse(
@@ -1033,7 +1045,18 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
         assert.deepEqual(returnedThread.nativeThreadRef, originalThread.nativeThreadRef);
         assert.equal(returnedThread.providerInstanceId, providerInstanceId);
         assert.isEmpty(third.contextHandoffs);
-        assert.deepEqual(messages, ["first", "second", "third"]);
+        assert.deepEqual(
+          third.messages
+            .filter((message) => message.role === "user")
+            .map((message) => message.text),
+          ["first", "second", "third"],
+        );
+        assert.deepEqual(
+          messages,
+          third.messages
+            .filter((message) => message.role === "user")
+            .map((message) => timestampedPrompt(message.text, message.createdAt)),
+        );
       }).pipe(Effect.provide(ProviderReplayHarness.layerWithRegistry({ name }, layerRegistry)));
     }),
 );
