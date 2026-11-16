@@ -1,4 +1,14 @@
-export const BUILT_IN_THEME_IDS = ["t3-chat", "grove", "ocean", "ember", "iris"] as const;
+export const BUILT_IN_THEME_IDS = [
+  "lavender",
+  "t3-chat",
+  "grove",
+  "ocean",
+  "ember",
+  "iris",
+] as const;
+
+/** Every client uses this palette until the user picks one. */
+export const DEFAULT_THEME_ID = "lavender";
 
 export const MOBILE_DEFAULT_THEME_ID = "t3-code";
 
@@ -910,7 +920,165 @@ export const IRIS_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
+export const LAVENDER_THEME: ThemeDefinition = {
+  id: "lavender",
+  label: "Lavender",
+  appearance: "light",
+  colors: {
+    canvas: "oklch(0.941518 0.038079 311.144)",
+    chrome: "oklch(0.897404 0.068228 311.262)",
+    toolbar: "oklch(0.897404 0.068228 311.262)",
+    toolbarForeground: "oklch(0.381345 0.201795 301.577)",
+    toolbarBorder: "oklch(0.829925 0.115296 310.636)",
+    toolbarControl: "oklch(0.863876 0.090676 310.472)",
+    toolbarControlForeground: "oklch(0.363198 0.192098 301.666)",
+    toolbarControlHover: "oklch(0.808842 0.130539 310.517)",
+    surface: "oklch(0.977622 0.014614 312.247)",
+    surfaceRaised: "oklch(0.988801 0.007285 312.303)",
+    surfaceOverlay: "oklch(0.988801 0.007285 312.303)",
+    text: "oklch(0.2071 0.107191 305.658)",
+    textMuted: "oklch(0.425812 0.225552 301.394)",
+    border: "oklch(0.842352 0.105967 310.449)",
+    input: "oklch(0.966463 0.021985 312.189)",
+    focus: "oklch(0.513362 0.272937 300.72)",
+    accent: "oklch(0.513362 0.272937 300.72)",
+    accentForeground: "oklch(1 0 0)",
+    secondary: "oklch(0.886473 0.075829 311.239)",
+    secondaryForeground: "oklch(0.335541 0.177317 301.823)",
+    muted: "oklch(0.908378 0.060648 311.271)",
+    mutedForeground: "oklch(0.452895 0.240341 301.058)",
+    placeholder: "oklch(0.574056 0.289185 303.251)",
+    secondaryLabel: "oklch(0.487139 0.258625 300.98)",
+    iconMuted: "oklch(0.513362 0.272937 300.72)",
+    error: "oklch(0.470095 0.249525 301.017)",
+    errorForeground: "oklch(0.509494 0.208583 28.513)",
+    errorSurface: "oklch(0.90911 0.046653 332.208)",
+    warning: "oklch(0.564192 0.167657 42.822)",
+    warningForeground: "oklch(0.522279 0.148565 45.359)",
+    warningSurface: "oklch(0.924589 0.02827 344.257)",
+    update: "oklch(0.56235 0.169518 136.722)",
+    updateForeground: "oklch(0.2 0.035 300.72)",
+    updateSurface: "oklch(0.851518 0.087006 300.72)",
+    accentSurface: "oklch(0.875589 0.083448 311.205)",
+    accentSurfaceForeground: "oklch(0.381345 0.201795 301.577)",
+    messageSurface: "oklch(0.863876 0.090676 310.472)",
+    messageForeground: "oklch(0.2071 0.107191 305.658)",
+    messageAction: "oklch(0.886473 0.075829 311.239)",
+    messageActionForeground: "oklch(0.363198 0.192098 301.666)",
+    messageActionHover: "oklch(0.829925 0.115296 310.636)",
+    codeBackground: "oklch(0.930438 0.045571 311.223)",
+    codeForeground: "oklch(0.335541 0.177317 301.823)",
+    searchMatchBackground: "oklch(0.722377 0.120469 300.824)",
+    searchMatchForeground: "oklch(0.222003 0.03479 328.979)",
+    searchMatchActiveBackground: "oklch(0.541707 0.179086 300.685)",
+    searchMatchActiveForeground: "oklch(0.990339 0.008411 325.64)",
+    sidebar: "oklch(0.91939 0.053095 311.261)",
+    sidebarForeground: "oklch(0.227829 0.11832 305.028)",
+    sidebarMutedForeground: "oklch(0.452895 0.240341 301.058)",
+    sidebarControlSurface: "oklch(0.886473 0.075829 311.239)",
+    sidebarRowHover: "oklch(0.886473 0.075829 311.239)",
+    sidebarRowActive: "oklch(0.829925 0.115296 310.636)",
+    sidebarRowSelected: "oklch(0.829925 0.115296 310.636)",
+    sidebarBorder: "oklch(0.842352 0.105967 310.449)",
+    terminalBackground: "oklch(0.977622 0.014614 312.247)",
+    terminalForeground: "oklch(0.2071 0.107191 305.658)",
+    terminalCursor: "oklch(0.513362 0.272937 300.72)",
+    terminalSelection: "oklch(0.829925 0.115296 310.636)",
+    terminalScrollbar: "oklch(0.781518 0.045 300.72)",
+    terminalScrollbarHover: "oklch(0.721518 0.045 300.72)",
+  },
+  variants: {
+    dark: {
+      canvas: "oklch(0 0 0)",
+      chrome: "oklch(0 0 0)",
+      toolbar: "oklch(0 0 0)",
+      toolbarForeground: "oklch(0.908378 0.060648 311.271)",
+      toolbarBorder: "oklch(0.383411 0.198451 305.653)",
+      toolbarControl: "oklch(0.185847 0.095771 306.475)",
+      toolbarControlForeground: "oklch(0.941518 0.038079 311.144)",
+      toolbarControlHover: "oklch(0.305616 0.157443 306.531)",
+      surface: "oklch(0.072 0.035238 316.234)",
+      surfaceRaised: "oklch(0.270014 0.139374 306.166)",
+      surfaceOverlay: "oklch(0.270014 0.139374 306.166)",
+      text: "oklch(0.988037 0.006904 304.245)",
+      textMuted: "oklch(0.941518 0.038079 311.144)",
+      border: "oklch(0.227829 0.11832 305.028)",
+      input: "oklch(0.270014 0.139374 306.166)",
+      focus: "oklch(0.736974 0.182249 309.469)",
+      accent: "oklch(0.736974 0.182249 309.469)",
+      accentForeground: "oklch(0 0 0)",
+      secondary: "oklch(0.185847 0.095771 306.475)",
+      secondaryForeground: "oklch(0.941518 0.038079 311.144)",
+      muted: "oklch(0.116725 0.058061 313.146)",
+      mutedForeground: "oklch(0.930438 0.045571 311.223)",
+      placeholder: "oklch(0.842352 0.105967 310.449)",
+      secondaryLabel: "oklch(0.908378 0.060648 311.271)",
+      iconMuted: "oklch(0.842352 0.105967 310.449)",
+      error: "oklch(0.628562 0.258958 306.823)",
+      errorForeground: "oklch(0.901233 0.057189 343.694)",
+      errorSurface: "oklch(0.259022 0.04799 340.062)",
+      warning: "oklch(0.687216 0.209694 41.419)",
+      warningForeground: "oklch(0.836861 0.164422 84.429)",
+      warningSurface: "oklch(0.321706 0.036256 60.806)",
+      update: "oklch(0.893517 0.261208 135.053)",
+      updateForeground: "oklch(0.901233 0.057189 343.694)",
+      updateSurface: "oklch(0.256077 0.063004 342.914)",
+      accentSurface: "oklch(0.305616 0.157443 306.531)",
+      accentSurfaceForeground: "oklch(0.941518 0.038079 311.144)",
+      messageSurface: "oklch(0.305616 0.157443 306.531)",
+      messageForeground: "oklch(0.988037 0.006904 304.245)",
+      messageAction: "oklch(0.227829 0.11832 305.028)",
+      messageActionForeground: "oklch(0.941518 0.038079 311.144)",
+      messageActionHover: "oklch(0.287055 0.151036 302.619)",
+      codeBackground: "oklch(0.072 0.035238 316.234)",
+      codeForeground: "oklch(0.863876 0.090676 310.472)",
+      searchMatchBackground: "oklch(0.55 0.1 85)",
+      searchMatchForeground: "oklch(0.970151 0 0)",
+      searchMatchActiveBackground: "oklch(0.774202 0.151946 74.331)",
+      searchMatchActiveForeground: "oklch(0.216164 0.028283 77.423)",
+      sidebar: "oklch(0 0 0)",
+      sidebarForeground: "oklch(0.908378 0.060648 311.271)",
+      sidebarMutedForeground: "oklch(0.819345 0.122927 310.581)",
+      sidebarControlSurface: "oklch(0.116725 0.058061 313.146)",
+      sidebarRowHover: "oklch(0.14635 0.073525 311.26)",
+      sidebarRowActive: "oklch(0.305616 0.157443 306.531)",
+      sidebarRowSelected: "oklch(0.305616 0.157443 306.531)",
+      sidebarBorder: "oklch(0.174998 0.089936 306.982)",
+      terminalBackground: "oklch(0 0 0)",
+      terminalForeground: "oklch(0.941518 0.038079 311.144)",
+      terminalCursor: "oklch(0.736974 0.182249 309.469)",
+      terminalSelection: "oklch(0.305616 0.157443 306.531)",
+      terminalScrollbar: "oklch(0.266817 0.02897 344.461)",
+      terminalScrollbarHover: "oklch(0.360924 0.021469 316.83)",
+    },
+  },
+  css: `body{font-family:"Adwaita Sans","Cantarell",system-ui,sans-serif}
+code,pre,kbd,.chat-markdown-codeblock{font-family:"Adwaita Mono","Fira Mono",ui-monospace,monospace!important;font-variant-numeric:tabular-nums}
+[data-slot="composer-host"],[data-user-message-bubble],.chat-markdown-codeblock,[data-thread-details-card],[data-slot="dialog-popup"]{border-radius:14px!important}
+:root:not(.dark) [data-slot="composer-host"],:root:not(.dark) [data-slot="dialog-popup"]{box-shadow:0 1px 2px rgba(36,0,61,.07),0 4px 18px rgba(134,0,230,.12)}
+[data-chat-header]{font-family:"Comfortaa",ui-rounded,system-ui,sans-serif}
+.dark [data-thread-details-card]{color:#F4E5FF;background-color:#000000!important;border-color:#2A0047!important}
+.dark [data-thread-details-card] svg.lucide{color:#E1B8FF}
+@layer base{
+.dark [data-thread-details-card] [class*="bg-white/[0.08]"]:hover,.dark [data-thread-details-card] [class*="data-pressed:!bg-white/[0.08]"][data-pressed],.dark [data-thread-details-card] [class*="data-popup-open:!bg-white/[0.08]"][data-popup-open],.dark [data-thread-details-card] [class*="has-[[data-popup-open]]:bg-white/[0.08]"]:has([data-popup-open]){background-color:#140020!important}
+.dark [data-thread-details-card] [class*="bg-white/[0.08]"]:hover [class*="bg-white/[0.08]"]:not(:hover){background-color:transparent!important}
+}
+.dark [data-slot="sidebar-inner"],.dark [data-slot="sidebar"]{background-color:#000000!important}
+.dark [data-chat-header]{background-color:#000000!important}
+.dark .composer-tiptap .is-editor-empty::before,.dark .composer-tiptap p.is-empty::before,.dark [data-chat-composer-form] ::placeholder{color:#E1B8FF!important;opacity:1!important}
+.dark [data-slot="toggle"][data-pressed],.dark [data-slot="toggle-group-item"][data-pressed],.dark [data-chat-header] [aria-pressed="true"]{background-color:#50007D!important}
+.dark :has(> [aria-label="Diff layout"]) [data-slot="toggle"][data-pressed]{background-color:#230036!important}
+.dark [data-app-sidebar] [data-sidebar-row] [class*="text-foreground"]{color:#F0DCFF!important}
+.dark [data-app-sidebar] [data-sidebar-row] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-sidebar-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-foreground/75"]{color:#DDADFF!important}
+.dark [data-app-sidebar] [data-sidebar-row] [class*="text-start"]{color:#FFFFFF!important}
+.dark [data-app-sidebar] [data-sidebar-row]:has([class*="font-medium text-muted-foreground"]) [class*="text-start"]{color:#F0DCFF!important}
+.dark [data-app-sidebar] [data-sidebar-row][class*="opacity-70"] [class*="text-start"]{color:#DDADFF!important}
+.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-start"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground"]{color:#FFFFFF!important}
+.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground/75"]:not([class*="text-start"]),.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-sidebar-muted-foreground"]{color:#F2E0FF!important}`,
+};
+
 export const BUILT_IN_THEMES: ReadonlyArray<ThemeDefinition> = [
+  LAVENDER_THEME,
   T3_CHAT_THEME,
   GROVE_THEME,
   OCEAN_THEME,
