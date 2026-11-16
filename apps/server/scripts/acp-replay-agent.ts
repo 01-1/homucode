@@ -115,6 +115,7 @@ function matchesExpected(expected: unknown, actual: unknown): boolean {
   if (expected === "<any>") return true;
   if (typeof expected === "string" && typeof actual === "string") {
     const expanded = expandExpectedString(expected);
+    actual = actual.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, "");
     if (!expanded.includes("<any>")) return expanded === actual;
     const parts = expanded.split("<any>");
     let offset = 0;

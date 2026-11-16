@@ -34,6 +34,7 @@ const fixture = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 
+vi.mock("./devicePins", () => ({ devicePins: undefined }));
 vi.mock("react-native", () => ({
   AppState: {
     get currentState() {

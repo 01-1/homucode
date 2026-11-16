@@ -2721,7 +2721,7 @@ describe("UsageService", () => {
       }),
   );
 
-  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32" || process.getuid?.() === 0)(
+  it.effect(
     "reports unreadable transcripts as partial and recovers once they can be read",
     () =>
       Effect.gen(function* () {
@@ -2730,15 +2730,20 @@ describe("UsageService", () => {
         yield* Effect.promise(async () => {
           await NodeFSP.writeFile(transcript, claudeLine(1, 5));
           await NodeFSP.writeFile(unreadable, claudeLine(2, 7));
-          await NodeFSP.chmod(unreadable, 0);
         });
         yield* Effect.gen(function* () {
+          const open = NodeFSP.open;
+          using unreadableFile = vi.spyOn(NodeFSP, "open").mockImplementation((file, flags, mode) =>
+            file === unreadable
+              ? Promise.reject(Object.assign(new Error("Permission denied"), { code: "EACCES" }))
+              : open(file, flags, mode),
+          );
           const service = yield* UsageService.make;
           const partial = yield* service.readSummary(WINDOW);
           assert.strictEqual(totalOutputTokens(partial), 5);
           assert.strictEqual(partial.sources[0]?.status, "partial");
 
-          yield* Effect.promise(() => NodeFSP.chmod(unreadable, 0o600));
+          unreadableFile.mockRestore();
           const healthy = yield* service.readSummary(WINDOW);
           assert.strictEqual(totalOutputTokens(healthy), 12);
           assert.strictEqual(healthy.sources[0]?.status, "ok");

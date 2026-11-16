@@ -18,7 +18,6 @@ import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
-import { ChildProcessSpawner } from "effect/process";
 import * as Scope from "effect/Scope";
 
 import * as ServerConfig from "../config.ts";
@@ -82,7 +81,10 @@ const layer = (baseDir: string, options?: HarnessOptions) =>
     Layer.provideMerge(layerEnrichment),
     Layer.provideMerge(WorkspacePaths.layer),
     Layer.provideMerge(layerGitWorkflow(options?.vcsProcess)),
-    Layer.provideMerge(options?.git ?? layerRealGit),
+    Layer.provideMerge(
+      options?.git ??
+        GitVcsDriver.layer.pipe(Layer.provide(options?.vcsProcess ?? VcsProcess.layer)),
+    ),
     Layer.provideMerge(SqlitePersistence.layerMemory),
     Layer.provideMerge(ServerSettings.layerTest()),
     Layer.provideMerge(ServerConfig.layerTest(baseDir, baseDir)),
@@ -543,23 +545,22 @@ it.effect("says Git is not installed when a named project cannot start Git", () 
         );
       }),
     {
-      git: GitVcsDriver.layer.pipe(
-        Layer.provide(
-          Layer.succeed(
-            ChildProcessSpawner.ChildProcessSpawner,
-            ChildProcessSpawner.make(() =>
-              Effect.fail(
-                PlatformError.systemError({
-                  _tag: "NotFound",
-                  module: "ChildProcess",
-                  method: "spawn",
-                  syscall: "spawn git",
-                }),
-              ),
-            ),
+      vcsProcess: Layer.succeed(VcsProcess.VcsProcess, {
+        run: (input) =>
+          Effect.fail(
+            new VcsProcessSpawnError({
+              operation: input.operation,
+              command: input.command,
+              cwd: input.cwd,
+              cause: PlatformError.systemError({
+                _tag: "NotFound",
+                module: "ChildProcess",
+                method: "spawn",
+                syscall: `spawn ${input.command}`,
+              }),
+            }),
           ),
-        ),
-      ),
+      }),
     },
   ),
 );

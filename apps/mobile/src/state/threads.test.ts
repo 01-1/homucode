@@ -16,6 +16,7 @@ import { startOpeningEnvironmentThread } from "./threads";
 
 const loads = vi.hoisted(() => [] as string[]);
 
+vi.mock("./devicePins", () => ({ devicePins: undefined }));
 vi.mock("../connection/runtime", () => ({ connectionAtomRuntime: {} }));
 vi.mock("../connection/catalog", () => ({ environmentCatalog: {} }));
 vi.mock("./shell", () => ({ environmentShell: {} }));

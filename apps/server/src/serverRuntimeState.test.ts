@@ -203,8 +203,7 @@ describe("server ownership", () => {
       "replace",
       "during acquisition",
       "first acquisition",
-      // Root bypasses directory permissions, so chmod cannot force EACCES.
-      ...(process.getuid?.() === 0 ? [] : (["stat error"] as const)),
+      "stat error",
     ] as const)("monitors ownership after %s", (operation) => {
       const messages: unknown[] = [];
       const warnings: unknown[] = [];
@@ -243,10 +242,11 @@ describe("server ownership", () => {
           yield* fs.rename(replacement, lockPath);
         }
         if (operation === "stat error") {
-          yield* fs.chmod(root, 0);
-          yield* TestClock.adjust("15 seconds").pipe(
-            Effect.ensuring(fs.chmod(root, 0o700).pipe(Effect.orDie)),
-          );
+          using stat = vi.spyOn(NodeFS, "statSync").mockImplementation(() => {
+            throw Object.assign(new Error("Permission denied"), { code: "EACCES" });
+          });
+          yield* TestClock.adjust("15 seconds");
+          stat.mockRestore();
           assert.deepEqual(warnings, [
             [`Cannot check server ownership lock at ${lockPath} (EACCES).`],
           ]);
