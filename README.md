@@ -7,7 +7,7 @@ Homu Code is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed f
 The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 
 - **Server speed.** CLI calls no longer take the database write lock when there is nothing to migrate, work-assistance activity reads are about ten times cheaper, Git config reads are cached, and `T3CODE_BACKGROUND_GIT=0` switches off the server's own background Git work.
-- **Threads and subagents.** Move threads under other threads, pinned subagents and sidebar folders, Stop that stops only the current thread, bare "stop" or "wait" messages that halt the running turn, the sending device on each message, `/q` for a quick question on a cheaper model, `/cd` to move a thread to another folder, and opt-in autoreviewers.
+- **Threads and subagents.** Move threads under other threads, move or copy threads to projects on other devices, pinned subagents and sidebar folders, Stop that stops only the current thread, bare "stop" or "wait" messages that halt the running turn, the sending device on each message, `/q` for a quick question on a cheaper model, `/cd` to move a thread to another folder, and opt-in autoreviewers.
 - **Queue and steering.** Auto and steer delivery that steers as soon as the turn can take it, Ctrl+Enter to steer every queued message, and Claude steers that survive Stop.
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, and answered questions that keep every option.
 - **Desktop, CLI and mobile.** Settings sync across web, desktop and phone, faster CLI launches, Linux desktop link fixes, undo for a staged build, and smaller fixes.
