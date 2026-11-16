@@ -60,6 +60,7 @@ const make = Effect.gen(function* () {
   const executable = Option.getOrElse(environment.appImagePath, () => executablePath);
   const args = yield* HostProcess.Arguments;
   const mutex = yield* Semaphore.make(1);
+  const runFork = Effect.runForkWith(yield* Effect.context<never>());
   let requested = args.includes("--duet");
   let configured = false;
   let settings: DesktopDuetSettings = {
@@ -87,12 +88,12 @@ const make = Effect.gen(function* () {
     return url.href;
   };
   const report = (effect: Effect.Effect<void, DesktopDuetError>) => {
-    Effect.runFork(
+    runFork(
       effect.pipe(Effect.catch((error) => Effect.logWarning("T3 Duet action failed", error))),
     );
   };
   const openWindow = Effect.fn("DesktopDuet.openWindow")(
-    function* (location?: Omit<DesktopDuetWindowMode, "mode">) {
+    function* (location: Omit<DesktopDuetWindowMode, "mode"> | undefined) {
       requested = true;
       if (!configured) return;
       if (window && !window.isDestroyed()) {
@@ -152,7 +153,7 @@ const make = Effect.gen(function* () {
         if (!allowNavigation(url)) event.preventDefault();
       });
       created.webContents.setWindowOpenHandler(({ url }) => {
-        if (/^https?:|^mailto:/i.test(url)) Effect.runFork(shell.openExternal(url));
+        if (/^https?:|^mailto:/i.test(url)) runFork(shell.openExternal(url));
         return { action: "deny" };
       });
       yield* Effect.tryPromise({
@@ -163,7 +164,7 @@ const make = Effect.gen(function* () {
     },
     Effect.mapError((cause) => new DesktopDuetError({ operation: "open", cause })),
   );
-  const open = openWindow().pipe(mutex.withPermits(1));
+  const open = openWindow(undefined).pipe(mutex.withPermits(1));
   const navigateMain = Effect.fn("DesktopDuet.navigateMain")(function* (
     view: "duet" | "code",
     location: Omit<DesktopDuetWindowMode, "mode">,
@@ -244,7 +245,7 @@ const make = Effect.gen(function* () {
         }
         appliedLauncher = launcher;
       }
-      if (requested) yield* openWindow();
+      if (requested) yield* openWindow(undefined);
     },
     mutex.withPermits(1),
     Effect.mapError((cause) => new DesktopDuetError({ operation: "configure", cause })),

@@ -299,6 +299,7 @@ function layerTest(input: {
         Effect.andThen(input.onWindowCreate ?? Effect.void),
         Effect.as(input.window),
       ),
+    appWindows: Effect.succeed([input.window]),
     main: Ref.get(input.mainWindow),
     currentMainOrFirst: Ref.get(input.mainWindow).pipe(
       Effect.map(Option.orElse(() => Option.fromNullishOr(input.fallbackWindow ?? null))),
@@ -434,6 +435,7 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
           yield* Ref.update(createdWindows, (windows) => [...windows, outcome]);
           return outcome;
         }),
+      appWindows: Ref.get(createdWindows),
       main: Ref.get(mainWindow),
       currentMainOrFirst,
       focusedMainOrFirst: currentMainOrFirst,

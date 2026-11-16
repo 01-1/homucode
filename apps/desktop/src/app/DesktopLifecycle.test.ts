@@ -71,6 +71,7 @@ const layerElectronTheme = Layer.succeed(ElectronTheme.ElectronTheme, {
 function layerElectronWindow(destroyAll: Effect.Effect<void> = Effect.void) {
   return Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected window creation"),
+    appWindows: Effect.die("unexpected app windows read"),
     main: Effect.die("unexpected main window read"),
     currentMainOrFirst: Effect.die("unexpected current window read"),
     focusedMainOrFirst: Effect.die("unexpected focused window read"),

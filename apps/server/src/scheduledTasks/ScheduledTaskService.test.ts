@@ -1102,7 +1102,9 @@ it.effect(
             ManagedPolicy.layerTest(),
             Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
             Layer.mock(ThreadManagementService.ThreadManagementService)({}),
-            Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({}),
+            Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+              namedProjectsRoot: "/projects",
+            }),
             Layer.mock(SecretRequests.SecretRequests)({}),
             Layer.mock(Scheduler.Scheduler)({ register: () => Effect.void }),
           ),
@@ -1140,5 +1142,5 @@ it.effect(
           assert.isTrue(after.tasks.find((t) => t.id === "other")?.enabled);
         }),
       );
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory), Effect.provide(NodeCrypto.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(SqlitePersistence.layerMemory, NodeCrypto.layer))),
 );

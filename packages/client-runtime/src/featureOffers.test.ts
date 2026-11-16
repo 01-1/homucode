@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { FEATURE_OFFERS, featureOfferSettingsPatch, unseenFeatureOffers } from "./featureOffers.ts";
 

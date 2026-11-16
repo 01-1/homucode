@@ -1,19 +1,34 @@
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 import { expect, vi } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 vi.mock("electron", () => ({}));
 import * as DesktopDuet from "./DesktopDuet.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
+
+const layerDesktopEnvironment = (appImagePath?: string) =>
+  DesktopEnvironment.layer({
+    dirname: "/app/dist-electron",
+    homeDirectory: "/home/user",
+    platform: "linux",
+    processArch: "x64",
+    appVersion: "0.0.0",
+    appPath: "/app",
+    isPackaged: true,
+    resourcesPath: "/app/resources",
+    runningUnderArm64Translation: false,
+  }).pipe(
+    Layer.provide(Layer.mergeAll(Path.layer, DesktopConfig.layerTest({ APPIMAGE: appImagePath }))),
+  );
 
 it.effect("adds and removes the Linux launcher only while both opt-ins are enabled", () => {
   const files = new Map<string, string>();
@@ -36,13 +51,7 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
       DesktopDuet.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
-            Layer.mock(DesktopEnvironment.DesktopEnvironment, {
-              platform: "linux",
-              homeDirectory: "/home/user",
-              path: NodePath.posix,
-              appImagePath: Option.some("/opt/Homu Code.AppImage"),
-              linuxDesktopEntryName: "t3code",
-            }),
+            layerDesktopEnvironment("/opt/Homu Code.AppImage"),
             Layer.mock(ElectronWindow.ElectronWindow, {}),
             Layer.mock(DesktopWindow.DesktopWindow, {}),
             Layer.mock(ElectronShell.ElectronShell, {}),
@@ -129,15 +138,7 @@ it.effect(
         DesktopDuet.layer.pipe(
           Layer.provide(
             Layer.mergeAll(
-              Layer.mock(DesktopEnvironment.DesktopEnvironment, {
-                platform: "linux",
-                homeDirectory: "/home/user",
-                path: NodePath.posix,
-                appImagePath: Option.none(),
-                linuxDesktopEntryName: "t3code",
-                isDevelopment: false,
-                preloadPath: "/app/preload.cjs",
-              }),
+              layerDesktopEnvironment(),
               Layer.mock(ElectronWindow.ElectronWindow, {
                 main: Effect.succeedSome(main),
                 create: () =>

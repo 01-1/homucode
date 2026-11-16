@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { duetThreadContext } from "./DuetThreadContext.ts";
 
