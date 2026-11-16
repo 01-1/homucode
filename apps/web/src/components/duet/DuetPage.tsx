@@ -50,7 +50,7 @@ function useDuetEnvironmentId() {
 export function DuetProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
   const actions = useDuetActions(environmentId);
   const projects = useProjects().filter(
-    (p) => p.environmentId === environmentId && p.archivedAt === null && p.deletedAt === null,
+    (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
   return (
     <label className="grid gap-2 text-sm">
@@ -105,7 +105,7 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
       <SidebarInset>
         <div className="p-6">
           Enable Duet in{" "}
-          <Link to="/settings/general" search={{ target: "duet-enabled" }}>
+          <Link to="/settings/general" hash="duet-enabled">
             Settings → Duet
           </Link>
           .
@@ -237,7 +237,7 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
           <Link to="/duet" search={{ environmentId }}>
             ✦ Duet
           </Link>
-          <Link to="/settings/general" search={{ target: "duet-enabled" }}>
+          <Link to="/settings/general" hash="duet-enabled">
             Settings
           </Link>
         </div>
@@ -259,13 +259,13 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
                 if (pending.current) return;
                 pending.current = true;
                 setBusy(true);
-                try {
+                await (async () => {
                   const id = await actions.createThread();
                   if (id) open(id);
-                } finally {
+                })().finally(() => {
                   pending.current = false;
                   setBusy(false);
-                }
+                });
               }}
             >
               New thread
@@ -342,7 +342,7 @@ function DuetThreadEditor({
   const unpin = useAtomCommand(threadEnvironment.unpin);
   const save = async () => {
     setBusy(true);
-    try {
+    await (async () => {
       if (
         (await update({ environmentId, input: { threadId: thread.id, title: title.trim() } }))
           ._tag !== "Success"
@@ -357,9 +357,9 @@ function DuetThreadEditor({
       )
         return;
       onClose();
-    } finally {
+    })().finally(() => {
       setBusy(false);
-    }
+    });
   };
   return (
     <Dialog

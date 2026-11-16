@@ -225,7 +225,7 @@ export function WelcomePage({
             type: "info",
             title: "Choose your quick model",
             description: (
-              <Link to="/settings/threads" search={{ target: "quick-model" }}>
+              <Link to="/settings/threads" hash="quick-model">
                 Open Quick model settings
               </Link>
             ),

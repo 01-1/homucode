@@ -49,15 +49,15 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     if (pending.current || !settings) return;
     pending.current = true;
     setBusy(true);
-    try {
+    await (async () => {
       await update({
         environmentId,
         input: { patch: featureOfferSettingsPatch(settings, offers, apply ? selected : new Set()) },
       });
-    } finally {
+    })().finally(() => {
       pending.current = false;
       setBusy(false);
-    }
+    });
   };
   if (!settings || !canWrite || offers.length === 0) return null;
   return (

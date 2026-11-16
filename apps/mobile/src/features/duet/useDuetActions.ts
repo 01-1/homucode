@@ -28,8 +28,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
       (candidate) =>
         candidate.environmentId === environmentId &&
         candidate.id === settings.duetProjectId &&
-        candidate.archivedAt === null &&
-        candidate.deletedAt === null,
+        candidate.archivedAt === null,
     ) ?? null;
   const modelSelection = scheduledTaskDefaultModel(config, project);
   const taskQuery = useEnvironmentQuery(

@@ -6,6 +6,7 @@ import {
   type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
+import { randomUUID } from "../../lib/utils";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { createDuetThread } from "../../duet";
 import { providerInstanceEntriesFor } from "../../providerInstances";
@@ -83,8 +84,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
     const result = await upsert({
       environmentId,
       input: duetMorningBriefInput({
-        id:
-          task?.id ?? settings.duetMorningBriefTaskId ?? ScheduledTaskId.make(crypto.randomUUID()),
+        id: task?.id ?? settings.duetMorningBriefTaskId ?? ScheduledTaskId.make(randomUUID()),
         timeOfDay,
         projectId: project.id,
         threadId,

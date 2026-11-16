@@ -12,10 +12,7 @@ export function DuetProjectPicker(props: {
   readonly onChange: (projectId: ProjectId | null) => void;
 }) {
   const projects = useProjects().filter(
-    (project) =>
-      project.environmentId === props.environmentId &&
-      project.archivedAt === null &&
-      project.deletedAt === null,
+    (project) => project.environmentId === props.environmentId && project.archivedAt === null,
   );
   return (
     <View>

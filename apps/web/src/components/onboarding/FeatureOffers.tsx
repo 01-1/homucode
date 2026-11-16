@@ -86,14 +86,14 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   const save = async (apply: boolean) => {
     if (busy) return;
     setBusy(true);
-    try {
+    await (async () => {
       await update({
         environmentId,
         input: { patch: featureOfferSettingsPatch(settings, offers, apply ? selected : new Set()) },
       });
-    } finally {
+    })().finally(() => {
       setBusy(false);
-    }
+    });
   };
   if (!available || !canWrite || offers.length === 0) return null;
   return (
@@ -119,7 +119,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
           />
           {selected.has("quick-model") ? (
             <p className="mt-3 text-sm">
-              <Link to="/settings/threads" search={{ target: "quick-model" }}>
+              <Link to="/settings/threads" hash="quick-model">
                 Quick model settings
               </Link>
             </p>

@@ -56,13 +56,13 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    try {
+    await (async () => {
       const threadId = await actions.createThread();
       if (threadId) open(threadId);
-    } finally {
+    })().finally(() => {
       pending.current = false;
       setBusy(false);
-    }
+    });
   };
   return (
     <View className="flex-1 bg-screen">

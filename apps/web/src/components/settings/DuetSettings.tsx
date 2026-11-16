@@ -37,12 +37,12 @@ function EnvironmentDuetSettings({ environmentId }: { environmentId: Environment
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    try {
+    await (async () => {
       await action();
-    } finally {
+    })().finally(() => {
       pending.current = false;
       setBusy(false);
-    }
+    });
   };
   return (
     <SettingsSection id="duet" title="Duet">

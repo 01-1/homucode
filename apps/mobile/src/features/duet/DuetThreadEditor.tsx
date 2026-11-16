@@ -38,7 +38,7 @@ export function DuetThreadEditor(props: {
   const save = async () => {
     if (busy || !validColor || !title.trim()) return;
     setBusy(true);
-    try {
+    await (async () => {
       if (
         (
           await update({
@@ -67,9 +67,9 @@ export function DuetThreadEditor(props: {
       )
         return;
       props.onClose();
-    } finally {
+    })().finally(() => {
       setBusy(false);
-    }
+    });
   };
   return (
     <Sheet title="Edit Duet thread" onClose={props.onClose} dismissDisabled={busy}>
