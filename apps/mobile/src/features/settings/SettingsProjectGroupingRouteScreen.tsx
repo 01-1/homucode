@@ -11,6 +11,7 @@ import {
 } from "../../state/project-grouping";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
+import { ListToggleRow } from "../../components/ui/ListToggleRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { NewThreadSettingsSection, WorkingSectionSettings } from "./ThreadSettingsSections";
 
@@ -66,6 +67,19 @@ export function SettingsProjectGroupingRouteScreen() {
               onPress={() => savePreferences(mobileProjectGroupingModePatch(option.mode))}
             />
           ))}
+        </SettingsSection>
+        <SettingsSection title="Settings sync">
+          <ListToggleRow
+            label="Sync settings"
+            description="Keep theme, chat and other settings the same as your other devices, through the server this phone first synced with."
+            value={
+              AsyncResult.isSuccess(preferencesResult)
+                ? preferencesResult.value.settingsSyncEnabled !== false
+                : false
+            }
+            disabled={!preferencesReady}
+            onValueChange={(settingsSyncEnabled) => savePreferences({ settingsSyncEnabled })}
+          />
         </SettingsSection>
         <WorkingSectionSettings />
         <NewThreadSettingsSection />

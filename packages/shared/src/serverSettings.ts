@@ -409,6 +409,7 @@ export function applyServerSettingsPatch(
     usageModelAliases: usageModelAliasesPatch,
     // Entry replacement: deepMerge would keep keys the client meant to clear.
     projectSettingsOverrides: projectSettingsOverridesPatch,
+    syncedClientSettings: syncedClientSettingsPatch,
     projectAgentBrowserAccessOverrides: _legacyBrowserAccess,
     projectAutoPullOverrides: _legacyAutoPull,
     projectScriptOverrides: _legacyScripts,
@@ -543,6 +544,11 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.providerInstances !== undefined
       ? { providerInstances: patch.providerInstances }
+      : {}),
+    // Whole replacement, and only on top of the revision it was based on.
+    ...(syncedClientSettingsPatch !== undefined &&
+    syncedClientSettingsPatch.revision === current.syncedClientSettings.revision + 1
+      ? { syncedClientSettings: syncedClientSettingsPatch }
       : {}),
     ...(patch.worktreesDirectory !== undefined &&
     patch.worktreesDirectory !== current.worktreesDirectory

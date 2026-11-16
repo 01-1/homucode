@@ -15,6 +15,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 import {
   EnvironmentId,
   ForwardCompatibleNullable,
+  NonNegativeInt,
   ForwardCompatibleOptional,
   OmittedWhenNull,
   ProjectId,
@@ -610,6 +611,8 @@ export const ClientSettingsSchema = Schema.Struct({
   // Opt-in TeX typesetting in rendered Markdown. Off keeps math parsing and
   // KaTeX out of the render path entirely.
   mathRenderingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Device-local: sync these settings through the primary server.
+  settingsSyncEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -1377,7 +1380,20 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+/**
+ * The client settings that devices sync through this server. Each write must carry the next
+ * revision; a write based on an older revision is dropped so the device merges again.
+ */
+export const SyncedClientSettings = Schema.Struct({
+  revision: NonNegativeInt,
+  values: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type SyncedClientSettings = typeof SyncedClientSettings.Type;
+
 export const ServerSettings = Schema.Struct({
+  syncedClientSettings: SyncedClientSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed({ revision: 0, values: {} })),
+  ),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1949,6 +1965,7 @@ export const ServerSettingsPatch = Schema.Struct({
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   autoreviewEnabled: Schema.optionalKey(Schema.Boolean),
+  syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
@@ -2171,5 +2188,6 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
   mathRenderingEnabled: Schema.optionalKey(Schema.Boolean),
+  settingsSyncEnabled: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

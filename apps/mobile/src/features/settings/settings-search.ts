@@ -60,6 +60,8 @@ const SETTINGS_SEARCH_TERMS = {
     "working section",
     "new threads",
     "last project",
+    "settings sync",
+    "sync devices",
   ],
   SettingsThreads: [
     "new threads",

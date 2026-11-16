@@ -86,6 +86,22 @@ const PullRequestActivityVisibility = Schema.Struct({
 });
 export type PullRequestActivityVisibility = typeof PullRequestActivityVisibility.Type;
 
+const SettingsSyncBase = Schema.Struct({
+  revision: Schema.Number,
+  values: Schema.Record(Schema.String, Schema.Unknown),
+});
+type SettingsSyncBase = typeof SettingsSyncBase.Type;
+const isSettingsSyncBases = Schema.is(Schema.Record(Schema.String, SettingsSyncBase));
+
+const SettingsSyncTheme = Schema.Struct({
+  theme: Schema.Unknown,
+  themeHalves: Schema.Unknown,
+  light: Schema.Literals(MOBILE_THEME_IDS),
+  dark: Schema.Literals(MOBILE_THEME_IDS),
+});
+type SettingsSyncTheme = typeof SettingsSyncTheme.Type;
+const isSettingsSyncTheme = Schema.is(SettingsSyncTheme);
+
 const isDevicePins = Schema.is(Schema.Record(Schema.String, DevicePinsState));
 const isThreadListFilters = Schema.is(ThreadListFilters);
 const isPullRequestActivityVisibility = Schema.is(PullRequestActivityVisibility);
@@ -144,6 +160,14 @@ export interface Preferences {
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
+  /** Unset means on, as on web and desktop. */
+  readonly settingsSyncEnabled?: boolean;
+  /** The server settings sync through; kept so the choice does not move between servers. */
+  readonly settingsSyncEnvironmentId?: string;
+  /** Per server, the synced copy this phone last agreed with. */
+  readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
+  /** The synced theme last applied and the phone themes it became. */
+  readonly settingsSyncTheme?: SettingsSyncTheme;
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -229,6 +253,10 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListFilters?: ThreadListFilters;
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
+    settingsSyncEnabled?: boolean;
+    settingsSyncEnvironmentId?: string;
+    settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
+    settingsSyncTheme?: SettingsSyncTheme;
   } = {};
 
   if (isDevicePins(parsed.devicePins)) preferences.devicePins = parsed.devicePins;
@@ -385,6 +413,18 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (isWorkspaceSelections(parsed.workspaceSelections)) {
     preferences.workspaceSelections = parsed.workspaceSelections;
+  }
+  if (typeof parsed.settingsSyncEnabled === "boolean") {
+    preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
+  }
+  if (typeof parsed.settingsSyncEnvironmentId === "string") {
+    preferences.settingsSyncEnvironmentId = parsed.settingsSyncEnvironmentId;
+  }
+  if (isSettingsSyncBases(parsed.settingsSyncBases)) {
+    preferences.settingsSyncBases = parsed.settingsSyncBases;
+  }
+  if (isSettingsSyncTheme(parsed.settingsSyncTheme)) {
+    preferences.settingsSyncTheme = parsed.settingsSyncTheme;
   }
   return preferences;
 }

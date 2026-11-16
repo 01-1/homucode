@@ -894,6 +894,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["ask before thread second click inline action"],
   },
   {
+    id: "settings-sync",
+    title: "Settings sync",
+    to: "/settings/general",
+    searchTerms: ["sync devices synced conflict merge share preferences"],
+  },
+  {
     id: "delete-confirmation",
     title: msg("Delete confirmation"),
     to: "/settings/general",

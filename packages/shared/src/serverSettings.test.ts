@@ -101,6 +101,26 @@ describe("serverSettings helpers", () => {
     expect([on.idleCompaction, on.compactIdleThreads]).toEqual(["beforeCacheExpires", true]);
   });
 
+  it("replaces synced client settings only with the next revision", () => {
+    const first = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      syncedClientSettings: { revision: 1, values: { wordWrap: false, chatWidth: "wide" } },
+    });
+    expect(first.syncedClientSettings).toEqual({
+      revision: 1,
+      values: { wordWrap: false, chatWidth: "wide" },
+    });
+    const second = applyServerSettingsPatch(first, {
+      syncedClientSettings: { revision: 2, values: { wordWrap: true } },
+    });
+    expect(second.syncedClientSettings).toEqual({ revision: 2, values: { wordWrap: true } });
+    // A device that last saw revision 1 also writes revision 2; its write is stale.
+    expect(
+      applyServerSettingsPatch(second, {
+        syncedClientSettings: { revision: 2, values: { wordWrap: false } },
+      }).syncedClientSettings,
+    ).toEqual({ revision: 2, values: { wordWrap: true } });
+  });
+
   it("changes a cleanup rule without replacing the machine's other rules", () => {
     const enabled = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       storageCleanup: { worktreeAfterDays: 8, worktreeOnMerge: true, logsAfterDays: 30 },
