@@ -30,6 +30,19 @@ it("excludes structured context chips without joining text across them", () => {
       context: { version: 1, records: [] },
     }),
   ).toEqual(["before", "after"]);
+  expect(
+    searchableMessageSegments(
+      {
+        role: "user",
+        streaming: false,
+        text: "hello **world**\n + x[hidden label](t3-context://v1/terminal/terminal_1)after",
+        context: { version: 1, records: [] },
+      },
+      undefined,
+      [],
+      true,
+    ),
+  ).toEqual(["hello **world**  + x", "after"]);
 });
 
 it("excludes the hidden prompt of an attachment-only message", () => {
