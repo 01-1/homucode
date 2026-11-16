@@ -1,0 +1,56 @@
+# Changes from T3 Code
+
+Everything Homu Code changes compared to upstream [T3 Code](https://github.com/pingdotgg/t3code). The [README](./README.md#changes-compared-to-t3-code) has a short summary.
+
+## Server speed
+
+- **Migration checks without a write lock.** In upstream T3 Code, every `t3` CLI command ran the database migration step inside a write-locked transaction on the live database, even when there was nothing to migrate. Each CLI call competed with the server's own writes and could wait up to SQLite's 5-second busy timeout. Homu Code first checks the recorded migration history with a plain read and skips the locked step when the schema is already current, so CLI calls no longer hold up, or wait on, the server.
+- **Cheaper work-assistance activity reads.** Work assistance (a Homu Code feature, see [Known limits](#known-limits)) re-reads thread activity as thread events arrive, for every thread it covers on each provider-session event. That query re-parsed every provider thread's stored JSON for each attached row; with one shared Codex session holding about 400 threads, a read took about 400 ms and kept the server's event loop near 94% busy. It now extracts each fork parent once (about 34 ms per read on the same data), and reads activity once per batch of events instead of once per event. In streaming bursts the per-event reads had used about 39% of the event loop.
+- **Background Git can be switched off.** Start the server with the environment variable `T3CODE_BACKGROUND_GIT=0` to stop the Git work it does on its own: automatic Git status and branch subscriptions, fetch and auto-pull, pull-request discovery, sync, watches and auto-settlement, new turn checkpoints, and automatic worktree cleanup. Restart to apply or remove it; unset keeps upstream's behavior. While it is off, new turns have no checkpoint diff or undo and the branch and Changes displays don't update by themselves, but explicit Git actions, status refresh from the Git action menu, PR linking, manual cleanup and worktree creation still work. See [Disable background Git](./docs/user/source-control.md#disable-background-git).
+- **Git config cache.** `git config` reads are cached for one second, and identical reads in flight are shared, which cuts repeated Git calls from status and pull-request lookups. Callers that need a fresh value skip the cache, a fresh read drops the whole cache, and background and foreground reads are cached separately.
+
+## Threads and subagents
+
+- **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.
+- **Sidebar folders.** Thread folders in the sidebar, ported from upstream PR #26714 without its mobile part.
+- **Stop.** Stop stops only the current thread. Shift-click, the background-work Stop or `/stopall` also stops its subagents.
+- **Who stopped a run.** Interrupt notices say whether a human (the app's Stop), an agent (MCP tools) or an unknown sender (the `t3` CLI, or a client that names no surface) stopped the run, also when it was stopped before its provider started.
+- **Bare "stop" or "wait".** A message that is only "stop" or "wait" stops the running turn and goes first in the queue, instead of waiting behind the work it meant to halt. This works on providers that can't interrupt and restart, such as Claude.
+- **Subagents default to T3 delegation.** Agents are told to start subagents through T3 Code's `delegate_task` rather than their provider's own subagent tool. The `preferNativeSubagents` setting (off by default, per project) switches the preference back to native subagents. Running Claude, OpenCode and Pi sessions pick up a change.
+- **Thread titles.** The titler sees the project name, so titles can leave out what it already says (`threadTitleIncludeProjectName`, on by default). An optional title ID (`threadTitleIdPrefix`, off by default) gives each active thread a short ID from its title's first letter, numbered when another thread in the project has it (F, F1, F2). Settling a thread adds letters (F1a) to free the number again. Both settings are per project, next to the title instructions.
+- **Message context.** Each user message records which device it came from, and the agent sees a `[T3] Sent from: ...` line. Optional names come from `device-names.json` in the state folder.
+- **`/q`.** Asks one question in the same thread on a "Quick model" (a new setting): the thread switches to the quick model for that one answer, then switches back to its own model. Context and prompt cache are kept: on the same provider the answer runs in the thread's own provider conversation, so nothing is handed off. On another provider the quick model gets a summary of the thread, and the switch back resumes the thread's original provider conversation with only the missed turn added.
+- **`/cd`.** `/cd <folder>` moves the thread to that folder's project and adds the project if there isn't one yet. A relative folder starts from the thread's current one, and `~` works. A started thread keeps its conversation and runs in the new folder from its next turn; it has to be idle first. In a new thread that hasn't started, `/cd` opens a new thread in that project instead. Web and desktop only.
+- **Machine for threads without a project.** Settings → Connections → Threads without a project picks which machine those threads start on, per device. Automatic keeps upstream's order: this device's own machine, then the one on screen.
+- **Autoreviewers.** An `autoreview` tool attaches reviewer subagents to a thread. They read its activity in batches and send back findings, which steer into the running turn or wait in one queued message. Options cover batch size, pacing, waking on each tool call or each user message, and a custom preamble. Findings that arrive after a Stop wait for the user's next turn. They are off by default: turn on Settings → Threads → Autoreviewers (`autoreviewEnabled`). While it is off the tool refuses to add reviewers, and reviewers already attached pause until it is back on. Using them isn't recommended. They often get in the way of other threads because they lag behind: if the main thread keeps working, the reviewer gets no new context until it replies, and that reply is based only on old context. Other times a reviewer gets stuck replying LGTM over and over.
+
+## Queue and steering
+
+- **Auto and steer delivery.** Messages sent with delivery mode auto or steer are steered in as soon as the turn can take them. `t3 thread send` takes `--mode queue|auto|steer|restart`, and `t3 thread configure` sets permission and interaction modes.
+- **Steer all queued messages.** While a turn runs, Ctrl+Enter (Cmd+Enter on macOS) in an empty composer steers every queued message into the running turn in order, stopping before one that must start its own turn. With a draft, it still sends the draft with the opposite queue or steer action.
+- **Claude steers survive Stop.** When Claude holds a steered message behind a running tool and you press Stop, the message is sent again automatically: it steers a live run or starts the next turn. Upstream dropped it and asked you to resend.
+
+## Composer and messages
+
+- **Status line.** An optional line under the composer shows the model, context use and usage limits, like Claude Code's status line. Turn it on in Settings → Status line, which also takes a custom command. Web, desktop and mobile.
+- **Plain-text sent messages.** A setting shows your sent messages as the plain text you typed instead of rendered Markdown. Find in thread matches what is shown.
+- **Keep `+` at the start of a line.** A setting keeps a `+` at the start of a line in your sent messages as typed, instead of turning it into a bullet.
+- **Answered questions keep their options.** Answered and cancelled questions show every option and its preview, not only the chosen one. Web and mobile.
+
+## Desktop, CLI and mobile
+
+- **Completions and CLI.** A durable local completion sink and native CLI task controls. Launch receipts and the AppImage runtime are reused across CLI calls.
+- **Desktop on Linux.** Thread links reuse the pinned AppImage cache, and URL launches request Wayland activation.
+- **Undo a staged build.** On AppImage installs, Settings → About shows the build the next start loads, with an Undo button that renames that AppImage to `.off` so the one staged before it loads instead. The toast after Undo offers Redo.
+- **Android undo notice.** The thread undo notice shows at the top of the screen on Android.
+
+## Smaller items
+
+- Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
+- CI runs the Linux jobs on Boat runners for pushes to `main`, the owner's PRs, and the run started by adding the `ci:boat` label to a PR. Other runs stay on GitHub's runners.
+
+## Known limits
+
+- Work assistance (`apps/server/src/orchestration-v2/WorkAssistance.ts`) is limited to one project and environment, set by `MAIN_PROJECT` and `MAIN_ENVIRONMENT`. They are placeholder IDs here, so the feature does nothing until you put in your own.
+- The phone and web apps published by upstream (App Store, Google Play, app.t3.codes) don't have these changes. Per-device pins, for example, only fully apply to clients built from this repository.
+- The Git config cache has been code reviewed but not yet run as part of a built app.

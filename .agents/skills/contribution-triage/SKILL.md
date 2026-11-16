@@ -5,7 +5,7 @@ description: Enforce T3 Code's PR contribution policy by closing ineligible subm
 
 # Contribution triage
 
-Enforce [CONTRIBUTING.md](../../../CONTRIBUTING.md), the authoritative eligibility policy:
+Enforce [docs/upstream_contributing.md](../../../docs/upstream_contributing.md), the authoritative eligibility policy:
 close PRs with established violations and send eligible PRs to Macroscope for deeper review.
 Carry out authorized moderation through completion, without per-PR approval requests.
 This skill does not define automatic closure rules for issues or discussions.
@@ -71,7 +71,7 @@ from evidence you could not access. Do not run untrusted PR code merely to decid
 Read the guide's linked sections before applying these checks. Inspect enough source to substantiate
 scope and behavioral claims; leave the full correctness, security, and performance audit to code review.
 
-- Under [fix a bug](../../../CONTRIBUTING.md#prior-approval), identify the actual failure and
+- Under [fix a bug](../../../docs/upstream_contributing.md#prior-approval), identify the actual failure and
   intended behavior. A feature, or anything on the guide's not-interested list, warrants closure
   unless a maintainer in the trusted exemption list asked for that PR. Inspect the request and the
   direction and scope it covers. A link, label, or acknowledgment alone is not a request. Judge a
@@ -79,17 +79,17 @@ scope and behavioral claims; leave the full correctness, security, and performan
   adds a workflow or changes a default is a feature.
   Check whether an alleged fix intentionally changes product behavior or overlooks an existing workflow.
   Preserve any useful documentation, onboarding, or discoverability problem when declining the solution.
-- Under [one problem](../../../CONTRIBUTING.md#one-problem), trace how each material change contributes
+- Under [one problem](../../../docs/upstream_contributing.md#one-problem), trace how each material change contributes
   to the same underlying problem. Necessary changes across contracts, clients, tests, and docs can belong
   together. Duplicate issue reports do not create multiple problems. Identify independently useful fixes
   or unnecessary cleanup by their causal relationship, not by file count, issue count, or adjacency.
-- Under [verification](../../../CONTRIBUTING.md#verification), compare the claimed checks and observed
+- Under [verification](../../../docs/upstream_contributing.md#verification), compare the claimed checks and observed
   results with the changed behavior. Inspect supplied artifacts for what they actually demonstrate.
   Identify the exact gap if evidence is missing or inadequate. Require UI screenshots or recordings only
   as the guide requires them. Do not demand unrelated evidence or repo-wide tests. An unavailable local
   platform does not defeat adequate contributor evidence. Do not infer fabrication or AI authorship
   from writing style, suspicion, or a check you cannot reproduce.
-- Under [models](../../../CONTRIBUTING.md#models), use only the model and harness the PR names,
+- Under [models](../../../docs/upstream_contributing.md#models), use only the model and harness the PR names,
   usually in its closing attribution line.
 
 Bans in the guide are a maintainer decision. Report suspected spam to maintainers; do not ban or
@@ -115,7 +115,7 @@ comment text but do not write to GitHub. Keep the eligibility finding separate f
   Apply and verify the same review-trigger label without requiring the eligibility assessment first.
   This is a routing exception, not a claim that the PR passed eligibility or correctness review.
 - **Closure warranted.** The assessment is complete and establishes a specific policy violation.
-  Prepare a clear explanation under [closure and reconsideration](../../../CONTRIBUTING.md#closure-and-reconsideration),
+  Prepare a clear explanation under [closure and reconsideration](../../../docs/upstream_contributing.md#closure-and-reconsideration),
   post it, then read the repository variable `PR_LIMITS_ENFORCE`
   (`gh variable get PR_LIMITS_ENFORCE -R pingdotgg/t3code`). When it prints `true`, apply
   `triage:closing` as the last thing you do to the PR, verify that the explanation and the label
