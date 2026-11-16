@@ -37,6 +37,7 @@ const state = vi.hoisted(() => ({
   importThreads: vi.fn(),
   refreshProviders: vi.fn(),
   completeOnboarding: vi.fn(),
+  updateSettings: vi.fn(),
   onDone: vi.fn(),
   scan: vi.fn(),
   refreshScan: vi.fn(),
@@ -177,18 +178,22 @@ vi.mock(import("../ThreadTerminalDrawer"), async (original) => ({
   ...(await original()),
   TerminalViewport: () => <div />,
 }));
-vi.mock(import("../../state/use-atom-command"), async (original) => ({
-  ...(await original()),
-  useAtomCommand: ((
-    command:
-      | "createProject"
-      | "importThreads"
-      | "refreshProviders"
-      | "openTerminal"
-      | "writeTerminal"
-      | "closeTerminal",
-  ) => state[command]) as never,
-}));
+vi.mock(import("../../state/use-atom-command"), async (original) => {
+  const { serverEnvironment } = await import("../../state/server");
+  return {
+    ...(await original()),
+    useAtomCommand: ((
+      command:
+        | typeof serverEnvironment.updateSettings
+        | "createProject"
+        | "importThreads"
+        | "refreshProviders"
+        | "openTerminal"
+        | "writeTerminal"
+        | "closeTerminal",
+    ) => (typeof command === "string" ? state[command] : state.updateSettings)) as never,
+  };
+});
 
 import { welcomeImportSelectionKey } from "../../onboarding/welcomeState";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
@@ -352,6 +357,7 @@ function setup() {
     .mockResolvedValue(AsyncResult.success({ importedCount: 1, skippedCount: 0 }));
   state.refreshProviders.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   state.completeOnboarding.mockReset().mockResolvedValue(undefined);
+  state.updateSettings.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   state.onDone.mockReset();
   state.scan.mockReset();
   state.refreshScan.mockReset();
