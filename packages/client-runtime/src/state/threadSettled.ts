@@ -2,7 +2,11 @@
 import * as DateTime from "effect/DateTime";
 import { DEFAULT_SNOOZE_PRESETS, type SnoozePresetSetting } from "@t3tools/contracts/settings";
 
-import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
+import {
+  threadRuntimeIsActive,
+  type EnvironmentThreadShell,
+  type PendingSubagentRequest,
+} from "./models.ts";
 
 interface SettlementRunLike {
   readonly turnId?: unknown;
@@ -151,6 +155,13 @@ export function canSnooze(
   if ((shell.pendingGuestMessageCount ?? 0) > 0) return false;
   if (hasQueuedTurnStart(shell, options)) return false;
   return true;
+}
+
+/** A thread settled mid-turn stays with active work until the turn ends. */
+export function isShelvedSettled(
+  shell: Pick<EnvironmentThreadShell, "settledOverride" | "runtime">,
+): boolean {
+  return shell.settledOverride === "settled" && !threadRuntimeIsActive(shell.runtime);
 }
 
 export function effectiveSnoozed(

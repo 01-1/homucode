@@ -2,6 +2,7 @@ import {
   canSnooze,
   effectiveSnoozed,
   hasQueuedTurnStart,
+  isShelvedSettled,
   pickSnoozePreset,
   QUEUED_TURN_START_GRACE_MS,
   resolveSnoozePresets,
@@ -370,7 +371,7 @@ export function getThreadListV2OrderedSection(input: {
     if (thread.archivedAt !== null || !isListedThreadLineage(thread.lineage)) return false;
     if (
       (input.settlementEnvironmentIds?.has(thread.environmentId) ?? true) &&
-      thread.settledOverride === "settled" &&
+      isShelvedSettled(thread) &&
       queuedThreadKeys?.has(`${thread.environmentId}:${thread.id}`) !== true
     ) {
       return false;
@@ -791,7 +792,7 @@ export function buildThreadListV2Items(input: {
     }
     const hasQueuedMessages =
       queuedThreadKeys?.has(`${thread.environmentId}:${thread.id}`) === true;
-    if (supportsSettlement && thread.settledOverride === "settled" && !hasQueuedMessages) {
+    if (supportsSettlement && isShelvedSettled(thread) && !hasQueuedMessages) {
       settled.push(thread);
     } else if (thread.pinnedAt != null) {
       pinned.push(thread);

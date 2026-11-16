@@ -1741,6 +1741,24 @@ describe("Working section beta", () => {
     expect(off.workingCount).toBe(0);
   });
 
+  it("keeps a thread settled mid-turn with working threads until its turn ends", () => {
+    const settling = makeThread({
+      id: ThreadId.make("settling"),
+      title: "settling",
+      settledOverride: "settled",
+      runtime: running,
+    });
+    const working = build({ threads: [settling] });
+    expect(working.workingCount).toBe(1);
+    expect(working.settledCount).toBe(0);
+
+    const done = build({
+      threads: [{ ...settling, runtime: { ...running, status: "completed" } }],
+    });
+    expect(done.workingCount).toBe(0);
+    expect(done.settledCount).toBe(1);
+  });
+
   it("keeps an inactive row in Working during the shared grace and returns it on expiry", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW));
