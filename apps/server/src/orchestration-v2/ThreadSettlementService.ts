@@ -402,10 +402,9 @@ export const make = Effect.gen(function* () {
           return null;
         }
         // thread.auto-settle does not recheck settings, so read them per decision; reads are cached.
-        const currentSettings = resolveProjectSettings(
-          yield* settingsService.getSettings,
-          thread.projectId,
-        ).settings;
+        const freshSettings = yield* settingsService.getSettings;
+        if (isDuetKeptThread(freshSettings, thread)) return thread;
+        const currentSettings = resolveProjectSettings(freshSettings, thread.projectId).settings;
         const decisionNow = yield* DateTime.now;
         const settledAt = resolveAutoSettlementAt({
           thread,
