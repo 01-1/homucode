@@ -52,8 +52,11 @@ export function planCloudAccountStep(
 }
 
 export interface CloudAccountHandlers<S extends CloudAccountSource> {
-  /** Synchronously drops every credential so nothing reads the old account during cleanup. */
-  readonly deactivate: () => void;
+  /**
+   * Synchronously drops every credential so nothing reads the old account during cleanup.
+   * `signedOut` is false when another account is about to replace it.
+   */
+  readonly deactivate: (input: { readonly signedOut: boolean }) => void;
   readonly cleanUp: (input: {
     readonly source: S;
     readonly accountId: string | null;
@@ -135,7 +138,7 @@ export function createCloudAccountService<S extends CloudAccountSource>(
     const activation = generation;
     const isCurrent = () => activation === generation;
     state = { _tag: "Activating", accountId: step.accountId };
-    if (step.switchFromAccountId !== null) handlers.deactivate();
+    if (step.switchFromAccountId !== null) handlers.deactivate({ signedOut: false });
     enqueue("cloud account activation", async () => {
       try {
         if (step.switchFromAccountId !== null) {
@@ -172,7 +175,7 @@ export function createCloudAccountService<S extends CloudAccountSource>(
     if (step._tag === "SignOut") {
       state = { _tag: "SignedOut" };
       if (step.isAccountTransition) handlers.onSignOutTransition?.();
-      handlers.deactivate();
+      handlers.deactivate({ signedOut: true });
       enqueue("cloud account cleanup", () =>
         handlers.cleanUp({ source, accountId: step.previousAccountId, wasActive }),
       );

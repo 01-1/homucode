@@ -13,9 +13,12 @@ export const Configuration = Schema.Struct({
 export type Configuration = typeof Configuration.Type;
 export const disabled: Configuration = { schema: 1, enabled: false, bindings: [] };
 
-export class ConfigError extends Schema.TaggedError<ConfigError>()("ProjectRouterNoticeConfigError", {
-  reason: Schema.Literals(["read_failed", "invalid_configuration", "duplicate_project"]),
-}) {}
+export class ConfigError extends Schema.TaggedError<ConfigError>()(
+  "ProjectRouterNoticeConfigError",
+  {
+    reason: Schema.Literals(["read_failed", "invalid_configuration", "duplicate_project"]),
+  },
+) {}
 
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(Configuration), {
   onExcessProperty: "error",
@@ -27,7 +30,9 @@ export const decodeConfig = (text: string) =>
     : decode(text).pipe(
         Effect.mapError(() => new ConfigError({ reason: "invalid_configuration" })),
         Effect.filterOrElse(
-          (config) => new Set(config.bindings.map((binding) => binding.projectId)).size === config.bindings.length,
+          (config) =>
+            new Set(config.bindings.map((binding) => binding.projectId)).size ===
+            config.bindings.length,
           () => new ConfigError({ reason: "duplicate_project" }),
         ),
       );

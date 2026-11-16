@@ -9,7 +9,7 @@ The server reads `Path.join(ServerConfig.stateDir, "project-router-notices.json"
 Disabled template:
 
 ```json
-{"schema":1,"enabled":false,"bindings":[]}
+{ "schema": 1, "enabled": false, "bindings": [] }
 ```
 
 Binding shape:
@@ -19,7 +19,7 @@ Binding shape:
   "schema": 1,
   "enabled": false,
   "bindings": [
-    {"projectId": "ACTUAL_LOCAL_PROJECT_ID", "routerThreadId": "ACTUAL_LOCAL_ROUTER_THREAD_ID"}
+    { "projectId": "ACTUAL_LOCAL_PROJECT_ID", "routerThreadId": "ACTUAL_LOCAL_ROUTER_THREAD_ID" }
   ]
 }
 ```

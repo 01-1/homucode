@@ -19,28 +19,20 @@ import { queuedRunsInDeliveryOrder } from "./QueuedRunOrder.ts";
 /** Safety bound; each promotion consumes one queued run, so a pass ends long before this. */
 const MAX_PROMOTIONS_PER_PASS = 500;
 
-/**
- * Sends that asked to steer (auto/steer) queue when the turn cannot take a steer yet: a
- * compaction is running, or the run is preparing/starting, or between provider turns. Those
- * runs carry `autoSteer`. Whenever a steerable turn exists, this promotes them to steers from
- * the head of the queue, so nothing waits for a manual "Send now". It stops at the first
- * queued run that is held or did not ask to steer, so queue order is never jumped.
- */
+/** Promotes opted-in queue heads once steering is available, without jumping held runs. */
 export interface AutoSteerPromotion {
   readonly queuedRunId: OrchestrationV2Run["id"];
   readonly targetRunId: OrchestrationV2Run["id"];
   readonly skipsCompaction: boolean;
 }
 
-export function nextAutoSteerPromotion(projection: {
+function nextAutoSteerPromotion(projection: {
   readonly thread?: object;
   readonly runs: ReadonlyArray<OrchestrationV2Run>;
   readonly messages: Parameters<typeof resolveMessageDispatchIntent>[0]["messages"];
   readonly providerTurns: Parameters<typeof resolveMessageDispatchIntent>[0]["providerTurns"];
   readonly providerThreads: Parameters<typeof resolveMessageDispatchIntent>[0]["providerThreads"];
-  readonly providerSessions: Parameters<
-    typeof resolveMessageDispatchIntent
-  >[0]["providerSessions"];
+  readonly providerSessions: Parameters<typeof resolveMessageDispatchIntent>[0]["providerSessions"];
 }): AutoSteerPromotion | null {
   const head = queuedRunsInDeliveryOrder(
     projection as Parameters<typeof queuedRunsInDeliveryOrder>[0],
@@ -192,7 +184,11 @@ export const make = Effect.gen(function* () {
           ? Effect.sync(() => dirty.add(event.threadId)).pipe(
               Effect.andThen(FiberMap.has(passes, event.threadId)),
               Effect.flatMap((running) =>
-                running ? Effect.void : FiberMap.run(passes, event.threadId, promote(event.threadId)).pipe(Effect.asVoid),
+                running
+                  ? Effect.void
+                  : FiberMap.run(passes, event.threadId, promote(event.threadId)).pipe(
+                      Effect.asVoid,
+                    ),
               ),
             )
           : Effect.void,

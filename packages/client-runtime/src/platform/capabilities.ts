@@ -29,6 +29,8 @@ export class CloudSession extends Context.Service<
   CloudSession,
   {
     readonly identity: Effect.Effect<Option.Option<CloudSessionIdentity>>;
+    /** True once this device is known to be signed out, as opposed to its session still loading. */
+    readonly signedOut: Effect.Effect<boolean>;
     readonly clerkToken: Effect.Effect<string, ConnectionAttemptError>;
   }
 >()("@t3tools/client-runtime/platform/capabilities/CloudSession") {}

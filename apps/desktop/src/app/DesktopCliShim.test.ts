@@ -40,7 +40,7 @@ const run = (shim: string, args: ReadonlyArray<string>, env: NodeJS.ProcessEnv =
   });
 
 const REPORTER =
-  '#!/bin/sh\necho "node=$ELECTRON_RUN_AS_NODE cli=$T3CODE_CLI_PATH home=$T3CODE_HOME"\nprintf "%s\\n" "$@"\nexit 3\n';
+  '#!/bin/sh\necho "node=$ELECTRON_RUN_AS_NODE cli=$T3CODE_CLI_PATH home=$T3CODE_HOME appimage=$APPIMAGE"\nprintf "%s\\n" "$@"\nexit 3\n';
 
 const fakeAppImage = () => {
   const root = tempRoot();
@@ -64,7 +64,70 @@ const fakeAppImage = () => {
   return { root, image, appImage, shim };
 };
 
+// Stays up after a signal until the test lets it finish, like a server shutting down.
+const SLOW_SERVER = [
+  "#!/bin/sh",
+  "trap 'echo stopping >&3; read go; echo stopped >&3; exit 0' TERM HUP",
+  "echo ready",
+  "while :; do sleep 0.05; done",
+  "",
+].join("\n");
+
+const lines = (stream: NodeJS.ReadableStream) => {
+  const seen: Array<string> = [];
+  const waiters: Array<() => void> = [];
+  let buffer = "";
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk: string) => {
+    buffer += chunk;
+    const parts = buffer.split("\n");
+    buffer = parts.pop()!;
+    seen.push(...parts);
+    for (const wake of waiters.splice(0)) wake();
+  });
+  const until = async (match: (line: string) => boolean) => {
+    for (;;) {
+      const line = seen.find(match);
+      if (line !== undefined) return line;
+      await new Promise<void>((resolve) => waiters.push(resolve));
+    }
+  };
+  return { seen, until };
+};
+
 describe("renderCliShim", () => {
+  it.each(["SIGTERM", "SIGHUP"] as const)(
+    "keeps the cached runtime available until the server exits after %s to the process group",
+    async (signal) => {
+      const { image, shim } = fakeAppImage();
+      writeExecutable(NodePath.join(image, "t3code"), SLOW_SERVER);
+      const child = NodeChildProcess.spawn(shim, [], {
+        detached: true,
+        env: { PATH: process.env.PATH },
+        stdio: ["pipe", "pipe", "ignore", "pipe"],
+      });
+      let closed = false;
+      const exited = new Promise<number | null>((resolve) =>
+        child.on("close", (code) => {
+          closed = true;
+          resolve(code);
+        }),
+      );
+      try {
+        const stdout = lines(child.stdout!);
+        const events = lines(child.stdio[3] as NodeJS.ReadableStream);
+        await stdout.until((line) => line === "ready");
+        process.kill(-child.pid!, signal);
+        await events.until((line) => line === "stopping");
+        child.stdin!.end("go\n");
+        expect(await exited).toBe(0);
+        expect(events.seen).toEqual(["stopping", "stopped"]);
+      } finally {
+        if (!closed) process.kill(-child.pid!, "SIGKILL");
+      }
+    },
+  );
+
   it("extracts once per image hash and preserves arguments and exit status", () => {
     const { root, appImage, shim } = fakeAppImage();
     const first = run(shim, ["thread", "space and 'quote'"], { APPIMAGE_EXTRACT_AND_RUN: "1" });
@@ -129,6 +192,13 @@ describe("renderCliShim", () => {
       { status: 0, stdout: "private input" },
     ]);
     expect(NodeFS.readFileSync(NodePath.join(root, "extractions"), "utf8")).toBe("extract\n");
+  });
+
+  it("tells the cached CLI which AppImage launched it", () => {
+    const { appImage, shim } = fakeAppImage();
+    const result = run(shim, ["--version"]);
+    expect(result.status).toBe(3);
+    expect(result.stdout).toContain(`appimage=${appImage}`);
   });
 
   it("keeps the install's T3 home under sudo, unless one is set", () => {

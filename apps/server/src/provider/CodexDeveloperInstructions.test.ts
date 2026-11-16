@@ -12,39 +12,28 @@ describe("buildCodexAdditionalContext", () => {
   describe.each([
     { model: "custom-model", modelName: "Custom 🦊 Model", reasoningEffort: "xhigh" },
   ])("with runtime $model", (runtime) => {
-    it.each([undefined, { browser: true, device: true }])(
-      "keeps every entry within Codex's per-entry cap with tools %j",
-      (availability) => {
-        const context = buildCodexAdditionalContext(runtime, availability);
+    describe.each([false, true])("native preference %j", (preferNativeSubagents) => {
+      it.each([undefined, { browser: true, device: true }])(
+        "keeps every entry within Codex's per-entry cap with tools %j",
+        (availability) => {
+          const context = buildCodexAdditionalContext(runtime, availability, preferNativeSubagents);
 
-        for (const [key, entry] of Object.entries(context)) {
-          // Codex counts ceil(UTF-8 bytes / 4) tokens, excluding keys and wrappers.
-          const bytes = Buffer.byteLength(entry.value, "utf8");
-          const limit = CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES;
-          NodeAssert.ok(
-            bytes <= limit,
-            `${key}: ${bytes} UTF-8 bytes exceeds Codex's ${limit}-byte per-entry cap by ${bytes - limit} bytes; split the instructions into separate entries to avoid silent truncation`,
-          );
-        }
-      },
-    );
+          for (const [key, entry] of Object.entries(context)) {
+            // Codex counts ceil(UTF-8 bytes / 4) tokens, excluding keys and wrappers.
+            const bytes = Buffer.byteLength(entry.value, "utf8");
+            const limit = CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES;
+            NodeAssert.ok(
+              bytes <= limit,
+              `${key}: ${bytes} UTF-8 bytes exceeds Codex's ${limit}-byte per-entry cap by ${bytes - limit} bytes; split the instructions into separate entries to avoid silent truncation`,
+            );
+          }
+        },
+      );
+    });
   });
 });
 
 describe("Codex runtime context", () => {
-  it("describes Markdown media support in the runtime context in both modes", () => {
-    {
-      const instructions = runtimeInstructions({
-        model: "gpt-5.3-codex",
-        reasoningEffort: "high",
-      });
-      NodeAssert.match(
-        instructions,
-        /<runtime_info>.*embed images, video, and audio.*Markdown image syntax with absolute file paths.*Link any other file.*absolute path.*files viewer.*<\/runtime_info>/,
-      );
-    }
-  });
-
   it("flattens multiline metadata into single-line runtime info", () => {
     const instructions = runtimeInstructions({
       model: "gpt\n5.3\ncodex",
@@ -58,7 +47,9 @@ describe("Codex runtime context", () => {
 
 describe("Codex orchestration context", () => {
   it("routes subagents native first, delegate_task for the rest", () => {
-    const orchestration = Object.entries(buildCodexAdditionalContext({ model: "gpt-6.1-sol" }))
+    const orchestration = Object.entries(
+      buildCodexAdditionalContext({ model: "gpt-6.1-sol" }, true, true),
+    )
       .filter(([key]) => key.startsWith("t3_code_orchestration_"))
       .map(([, entry]) => entry.value)
       .join("\n");

@@ -9,7 +9,10 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import type * as Orchestrator from "./Orchestrator.ts";
-import type { ThreadManagementProviderInstanceDisabledError, ThreadManagementServiceShape } from "./ThreadManagementService.ts";
+import type {
+  ThreadManagementProviderInstanceDisabledError,
+  ThreadManagementServiceShape,
+} from "./ThreadManagementService.ts";
 
 export class AutoreviewerStopError extends Schema.TaggedError<AutoreviewerStopError>()(
   "AutoreviewerStopError",
@@ -35,13 +38,19 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
   const parent = yield* threads.getThreadRecords(input.threadId, ["subagents"]);
   const selected = parent.subagents.find((task) => task.id === input.reviewer.taskId);
   if (selected?.origin !== "app_owned" || selected.childThreadId !== input.reviewer.threadId) {
-    return yield* new AutoreviewerStopError({ message: "The attached reviewer no longer matches its delegated task." });
+    return yield* new AutoreviewerStopError({
+      message: "The attached reviewer no longer matches its delegated task.",
+    });
   }
   // Human follow-ups create separate parent tasks for the same reviewer thread. Dispose
   // every such delivery before Stop can publish a terminal and trigger async settlement.
   for (const task of parent.subagents) {
-    if (task.origin !== "app_owned" || task.childThreadId !== input.reviewer.threadId ||
-      task.completionDelivery?.state === "disposed") continue;
+    if (
+      task.origin !== "app_owned" ||
+      task.childThreadId !== input.reviewer.threadId ||
+      task.completionDelivery?.state === "disposed"
+    )
+      continue;
     yield* threads.dispatch({
       type: "delegated_task.completion-delivery.dispose",
       commandId: CommandId.make(`${input.commandId}:${task.id}:dispose`),
@@ -60,19 +69,30 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
     if (task.completionDelivery?.state !== "disposed") {
       yield* threads.dispatch({
         type: "delegated_task.completion-delivery.dispose",
-        commandId: commandId("dispose"), parentThreadId, taskId: task.id,
+        commandId: commandId("dispose"),
+        parentThreadId,
+        taskId: task.id,
       });
     }
     if (task.childThreadId === null) {
       if (task.remoteChild !== undefined) {
-        yield* threads.dispatch(task.result === null ? {
-          type: "delegated_task.remote.complete",
-          commandId: commandId("remote"), parentThreadId, taskId: task.id,
-          status: "interrupted", result: "Stopped with its autoreviewer by the user.",
-        } : {
-          type: "delegated_task.remote.stop",
-          commandId: commandId("remote"), parentThreadId, taskId: task.id,
-        });
+        yield* threads.dispatch(
+          task.result === null
+            ? {
+                type: "delegated_task.remote.complete",
+                commandId: commandId("remote"),
+                parentThreadId,
+                taskId: task.id,
+                status: "interrupted",
+                result: "Stopped with its autoreviewer by the user.",
+              }
+            : {
+                type: "delegated_task.remote.stop",
+                commandId: commandId("remote"),
+                parentThreadId,
+                taskId: task.id,
+              },
+        );
       }
       return;
     }
@@ -81,8 +101,11 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
     if (firstVisit) {
       visited.add(childThreadId);
       yield* threads.dispatch({
-        type: "thread.stop", commandId: commandId("stop"), threadId: childThreadId,
-        stopDelegatedTasks: false, reason: "Autoreviewer stopped by the user.",
+        type: "thread.stop",
+        commandId: commandId("stop"),
+        threadId: childThreadId,
+        stopDelegatedTasks: false,
+        reason: "Autoreviewer stopped by the user.",
       });
     }
     const child = yield* threads.getThreadRecords(childThreadId, ["runs", "subagents"]);
@@ -108,12 +131,17 @@ export const stopAutoreviewerWork = Effect.fn("AutoreviewService.stopWork")(func
       }
     }
     // Also settle a follow-up whose original child run is already terminal or missing.
-    const latest = yield* threads.getThreadRecords(parentThreadId, ["subagents"], { subagentIds: [task.id] });
+    const latest = yield* threads.getThreadRecords(parentThreadId, ["subagents"], {
+      subagentIds: [task.id],
+    });
     const remaining = latest.subagents.find((entry) => entry.id === task.id);
     if (remaining?.runId != null && isOrchestrationV2WorkActive(remaining.status)) {
       yield* threads.dispatch({
-        type: "subagent.stop", commandId: commandId("orphan"),
-        threadId: parentThreadId, runId: remaining.runId, subagentId: task.id,
+        type: "subagent.stop",
+        commandId: commandId("orphan"),
+        threadId: parentThreadId,
+        runId: remaining.runId,
+        subagentId: task.id,
       });
     }
   });

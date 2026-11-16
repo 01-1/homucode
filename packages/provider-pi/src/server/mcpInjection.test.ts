@@ -5,6 +5,7 @@ import {
   T3_MCP_BEARER_ENV,
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
+  T3_PI_PREFER_NATIVE_SUBAGENTS_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
 } from "./mcpExtensionSource.ts";
 import * as Effect from "effect/Effect";
@@ -69,6 +70,14 @@ describe("pi T3 MCP injection", () => {
     assert.equal(launch.env[T3_MCP_URL_ENV], "http://127.0.0.1:43123/mcp");
     assert.equal(launch.env[T3_MCP_BEARER_ENV], "secret-pi-token");
     assert.equal(launch.env[T3_PI_RUNTIME_MODE_ENV], "approval-required");
+    assert.equal(launch.env[T3_PI_PREFER_NATIVE_SUBAGENTS_ENV], "false");
+    const nativeLaunch = buildPiRpcLaunch({
+      launchArgs: resolvedArgs.args,
+      environment: {},
+      mcpSession: { ...mcpSession, preferNativeSubagents: true },
+      extensionPath: "/tmp/cache/pi-t3-mcp-extension.ts",
+    });
+    assert.equal(nativeLaunch.env[T3_PI_PREFER_NATIVE_SUBAGENTS_ENV], "true");
     assert.equal(launch.env[T3_PI_MCP_EXTENSION_PATH_ENV], "/tmp/cache/pi-t3-mcp-extension.ts");
 
     const permissionOnly = buildPiRpcLaunch({

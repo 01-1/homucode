@@ -92,10 +92,43 @@ export function renderUrlHandlerDesktopEntry(input: {
     ...(input.iconPath === undefined ? [] : [`Icon=${escapeDesktopEntryString(input.iconPath)}`]),
     "Terminal=false",
     "NoDisplay=true",
+    // GLib launch contexts only mint a Wayland activation token when this is true.
     "StartupNotify=true",
     `MimeType=x-scheme-handler/${input.scheme};`,
     "",
   ].join("\n");
+}
+
+function parseUrlHandlerExecTarget(entry: string): string | null {
+  const exec = /^Exec=(.*) %U$/mu.exec(entry)?.[1];
+  if (exec === undefined) return null;
+  const unescaped = exec.replace(/\\([\\nrt])/gu, (_, char: string) =>
+    char === "n" ? "\n" : char === "r" ? "\r" : char === "t" ? "\t" : char,
+  );
+  const quoted = /^"(.*)"$/su.exec(unescaped)?.[1];
+  return (
+    quoted === undefined ? unescaped : quoted.replace(/\\([\\`$"])/gu, (_, char: string) => char)
+  ).replaceAll("%%", "%");
+}
+
+const APPIMAGE_NAME_VERSION = /\d+\.\d+\.\d+/u;
+
+// An updater from before version-free AppImage names deletes its own file and installs the update
+// beside it under the new name. The previous launch's entry still names the path launchers use.
+export function replacedVersionedAppImagePath(input: {
+  readonly previousEntry: string;
+  readonly appImagePath: string;
+}): string | null {
+  const previous = parseUrlHandlerExecTarget(input.previousEntry);
+  if (previous === null) return null;
+  const previousName = previous.slice(previous.lastIndexOf("/") + 1);
+  const currentName = input.appImagePath.slice(input.appImagePath.lastIndexOf("/") + 1);
+  return previous.startsWith("/") &&
+    previous.slice(0, -previousName.length) === input.appImagePath.slice(0, -currentName.length) &&
+    APPIMAGE_NAME_VERSION.test(previousName) &&
+    !APPIMAGE_NAME_VERSION.test(currentName)
+    ? previous
+    : null;
 }
 
 // Docks may look up the Wayland app id without a desktop entry; icon theme lookups are case-sensitive.
@@ -154,7 +187,8 @@ export const make = Effect.gen(function* () {
       });
       const installed = yield* Effect.gen(function* () {
         const current = yield* fileSystem.readFileString(launcher).pipe(Effect.option);
-        if (Option.isSome(current) && !current.value.includes(APPIMAGE_LAUNCHER_MARKER)) return appImage;
+        if (Option.isSome(current) && !current.value.includes(APPIMAGE_LAUNCHER_MARKER))
+          return appImage;
         if (Option.getOrUndefined(current) !== script) {
           yield* fileSystem.makeDirectory(environment.path.dirname(launcher), { recursive: true });
           const staging = `${launcher}.${process.pid}.${yield* Random.nextIntBetween(0, 0xffffff)}.tmp`;
@@ -323,10 +357,11 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(png)) return;
       // The AppImage mount is temporary; the chooser needs the icon after exit.
       yield* fileSystem.makeDirectory(iconsDir, { recursive: true });
-      yield* fileSystem.copyFile(png.value, iconPath);
+      // Electron's copyFile from app.asar extracts to a temp file it never deletes.
+      yield* fileSystem.writeFile(iconPath, yield* fileSystem.readFile(png.value));
     }).pipe(
       Effect.catch((error) =>
-        logWarning("URL handler icon copy failed", { iconPath, category: error.reason._tag }),
+        logWarning("URL handler icon install failed", { iconPath, category: error.reason._tag }),
       ),
     );
 

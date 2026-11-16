@@ -31,7 +31,7 @@ function makeService() {
     { readonly started: PromiseWithResolvers<void>; readonly release: PromiseWithResolvers<void> }
   >();
   const service = createCloudAccountService<CloudAccountSource>({
-    deactivate: () => log.push("deactivate"),
+    deactivate: ({ signedOut }) => log.push(signedOut ? "deactivate" : "deactivate:switch"),
     detach: () => log.push("detach"),
     onSignOutTransition: () => log.push("signOutTransition"),
     cleanUp: async ({ accountId, wasActive }) => {
@@ -126,10 +126,10 @@ describe("createCloudAccountService", () => {
 
     const second = nextActivation();
     emit({ id: "b" });
-    expect(log).toEqual(["deactivate"]);
+    expect(log).toEqual(["deactivate:switch"]);
     await second;
 
-    expect(log).toEqual(["deactivate", "cleanUp:a:true", "prepare:b", "activate:b:true"]);
+    expect(log).toEqual(["deactivate:switch", "cleanUp:a:true", "prepare:b", "activate:b:true"]);
   });
 
   it("cleans up on sign-out, including a signed-out first observation", async () => {

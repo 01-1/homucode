@@ -566,27 +566,17 @@ export const make = (port: AutoreviewPort) => {
       createdBy: "agent" as const,
       creationSource: "server" as const,
     });
-    if (delivery.type === "steer") {
-      const steered = yield* engine
-        .dispatch({
-          ...message("steer"),
-          dispatchMode: { type: "steer_active", targetRunId: delivery.targetRunId },
-        })
-        .pipe(
-          Effect.as(true),
-          Effect.catchCause((cause) =>
-            Effect.logInfo("autoreview findings could not steer; queueing them", {
-              threadId: found.parent.id,
-              cause,
-            }).pipe(Effect.as(false)),
-          ),
-        );
-      if (steered) return sent;
-    }
-    // Not steerable now: join the findings already waiting, so the queue holds one message.
+    // Steering can fall back to the queue, so join waiting findings before trying another send.
     const fresh = yield* projections.getThreadRecords(found.parent.id, ["runs"]);
     const waiting = queuedFindingsRun(fresh.runs);
-    if (waiting !== undefined) {
+    const target =
+      delivery.type === "steer"
+        ? fresh.runs.find((run) => run.id === delivery.targetRunId)
+        : undefined;
+    if (
+      waiting !== undefined &&
+      (target === undefined || (!waiting.queueHeld && waiting.ordinal > target.ordinal))
+    ) {
       const { messages } = yield* projections.getThreadRecords(found.parent.id, ["messages"], {
         messageIds: [waiting.userMessageId],
       });
@@ -605,6 +595,23 @@ export const make = (port: AutoreviewPort) => {
           Effect.catchCause(() => Effect.succeed(false)),
         );
       if (joined) return sent;
+    }
+    if (delivery.type === "steer") {
+      const steered = yield* engine
+        .dispatch({
+          ...message("steer"),
+          dispatchMode: { type: "steer_active", targetRunId: delivery.targetRunId },
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catchCause((cause) =>
+            Effect.logInfo("autoreview findings could not steer; queueing them", {
+              threadId: found.parent.id,
+              cause,
+            }).pipe(Effect.as(false)),
+          ),
+        );
+      if (steered) return sent;
     }
     yield* engine.dispatch({ ...message("queue"), dispatchMode: { type: "queue_after_active" } });
     return sent;

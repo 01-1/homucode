@@ -29,9 +29,9 @@ import { resolveRelayClerkTokenOptions } from "./publicConfig";
 
 type ClerkInstance = ReturnType<typeof getClerkInstance>;
 
-export function deactivateCloudRelayAccount(): void {
+export function deactivateCloudRelayAccount(input?: { readonly signedOut: boolean }): void {
   setAgentAwarenessRelayTokenProvider(null);
-  setManagedRelaySession(appAtomRegistry, null);
+  setManagedRelaySession(appAtomRegistry, null, input);
 }
 
 export function activateCloudRelayAccount(

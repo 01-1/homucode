@@ -137,6 +137,7 @@ const layerTest = Layer.mergeAll(
         }),
       request: () => Effect.void,
       readRepositoryIdentity: () => Effect.succeed(null),
+      refreshRepositoryIdentity: () => Effect.void,
       getAvailable: () =>
         Effect.succeed({
           repositoryIdentity: null,
@@ -1887,9 +1888,9 @@ it.layer(layerTest)("autoreview", (it) => {
         const orchestrator = yield* Orchestrator.OrchestratorV2;
         const eventSink = yield* EventSink.EventSinkV2;
         const service = AutoreviewService.make(orchestrator);
-        const { threadId, runId, now } = yield* seedReviewedThread("paced");
+        const { threadId, runId, now } = yield* seedReviewedThread("interval-paced");
         const { reviewerThreadId } = yield* service.attach({
-          commandId: CommandId.make("command:autoreview-attach:paced"),
+          commandId: CommandId.make("command:autoreview-attach:interval-paced"),
           threadId,
           modelSelection: reviewerModel,
           runtimeMode: "full-access",
@@ -1906,17 +1907,17 @@ it.layer(layerTest)("autoreview", (it) => {
             yield* service.handle(itemEvent(item));
           });
         // The backlog sent at attach counts as the last batch.
-        const first = yield* finishReview(reviewerThreadId, "LGTM", "paced-1");
+        const first = yield* finishReview(reviewerThreadId, "LGTM", "interval-paced-1");
         yield* service.handle(first.ended);
-        yield* step("paced:a", 20);
-        yield* step("paced:b", 21);
+        yield* step("interval-paced:a", 20);
+        yield* step("interval-paced:b", 21);
         assert.lengthOf(yield* batches(), 0);
 
         const run = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
           (r) => r.id === runId,
         )!;
         const ended: OrchestrationV2DomainEvent = {
-          id: EventId.make("event:paced:ended"),
+          id: EventId.make("event:interval-paced:ended"),
           type: "run.updated",
           threadId,
           runId,
@@ -1930,8 +1931,8 @@ it.layer(layerTest)("autoreview", (it) => {
         assert.lengthOf(yield* batches(), 0);
         yield* TestClock.adjust("10 minutes");
         assert.lengthOf(yield* batches(), 1);
-        assert.include((yield* batches())[0]!.text, "Step paced:a.");
-        assert.include((yield* batches())[0]!.text, "Step paced:b.");
+        assert.include((yield* batches())[0]!.text, "Step interval-paced:a.");
+        assert.include((yield* batches())[0]!.text, "Step interval-paced:b.");
       }),
   );
 

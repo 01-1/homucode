@@ -140,6 +140,8 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
         pinOrderKey: null,
         devicePins: {},
         legacyPin: null,
+        // A fork gets its own title ID when it is titled.
+        titleId: null,
         activeOrderKey: null,
         autoSettleDisabledAt: null,
         // A guest link belongs to the thread it was made for.
