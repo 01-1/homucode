@@ -1,5 +1,6 @@
 import {
   findUntouchedMadoHomuThread,
+  MADOHOMU_NEW_THREAD_TITLE,
   groupMadoHomuThreads,
   madohomuListedThreads,
   madohomuRuntimeMode,
@@ -77,7 +78,7 @@ export function readMadoHomuContext(router: AnyRouter) {
 
 export async function createMadoHomuThread(
   environmentId: EnvironmentId,
-  title = "New thread",
+  title: string = MADOHOMU_NEW_THREAD_TITLE,
   icon: string | null = null,
 ): Promise<ThreadId | null> {
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);

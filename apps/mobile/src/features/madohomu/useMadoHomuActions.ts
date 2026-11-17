@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
+  MADOHOMU_NEW_THREAD_TITLE,
   madohomuMorningBriefInput,
   madohomuRuntimeMode,
   findMadoHomuMorningBriefThread,
@@ -55,7 +56,7 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
   const save = async (patch: ServerSettingsPatch) =>
     (await update({ environmentId, input: { patch } }))._tag === "Success";
 
-  const createThread = async (title = "New thread", icon: string | null = null) => {
+  const createThread = async (title: string = MADOHOMU_NEW_THREAD_TITLE, icon: string | null = null) => {
     if (!settings.madohomuEnabled || !project || !modelSelection || !canWrite || !canOperate)
       return null;
     const threadId = ThreadId.make(uuidv4());
