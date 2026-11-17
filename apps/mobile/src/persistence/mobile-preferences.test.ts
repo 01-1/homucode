@@ -18,6 +18,10 @@ it.effect.each([
   { stored: { settingsSyncBases: { server: { revision: 1, values: {} } } }, expected: true },
   { stored: { settingsSyncEnabled: true }, expected: true },
   { stored: { settingsSyncEnabled: false }, expected: false },
+  {
+    stored: { featureOffersDraft: { environmentId: "server", selected: ["sent-from"], step: 2 } },
+    expected: true,
+  },
 ])(
   "preserves sync for stored preferences $stored while new devices opt out",
   ({ stored, expected }) =>
