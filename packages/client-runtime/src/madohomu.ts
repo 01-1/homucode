@@ -3,10 +3,16 @@ import type {
   EnvironmentId,
   ModelSelection,
   ProjectId,
+  RuntimeMode,
   ScheduledTaskId,
   ScheduledTaskUpsertInput,
+  ServerSettings,
   ThreadId,
 } from "@t3tools/contracts";
+import {
+  resolveProjectSettings,
+  type LegacyProjectSettingsFields,
+} from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
 
 export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined): boolean {
@@ -41,6 +47,14 @@ export function madohomuIconColor(threadId: string, color?: string | null): stri
     [...threadId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % MADOHOMU_ICON_COLORS.length;
   return MADOHOMU_ICON_COLORS[index]!;
 }
+/** New MadoHomu threads start in the same permission mode as any new thread in the project. */
+export function madohomuRuntimeMode(
+  settings: ServerSettings,
+  project: LegacyProjectSettingsFields & { readonly id: ProjectId },
+): RuntimeMode {
+  return resolveProjectSettings(settings, project.id, project).settings.defaultRuntimeMode;
+}
+
 export const MORNING_BRIEF_PROMPT =
   "Prepare the user's morning brief for this project. Summarise what is in progress, what needs the user's decision, and propose next steps. Do not carry out those steps or make changes. Ask for approval before acting.";
 
@@ -73,6 +87,7 @@ export function madohomuMorningBriefInput(input: {
   readonly projectId: ProjectId;
   readonly threadId: ThreadId;
   readonly modelSelection: ModelSelection;
+  readonly runtimeMode: RuntimeMode;
   readonly timeOfDay: string;
   readonly creationSource: "web" | "mobile";
 }): ScheduledTaskUpsertInput {
@@ -87,7 +102,7 @@ export function madohomuMorningBriefInput(input: {
     threadMode: "continue",
     workspaceStrategy: { type: "root" },
     modelSelection: input.modelSelection,
-    runtimeMode: "approval-required",
+    runtimeMode: input.runtimeMode,
     interactionMode: "plan",
     creationSource: input.creationSource,
   };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 import {
+  DEFAULT_SERVER_SETTINGS,
   MadoHomuThreadSettings,
   EnvironmentId,
   ProjectId,
@@ -10,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import {
   madohomuMorningBriefInput,
+  madohomuRuntimeMode,
   madohomuTaskLabel,
   findMadoHomuMorningBriefThread,
   isMadoHomuThreadPinned,
@@ -73,13 +75,14 @@ it("reuses a renamed bound brief thread within the MadoHomu project, excluding o
 });
 
 it.each(["web", "mobile"] as const)(
-  "creates an approval-required daily brief for %s that continues its pinned thread",
+  "creates a daily brief for %s that continues its pinned thread",
   (creationSource) => {
     const input = {
       id: ScheduledTaskId.make("morning-brief"),
       projectId: ProjectId.make("madohomu-project"),
       threadId: ThreadId.make("brief-thread"),
       modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" },
+      runtimeMode: "auto-accept-edits" as const,
       timeOfDay: "08:30",
       creationSource,
     };
@@ -94,12 +97,27 @@ it.each(["web", "mobile"] as const)(
       threadMode: "continue",
       workspaceStrategy: { type: "root" },
       modelSelection: input.modelSelection,
-      runtimeMode: "approval-required",
+      runtimeMode: "auto-accept-edits",
       interactionMode: "plan",
       creationSource,
     });
   },
 );
+
+it("starts MadoHomu threads in the project's default permission mode, like new threads", () => {
+  const project = { id: ProjectId.make("madohomu-project") };
+  const settings = { ...DEFAULT_SERVER_SETTINGS, defaultRuntimeMode: "auto-accept-edits" as const };
+  expect(madohomuRuntimeMode(settings, project)).toBe("auto-accept-edits");
+  expect(
+    madohomuRuntimeMode(
+      {
+        ...settings,
+        projectSettingsOverrides: { [project.id]: { defaultRuntimeMode: "approval-required" } },
+      },
+      project,
+    ),
+  ).toBe("approval-required");
+});
 
 describe("MadoHomu tasks", () => {
   it("puts decisions before running work and recent threads, newest first within each group", () => {

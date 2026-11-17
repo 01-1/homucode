@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   madohomuMorningBriefInput,
+  madohomuRuntimeMode,
   findMadoHomuMorningBriefThread,
 } from "@t3tools/client-runtime/madohomu";
 import {
@@ -96,6 +97,7 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
         projectId: project.id,
         threadId,
         modelSelection,
+        runtimeMode: madohomuRuntimeMode(settings, project),
         creationSource: "web",
       }),
     });
