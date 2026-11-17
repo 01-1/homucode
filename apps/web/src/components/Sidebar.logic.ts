@@ -1286,7 +1286,7 @@ export interface SidebarSearchFilters {
   readonly statuses: ReadonlyArray<SidebarSearchStatus>;
   readonly shelves: ReadonlyArray<SidebarSearchShelf>;
   readonly providers: ReadonlyArray<string>;
-  readonly environments: ReadonlyArray<EnvironmentId>;
+  readonly environments: ReadonlyArray<string>;
   readonly updated: SidebarSearchUpdated;
   readonly features: ReadonlyArray<SidebarSearchFeature>;
   readonly titlesOnly: boolean;

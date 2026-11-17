@@ -319,7 +319,7 @@ function FilterMenuContent({
           Icon={BotIcon}
           choices={providers}
           selected={filters.providers}
-          onChange={(selected) => update({ providers: selected })}
+          onChange={(providers) => update({ providers })}
         />
       ) : null}
       {environments.length > 1 || filters.environments.length > 0 ? (
@@ -328,9 +328,7 @@ function FilterMenuContent({
           Icon={ServerIcon}
           choices={environments}
           selected={filters.environments}
-          onChange={(selected) =>
-            update({ environments: selected as SidebarSearchFilters["environments"] })
-          }
+          onChange={(environments) => update({ environments })}
         />
       ) : null}
       <MenuSeparator />
