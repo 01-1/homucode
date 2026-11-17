@@ -166,14 +166,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     canShareWithGuest,
   });
 
-  // The whole manual order, with ids of hidden (snoozed or settled) pinned threads kept at the end.
-  const fullOrder = (visible: ReadonlyArray<ThreadId>) => [
-    ...visible,
-    ...settings.madohomuThreadOrder.filter((id) => !visible.includes(id)),
+  // Built on the saved order so snoozed and settled pinned threads keep their places.
+  const savedOrder = () => [
+    ...manualIds.filter((id) => !settings.madohomuThreadOrder.includes(id)),
+    ...settings.madohomuThreadOrder,
   ];
   const fileThread = (threadId: ThreadId, section: string | null, before: ThreadId | null) =>
     actions.save({
-      madohomuThreadOrder: reorderMadoHomuThreads(fullOrder(manualIds), threadId, before),
+      madohomuThreadOrder: reorderMadoHomuThreads(savedOrder(), threadId, before),
       madohomuThreads: {
         [threadId]: actions.threadEntry(threadId, { pinned: true, section }),
       },
@@ -229,7 +229,6 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const handleActivate = useStableCallback((threadRef: ScopedThreadRef) =>
     open(threadRef.threadId),
   );
-  // Double-click and F2 open the MadoHomu editor; Rename in the menu renames in place.
   const handleEdit = useStableCallback((threadRef: ScopedThreadRef) => {
     if (canEdit) setEditing(threadRef.threadId);
   });
@@ -253,7 +252,13 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   });
   const handleContextMenu = useStableCallback(
     (threadRef: ScopedThreadRef, position: { x: number; y: number }) =>
-      openMenu(position, { threadRef, extras: menuExtras(threadRef.threadId) }),
+      openMenu(position, {
+        threadRef,
+        extras: menuExtras(threadRef.threadId),
+        isSettled: groups
+          .find((g) => g.kind === "settled")
+          ?.threads.some((t) => t.id === threadRef.threadId),
+      }),
   );
   const handleSettle = useStableCallback((threadRef: ScopedThreadRef) => {
     void settleThread(threadRef).then((r) => failureToast("Failed to settle thread", r));
@@ -290,9 +295,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
 
   const saveSections = (sections: ReadonlyArray<MadoHomuSection>) =>
     actions.save({ madohomuSections: [...sections] });
+  const addingSectionRef = useRef(false);
   const addSection = async () => {
+    if (addingSectionRef.current) return;
+    addingSectionRef.current = true;
     const section = { id: randomUUID(), name: "New section" };
-    if (await saveSections([...settings.madohomuSections, section])) setRenamingSection(section.id);
+    const saved = await saveSections([...settings.madohomuSections, section]);
+    addingSectionRef.current = false;
+    if (saved) setRenamingSection(section.id);
   };
   const renameSection = (id: string, name: string) => {
     setRenamingSection(null);
@@ -310,7 +320,6 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     [sections[index], sections[target]] = [sections[target]!, sections[index]!];
     void saveSections(sections);
   };
-  // Threads of a deleted section go back to Pinned.
   const deleteSection = (id: string) =>
     actions.save({
       madohomuSections: settings.madohomuSections.filter((s) => s.id !== id),
@@ -477,7 +486,6 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             <Button
               variant="outline"
               size="sm"
-              className="justify-start"
               disabled={creating || !project || !actions.modelSelection || !canEdit}
               onClick={() => void createThread()}
             >
@@ -640,7 +648,6 @@ function SectionBlock({
   collapsed?: boolean;
   empty?: string;
 }) {
-  // Every manual section takes drops on its header, so an empty one can still be filled.
   const { setNodeRef, isOver } = useDroppable({
     id: `${SECTION_DROP_PREFIX}${group.id}`,
     disabled: !droppable,

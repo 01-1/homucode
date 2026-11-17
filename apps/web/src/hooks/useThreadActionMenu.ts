@@ -143,12 +143,13 @@ export function useThreadActionMenu(input: {
     onError: (error) => failureToast("Failed to copy thread ID", error),
   });
 
-  // A list passes each row's thread; the chat header uses the one it was given.
   const openMenu = (
     position: { x: number; y: number },
     target: {
       readonly threadRef: ScopedThreadRef;
       readonly extras?: ThreadActionMenuExtras;
+      /** The list's own settled state; a running thread stays unsettled there until its run ends. */
+      readonly isSettled?: boolean | undefined;
     } | null = null,
   ) => {
     const threadRef = target?.threadRef ?? input.threadRef;
@@ -183,7 +184,8 @@ export function useThreadActionMenu(input: {
         branch: thread.branch ?? null,
         projectFilter: null,
         isPinned: thread.pinnedAt != null,
-        isSettled: supports.settlement && thread.settledOverride === "settled",
+        isSettled:
+          supports.settlement && (target?.isSettled ?? thread.settledOverride === "settled"),
         autoSettleEnabled: thread.autoSettleDisabledAt == null,
         isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
         canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
