@@ -459,32 +459,34 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   return (
     <>
       <SidebarHeader>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <Link
-              to="/madohomu"
-              search={{ environmentId }}
-              className="min-w-0 flex-1 truncate rounded-sm px-1 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        <div className="flex items-center gap-1">
+          <Link
+            to="/madohomu"
+            search={{ environmentId }}
+            className="min-w-0 flex-1 truncate rounded-sm px-1 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            MadoHomu
+          </Link>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Link
+                  to="/settings/general"
+                  hash="madohomu-enabled"
+                  aria-label="MadoHomu settings"
+                  className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                />
+              }
             >
-              MadoHomu
-            </Link>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Link
-                    to="/settings/general"
-                    hash="madohomu-enabled"
-                    aria-label="MadoHomu settings"
-                    className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  />
-                }
-              >
-                <SettingsIcon aria-hidden className="size-4" />
-              </TooltipTrigger>
-              <TooltipPopup side="bottom">MadoHomu settings</TooltipPopup>
-            </Tooltip>
-          </div>
-          {enabled ? (
+              <SettingsIcon aria-hidden className="size-4" />
+            </TooltipTrigger>
+            <TooltipPopup side="bottom">MadoHomu settings</TooltipPopup>
+          </Tooltip>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        {enabled ? (
+          <div className="flex flex-col px-2 pb-3">
             <Button
               variant="outline"
               size="sm"
@@ -494,10 +496,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               <SquarePenIcon aria-hidden className="size-4" />
               New thread
             </Button>
-          ) : null}
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
+          </div>
+        ) : null}
         {!enabled ? null : !project ? (
           <p className="p-3 text-xs text-muted-foreground">Choose a project to see its threads.</p>
         ) : (
