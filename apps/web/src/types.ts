@@ -89,6 +89,8 @@ export interface ChatMessage {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly inputIntent?: OrchestrationV2UserMessageInputIntent | undefined;
+  /** Client-only: sends itself once the previous message finishes sending. */
+  readonly waitingForPreviousSend?: true;
 }
 
 export interface ProposedPlan {

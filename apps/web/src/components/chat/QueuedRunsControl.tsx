@@ -94,7 +94,7 @@ export function QueuedRunsControl({
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly optimisticMessages: ReadonlyArray<
-    Pick<ChatMessage, "id" | "inputIntent" | "text" | "attachments">
+    Pick<ChatMessage, "id" | "inputIntent" | "text" | "attachments" | "waitingForPreviousSend">
   >;
   readonly editingRunId: RunId | null;
   /** Set while something else holds the composer, such as an open question. */
@@ -170,6 +170,7 @@ export function QueuedRunsControl({
         };
       }),
       pending: false,
+      waitingForPreviousSend: false,
     })),
     ...optimisticQueued.map((message) => ({
       key: message.id,
@@ -183,6 +184,7 @@ export function QueuedRunsControl({
       attachments: [] as ReadonlyArray<ContractChatAttachment>,
       thumbnails: (message.attachments ?? []).filter(isImageAttachment),
       pending: true,
+      waitingForPreviousSend: message.waitingForPreviousSend === true,
     })),
   ];
 
@@ -363,7 +365,9 @@ export function QueuedRunsControl({
                 {item.pending ? (
                   <span className="flex items-center gap-1 px-1">
                     <Clock3Icon aria-hidden className="size-3" />
-                    Saving
+                    {item.waitingForPreviousSend
+                      ? "Sends once your previous message goes through"
+                      : "Saving"}
                   </span>
                 ) : null}
                 {isEditing ? (
