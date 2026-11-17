@@ -122,9 +122,13 @@ the protection is in place, and `t3 service protect --undo` removes it.
 
 ## Agent memory controls
 
-On Linux with a systemd user manager and cgroups v2, each agent process is
-limited to 6 GiB before throttling and 8 GiB before a possible out-of-memory
-kill. The cap for all agents still applies; the smaller limit wins. Codex
+Memory controls are off by default: agents have no memory cap, and the agents'
+slice is left unlimited. Agents still run with lower CPU and disk priority than
+the server. Set `"enabled": true` to turn the controls on.
+
+With them on, on Linux with a systemd user manager and cgroups v2, each agent
+process is limited to 6 GiB before throttling and 8 GiB before a possible
+out-of-memory kill, under a cap for all agents; the smaller limit wins. Codex
 uses one session per thread while memory controls are enabled. Native
 subagents and tools share their owning process's cap; providers with a
 shared service have one cap for that service.
@@ -143,7 +147,7 @@ are optional; these are their defaults (byte values use GiB):
 ```json
 {
   "agentMemory": {
-    "enabled": true,
+    "enabled": false,
     "perAgentHighBytes": 6442450944,
     "perAgentMaxBytes": 8589934592,
     "groupHighBytes": null,
@@ -162,7 +166,7 @@ hard cap. Reservations and group limits follow settings changes on the next
 poll; process caps apply to new processes. Setting
 `enabled` to false releases waiting starts and stops applying per-process
 caps to new processes. Existing process caps remain until those processes
-exit. The group cap stays in place.
+exit. The group cap is lifted on the next poll.
 
 ## Troubleshooting
 
