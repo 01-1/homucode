@@ -80,14 +80,18 @@ export const resolveSettingsSyncPrompt = runner.resolvePrompt;
 export const deferSettingsSyncPrompt = runner.deferPrompt;
 
 let sheetOpen = false;
+let openSheetForPrompt: (() => void) | null = null;
 
 /** Tracks the conflict sheet, so a changed prompt does not open a second one. */
 export function setSettingsSyncSheetOpen(open: boolean): void {
   sheetOpen = open;
+  // The next server's prompt can arrive while the answered sheet is still closing.
+  if (!open && runner.getPrompt() !== null) openSheetForPrompt?.();
 }
 
 /** Syncs the phone's settings with every connected server while sync is on. */
 export function installClientSettingsSync(openSheet: () => void): () => void {
+  openSheetForPrompt = openSheet;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   const onLocalChange = () => {
     if (localTimer !== null) clearTimeout(localTimer);
@@ -106,6 +110,7 @@ export function installClientSettingsSync(openSheet: () => void): () => void {
   ];
   runner.requestSync();
   return () => {
+    openSheetForPrompt = null;
     if (localTimer !== null) clearTimeout(localTimer);
     for (const unsubscribe of unsubscribes) unsubscribe();
   };

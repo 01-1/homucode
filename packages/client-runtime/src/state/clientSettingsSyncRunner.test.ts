@@ -123,6 +123,12 @@ describe("createClientSettingsSyncRunner", () => {
       environmentId: "second",
       conflicts: [{ key: "chatWidth", local: "wide", remote: "narrow" }],
     });
+
+    runner.deferPrompt();
+    state.servers.caughtUp = { revision: 2, values: { wordWrap: false, chatWidth: "wide" } };
+    await runner.requestSync();
+    expect(runner.getPrompt()).toBeNull();
+    expect(state.local.wordWrap).toBe(false);
   });
 
   it("syncs only with connected servers whose config has loaded", () => {

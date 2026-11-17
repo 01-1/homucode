@@ -70,7 +70,7 @@ export interface ClientSettingsSyncRunner {
   readonly subscribePrompt: (listener: () => void) => () => void;
   /** Applies the user's side for every conflict of the shown prompt and syncs. */
   readonly resolvePrompt: (choices: Readonly<Record<string, ClientSettingsSyncChoice>>) => void;
-  /** Hides the prompt until the app restarts; nothing syncs until then. */
+  /** Hides the prompt until the app restarts; its server does not sync until then. */
   readonly deferPrompt: () => void;
 }
 
@@ -79,7 +79,7 @@ export function createClientSettingsSyncRunner(
 ): ClientSettingsSyncRunner {
   let prompt: SettingsSyncPrompt | null = null;
   let lastIgnoredWrite: string | null = null;
-  let promptDeferred = false;
+  const deferred = new Set<EnvironmentId>();
   let choices: {
     readonly environmentId: EnvironmentId;
     readonly values: Readonly<Record<string, ClientSettingsSyncChoice>>;
@@ -167,12 +167,11 @@ export function createClientSettingsSyncRunner(
     if (!adapter.isReady()) return;
     if (!adapter.isEnabled()) {
       // Turning sync back on asks again even after "Decide later".
-      promptDeferred = false;
+      deferred.clear();
       setPrompt(null);
       return;
     }
-    if (promptDeferred) return;
-    const targets = adapter.targets();
+    const targets = adapter.targets().filter((target) => !deferred.has(target.environmentId));
     // One prompt at a time, and the one on screen keeps its place; other servers still sync.
     const ordered = [
       ...targets.filter((target) => target.environmentId === prompt?.environmentId),
@@ -217,13 +216,13 @@ export function createClientSettingsSyncRunner(
     },
     resolvePrompt: (nextChoices) => {
       if (prompt !== null) choices = { environmentId: prompt.environmentId, values: nextChoices };
-      promptDeferred = false;
       setPrompt(null);
       void requestSync();
     },
     deferPrompt: () => {
-      promptDeferred = true;
+      if (prompt !== null) deferred.add(prompt.environmentId);
       setPrompt(null);
+      void requestSync();
     },
   };
 }

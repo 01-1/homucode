@@ -33,8 +33,8 @@ export function SettingsSyncSheet() {
   useEffect(() => {
     setSettingsSyncSheetOpen(true);
     return () => {
-      setSettingsSyncSheetOpen(false);
       if (!answered.current) deferSettingsSyncPrompt();
+      setSettingsSyncSheetOpen(false);
     };
   }, []);
 
