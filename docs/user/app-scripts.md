@@ -39,8 +39,10 @@ What a script returns is printed by `t3 app run` as JSON.
 
 ## Run a script with a keybinding
 
-Bind a key to the command `user.<name>.run` in **Settings → Keybindings**, for example
-`user.review-today.run` for `scripts/review-today.ts`. Scripts run in the desktop app and in a
+Add a rule for the command `user.<name>.run` to
+[`keybindings.json`](./keybindings.md#edit-the-configuration-file), for example
+`{ "key": "mod+alt+r", "command": "user.review-today.run" }` for `scripts/review-today.ts`. Once
+bound, it shows in **Settings → Keybindings**, where you can change its key. Scripts run in the desktop app and in a
 browser opened on the same machine as T3 Code. A browser that reaches T3 Code over the network,
 and the mobile app, cannot run them.
 
