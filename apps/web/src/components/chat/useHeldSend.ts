@@ -24,9 +24,11 @@ interface HeldSendMeta {
 // The held draft persists with the other drafts; how it was sent lives only for the session.
 const heldSendMetaByRouteKey = new Map<string, HeldSendMeta>();
 
-const heldDraftId = (routeThreadKey: string) => DraftId.make(`held-send:${routeThreadKey}`);
+// Suffixed rather than prefixed so the ids still parse to the thread's environment, which
+// keeps uploaded attachments valid when content moves through them.
+export const heldDraftId = (routeThreadKey: string) => DraftId.make(`${routeThreadKey}#held-send`);
 // What the user was typing when the held message went back into the composer to send.
-const stashDraftId = (routeThreadKey: string) => DraftId.make(`held-send-stash:${routeThreadKey}`);
+const stashDraftId = (routeThreadKey: string) => DraftId.make(`${routeThreadKey}#held-stash`);
 
 interface AdvanceState {
   readonly blocked: boolean;

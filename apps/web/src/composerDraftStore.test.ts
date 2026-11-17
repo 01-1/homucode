@@ -8,6 +8,7 @@ import {
   type EnvironmentShellStatus,
 } from "@t3tools/client-runtime/state/shell";
 import { makeThreadProjectionFixture } from "./test-fixtures";
+import { heldDraftId } from "./components/chat/useHeldSend";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import {
@@ -509,6 +510,25 @@ describe("composerDraftStore file attachments", () => {
     expect(marker && composerFileNeedsReattach(marker)).toBe(true);
     expect(marker?.uploadedAttachmentId).toBeUndefined();
     expect(marker?.uploadEnvironmentId).toBeUndefined();
+  });
+
+  it("keeps a byte-less upload while its message is held", () => {
+    const store = useComposerDraftStore.getState();
+    const hidden = heldDraftId(scopedThreadKey(threadRef));
+    store.addFiles(threadRef, [
+      {
+        ...makeFile("file-hydrated"),
+        file: null,
+        uploadedAttachmentId: "pending-old",
+        uploadEnvironmentId: TEST_ENVIRONMENT_ID,
+      },
+    ]);
+    store.moveComposerContent(threadRef, hidden);
+    store.moveComposerContent(hidden, threadRef);
+
+    const file = store.getComposerDraft(threadRef)?.files[0];
+    expect(file?.uploadedAttachmentId).toBe("pending-old");
+    expect(file?.uploadEnvironmentId).toBe(TEST_ENVIRONMENT_ID);
   });
 
   it("enforces the combined file and image limit across separate updates", () => {
