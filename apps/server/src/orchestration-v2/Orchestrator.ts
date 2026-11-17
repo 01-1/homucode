@@ -7472,11 +7472,29 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const sourceMessage = projection.messages.find(
         (message) => message.id === source?.userMessageId,
       );
+      const sourceSessionId = projection.providerThreads.find(
+        (candidate) => candidate.id === source?.providerThreadId,
+      )?.providerSessionId;
+      const sourceSession = sourceSessionId
+        ? Option.getOrUndefined(
+            yield* providerSessions
+              .get(sourceSessionId)
+              .pipe(Effect.orElseSucceed(() => Option.none())),
+          )
+        : undefined;
+      // Without a live apply, the run's own selection is what its turn runs on.
+      const alreadyOnSelection =
+        source !== undefined &&
+        command.modelSelection !== undefined &&
+        sourceSession !== undefined &&
+        sourceSession.applyModelSelection === undefined &&
+        modelSelectionsEqual(source.modelSelection, command.modelSelection);
       if (
         source?.status !== "running" ||
         (sourceTurn?.status !== "pending" && sourceTurn?.status !== "running") ||
         command.modelSelection === undefined ||
         !modelSelectionsEqual(projection.thread.modelSelection, command.modelSelection) ||
+        alreadyOnSelection ||
         (sourceMessage !== undefined && isNativeMaintenanceCommand(sourceMessage)) ||
         (yield* stopReachedRun(command, command.threadId, source.id))
       ) {
