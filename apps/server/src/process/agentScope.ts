@@ -203,7 +203,10 @@ export const make = Effect.gen(function* () {
           const max = settings.enabled ? String(limits.groupMax) : "infinity";
           const key = `${total}:${high}:${max}`;
           if (key === appliedKey) return;
-          const applied = yield* setProperties(AGENT_SLICE, [`MemoryHigh=${high}`, `MemoryMax=${max}`]);
+          const applied = yield* setProperties(AGENT_SLICE, [
+            `MemoryHigh=${high}`,
+            `MemoryMax=${max}`,
+          ]);
           if (!applied) return;
           if (appliedTotal !== undefined) {
             yield* Effect.logInfo("Agent memory limits follow a memory change", {

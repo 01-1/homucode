@@ -374,31 +374,32 @@ describe("AgentScope service", () => {
   );
 
   it.effect("leaves agent memory and tasks uncapped by default and yields CPU and disk", () =>
-    withFakeSystemd(({ scope, calls }) =>
-      Effect.gen(function* () {
-        const agent = yield* scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
-        expect(agent.args.some((arg) => arg.startsWith("--property=MemoryMax="))).toBe(false);
-        const setProperties = calls.filter(([, verb]) => verb === "set-property");
-        expect(setProperties).toEqual([
-          [
-            "--user",
-            "set-property",
-            "--runtime",
-            "app-t3code-agents.slice",
-            "MemoryHigh=infinity",
-            "MemoryMax=infinity",
-          ],
-          [
-            "--user",
-            "set-property",
-            "--runtime",
-            "app-t3code.slice",
-            "CPUWeight=10",
-            "IOWeight=10",
-            "TasksMax=infinity",
-          ],
-        ]);
-      }),
+    withFakeSystemd(
+      ({ scope, calls }) =>
+        Effect.gen(function* () {
+          const agent = yield* scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
+          expect(agent.args.some((arg) => arg.startsWith("--property=MemoryMax="))).toBe(false);
+          const setProperties = calls.filter(([, verb]) => verb === "set-property");
+          expect(setProperties).toEqual([
+            [
+              "--user",
+              "set-property",
+              "--runtime",
+              "app-t3code-agents.slice",
+              "MemoryHigh=infinity",
+              "MemoryMax=infinity",
+            ],
+            [
+              "--user",
+              "set-property",
+              "--runtime",
+              "app-t3code.slice",
+              "CPUWeight=10",
+              "IOWeight=10",
+              "TasksMax=infinity",
+            ],
+          ]);
+        }),
       { memorySettings: DEFAULT_AGENT_MEMORY_SETTINGS },
     ),
   );
@@ -425,22 +426,23 @@ describe("AgentScope service", () => {
     "registers the cached limit updater for admission before another scope launches",
     () => {
       memory.total = 16 * GiB;
-      return withFakeSystemd(({ calls, updateLimits }) =>
-        Effect.gen(function* () {
-          memory.total = 22 * GiB;
-          yield* updateLimits;
-          expect(calls.at(-1)).toEqual([
-            "--user",
-            "set-property",
-            "--runtime",
-            "app-t3code-agents.slice",
-            `MemoryHigh=${16 * GiB}`,
-            `MemoryMax=${18 * GiB}`,
-          ]);
-          const count = calls.length;
-          yield* updateLimits;
-          expect(calls).toHaveLength(count);
-        }),
+      return withFakeSystemd(
+        ({ calls, updateLimits }) =>
+          Effect.gen(function* () {
+            memory.total = 22 * GiB;
+            yield* updateLimits;
+            expect(calls.at(-1)).toEqual([
+              "--user",
+              "set-property",
+              "--runtime",
+              "app-t3code-agents.slice",
+              `MemoryHigh=${16 * GiB}`,
+              `MemoryMax=${18 * GiB}`,
+            ]);
+            const count = calls.length;
+            yield* updateLimits;
+            expect(calls).toHaveLength(count);
+          }),
         { memorySettings: { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true } },
       );
     },
@@ -448,35 +450,37 @@ describe("AgentScope service", () => {
 
   it.effect("follows a live memory change at the next launch", () => {
     memory.total = 16 * GiB;
-    return withFakeSystemd(({ scope, calls, failingVerbs }) =>
-      Effect.gen(function* () {
-        const launch = scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
-        const memoryLimits = () =>
-          calls
-            .filter(
-              ([, verb, , slice]) => verb === "set-property" && slice === "app-t3code-agents.slice",
-            )
-            .map((args) => args.slice(4));
-        yield* launch;
-        yield* launch;
-        expect(memoryLimits()).toEqual([[`MemoryHigh=${10 * GiB}`, `MemoryMax=${12 * GiB}`]]);
+    return withFakeSystemd(
+      ({ scope, calls, failingVerbs }) =>
+        Effect.gen(function* () {
+          const launch = scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
+          const memoryLimits = () =>
+            calls
+              .filter(
+                ([, verb, , slice]) =>
+                  verb === "set-property" && slice === "app-t3code-agents.slice",
+              )
+              .map((args) => args.slice(4));
+          yield* launch;
+          yield* launch;
+          expect(memoryLimits()).toEqual([[`MemoryHigh=${10 * GiB}`, `MemoryMax=${12 * GiB}`]]);
 
-        // A VM balloon or `pct set --memory` grows RAM while the server keeps running.
-        memory.total = 22 * GiB;
-        failingVerbs.add("set-property");
-        yield* launch;
-        yield* launch;
-        failingVerbs.delete("set-property");
-        yield* launch;
-        yield* launch;
-        const grown = [`MemoryHigh=${16 * GiB}`, `MemoryMax=${18 * GiB}`];
-        expect(memoryLimits()).toEqual([
-          [`MemoryHigh=${10 * GiB}`, `MemoryMax=${12 * GiB}`],
-          grown,
-          grown,
-          grown,
-        ]);
-      }),
+          // A VM balloon or `pct set --memory` grows RAM while the server keeps running.
+          memory.total = 22 * GiB;
+          failingVerbs.add("set-property");
+          yield* launch;
+          yield* launch;
+          failingVerbs.delete("set-property");
+          yield* launch;
+          yield* launch;
+          const grown = [`MemoryHigh=${16 * GiB}`, `MemoryMax=${18 * GiB}`];
+          expect(memoryLimits()).toEqual([
+            [`MemoryHigh=${10 * GiB}`, `MemoryMax=${12 * GiB}`],
+            grown,
+            grown,
+            grown,
+          ]);
+        }),
       { memorySettings: { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true } },
     );
   });
