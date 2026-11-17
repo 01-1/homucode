@@ -1,6 +1,11 @@
+import { Atom, AtomRegistry } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
-import { createLaunchSplashHomeRows, splashCanHide } from "./home-launch-splash";
+import {
+  createLaunchHomeReadyAtom,
+  createLaunchSplashHomeRows,
+  splashCanHide,
+} from "./home-launch-splash";
 
 const launched = {
   preferencesReady: true,
@@ -67,4 +72,32 @@ it("the launch splash is held only while a Home list has rows to lay out", () =>
   releaseOther();
   rows.hold();
   expect(rows.pending(), "a list that mounts after the launch holds nothing").toBe(false);
+});
+
+it("builds Home after all launch caches arrive and never holds it again", () => {
+  const registry = AtomRegistry.make();
+  const cacheCount = Atom.make(0);
+  const cachesRead = Atom.make((get) => get(cacheCount) === 3);
+  const waitEnded = Atom.make(false);
+  const ready = createLaunchHomeReadyAtom(cachesRead, waitEnded);
+  const release = registry.mount(ready);
+  try {
+    expect(registry.get(ready)).toBe(false);
+    registry.set(cacheCount, 1);
+    expect(registry.get(ready)).toBe(false);
+    registry.set(cacheCount, 2);
+    expect(registry.get(ready)).toBe(false);
+    registry.set(cacheCount, 3);
+    expect(registry.get(ready)).toBe(true);
+    registry.set(cacheCount, 0);
+    expect(registry.get(ready)).toBe(true);
+
+    const timedOut = createLaunchHomeReadyAtom(cachesRead, waitEnded);
+    expect(registry.get(timedOut)).toBe(false);
+    registry.set(waitEnded, true);
+    expect(registry.get(timedOut)).toBe(true);
+  } finally {
+    release();
+    registry.dispose();
+  }
 });
