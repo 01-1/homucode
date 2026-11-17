@@ -19,11 +19,20 @@ export const rootNavigationRef = createNavigationContainerRef<ReactNavigation.Ro
 export function attachRootNavigation(
   navigation: NavigationContainerRef<ReactNavigation.RootParamList> | null,
 ): () => void {
+  if (navigation) attachedContainers.push(navigation);
   rootNavigationRef.current = navigation;
   return () => {
-    if (rootNavigationRef.current === navigation) rootNavigationRef.current = null;
+    const index = attachedContainers.lastIndexOf(navigation!);
+    if (index !== -1) attachedContainers.splice(index, 1);
+    // The MadoHomu launcher activity is a second root that outlives or dies before the main one;
+    // when the owner goes, hand the ref back to the root still mounted.
+    if (rootNavigationRef.current === navigation) {
+      rootNavigationRef.current = attachedContainers.at(-1) ?? null;
+    }
   };
 }
+
+const attachedContainers: Array<NavigationContainerRef<ReactNavigation.RootParamList>> = [];
 
 const pendingUntilReady: Array<() => void> = [];
 

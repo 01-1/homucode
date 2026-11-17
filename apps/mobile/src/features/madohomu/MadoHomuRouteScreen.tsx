@@ -9,7 +9,7 @@ import {
 } from "@t3tools/client-runtime/madohomu";
 import { AuthOrchestrationOperateScope, EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { BackHandler, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBar } from "../../components/ui/AppBar";
@@ -71,7 +71,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       <AppBar
         title="MadoHomu"
         subtitle={actions.project?.title}
-        onBack={() => navigation.goBack()}
+        // Opened from the MadoHomu launcher icon there is nothing behind it: leave the app.
+        onBack={() => (navigation.canGoBack() ? navigation.goBack() : BackHandler.exitApp())}
         actions={[
           {
             icon: "gearshape",

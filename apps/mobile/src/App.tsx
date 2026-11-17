@@ -111,6 +111,14 @@ import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
 import { installClientSettingsSync } from "./features/settings/settingsSync";
+import {
+  MadoHomuLauncherSync,
+  useMadoHomuEnvironmentStates,
+} from "./features/madohomu/madohomuLauncher";
+import {
+  MADOHOMU_LAUNCH_SURFACE,
+  madohomuLauncherEnvironmentId,
+} from "./features/madohomu/madohomuLauncherState";
 
 import "../global.css";
 
@@ -266,19 +274,48 @@ function SplashScreenCoordinator() {
   return null;
 }
 
-export default function App() {
+/** Set by the Android MadoHomu launcher activity, a second React root in its own task. */
+interface AppProps {
+  readonly launchSurface?: string;
+}
+
+export default function App({ launchSurface }: AppProps) {
+  const madohomu = launchSurface === MADOHOMU_LAUNCH_SURFACE;
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AppContent />
+          <AppContent madohomu={madohomu} />
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>
   );
 }
 
-function AppContent() {
+// The MadoHomu task shows only MadoHomu: no deep links (the main root handles those) and no
+// workspace or link bookkeeping, which belongs to the main task's navigation state.
+function handleMadoHomuNavigationStateChange(): void {
+  settleLaunchSplashHomeRows();
+}
+
+function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
+  const environmentId = madohomuLauncherEnvironmentId(useMadoHomuEnvironmentStates());
+  if (!environmentId) return null;
+  return (
+    <Navigation
+      ref={attachRootNavigation}
+      initialState={{ routes: [{ name: "MadoHomu", params: { environmentId } }] }}
+      onReady={() => {
+        settleLaunchSplashHomeRows();
+        flushRootNavigationQueue();
+      }}
+      theme={theme}
+      onStateChange={handleMadoHomuNavigationStateChange}
+    />
+  );
+}
+
+function AppContent({ madohomu }: { readonly madohomu: boolean }) {
   const { themeAppearance } = useAppearancePreferences();
   const navigationTheme = useMobileNavigationTheme();
 
@@ -293,8 +330,14 @@ function AppContent() {
   return (
     <>
       <SplashScreenCoordinator />
-      <SubscriptionUsageCoordinator />
-      <ConnectDeviceApprovalCoordinator />
+      {/* App-wide coordinators run once, in the main root; the MadoHomu root shares their state. */}
+      {madohomu ? null : (
+        <>
+          <SubscriptionUsageCoordinator />
+          <ConnectDeviceApprovalCoordinator />
+          <MadoHomuLauncherSync />
+        </>
+      )}
       <GestureHandlerRootView className="flex-1">
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
@@ -302,13 +345,17 @@ function AppContent() {
             {/* native-stack needs the theme's dark flag to select dark native headers. */}
             <GlobalVoiceInputControl>
               <NativeLayoutMetricsProvider>
-                <Navigation
-                  ref={attachRootNavigation}
-                  linking={appLinking}
-                  onReady={handleNavigationReady}
-                  theme={navigationTheme}
-                  onStateChange={handleNavigationStateChange}
-                />
+                {madohomu ? (
+                  <MadoHomuNavigation theme={navigationTheme} />
+                ) : (
+                  <Navigation
+                    ref={attachRootNavigation}
+                    linking={appLinking}
+                    onReady={handleNavigationReady}
+                    theme={navigationTheme}
+                    onStateChange={handleNavigationStateChange}
+                  />
+                )}
                 <Dialog.Host />
                 <ThreadArrangementHost />
                 <ProjectChipIconRasterizer />
