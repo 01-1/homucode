@@ -12,7 +12,8 @@ Builds you package yourself need a rebuild unless you configured an update feed.
 The upstream release channels, standalone CLI releases, and app-store updates described below
 do not supply HomuCode's fork features.
 
-For an AppImage staged to load on the next start, **Settings → About** shows the staged build.
+For an AppImage staged to load on the next start, **Settings → About** shows the staged build
+(**Building T3** shows it instead while those settings are shown).
 **Undo** disables that AppImage so the preceding staged build loads instead; the notice offers **Redo**.
 
 ## Update everything at once
