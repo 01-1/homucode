@@ -39,7 +39,10 @@ function attachSurfaceNavigation(surface: Surface) {
     containers.set(surface, navigation);
     foregroundSurface = launcherModule?.foregroundSurface() ?? foregroundSurface;
     focusRootNavigation(containers.get(foregroundSurface) ?? null);
-    for (const listener of attachListeners) listener();
+    // After this commit's effects, where the navigator adds its own Back listener.
+    setTimeout(() => {
+      for (const listener of attachListeners) listener();
+    }, 0);
     return () => {
       if (containers.get(surface) === navigation) containers.delete(surface);
       detach();
