@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
+import { launchHomeReadyAtom } from "../../state/shell";
 import { useProjects } from "../../state/entities";
 import { steadyNavigationThreadShellsAtom } from "../../state/threads";
 import { useThreadSearch } from "../../state/queries";
@@ -107,6 +108,8 @@ interface ThreadNavigationSidebarProps {
 }
 
 export function ThreadNavigationSidebar(props: ThreadNavigationSidebarProps) {
+  const ready = useAtomValue(launchHomeReadyAtom);
+  if (!ready) return null;
   return (
     <ThreadPrDemandProvider visible={props.visible}>
       <WorkspaceSidebarColumn width={props.width}>

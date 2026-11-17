@@ -1,4 +1,18 @@
 import { useSyncExternalStore } from "react";
+import * as Option from "effect/Option";
+import { Atom } from "effect/reactivity";
+
+export const launchSplashWaitEndedAtom = Atom.make(false);
+
+export function createLaunchHomeReadyAtom(
+  cachesRead: Atom.Atom<boolean>,
+  waitEnded: Atom.Atom<boolean>,
+) {
+  return Atom.make(
+    (get): boolean =>
+      Option.getOrElse(get.self<boolean>(), () => false) || get(waitEnded) || get(cachesRead),
+  ).pipe(Atom.keepAlive);
+}
 
 /**
  * Whether the launch splash still waits for Home's list. A list holds the splash while it

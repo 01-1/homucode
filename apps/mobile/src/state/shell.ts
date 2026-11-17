@@ -11,6 +11,11 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
 
+import {
+  createLaunchHomeReadyAtom,
+  launchSplashWaitEndedAtom,
+} from "../features/home/home-launch-splash";
+
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 
@@ -46,6 +51,11 @@ export const shellCachesReadAtom = Atom.make((get) => {
   }
   return allRead;
 }).pipe(Atom.withLabel("mobile-shell-caches-read"));
+
+export const launchHomeReadyAtom = createLaunchHomeReadyAtom(
+  shellCachesReadAtom,
+  launchSplashWaitEndedAtom,
+);
 
 export function useEnvironmentShellReadiness(environmentId: EnvironmentId | null) {
   const atom =

@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import { launchHomeReadyAtom } from "../../state/shell";
 import { uuidv4 } from "../../lib/uuid";
 import { ThreadUndoNotice } from "./ThreadUndoNotice";
 import { use } from "react";
@@ -44,6 +46,10 @@ import { WorkspaceListHeader } from "../layout/workspace/WorkspaceListHeader";
 import { buildHomeListFilterMenuItems } from "./home-list-filter-menu";
 
 export function HomeRouteScreen() {
+  return useAtomValue(launchHomeReadyAtom) ? <ReadyHomeRouteScreen /> : null;
+}
+
+function ReadyHomeRouteScreen() {
   const nativePrimaryColumn = use(NativePrimaryColumnContext);
   const { layout, setPrimarySidebarSearchQuery, startNewTask } = useAdaptiveWorkspaceLayout();
   const { primarySidebarSearchQuery } = useWorkspacePaneState();

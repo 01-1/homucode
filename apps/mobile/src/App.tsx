@@ -4,7 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -80,6 +80,7 @@ import { installSubscriptionUsageRefresh } from "./widgets/useSubscriptionUsage"
 import { GlobalVoiceInputControl } from "./features/voice-input/GlobalVoiceInputControl";
 import {
   launchSplashHomeRowsPending,
+  launchSplashWaitEndedAtom,
   settleLaunchSplashHomeRows,
   splashCanHide,
   useLaunchSplashHomeRowsPending,
@@ -228,12 +229,15 @@ function SplashScreenCoordinator() {
   const { isReady } = useAppearancePreferences();
   const shellCachesRead = useAtomValue(shellCachesReadAtom);
   const homeRowsPending = useLaunchSplashHomeRowsPending();
-  const [waitEnded, setWaitEnded] = useState(false);
+  const waitEnded = useAtomValue(launchSplashWaitEndedAtom);
   const hidden = useRef(false);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the limit on how long the native splash screen waits for cached shells and their rows
   useEffect(() => {
-    const timer = setTimeout(() => setWaitEnded(true), SPLASH_WAIT_MS);
+    const timer = setTimeout(
+      () => appAtomRegistry.set(launchSplashWaitEndedAtom, true),
+      SPLASH_WAIT_MS,
+    );
     return () => clearTimeout(timer);
   }, []);
 
