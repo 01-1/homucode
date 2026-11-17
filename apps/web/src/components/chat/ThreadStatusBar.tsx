@@ -309,7 +309,8 @@ export function ThreadStatusLineRunner(props: {
             lines: parseAnsiLines(response.value.text),
             error: response.value.error ?? null,
           });
-        } else if (quickRetries-- > 0) {
+        } else if (quickRetries > 0) {
+          quickRetries = quickRetries - 1;
           delay = RETRY_MS;
         }
       }
