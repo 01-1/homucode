@@ -7322,6 +7322,44 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             payload: { ...sourcePlan, status: "completed" },
           });
 
+    // An automatic send that arrives before the provider turn starts defers its steer like an
+    // explicit one, instead of waiting for the whole turn, when the provider steers active turns.
+    const autoSteerTarget =
+      command.deliveryIntent === "auto" &&
+      dispatchMode.type === "queue_after_active" &&
+      notification === undefined &&
+      delegatedCompletion === undefined &&
+      !freshContext &&
+      parsedGoalCommand === null &&
+      queuedRunStop === undefined &&
+      !isNativeMaintenanceCommand(command)
+        ? projection.runs.findLast(isActiveRun)
+        : undefined;
+    if (autoSteerTarget !== undefined) {
+      const targetMessage = projection.messages.find(
+        (message) => message.id === autoSteerTarget.userMessageId,
+      );
+      const turnStatus = latestProviderTurnForAttempt(
+        projection.providerTurns,
+        autoSteerTarget.activeAttemptId,
+      )?.status;
+      if (
+        (targetMessage === undefined || !isNativeMaintenanceCommand(targetMessage)) &&
+        (autoSteerTarget.status === "preparing" ||
+          autoSteerTarget.status === "starting" ||
+          (autoSteerTarget.status === "running" &&
+            (turnStatus === undefined || turnStatus === "pending"))) &&
+        !(yield* stopReachedRun(command, command.threadId, autoSteerTarget.id))
+      ) {
+        const adapter = yield* providerAdapters
+          .get(autoSteerTarget.providerInstanceId)
+          .pipe(mapDispatchError(command));
+        const capabilities = yield* adapter.getCapabilities().pipe(mapDispatchError(command));
+        if (capabilities.turns.supportsActiveSteering) {
+          dispatchMode = { type: "steer_active", targetRunId: autoSteerTarget.id };
+        }
+      }
+    }
     let steerWhenReadyRunId: RunId | undefined;
     if (dispatchMode.type === "steer_active") {
       const targetRunId = dispatchMode.targetRunId;

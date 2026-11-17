@@ -884,9 +884,13 @@ it.effect("sends a selected held message once and preserves the remaining queue 
 
 it.effect.each(
   (["preparing", "starting", "running"] as const).flatMap((status) =>
-    [false, true].map((direct) => ({ status, direct })),
+    [undefined, "steer" as const, "auto" as const].map((intent) => ({
+      status,
+      intent,
+      direct: intent !== undefined,
+    })),
   ),
-)("delivers a deferred steer for a $status run (direct: $direct)", ({ status, direct }) =>
+)("delivers a deferred steer for a $status run (intent: $intent)", ({ status, intent, direct }) =>
   Effect.gen(function* () {
     const restarting = status === "starting" && !direct;
     const { started, steered, layer, startFirstTurn, events } = yield* nextTurnSelectionHarness(
@@ -966,7 +970,7 @@ it.effect.each(
         text: "steer after setup",
         attachments: [],
         dispatchMode: { type: "queue_after_active" },
-        ...(direct ? { deliveryIntent: "steer" as const } : {}),
+        ...(intent === undefined ? {} : { deliveryIntent: intent }),
         createdBy: "user",
         creationSource: "web",
       });
