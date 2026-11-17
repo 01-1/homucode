@@ -27,6 +27,7 @@ import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-sto
 
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const SETTINGS_SYNC_DEFAULT_KEY = "t3code.preferences.settings-sync-default";
 const encodeJson = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
 export const PullRequestListControls = Schema.Struct({
@@ -202,6 +203,7 @@ export class MobilePreferencesStore extends Context.Service<
   MobilePreferencesStore,
   {
     readonly load: Effect.Effect<Preferences, MobilePreferencesLoadError>;
+    readonly settingsSyncDefault: Effect.Effect<boolean, MobilePreferencesLoadError>;
     readonly savePatch: (
       patch: Partial<Preferences>,
     ) => Effect.Effect<Preferences, MobilePreferencesSaveError>;
@@ -424,11 +426,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (isSettingsSyncBases(parsed.settingsSyncBases)) {
     preferences.settingsSyncBases = parsed.settingsSyncBases;
-    if (
-      parsed.settingsSyncEnabled === undefined &&
-      Object.keys(parsed.settingsSyncBases).length > 0
-    )
-      preferences.settingsSyncEnabled = true;
   }
   if (isSettingsSyncTheme(parsed.settingsSyncTheme)) {
     preferences.settingsSyncTheme = parsed.settingsSyncTheme;
@@ -599,13 +596,27 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       }
     }
 
-    return parsed === null
-      ? { settingsSyncEnabled: false }
-      : sanitizePreferences({ settingsSyncEnabled: true, ...parsed });
+    return {
+      preferences: parsed === null ? {} : sanitizePreferences(parsed),
+      hasDocument: parsed !== null,
+    };
   });
 
   const load = lock
     .withPermits(1)(loadUnlocked)
+    .pipe(
+      Effect.map(({ preferences }) => preferences),
+      Effect.mapError((cause) => new MobilePreferencesLoadError({ cause })),
+    );
+
+  const settingsSyncDefault = lock
+    .withPermits(1)(
+      Effect.gen(function* () {
+        const { hasDocument } = yield* loadUnlocked;
+        if (!hasDocument) return false;
+        return (yield* secureStorage.getItem(SETTINGS_SYNC_DEFAULT_KEY)) !== "false";
+      }),
+    )
     .pipe(Effect.mapError((cause) => new MobilePreferencesLoadError({ cause })));
 
   const update = Effect.fn("MobilePreferencesStore.update")(
@@ -613,13 +624,15 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       lock
         .withPermits(1)(
           Effect.gen(function* () {
-            const current = yield* loadUnlocked;
+            const { preferences: current, hasDocument } = yield* loadUnlocked;
             const patch = yield* Effect.try({
               try: () => transform(current),
               catch: (cause) => new MobilePreferencesSaveError({ cause }),
             });
             const next: Preferences = { ...current, ...patch };
             const payload = yield* encode(PREFERENCES_KEY, next);
+            // Keep a new phone opted out after its first ordinary preference write.
+            if (!hasDocument) yield* secureStorage.setItem(SETTINGS_SYNC_DEFAULT_KEY, "false");
             yield* saveJson(payload);
             return next;
           }),
@@ -633,6 +646,7 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   return MobilePreferencesStore.of({
     load,
+    settingsSyncDefault,
     update,
     savePatch: Effect.fn("MobilePreferencesStore.savePatch")((patch) => update(() => patch)),
   });

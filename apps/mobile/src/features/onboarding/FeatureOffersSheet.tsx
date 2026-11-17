@@ -1,5 +1,9 @@
 import { AsyncResult } from "effect/reactivity";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import {
+  mobilePreferencesAtom,
+  updateMobilePreferencesAtom,
+  mobileSettingsSyncEnabledAtom,
+} from "../../state/preferences";
 import {
   MobileBuildTools,
   MobileDeviceNames,
@@ -76,6 +80,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const settingsSyncEnabled = useAtomValue(mobileSettingsSyncEnabledAtom);
   const [chosen, setSelected] = useState<ReadonlySet<string> | null>(null);
   const [step, setStep] = useState(0);
   const [chosenTarget, setWorkTarget] = useState<
@@ -86,7 +91,10 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const pending = useRef(false);
   const settings = config?.settings;
   const selected =
-    chosen ?? (settings ? selectedFeatureOffers(settings, preferences) : new Set<string>());
+    chosen ??
+    (settings
+      ? selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled })
+      : new Set<string>());
   const workTarget =
     chosenTarget === undefined ? (settings?.workAssistanceTarget ?? null) : chosenTarget;
   const offers = settings

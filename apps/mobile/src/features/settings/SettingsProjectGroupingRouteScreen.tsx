@@ -11,7 +11,11 @@ import {
   mobileProjectGroupingModePatch,
   resolveMobileProjectGroupingSettings,
 } from "../../state/project-grouping";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import {
+  mobilePreferencesAtom,
+  updateMobilePreferencesAtom,
+  mobileSettingsSyncEnabledAtom,
+} from "../../state/preferences";
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ListToggleRow } from "../../components/ui/ListToggleRow";
 import { SettingsSection } from "./components/SettingsSection";
@@ -44,6 +48,7 @@ export function SettingsProjectGroupingRouteScreen() {
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const settingsSyncEnabled = useAtomValue(mobileSettingsSyncEnabledAtom);
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
   const selectedMode = AsyncResult.isSuccess(preferencesResult)
     ? resolveMobileProjectGroupingSettings(preferencesResult.value).sidebarProjectGroupingMode
@@ -95,11 +100,7 @@ export function SettingsProjectGroupingRouteScreen() {
           <ListToggleRow
             label="Sync settings"
             description="Keep theme, chat and other settings the same as your other devices, through the server this phone first synced with."
-            value={
-              AsyncResult.isSuccess(preferencesResult)
-                ? preferencesResult.value.settingsSyncEnabled === true
-                : false
-            }
+            value={settingsSyncEnabled}
             disabled={!preferencesReady}
             onValueChange={(settingsSyncEnabled) => savePreferences({ settingsSyncEnabled })}
           />

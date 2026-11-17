@@ -15,6 +15,7 @@ import * as MobileSecureStorage from "./mobile-secure-storage";
 it.effect.each([
   { stored: null, expected: false },
   { stored: {}, expected: true },
+  { stored: { settingsSyncBases: { server: { revision: 1, values: {} } } }, expected: true },
   { stored: { settingsSyncEnabled: true }, expected: true },
   { stored: { settingsSyncEnabled: false }, expected: false },
 ])(
@@ -26,6 +27,7 @@ it.effect.each([
           ? Option.none<MobileDatabase.StoredPreferencesJson>()
           : Option.some({ payload: JSON.stringify(stored), updatedAt: 1 }),
       );
+      const metadata = yield* Ref.make<Record<string, string>>({});
       const dependencies = Layer.mergeAll(
         Layer.mock(MobileDatabase.MobileDatabase)({
           loadPreferencesJson: Ref.get(data),
@@ -33,16 +35,28 @@ it.effect.each([
             Ref.set(data, Option.some({ payload, updatedAt })),
         }),
         Layer.succeed(MobileSecureStorage.MobileSecureStorage, {
-          getItem: () => Effect.succeed(null),
-          setItem: () => Effect.void,
+          getItem: (key) => Ref.get(metadata).pipe(Effect.map((values) => values[key] ?? null)),
+          setItem: (key, value) => Ref.update(metadata, (values) => ({ ...values, [key]: value })),
           removeItem: () => Effect.void,
         }),
       );
+      const storage = MobilePreferences.layer.pipe(Layer.provide(dependencies));
       yield* Effect.gen(function* () {
         const store = yield* MobilePreferences.MobilePreferencesStore;
-        expect((yield* store.load).settingsSyncEnabled).toBe(expected);
-        yield* store.savePatch({ language: "en" });
-        expect((yield* store.load).settingsSyncEnabled).toBe(expected);
-      }).pipe(Effect.provide(MobilePreferences.layer.pipe(Layer.provide(dependencies))));
+        const preferences = yield* store.load;
+        expect(preferences).toEqual(stored ?? {});
+        expect(preferences.settingsSyncEnabled ?? (yield* store.settingsSyncDefault)).toBe(
+          expected,
+        );
+        expect(yield* store.savePatch({ language: "en" })).toEqual({ ...stored, language: "en" });
+      }).pipe(Effect.provide(Layer.fresh(storage)));
+      yield* Effect.gen(function* () {
+        const store = yield* MobilePreferences.MobilePreferencesStore;
+        const preferences = yield* store.load;
+        expect(preferences).toEqual({ ...stored, language: "en" });
+        expect(preferences.settingsSyncEnabled ?? (yield* store.settingsSyncDefault)).toBe(
+          expected,
+        );
+      }).pipe(Effect.provide(Layer.fresh(storage)));
     }),
 );

@@ -25,10 +25,28 @@ export function createMobilePreferencesState(
   const storedPreferencesAtom = runtime
     .atom(
       MobilePreferences.MobilePreferencesStore.pipe(
-        Effect.flatMap((store) => store.load),
+        Effect.flatMap((store) =>
+          Effect.gen(function* () {
+            const preferences = yield* store.load;
+            const settingsSyncDefault =
+              preferences.settingsSyncEnabled === undefined
+                ? yield* store.settingsSyncDefault.pipe(
+                    Effect.catch((error) =>
+                      Effect.logWarning("Could not load the settings sync default.", error).pipe(
+                        Effect.as(false),
+                      ),
+                    ),
+                  )
+                : false;
+            return { preferences, settingsSyncDefault };
+          }),
+        ),
         Effect.catch((error) =>
           Effect.logWarning("Could not load mobile preferences.", error).pipe(
-            Effect.as<MobilePreferences.Preferences>({}),
+            Effect.as({
+              preferences: {} as MobilePreferences.Preferences,
+              settingsSyncDefault: false,
+            }),
           ),
         ),
       ),
@@ -49,12 +67,22 @@ export function createMobilePreferencesState(
     const stored = get(storedPreferencesAtom);
     const confirmed = get(confirmedPreferencesAtom);
     const optimistic = get(optimisticPatchAtom);
-    return AsyncResult.map(stored, (preferences) => ({
+    return AsyncResult.map(stored, ({ preferences }) => ({
       ...preferences,
       ...confirmed,
       ...optimistic.values,
     }));
   }).pipe(Atom.keepAlive, Atom.withLabel("mobile:preferences"));
+
+  const settingsSyncEnabledAtom = Atom.make((get) => {
+    const preferences = get(preferencesAtom);
+    const stored = get(storedPreferencesAtom);
+    return (
+      AsyncResult.isSuccess(preferences) &&
+      (preferences.value.settingsSyncEnabled ??
+        (AsyncResult.isSuccess(stored) && stored.value.settingsSyncDefault))
+    );
+  }).pipe(Atom.keepAlive, Atom.withLabel("mobile:settings-sync-enabled"));
 
   const updatePreferencesAtom = runtime
     .fn(
@@ -126,7 +154,7 @@ export function createMobilePreferencesState(
     )
     .pipe(Atom.keepAlive, Atom.withLabel("mobile:preferences:update"));
 
-  return { preferencesAtom, updatePreferencesAtom } as const;
+  return { preferencesAtom, updatePreferencesAtom, settingsSyncEnabledAtom } as const;
 }
 
 const mobilePreferencesRuntime = Atom.runtime(Runtime.layer);
@@ -134,3 +162,5 @@ const mobilePreferencesState = createMobilePreferencesState(mobilePreferencesRun
 
 export const mobilePreferencesAtom = mobilePreferencesState.preferencesAtom;
 export const updateMobilePreferencesAtom = mobilePreferencesState.updatePreferencesAtom;
+
+export const mobileSettingsSyncEnabledAtom = mobilePreferencesState.settingsSyncEnabledAtom;

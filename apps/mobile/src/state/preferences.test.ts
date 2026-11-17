@@ -37,10 +37,16 @@ function deferred<A>() {
 }
 
 function makePreferencesState(
-  service: Omit<MobilePreferences.MobilePreferencesStore["Service"], "update"> &
-    Partial<Pick<MobilePreferences.MobilePreferencesStore["Service"], "update">>,
+  service: Omit<
+    MobilePreferences.MobilePreferencesStore["Service"],
+    "update" | "settingsSyncDefault"
+  > &
+    Partial<
+      Pick<MobilePreferences.MobilePreferencesStore["Service"], "update" | "settingsSyncDefault">
+    >,
 ) {
   const completeService = MobilePreferences.MobilePreferencesStore.of({
+    settingsSyncDefault: Effect.succeed(false),
     ...service,
     update:
       service.update ??
@@ -170,6 +176,44 @@ describe("mobile preferences state", () => {
       unmountPreferences();
       registry.dispose();
     }),
+  );
+
+  it.effect.each([
+    { stored: {}, defaultEnabled: false, expected: false },
+    { stored: {}, defaultEnabled: true, expected: true },
+    { stored: { settingsSyncEnabled: false }, defaultEnabled: true, expected: false },
+    { stored: { settingsSyncEnabled: true }, defaultEnabled: false, expected: true },
+  ])(
+    "resolves sync from $stored with default $defaultEnabled",
+    ({ stored, defaultEnabled, expected }) =>
+      Effect.gen(function* () {
+        let persisted: MobilePreferences.Preferences = stored;
+        const state = makePreferencesState({
+          load: Effect.succeed(stored),
+          settingsSyncDefault: Effect.succeed(defaultEnabled),
+          savePatch: (patch) =>
+            Effect.sync(() => {
+              persisted = { ...persisted, ...patch };
+              return persisted;
+            }),
+        });
+        const registry = AtomRegistry.make();
+        const unmount = registry.mount(state.preferencesAtom);
+        expect(
+          yield* AtomRegistry.getResult(registry, state.preferencesAtom, {
+            suspendOnWaiting: true,
+          }),
+        ).toEqual(stored);
+        expect(registry.get(state.settingsSyncEnabledAtom)).toBe(expected);
+        registry.set(state.updatePreferencesAtom, { settingsSyncEnabled: !expected });
+        yield* AtomRegistry.getResult(registry, state.updatePreferencesAtom, {
+          suspendOnWaiting: true,
+        });
+        expect(registry.get(state.settingsSyncEnabledAtom)).toBe(!expected);
+        expect(persisted.settingsSyncEnabled).toBe(!expected);
+        unmount();
+        registry.dispose();
+      }),
   );
 
   it.effect("falls back to empty preferences when secure storage cannot be read", () =>
