@@ -237,14 +237,30 @@ export function subagentResultForRun(
     failure !== undefined && turnItem !== null && turnItem.ordinal < failure.ordinal
       ? (message?.text ?? turnItem.text)
       : undefined;
+  // The stop reason names who stopped the run, so a parent can tell a person's Stop from a failure.
+  const stop =
+    run.status === "interrupted"
+      ? projection.turnItems
+          .filter(
+            (item) =>
+              item.runId === run.id &&
+              (item.type === "run_interrupt_request" || item.type === "run_interrupt_result"),
+          )
+          .toSorted((left, right) => right.ordinal - left.ordinal)[0]
+      : undefined;
+  const lastReport = message?.text ?? turnItem?.text;
   const text =
     (failure?.type === "error"
       ? reportBeforeFailure === undefined
         ? failure.failure.message
         : `${failure.failure.message}\n\nLast assistant message before the run failed:\n\n${reportBeforeFailure}`
       : undefined) ??
-    message?.text ??
-    turnItem?.text ??
+    (stop?.type === "run_interrupt_request" || stop?.type === "run_interrupt_result"
+      ? lastReport === undefined
+        ? `${stop.message}.`
+        : `${stop.message}.\n\nLast assistant message before the run was stopped:\n\n${lastReport}`
+      : undefined) ??
+    lastReport ??
     (run.status === "completed"
       ? "Child task completed without an assistant result."
       : `Child task ended with status ${run.status}.`);

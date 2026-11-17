@@ -15093,7 +15093,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           messageRoles: ["assistant"],
           messageRunIds: [childRun.id],
           turnItemRunId: childRun.id,
-          turnItemTypes: ["assistant_message", "error"],
+          turnItemTypes: [
+            "assistant_message",
+            "error",
+            "run_interrupt_request",
+            "run_interrupt_result",
+          ],
         },
       );
       const childProjection = {

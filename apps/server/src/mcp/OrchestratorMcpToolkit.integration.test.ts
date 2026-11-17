@@ -588,9 +588,13 @@ describe("orchestrator MCP toolkit", () => {
             ),
           );
         const finishedParent = yield* orchestrator.getThreadProjection(parentThreadId);
-        expect(
-          finishedParent.subagents.find((task) => task.id === followupTasks[0]!.id)?.status,
-        ).toBe("interrupted");
+        const interruptedTask = finishedParent.subagents.find(
+          (task) => task.id === followupTasks[0]!.id,
+        );
+        expect(interruptedTask?.status).toBe("interrupted");
+        expect(interruptedTask?.result).toMatch(
+          /^Stopped by an agent: Allow the queued replay follow-up to run\./,
+        );
         expect(
           finishedParent.subagents.find((task) => task.id === followupTasks[1]!.id),
         ).toMatchObject({

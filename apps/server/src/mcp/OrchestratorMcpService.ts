@@ -1827,7 +1827,12 @@ const make = Effect.gen(function* () {
         messageRoles: ["assistant"],
         messageRunIds: resultRunIds,
         turnItemRunIds: resultRunIds,
-        turnItemTypes: ["assistant_message", "error"],
+        turnItemTypes: [
+          "assistant_message",
+          "error",
+          "run_interrupt_request",
+          "run_interrupt_result",
+        ],
       })
       .pipe(Effect.mapError(threadManagementFailure));
     const childProjection = {
