@@ -121,7 +121,6 @@ function manualOrder<T extends { readonly id: ThreadId }>(
   return [...unlisted, ...saved];
 }
 
-
 export function moveMadoHomuThread(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly settings: MadoHomuListSettings;
