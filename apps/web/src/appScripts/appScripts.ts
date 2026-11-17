@@ -28,6 +28,8 @@ class AppScriptRefusedError extends Schema.TaggedError<AppScriptRefusedError>()(
   }
 }
 
+const isAppScriptRefused = Schema.is(AppScriptRefusedError);
+
 let api: T3App | null = null;
 
 async function loadNamedScript(name: string): Promise<string> {
@@ -100,7 +102,7 @@ export async function handleRunScriptRequest(
     return {
       ...base,
       ok: false,
-      code: error instanceof AppScriptRefusedError ? "scripts-disabled" : "script-failed",
+      code: isAppScriptRefused(error) ? "scripts-disabled" : "script-failed",
       message: errorMessage(error) || "The app script failed.",
     };
   }
