@@ -15,6 +15,7 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Orchestrator from "../Orchestrator.ts";
 import { userFacingDispatchErrorMessage } from "../UserFacingErrors.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
+import { assertClaudeBackgroundTaskWakeOutput } from "./fixtures/claude_background_task_wake/output.ts";
 import { subagentInput } from "./fixtures/subagent/input.ts";
 import { runOrchestratorV2Scenario } from "./OrchestratorScenario.ts";
 import * as ProviderReplayHarness from "./ProviderReplayHarness.ts";
@@ -48,6 +49,20 @@ function runClaudeReplayFixture(input: ReplayFixtureCase) {
 
 describe("Claude Agent SDK replay fixtures", () => {
   itRunsReplayFixtures("claudeAgent", runClaudeReplayFixture);
+
+  const backgroundWakeFixture = findReplayFixture("claude_background_task_wake")!;
+  it.effect("holds background commands in the wake fixture when enabled", () =>
+    runClaudeReplayFixture({
+      fixtureName: backgroundWakeFixture.name,
+      buildInput: backgroundWakeFixture.buildInput,
+      serverSettings: { claudeHoldBackgroundCommands: true },
+      driver: {
+        ...backgroundWakeFixture.providers[0]!,
+        assertOutput: (result, transcript) =>
+          assertClaudeBackgroundTaskWakeOutput(result, transcript, true),
+      },
+    }),
+  );
 
   it.effect("refuses messages to a native subagent thread without touching it", () =>
     Effect.gen(function* () {

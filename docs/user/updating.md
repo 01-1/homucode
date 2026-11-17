@@ -73,9 +73,11 @@ T3 Code must start again on that machine;
 the setting does not enable automatic startup. Terminal commands may still be
 interrupted, and threads without saved provider resume state need a new message.
 A thread that finished its turn to wait on a subagent, a background task, a Claude
-monitor, or a command or other monitor the agent said it was waiting on is woken and told that this work
-stopped. Other background shells and monitors, such as a dev server and its
-watchdog, do not wake it; the thread learns about them with your next message.
+monitor, or a command or other monitor the agent said it was waiting on is woken and told that
+this work stopped. Claude commands also count when **Settings → Threads → Keep Claude threads
+working while background commands run** is on. That setting is off by default and applies to
+new background tasks without restarting. Other background shells and monitors, such as a dev
+server and its watchdog, do not wake it; the thread learns about them with your next message.
 A thread is not resumed while it waits for your approval, answer, or secret, or
 while it is archived, snoozed, or settled. After three consecutive crash recoveries
 of an unfinished turn, the thread waits for your next message, even when crashes

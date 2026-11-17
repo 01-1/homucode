@@ -29,6 +29,7 @@ function runAssistantTexts(
 export function assertClaudeBackgroundTaskWakeOutput(
   result: OrchestratorV2ScenarioResult,
   transcript: ProviderReplayTranscript,
+  holdBackgroundCommands = false,
 ) {
   assertBaseProjection({
     result,
@@ -79,6 +80,7 @@ export function assertClaudeBackgroundTaskWakeOutput(
   assert.deepEqual(rosterTask, {
     taskId: BACKGROUND_TASK_ID,
     description: "Background sleep test",
+    ...(holdBackgroundCommands ? { awaited: true } : {}),
     kind: "command",
   });
   assert.deepEqual(backgroundNotifications(projection), [

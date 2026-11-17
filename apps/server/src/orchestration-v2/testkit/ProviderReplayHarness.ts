@@ -1,3 +1,4 @@
+import type { DeepPartial } from "@t3tools/shared/Struct";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -6,6 +7,7 @@ import type {
   ManagedPolicyDocument,
   ProviderDriverKind,
   ProviderReplayTranscript,
+  ServerSettings as ServerSettingsValues,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -206,6 +208,7 @@ export function runOrchestratorV2ProviderReplayScenario<
     readonly runContinuationWorker?: boolean;
     readonly recoverOnStartup?: boolean;
     readonly continueThreadsAfterServerUpdate?: boolean;
+    readonly serverSettings?: DeepPartial<ServerSettingsValues>;
     readonly managedPolicy?: ManagedPolicyDocument;
   } = {},
 ): Effect.Effect<
@@ -249,6 +252,7 @@ export function layerProviderReplay<Transcript extends ProviderReplayTranscript,
     readonly runContinuationWorker?: boolean;
     readonly recoverOnStartup?: boolean;
     readonly continueThreadsAfterServerUpdate?: boolean;
+    readonly serverSettings?: DeepPartial<ServerSettingsValues>;
     readonly managedPolicy?: ManagedPolicyDocument;
     readonly replayGate?: ProviderReplayGate;
   } = {},
@@ -283,6 +287,7 @@ export function layerWithRegistry<Error>(
     readonly runContinuationWorker?: boolean;
     readonly recoverOnStartup?: boolean;
     readonly continueThreadsAfterServerUpdate?: boolean;
+    readonly serverSettings?: DeepPartial<ServerSettingsValues>;
     /** Lets a test hold a projection read open to order concurrent dispatches. */
     readonly wrapProjectionStore?: (
       store: ProjectionStore.ProjectionStoreV2Shape,
@@ -313,14 +318,12 @@ export function layerWithRegistry<Error>(
   // Share one continuation queue across adapters, orchestrator, and worker through layer memoization.
   const layerContinuationRequests =
     options.runContinuationWorker === true ? ProviderContinuationRequests.layer : Layer.empty;
-  const layerProvidedRegistry = registryLayer.pipe(
-    Layer.provide(Layer.merge(layerContinuationRequests, McpProviderSessions.layer)),
-  );
   const layerServerSettings = Layer.unwrap(
     Effect.map(ManagedPolicy.fromDocument("/test/policy.json", options.managedPolicy), (policy) =>
       ServerSettings.layerTest(
         {
           responseStreamingMode: "turn",
+          ...options.serverSettings,
           ...(options.continueThreadsAfterServerUpdate === undefined
             ? {}
             : { continueThreadsAfterServerUpdate: options.continueThreadsAfterServerUpdate }),
@@ -329,6 +332,11 @@ export function layerWithRegistry<Error>(
       ),
     ),
   ).pipe(Layer.orDie);
+  const layerProvidedRegistry = registryLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(layerContinuationRequests, McpProviderSessions.layer, layerServerSettings),
+    ),
+  );
   const layerEffectOutboxProvided = EffectOutbox.layer.pipe(Layer.provide(layerDatabase));
   const wrapProjectionStore = options.wrapProjectionStore;
   const layerProjectionStore =

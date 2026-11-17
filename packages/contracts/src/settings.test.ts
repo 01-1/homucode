@@ -570,6 +570,15 @@ it("defaults native subagents off and persists environment and project choices",
   expect(decodeServerSettingsPatch(input)).toEqual(input);
 });
 
+it("defaults Claude background command holds off and persists either choice", () => {
+  expect(decodeServerSettings({}).claudeHoldBackgroundCommands).toBe(false);
+  for (const claudeHoldBackgroundCommands of [false, true]) {
+    const input = { claudeHoldBackgroundCommands };
+    expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
+    expect(decodeClientServerSettingsPatch(input)).toEqual(input);
+  }
+});
+
 describe("SnoozePresetSettings", () => {
   it("accepts sixteen presets, including days from today, and rejects a seventeenth", () => {
     const decode = Schema.decodeUnknownSync(SnoozePresetSettings);

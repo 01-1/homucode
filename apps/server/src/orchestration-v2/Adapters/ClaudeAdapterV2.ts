@@ -5497,6 +5497,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
   const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+  const holdBackgroundCommands = Option.isSome(serverSettings)
+    ? serverSettings.value.getSettings.pipe(
+        Effect.map((settings) => settings.claudeHoldBackgroundCommands),
+        Effect.orElseSucceed(() => false),
+      )
+    : Effect.succeed(false);
   const { attachmentsDir, fileSystem, path, random, idAllocator, queryRunner } = adapterOptions;
   const loadModelCatalog = (
     adapterOptions.modelCatalog ?? Effect.succeed(BUNDLED_CLAUDE_MODEL_CATALOG)
@@ -6650,23 +6656,42 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>,
           ) {
-            yield* Ref.update(pendingBackgroundTasksByNativeThread, (current) => {
-              const updated = new Map(current);
-              if (tasks.length === 0) {
-                updated.delete(nativeThreadId);
-              } else {
-                updated.set(
-                  nativeThreadId,
-                  new Map(
-                    tasks.map((task) => {
-                      const previous = current.get(nativeThreadId)?.get(task.taskId);
-                      return [task.taskId, { ...previous, ...task }] as const;
-                    }),
-                  ),
+            const holdCommands = yield* holdBackgroundCommands;
+            const startedCommandIds = yield* Ref.modify(
+              pendingBackgroundTasksByNativeThread,
+              (current) => {
+                const previousRoster = current.get(nativeThreadId);
+                const startedCommandIds = tasks.flatMap((task) =>
+                  holdCommands &&
+                  task.kind === "command" &&
+                  previousRoster?.has(task.taskId) !== true
+                    ? [task.taskId]
+                    : [],
                 );
-              }
-              return updated;
-            });
+                const updated = new Map(current);
+                if (tasks.length === 0) {
+                  updated.delete(nativeThreadId);
+                } else {
+                  updated.set(
+                    nativeThreadId,
+                    new Map(
+                      tasks.map((task) => {
+                        const previous = previousRoster?.get(task.taskId);
+                        return [task.taskId, { ...previous, ...task }] as const;
+                      }),
+                    ),
+                  );
+                }
+                return [startedCommandIds, updated] as const;
+              },
+            );
+            if (startedCommandIds.length > 0) {
+              yield* addTaskIdsToNativeThreadSet(
+                awaitedBackgroundTasksByNativeThread,
+                nativeThreadId,
+                startedCommandIds,
+              );
+            }
             yield* rememberOpaqueTasks(tasks);
             if (tasks.length > 0) {
               yield* markWakeEligibleOpaqueBackgroundTasks(
@@ -6693,17 +6718,19 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             task: OrchestrationV2PendingBackgroundTask,
           ) {
-            const startedMonitor = yield* Ref.modify(
+            const holdCommands = task.kind === "command" && (yield* holdBackgroundCommands);
+            const startedHeldTask = yield* Ref.modify(
               pendingBackgroundTasksByNativeThread,
               (current) => {
                 const roster = new Map(rosterForNativeThread(current, nativeThreadId));
-                const startedMonitor =
-                  task.kind === "monitor" && roster.get(task.taskId)?.kind !== "monitor";
+                const startedHeldTask =
+                  (task.kind === "monitor" || holdCommands) &&
+                  roster.get(task.taskId)?.kind !== task.kind;
                 roster.set(task.taskId, task);
-                return [startedMonitor, new Map(current).set(nativeThreadId, roster)] as const;
+                return [startedHeldTask, new Map(current).set(nativeThreadId, roster)] as const;
               },
             );
-            if (startedMonitor) {
+            if (startedHeldTask) {
               yield* addTaskIdsToNativeThreadSet(
                 awaitedBackgroundTasksByNativeThread,
                 nativeThreadId,

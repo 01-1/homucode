@@ -1,6 +1,11 @@
+import type { DeepPartial } from "@t3tools/shared/Struct";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import type { OrchestrationV2DomainEvent, ProviderReplayTranscript } from "@t3tools/contracts";
+import type {
+  OrchestrationV2DomainEvent,
+  ProviderReplayTranscript,
+  ServerSettings,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -94,6 +99,7 @@ function isStreamingAssistantEvent(event: OrchestrationV2DomainEvent): boolean {
 
 export interface ReplayFixtureCase {
   readonly fixtureName: string;
+  readonly serverSettings?: DeepPartial<ServerSettings>;
   readonly buildInput: () => OrchestratorFixtureInput;
   readonly driver: ProviderOrchestratorReplayVariant;
   readonly transformTranscript?: (transcript: ProviderReplayTranscript) => ProviderReplayTranscript;
@@ -165,11 +171,10 @@ const runFixtureProvider = Effect.fn("runOrchestratorReplayFixture")(function* <
     },
   };
 
-  const result = yield* runOrchestratorV2ProviderReplayScenario(
-    scenario,
-    input.harness,
-    input.driver.runContinuationWorker === true ? { runContinuationWorker: true } : {},
-  ).pipe(provideDeterministicTestRuntime);
+  const result = yield* runOrchestratorV2ProviderReplayScenario(scenario, input.harness, {
+    ...(input.driver.runContinuationWorker === true ? { runContinuationWorker: true } : {}),
+    ...(input.serverSettings === undefined ? {} : { serverSettings: input.serverSettings }),
+  }).pipe(provideDeterministicTestRuntime);
   input.driver.assertOutput(result, transcript);
   assertProviderNativeSubagentRootTurns(result);
   const expectedAbsentWorkspacePaths = input.driver.expectedAbsentWorkspacePaths;
