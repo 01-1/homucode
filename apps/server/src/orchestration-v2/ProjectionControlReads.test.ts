@@ -336,7 +336,7 @@ it.effect.each(storageCases)(
         yield* reply.respond({ threadId, providerSessionId, requestId, decision: "accept" });
         assert.deepEqual(calls, [
           "interrupt",
-          timestampedPrompt("Use the smaller fix.", now),
+          `${timestampedPrompt("Use the smaller fix.", now)}\n\n[T3] Sent from: unknown device. A human sent this message.`,
           "reply",
         ]);
         const wrongSession = ProviderSessionId.make("session:wrong");
@@ -390,7 +390,7 @@ it.effect.each(storageCases)(
         yield* interrupt;
         assert.deepEqual(calls, [
           "interrupt",
-          timestampedPrompt("Use the smaller fix.", now),
+          `${timestampedPrompt("Use the smaller fix.", now)}\n\n[T3] Sent from: unknown device. A human sent this message.`,
           "reply",
           "interrupt",
           "interrupt",

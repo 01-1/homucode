@@ -1,3 +1,4 @@
+import { messageSource, messageSourceLabel } from "@t3tools/shared/messageSource";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
@@ -1529,6 +1530,9 @@ function ThreadAutomationMessageRow(props: {
 
   return (
     <View className="mb-5 items-end">
+      <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
+        Automatic · Scheduled task
+      </Text>
       <View
         className="min-w-0 rounded-[20px]"
         style={{
@@ -2089,11 +2093,12 @@ function renderFeedEntry(
           className={cn("items-end", props.userMessageGrouping.groupedWithNext ? "mb-1" : "mb-5")}
           {...(enterAnimated ? { entering: FadeInDown.duration(220) } : {})}
         >
-          {presentation.attribution === "t3code" ? (
+          {messageSource(message).kind === "human" &&
+          props.userMessageGrouping.groupedWithPrevious ? null : (
             <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-              Sent by T3 Code
+              {messageSourceLabel(message)}
             </Text>
-          ) : null}
+          )}
           {presentation.guestName !== undefined ? (
             <GuestMessageName name={presentation.guestName} />
           ) : null}

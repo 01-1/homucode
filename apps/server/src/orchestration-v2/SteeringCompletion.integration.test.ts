@@ -46,15 +46,22 @@ const driver = ProviderDriverKind.make("codex");
 const instanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId, model: "test-model" };
 
+// The sender lines T3 appends to the prompt (see `messageSourceLine`).
+const humanLine = (device = "unknown device") =>
+  `[T3] Sent from: ${device}. A human sent this message.`;
+const automaticLine = (sender: string, summary?: string) =>
+  `[T3] Automatic message from ${sender}${summary === undefined ? "" : `: ${summary}`}. No human sent this message.`;
+
 // TestClock starts at the Unix epoch; slash commands retain their native prompt.
-const timestampedAt = (text: string, sentAt: number) => {
+const timestampedAt = (text: string, sentAt: number, line = humanLine()) => {
   const sent = DateTime.makeUnsafe(sentAt);
   const local = DateTime.formatIso(
     DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
   ).slice(0, 19);
-  return text.trimStart().startsWith("/") ? text : `${local}: ${text}`;
+  return text.trimStart().startsWith("/") ? text : `${local}: ${text}\n\n${line}`;
 };
 const timestamped = (text: string) => timestampedAt(text, 0);
+const timestampedBy = (text: string, line: string) => timestampedAt(text, 0, line);
 
 it.effect.each(
   (
@@ -456,7 +463,17 @@ it.effect.each(
       assert.equal(started.length, 2);
       assert.equal(started[1]?.message.messageId, messageId);
       if (mailbox) assert.include(started[1]?.message.text ?? "", String(taskId));
-      else assert.equal(started[1]?.message.text, timestamped("fix the popover"));
+      else {
+        assert.equal(
+          started[1]?.message.text,
+          timestampedBy(
+            "fix the popover",
+            question
+              ? automaticLine("a delegated task's result", "Delegated task has a question")
+              : humanLine(),
+          ),
+        );
+      }
       assert.deepEqual(started[1]?.message.attachments, [
         {
           type: "image",
@@ -799,7 +816,19 @@ it.effect.each([
         const after = yield* orchestrator.getThreadProjection(threadId);
         assert.deepEqual(
           steered,
-          steers ? [timestamped(`${notification.summary}\nexit 0: built 12 files`)] : [],
+          steers
+            ? [
+                timestampedBy(
+                  `${notification.summary}\nexit 0: built 12 files`,
+                  automaticLine(
+                    notice === "delegated task question"
+                      ? "a delegated task's result"
+                      : "a background command",
+                    notification.summary,
+                  ),
+                ),
+              ]
+            : [],
         );
         assert.lengthOf(started, 1);
         assert.equal(
@@ -2298,7 +2327,7 @@ it.effect("steers a promoted scheduled delivery with the thread's current select
         yield* worker.drain();
 
         const projection = yield* orchestrator.getThreadProjection(threadId);
-        assert.deepEqual(steered, [timestamped("scheduled")]);
+        assert.deepEqual(steered, [timestampedBy("scheduled", automaticLine("a scheduled task"))]);
         assert.deepEqual(projection.thread.modelSelection, composerSelection);
       }).pipe(Effect.provide(layer));
     }),
@@ -3055,7 +3084,7 @@ it.effect.each([
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {
           queue: ["queued"],
-          started: ["first", `${text}\n\n[T3] Sent from: ${label}`].map(timestamped),
+          started: [timestamped("first"), timestampedBy(text, humanLine(label))],
           stopRequested: true,
         });
       }).pipe(Effect.provide(layer));
@@ -3127,7 +3156,7 @@ it.effect("restarts by stopping the running turn when the provider cannot interr
       assert.deepEqual(steered, []);
       assert.deepEqual(yield* read(threadId), {
         queue: ["queued"],
-        started: ["first", "do this instead"].map(timestamped),
+        started: [timestamped("first"), timestampedBy("do this instead", automaticLine("T3 Code"))],
         stopRequested: true,
       });
     }).pipe(Effect.provide(layer));
@@ -3186,7 +3215,18 @@ it.effect("starts a restart that stops the running turn ahead of an older held q
       const { queue, started: startedTexts } = yield* read(threadId);
       assert.deepEqual(
         { queue, started: startedTexts },
-        { queue: ["queued"], started: ["first", "second", "do this instead"].map(timestamped) },
+        {
+          queue: ["queued"],
+          started: [
+            timestamped("first"),
+            ...["second", "do this instead"].map((text) =>
+              timestampedBy(
+                text,
+                automaticLine("an agent or script using T3's tools (t3 thread send)"),
+              ),
+            ),
+          ],
+        },
       );
     }).pipe(Effect.provide(layer));
   }),
@@ -3540,7 +3580,7 @@ it.effect("a side chat that opens with /goal gets its context on the next questi
       assert.deepEqual([first, goal], ["first", "/goal clear"].map(timestamped));
       assert.include(question, "You are in a side chat beside the main thread.");
       assert.include(question, "- User: first");
-      assert.isTrue(question?.endsWith("What is the main thread doing?"));
+      assert.isTrue(question?.endsWith(`What is the main thread doing?\n\n${humanLine()}`));
     }).pipe(Effect.provide(layer));
   }),
 );
@@ -3593,7 +3633,7 @@ it.effect("a promoted queued message retains its original send time and device l
         });
         yield* worker.drain();
         assert.deepEqual(steered, [
-          `${timestamp}: from the phone\n\n[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)`,
+          `${timestamp}: from the phone\n\n[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay). A human sent this message.`,
         ]);
         const after = yield* orchestrator.getThreadProjection(threadId);
         assert.equal(
