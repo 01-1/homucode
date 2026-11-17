@@ -82,6 +82,8 @@ export type CommandPaletteOpenIntent =
   | { readonly kind: "new-thread-in" | "change-theme" }
   | {
       readonly kind: "add-project";
+      /** Limits the flow to this environment (MadoHomu's picker). */
+      readonly environmentId?: EnvironmentId;
       /** Replaces opening a new thread in the project once it exists (MadoHomu's picker). */
       readonly onProjectAdded?: CommandPaletteProjectAdded;
     }
@@ -110,7 +112,11 @@ export type CommandPaletteUiAction =
       readonly query: string;
       readonly linkedThreads?: CommandPaletteLinkedThreads;
     }
-  | { readonly _tag: "OpenAddProject"; readonly onProjectAdded?: CommandPaletteProjectAdded }
+  | {
+      readonly _tag: "OpenAddProject";
+      readonly environmentId?: EnvironmentId;
+      readonly onProjectAdded?: CommandPaletteProjectAdded;
+    }
   | { readonly _tag: "OpenNewThreadIn" }
   | { readonly _tag: "OpenChangeTheme" }
   | {
@@ -167,6 +173,7 @@ export function reduceCommandPaletteUiState(
     case "OpenAddProject":
       return openWithIntent({
         kind: "add-project",
+        ...(action.environmentId ? { environmentId: action.environmentId } : {}),
         ...(action.onProjectAdded ? { onProjectAdded: action.onProjectAdded } : {}),
       });
     case "OpenNewThreadIn":

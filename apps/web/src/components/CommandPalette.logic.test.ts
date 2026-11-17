@@ -108,13 +108,14 @@ describe("reduceCommandPaletteUiState", () => {
     });
   });
 
-  it("keeps the add-project completion callback in the intent", () => {
+  it("keeps the add-project environment and completion callback in the intent", () => {
     const onProjectAdded = () => {};
+    const environmentId = EnvironmentId.make("local");
     const state = reduceCommandPaletteUiState(
       { open: false, mode: "command", openIntent: null, session: 0 },
-      { _tag: "OpenAddProject", onProjectAdded },
+      { _tag: "OpenAddProject", environmentId, onProjectAdded },
     );
-    expect(state.openIntent).toEqual({ kind: "add-project", onProjectAdded });
+    expect(state.openIntent).toEqual({ kind: "add-project", environmentId, onProjectAdded });
   });
 });
 

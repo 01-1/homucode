@@ -19,7 +19,7 @@ export function MadoHomuProjectPicker(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly disabled: boolean;
-  readonly onChange: (projectId: ProjectId) => void;
+  readonly onChange: (projectId: ProjectId | null) => void;
 }) {
   const navigation = useNavigation();
   const route = useRoute();
@@ -65,6 +65,13 @@ export function MadoHomuProjectPicker(props: {
             />
           ))}
         </View>
+      ) : null}
+      {props.projectId !== null ? (
+        <ListActionRow
+          label="Clear project"
+          disabled={props.disabled}
+          onPress={() => props.onChange(null)}
+        />
       ) : null}
     </View>
   );

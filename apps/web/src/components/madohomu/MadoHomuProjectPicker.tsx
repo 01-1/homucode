@@ -25,6 +25,7 @@ export function useNewMadoHomuProject(environmentId: EnvironmentId) {
   return () =>
     openCommandPalette({
       open: "add-project",
+      environmentId,
       onProjectAdded: (project) => {
         if (project.environmentId !== environmentId) {
           toastManager.add({
@@ -80,6 +81,12 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
             </MenuRadioItem>
           ))}
         </MenuRadioGroup>
+        {current && (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>
+          </>
+        )}
       </MenuPopup>
     </Menu>
   );

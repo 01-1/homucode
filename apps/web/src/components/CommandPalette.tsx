@@ -1236,9 +1236,21 @@ function OpenCommandPaletteDialog(props: {
     setOpen(false);
     void navigate({ to: "/settings/connections" });
   };
+  // Read once per palette session, like the rest of the open intent.
+  const [{ onProjectAdded, addProjectOnlyEnvironmentId }] = useState(() => {
+    const intent = props.openIntent?.kind === "add-project" ? props.openIntent : null;
+    return {
+      onProjectAdded: intent?.onProjectAdded ?? null,
+      addProjectOnlyEnvironmentId: intent?.environmentId ?? null,
+    };
+  });
   const addProjectEntry = resolveAddProjectEntry(
-    addProjectEnvironmentOptions,
-    defaultAddProjectEnvironmentId,
+    addProjectOnlyEnvironmentId === null
+      ? addProjectEnvironmentOptions
+      : addProjectEnvironmentOptions.filter(
+          (option) => option.environmentId === addProjectOnlyEnvironmentId,
+        ),
+    addProjectOnlyEnvironmentId ?? defaultAddProjectEnvironmentId,
   );
 
   const openAddProjectFlow = () => {
@@ -1886,10 +1898,6 @@ function OpenCommandPaletteDialog(props: {
     now: searchNow,
   });
 
-  // Read once per palette session, like the rest of the open intent.
-  const [onProjectAdded] = useState(() =>
-    props.openIntent?.kind === "add-project" ? (props.openIntent.onProjectAdded ?? null) : null,
-  );
   /** Where a newly added project leads: the opener's callback, else a new thread in it. */
   const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
     if (onProjectAdded) {

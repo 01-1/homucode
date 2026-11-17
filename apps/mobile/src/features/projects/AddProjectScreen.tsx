@@ -726,11 +726,6 @@ function useOpenNewTaskDraft() {
     },
     originRoute: NavigationState<ParamListBase>["routes"][number] | undefined,
   ) => {
-    const completion = takeAddProjectCompletion();
-    if (completion) {
-      completion({ environmentId: params.environmentId, projectId: params.projectId });
-      return;
-    }
     const activeRoute = getActiveRoute(navigation);
     // A warm link can change the task without replacing its native route key.
     if (
@@ -740,6 +735,11 @@ function useOpenNewTaskDraft() {
       activeRoute.params !== originRoute.params
     )
       return;
+    const completion = takeAddProjectCompletion();
+    if (completion) {
+      completion({ environmentId: params.environmentId, projectId: params.projectId });
+      return;
+    }
     selectDetail({ name: "Thread", params: { draft: params } });
   };
 }
