@@ -8,6 +8,7 @@ import {
 import {
   createClientSettingsSyncRunner,
   type SettingsSyncPrompt,
+  settingsSyncTargets,
 } from "@t3tools/client-runtime/state/client-settings-sync-runner";
 import {
   isAtomCommandInterrupted,
@@ -25,8 +26,8 @@ import {
 } from "~/hooks/useSettings";
 import { refreshTheme, subscribeRenderedAppearance } from "~/hooks/useTheme";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
-import { primaryServerConfigAtom, serverEnvironment } from "~/state/server";
+import { environmentSummaries } from "~/state/presentation";
+import { environmentServerConfigsAtom, serverEnvironment } from "~/state/server";
 import { invalidateCustomThemes, subscribeToCustomThemes } from "~/themePalette";
 import { readThemeSyncValues, writeThemeSyncValues } from "~/themeSync";
 
@@ -97,7 +98,7 @@ async function writeRemote(
   if (result._tag === "Success") return result.value.syncedClientSettings;
   if (!isAtomCommandInterrupted(result)) {
     console.warn(
-      "[SETTINGS_SYNC] could not save settings on the primary server",
+      "[SETTINGS_SYNC] could not save settings on the server",
       squashAtomCommandFailure(result),
     );
   }
@@ -107,13 +108,11 @@ async function writeRemote(
 const runner = createClientSettingsSyncRunner({
   isReady: isClientSettingsHydrated,
   isEnabled: () => getClientSettings().settingsSyncEnabled,
-  target: () => {
-    const environmentId = appAtomRegistry.get(primaryEnvironmentIdAtom);
-    const config = appAtomRegistry.get(primaryServerConfigAtom);
-    // Without the loaded config the default revision 0 would read as an empty server.
-    if (environmentId === null || config === null) return null;
-    return { environmentId, remote: config.settings.syncedClientSettings };
-  },
+  targets: () =>
+    settingsSyncTargets(
+      appAtomRegistry.get(environmentSummaries.connectedEnvironmentIdsAtom),
+      appAtomRegistry.get(environmentServerConfigsAtom),
+    ),
   readLocal: readLocalSyncedValues,
   applyLocal: applyLocally,
   readBase,
@@ -129,7 +128,7 @@ export function useSettingsSyncPrompt(): SettingsSyncPrompt | null {
 export const resolveSettingsSyncPrompt = runner.resolvePrompt;
 export const deferSettingsSyncPrompt = runner.deferPrompt;
 
-/** Syncs this device's client settings through the primary server while sync is on. */
+/** Syncs this device's client settings with every connected server while sync is on. */
 export function startClientSettingsSync(): () => void {
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   const onLocalChange = () => {
@@ -140,7 +139,8 @@ export function startClientSettingsSync(): () => void {
     }, LOCAL_CHANGE_DELAY_MS);
   };
   const unsubscribes = [
-    appAtomRegistry.subscribe(primaryServerConfigAtom, runner.requestSync),
+    appAtomRegistry.subscribe(environmentServerConfigsAtom, runner.requestSync),
+    appAtomRegistry.subscribe(environmentSummaries.connectedEnvironmentIdsAtom, runner.requestSync),
     subscribeClientSettingsHydration(runner.requestSync),
     subscribeClientSettings(onLocalChange),
     subscribeRenderedAppearance(onLocalChange),

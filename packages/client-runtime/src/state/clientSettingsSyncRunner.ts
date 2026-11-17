@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 import type { SyncedClientSettings } from "@t3tools/contracts/settings";
 
 import {
@@ -17,16 +17,34 @@ export interface SettingsSyncPrompt {
   readonly conflicts: ReadonlyArray<ClientSettingsSyncConflict>;
 }
 
-/** What a client provides so its settings sync through one server. */
+export interface ClientSettingsSyncTarget {
+  readonly environmentId: EnvironmentId;
+  readonly remote: SyncedClientSettings;
+}
+
+/**
+ * Every connected server whose config has loaded. A disconnected server's config is only a cache,
+ * and without a config the default revision 0 would read as an empty server.
+ */
+export function settingsSyncTargets(
+  connected: ReadonlyArray<EnvironmentId>,
+  configs: ReadonlyMap<EnvironmentId, Pick<ServerConfig, "settings">>,
+): ReadonlyArray<ClientSettingsSyncTarget> {
+  return connected.flatMap((environmentId) => {
+    const config = configs.get(environmentId);
+    return config === undefined
+      ? []
+      : [{ environmentId, remote: config.settings.syncedClientSettings }];
+  });
+}
+
+/** What a client provides so its settings sync through every server it is connected to. */
 export interface ClientSettingsSyncAdapter {
   /** False until this device's own settings have loaded. */
   readonly isReady: () => boolean;
   readonly isEnabled: () => boolean;
-  /** The server this device syncs through and its copy, or null while unknown. */
-  readonly target: () => {
-    readonly environmentId: EnvironmentId;
-    readonly remote: SyncedClientSettings;
-  } | null;
+  /** Each connected server whose copy has loaded. */
+  readonly targets: () => ReadonlyArray<ClientSettingsSyncTarget>;
   readonly readLocal: () => SyncedValues;
   /** Applies only the values the merge changed, so edits made meanwhile survive. */
   readonly applyLocal: (changed: SyncedValues) => Promise<void>;
@@ -50,9 +68,9 @@ export interface ClientSettingsSyncRunner {
   readonly requestSync: () => Promise<void>;
   readonly getPrompt: () => SettingsSyncPrompt | null;
   readonly subscribePrompt: (listener: () => void) => () => void;
-  /** Applies the user's side for every conflict and syncs. */
+  /** Applies the user's side for every conflict of the shown prompt and syncs. */
   readonly resolvePrompt: (choices: Readonly<Record<string, ClientSettingsSyncChoice>>) => void;
-  /** Hides the prompt until the app restarts; nothing syncs until then. */
+  /** Hides the prompt until the app restarts; its server does not sync until then. */
   readonly deferPrompt: () => void;
 }
 
@@ -61,8 +79,11 @@ export function createClientSettingsSyncRunner(
 ): ClientSettingsSyncRunner {
   let prompt: SettingsSyncPrompt | null = null;
   let lastIgnoredWrite: string | null = null;
-  let promptDeferred = false;
-  let choices: Readonly<Record<string, ClientSettingsSyncChoice>> | null = null;
+  const deferred = new Set<EnvironmentId>();
+  let choices: {
+    readonly environmentId: EnvironmentId;
+    readonly values: Readonly<Record<string, ClientSettingsSyncChoice>>;
+  } | null = null;
   const promptListeners = new Set<() => void>();
 
   const setPrompt = (next: SettingsSyncPrompt | null) => {
@@ -90,17 +111,11 @@ export function createClientSettingsSyncRunner(
     }
   };
 
-  const syncOnce = async () => {
-    if (!adapter.isReady()) return;
-    if (!adapter.isEnabled()) {
-      // Turning sync back on asks again even after "Decide later".
-      promptDeferred = false;
-      setPrompt(null);
-      return;
-    }
-    const target = adapter.target();
-    if (promptDeferred || target === null) return;
-    const { environmentId, remote } = target;
+  /** False when this server's conflicts need the user, which leaves it unsynced for now. */
+  const syncTarget = async (
+    { environmentId, remote }: ClientSettingsSyncTarget,
+    mayPrompt: boolean,
+  ) => {
     const local = adapter.readLocal();
     const base = await adapter.readBase(environmentId);
     // Keys this client does not have are not its opinion, so they cannot make it out of date.
@@ -110,12 +125,16 @@ export function createClientSettingsSyncRunner(
         syncedValuesEqual({ value }, { value: base.values[key] }),
       )
     ) {
-      return;
+      return true;
     }
 
     const plan = planClientSettingsSync({ local, base, remote });
-    const resolved = resolveClientSettingsSync(plan, choices ?? {});
+    const resolved = resolveClientSettingsSync(
+      plan,
+      choices?.environmentId === environmentId ? choices.values : {},
+    );
     if (resolved === undefined) {
+      if (!mayPrompt) return false;
       const firstSetup = base === null;
       if (
         prompt?.environmentId !== environmentId ||
@@ -124,10 +143,9 @@ export function createClientSettingsSyncRunner(
       ) {
         setPrompt({ environmentId, firstSetup, conflicts: plan.conflicts });
       }
-      return;
+      return false;
     }
-    choices = null;
-    setPrompt(null);
+    if (choices?.environmentId === environmentId) choices = null;
     if (!syncedValuesEqual(resolved, local)) {
       await adapter.applyLocal(
         Object.fromEntries(
@@ -139,9 +157,31 @@ export function createClientSettingsSyncRunner(
     }
     if (syncedValuesEqual(resolved, remote.values)) {
       await adapter.writeBase(environmentId, remote);
+    } else {
+      await writeRemote(environmentId, remote, resolved);
+    }
+    return true;
+  };
+
+  const syncOnce = async () => {
+    if (!adapter.isReady()) return;
+    if (!adapter.isEnabled()) {
+      // Turning sync back on asks again even after "Decide later".
+      deferred.clear();
+      setPrompt(null);
       return;
     }
-    await writeRemote(environmentId, remote, resolved);
+    const targets = adapter.targets().filter((target) => !deferred.has(target.environmentId));
+    // One prompt at a time, and the one on screen keeps its place; other servers still sync.
+    const ordered = [
+      ...targets.filter((target) => target.environmentId === prompt?.environmentId),
+      ...targets.filter((target) => target.environmentId !== prompt?.environmentId),
+    ];
+    let prompted = false;
+    for (const target of ordered) {
+      if (!(await syncTarget(target, !prompted))) prompted = true;
+    }
+    if (!prompted) setPrompt(null);
   };
 
   let running: Promise<void> | null = null;
@@ -175,14 +215,14 @@ export function createClientSettingsSyncRunner(
       return () => promptListeners.delete(listener);
     },
     resolvePrompt: (nextChoices) => {
-      choices = nextChoices;
-      promptDeferred = false;
+      if (prompt !== null) choices = { environmentId: prompt.environmentId, values: nextChoices };
       setPrompt(null);
       void requestSync();
     },
     deferPrompt: () => {
-      promptDeferred = true;
+      if (prompt !== null) deferred.add(prompt.environmentId);
       setPrompt(null);
+      void requestSync();
     },
   };
 }

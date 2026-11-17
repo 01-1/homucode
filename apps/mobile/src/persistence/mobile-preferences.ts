@@ -164,8 +164,6 @@ export interface Preferences {
   readonly workspaceSelections?: WorkspaceSelections;
   /** Unset means on, as on web and desktop. */
   readonly settingsSyncEnabled?: boolean;
-  /** The server settings sync through; kept so the choice does not move between servers. */
-  readonly settingsSyncEnvironmentId?: string;
   /** Per server, the synced copy this phone last agreed with. */
   readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
   /** The synced theme last applied and the phone themes it became. */
@@ -258,7 +256,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
     settingsSyncEnabled?: boolean;
-    settingsSyncEnvironmentId?: string;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
   } = {};
@@ -414,9 +411,6 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.settingsSyncEnabled === "boolean") {
     preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
-  }
-  if (typeof parsed.settingsSyncEnvironmentId === "string") {
-    preferences.settingsSyncEnvironmentId = parsed.settingsSyncEnvironmentId;
   }
   if (isSettingsSyncBases(parsed.settingsSyncBases)) {
     preferences.settingsSyncBases = parsed.settingsSyncBases;

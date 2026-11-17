@@ -12,6 +12,7 @@ import {
   useSettingsSyncPrompt,
 } from "../settingsSync";
 import { updateClientSettings } from "../hooks/useSettings";
+import { useEnvironment } from "../state/environments";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -28,11 +29,15 @@ export function SettingsSyncDialogHost() {
   const prompt = useSettingsSyncPrompt();
   // Keyed so a new prompt starts from fresh choices.
   return prompt ? (
-    <SettingsSyncDialog key={prompt.conflicts.map(({ key }) => key).join()} prompt={prompt} />
+    <SettingsSyncDialog
+      key={[prompt.environmentId, ...prompt.conflicts.map(({ key }) => key)].join()}
+      prompt={prompt}
+    />
   ) : null;
 }
 
 function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
+  const server = useEnvironment(prompt.environmentId)?.label ?? "your server";
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
   );
@@ -53,8 +58,8 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
           </DialogTitle>
           <DialogDescription>
             {prompt.firstSetup
-              ? "This device's settings differ from the ones synced through your server. Choose which value to keep for each."
-              : "These settings changed on this device and on another one since they last synced. Choose which value to keep for each."}
+              ? `This device's settings differ from the ones synced through ${server}. Choose which value to keep for each.`
+              : `These settings changed on this device and through ${server} since they last synced. Choose which value to keep for each.`}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>

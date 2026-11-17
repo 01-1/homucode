@@ -1,15 +1,15 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-import { createClientSettingsSyncRunner } from "@t3tools/client-runtime/state/client-settings-sync-runner";
+import {
+  createClientSettingsSyncRunner,
+  settingsSyncTargets,
+} from "@t3tools/client-runtime/state/client-settings-sync-runner";
 import {
   isAtomCommandInterrupted,
   runAtomCommand,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
 import { AsyncResult } from "effect/reactivity";
 import { useSyncExternalStore } from "react";
 
-import { environmentCatalog } from "../../connection/catalog";
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
@@ -17,7 +17,6 @@ import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import {
   mobilePreferencesPatchFromSyncedValues,
-  pickSettingsSyncEnvironment,
   syncedValuesFromMobilePreferences,
 } from "./settingsSyncValues";
 
@@ -32,29 +31,14 @@ function savePreferences(transform: (current: Preferences) => Partial<Preference
   appAtomRegistry.set(updateMobilePreferencesAtom, { transform });
 }
 
-function syncEnvironmentId(preferences: Preferences): EnvironmentId | null {
-  return pickSettingsSyncEnvironment(
-    [...enabledEnvironmentIds(appAtomRegistry.get(environmentCatalog.catalogValueAtom))],
-    appAtomRegistry.get(connectedEnvironmentIdsAtom),
-    preferences.settingsSyncEnvironmentId,
-  );
-}
-
 const runner = createClientSettingsSyncRunner({
   isReady: () => readPreferences() !== null,
   isEnabled: () => readPreferences()?.settingsSyncEnabled !== false,
-  target: () => {
-    const preferences = readPreferences();
-    if (preferences === null) return null;
-    const environmentId = syncEnvironmentId(preferences);
-    const config =
-      environmentId === null
-        ? undefined
-        : appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
-    // Without the loaded config the default revision 0 would read as an empty server.
-    if (environmentId === null || config === undefined) return null;
-    return { environmentId, remote: config.settings.syncedClientSettings };
-  },
+  targets: () =>
+    settingsSyncTargets(
+      appAtomRegistry.get(connectedEnvironmentIdsAtom),
+      appAtomRegistry.get(environmentServerConfigsAtom),
+    ),
   readLocal: () => syncedValuesFromMobilePreferences(readPreferences() ?? {}),
   applyLocal: async (changed) => {
     const preferences = readPreferences();
@@ -66,7 +50,6 @@ const runner = createClientSettingsSyncRunner({
   readBase: (environmentId) => readPreferences()?.settingsSyncBases?.[environmentId] ?? null,
   writeBase: (environmentId, base) => {
     savePreferences((current) => ({
-      settingsSyncEnvironmentId: environmentId,
       settingsSyncBases: { ...current.settingsSyncBases, [environmentId]: base },
     }));
   },
@@ -97,14 +80,18 @@ export const resolveSettingsSyncPrompt = runner.resolvePrompt;
 export const deferSettingsSyncPrompt = runner.deferPrompt;
 
 let sheetOpen = false;
+let openSheetForPrompt: (() => void) | null = null;
 
 /** Tracks the conflict sheet, so a changed prompt does not open a second one. */
 export function setSettingsSyncSheetOpen(open: boolean): void {
   sheetOpen = open;
+  // The next server's prompt can arrive while the answered sheet is still closing.
+  if (!open && runner.getPrompt() !== null) openSheetForPrompt?.();
 }
 
-/** Syncs the phone's settings through one paired server while sync is on. */
+/** Syncs the phone's settings with every connected server while sync is on. */
 export function installClientSettingsSync(openSheet: () => void): () => void {
+  openSheetForPrompt = openSheet;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   const onLocalChange = () => {
     if (localTimer !== null) clearTimeout(localTimer);
@@ -123,6 +110,7 @@ export function installClientSettingsSync(openSheet: () => void): () => void {
   ];
   runner.requestSync();
   return () => {
+    openSheetForPrompt = null;
     if (localTimer !== null) clearTimeout(localTimer);
     for (const unsubscribe of unsubscribes) unsubscribe();
   };
