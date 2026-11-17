@@ -30,7 +30,7 @@ export class AppScripts extends Context.Service<
       input: AppScriptLoadInput,
     ) => Effect.Effect<AppScriptLoadResult, AppScriptLoadError>;
   }
->()("t3/appScripts/AppScripts") {}
+>()("t3/appScripts") {}
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;

@@ -81,7 +81,7 @@ interface T3App {
   openThread(threadId: string): Promise<void>;
   /** Opens a new-thread composer for a project, by id or folder path. */
   newThread(project: string, options?: T3NewThreadOptions): Promise<void>;
-  /** Sends a message to a thread. A busy thread gets it next, as with the send button. */
+  /** Sends a message to a thread. A busy thread queues it until its current turn ends. */
   send(threadId: string, text: string): Promise<void>;
   /** Shows a short notice in the window. */
   toast(title: string, description?: string): void;

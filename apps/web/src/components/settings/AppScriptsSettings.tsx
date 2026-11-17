@@ -55,9 +55,16 @@ export function AppScriptsSettingsSection() {
       <SettingsRow
         {...searchableSetting("app-scripts-terminal")}
         description={
-          isElectron
-            ? "Also let `t3 app run <name|file.ts>` run scripts in this window from a terminal on this machine."
-            : "`t3 app run` needs the desktop app."
+          isElectron ? (
+            <>
+              Also let <code>t3 app run &lt;name|file.ts&gt;</code> run scripts in this window from
+              a terminal on this machine.
+            </>
+          ) : (
+            <>
+              <code>t3 app run</code> needs the desktop app.
+            </>
+          )
         }
         control={
           <Switch
@@ -75,7 +82,13 @@ export function AppScriptsSettingsSection() {
       />
       <SettingsRow
         {...searchableSetting("app-scripts-agents")}
-        description="Also accept `t3 app run` from an agent's shell. A guard against mistakes, not a sandbox: an agent that hides its thread marker or edits settings files can get past it."
+        description={
+          <>
+            Also accept <code>t3 app run</code> from an agent&apos;s shell. A guard against
+            mistakes, not a sandbox: an agent that hides its thread marker or edits settings files
+            can get past it.
+          </>
+        }
         control={
           <Switch
             checked={

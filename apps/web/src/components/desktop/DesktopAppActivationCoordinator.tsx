@@ -22,6 +22,13 @@ export function DesktopAppActivationCoordinator() {
 
     let subscribed = true;
     const unsubscribe = activation.onRequest((request) => {
+      // A script that never settles must not hold up opening projects or later scripts.
+      if (request.type === "run-script") {
+        void processRequest(request)
+          .then((response) => activation.complete(response))
+          .catch(() => undefined);
+        return;
+      }
       queueRef.current = queueRef.current.then(async () => {
         const response = await processRequest(request);
         await activation.complete(response);

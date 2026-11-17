@@ -7,6 +7,7 @@ import {
   type DesktopAppRunScriptRequest,
 } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
+import * as Schema from "effect/Schema";
 
 import { toastManager } from "~/components/ui/toast";
 import { isElectron } from "../env";
@@ -18,7 +19,14 @@ import { serverEnvironment } from "../state/server";
 import { createAppScriptApi, type T3App } from "./appScriptApi";
 import { appScriptNameFromCommand, appScriptOutput, isLocalAppWindow } from "./appScripts.logic";
 
-class AppScriptRefusedError extends Error {}
+class AppScriptRefusedError extends Schema.TaggedError<AppScriptRefusedError>()(
+  "AppScriptRefusedError",
+  { reason: Schema.String },
+) {
+  override get message(): string {
+    return this.reason;
+  }
+}
 
 let api: T3App | null = null;
 
@@ -43,16 +51,22 @@ async function runAppScript(input: {
   readonly source: AppScriptRunSource;
   readonly fromAgent: boolean;
 }): Promise<string | null> {
-  const refusal = appScriptRunRefusal(getClientSettings(), input);
-  if (refusal !== null) throw new AppScriptRefusedError(refusal);
-  if (!isLocalAppWindow({ electron: isElectron, hostname: window.location.hostname })) {
-    throw new AppScriptRefusedError(
-      "App scripts run only in the desktop app or in a browser on the same machine as T3 Code.",
-    );
-  }
+  // Checked again after loading: the settings can change while the script is fetched.
+  const ensureAllowed = () => {
+    const refusal = appScriptRunRefusal(getClientSettings(), input);
+    if (refusal !== null) throw new AppScriptRefusedError({ reason: refusal });
+    if (!isLocalAppWindow({ electron: isElectron, hostname: window.location.hostname })) {
+      throw new AppScriptRefusedError({
+        reason:
+          "App scripts run only in the desktop app or in a browser on the same machine as T3 Code.",
+      });
+    }
+  };
+  ensureAllowed();
   if (api === null) throw new Error("T3 Code is still starting.");
   const code =
     input.script.kind === "name" ? await loadNamedScript(input.script.name) : input.script.code;
+  ensureAllowed();
   const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
   let module: { readonly default?: unknown };
   try {

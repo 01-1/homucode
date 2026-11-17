@@ -200,6 +200,7 @@ export function createAppScriptApi(router: AnyRouter): T3App {
           message: { messageId: newMessageId(), role: "user", text, attachments: [] },
           runtimeMode: thread.runtimeMode,
           interactionMode: thread.interactionMode,
+          dispatchMode: "queue",
         },
       });
       if (result._tag === "Failure") throw squashAtomCommandFailure(result);
