@@ -1828,6 +1828,10 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId }) => environmentId,
       },
     }),
+    loadAppScript: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:load-app-script",
+      tag: WS_METHODS.serverLoadAppScript,
+    }),
     checkOtlpEndpoint: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:check-otlp-endpoint",
       tag: WS_METHODS.serverCheckOtlpEndpoint,

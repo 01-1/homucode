@@ -625,6 +625,10 @@ export const ClientSettingsSchema = Schema.Struct({
   mathRenderingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Device-local: sync these settings through the primary server.
   settingsSyncEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Device-local and never synced: each gate lets code run in this window.
+  appScriptsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  appScriptsFromTerminal: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  appScriptsFromAgents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -2284,5 +2288,8 @@ export const ClientSettingsPatch = Schema.Struct({
   wordWrap: Schema.optionalKey(Schema.Boolean),
   mathRenderingEnabled: Schema.optionalKey(Schema.Boolean),
   settingsSyncEnabled: Schema.optionalKey(Schema.Boolean),
+  appScriptsEnabled: Schema.optionalKey(Schema.Boolean),
+  appScriptsFromTerminal: Schema.optionalKey(Schema.Boolean),
+  appScriptsFromAgents: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

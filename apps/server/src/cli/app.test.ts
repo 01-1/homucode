@@ -298,10 +298,11 @@ describe("t3 app", () => {
         yield* runCli(["app"], { T3CODE_HOME: baseDir });
         yield* runCli(["app", explicitPath, "--base-dir", baseDir]);
 
-        expect(desktop.received.map((request) => request.workspaceRoot)).toEqual([
-          workingDirectory,
-          explicitPath,
-        ]);
+        expect(
+          desktop.received.map((request) =>
+            request.type === "open-workspace" ? request.workspaceRoot : null,
+          ),
+        ).toEqual([workingDirectory, explicitPath]);
         expect(desktop.received.every((request) => request.platform === platform)).toBe(true);
       }).pipe(Effect.scoped),
     ),
@@ -399,5 +400,73 @@ describe("t3 app", () => {
           }
         }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
       ),
+  );
+  it.effect("sends a script name, or a file's code with its types stripped", () =>
+    withTempDirectory("t3-app-run-test-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, ".t3");
+        const scriptPath = NodePath.join(root, "hello.ts");
+        yield* Effect.promise(() =>
+          NodeFSP.writeFile(scriptPath, "export default (t3: T3App): string => 'hi';"),
+        );
+        const desktop = yield* fakeDesktop({
+          baseDir,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: true,
+            output: '"hi"',
+          }),
+        });
+
+        yield* runCli(["app", "run", "open-inbox"]);
+        yield* runCli(["app", "run", scriptPath], { T3CODE_THREAD_ID: "thread-agent" });
+
+        expect(desktop.received.map((request) => request.type)).toEqual([
+          "run-script",
+          "run-script",
+        ]);
+        const [byName, byFile] = desktop.received;
+        assert(byName?.type === "run-script" && byFile?.type === "run-script");
+        expect(byName.script).toEqual({ kind: "name", name: "open-inbox" });
+        expect(byName.agentThreadId).toBeUndefined();
+        expect(byFile.script).toMatchObject({ kind: "code", label: "hello.ts" });
+        assert(byFile.script.kind === "code");
+        expect(byFile.script.code).not.toContain("T3App");
+        expect(byFile.script.code).toContain("'hi'");
+        expect(byFile.agentThreadId).toBe("thread-agent");
+      }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
+    ),
+  );
+
+  it.effect("reports a refused script without sending a file it cannot read", () =>
+    withTempDirectory("t3-app-run-refused-test-", (root) =>
+      Effect.gen(function* () {
+        const baseDir = NodePath.join(root, ".t3");
+        const desktop = yield* fakeDesktop({
+          baseDir,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: false,
+            code: "scripts-disabled",
+            message: "App scripts are off.",
+          }),
+        });
+
+        const refused = yield* runCli(["app", "run", "open-inbox"]).pipe(Effect.flip);
+        const missing = yield* runCli(["app", "run", NodePath.join(root, "nope.ts")]).pipe(
+          Effect.flip,
+        );
+
+        expect(refused).toMatchObject({
+          _tag: "DesktopAppScriptFailedError",
+          code: "scripts-disabled",
+          message: "open-inbox: App scripts are off.",
+        });
+        expect(missing).toMatchObject({ _tag: "AppScriptLoadError", reason: "not-found" });
+        expect(desktop.received).toHaveLength(1);
+      }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
+    ),
   );
 });

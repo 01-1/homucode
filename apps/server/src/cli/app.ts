@@ -5,8 +5,11 @@ import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 
 import {
+  AppScriptLoadError,
+  AppScriptName,
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
   DesktopAppActivationErrorCode,
+  MAX_APP_SCRIPT_SOURCE_BYTES,
   DesktopAppActivationResponse,
   type DesktopAppActivationPlatform,
   type DesktopAppActivationRequest,
@@ -20,17 +23,20 @@ import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Argument, Command } from "effect/cli";
 
+import { stripAppScriptTypes } from "../appScripts.ts";
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
 
 const CLI_RESPONSE_TIMEOUT_MS = 17_000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const isDesktopAppActivationResponse = Schema.is(DesktopAppActivationResponse);
+const isAppScriptName = Schema.is(AppScriptName);
 
 export class DesktopAppSshUnsupportedError extends Schema.TaggedError<DesktopAppSshUnsupportedError>()(
   "DesktopAppSshUnsupportedError",
@@ -75,6 +81,20 @@ export class DesktopAppRequestFailedError extends Schema.TaggedError<DesktopAppR
 ) {
   override get message(): string {
     return `T3 Code could not open ${this.workspaceRoot} (${this.code}).`;
+  }
+}
+
+export class DesktopAppScriptFailedError extends Schema.TaggedError<DesktopAppScriptFailedError>()(
+  "DesktopAppScriptFailedError",
+  {
+    code: DesktopAppActivationErrorCode,
+    requestId: Schema.String,
+    script: Schema.String,
+    detail: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `${this.script}: ${this.detail}`;
   }
 }
 
@@ -195,11 +215,25 @@ const appEnvironment = Config.all({
   t3Home: Config.String("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
   sshConnection: Config.String("SSH_CONNECTION").pipe(Config.option),
   sshTty: Config.String("SSH_TTY").pipe(Config.option),
+  // Agents' shells carry their thread id; the integrated terminal strips it.
+  agentThreadId: Config.String("T3CODE_THREAD_ID").pipe(
+    Config.option,
+    Config.map((value) => Option.getOrUndefined(value)?.trim() || undefined),
+  ),
 });
 
-const runAppCommand = Effect.fn("cli.app")(function* (flags: {
+/** Finds this machine's desktop app and sends it one request. */
+const sendToDesktopApp = Effect.fn("cli.app.send")(function* (input: {
   readonly baseDir: Option.Option<string>;
-  readonly workspaceRoot: Option.Option<string>;
+  readonly workspaceRoot: string;
+  readonly makeRequest: (
+    base: {
+      readonly version: typeof DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION;
+      readonly requestId: string;
+      readonly platform: DesktopAppActivationPlatform;
+    },
+    caller: { readonly agentThreadId: string | undefined },
+  ) => DesktopAppActivationRequest;
 }) {
   const environment = yield* appEnvironment;
   const hostPlatform = yield* HostProcess.Platform;
@@ -211,12 +245,9 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   }
 
   const path = yield* Path.Path;
-  const configuredBaseDir = Option.getOrUndefined(flags.baseDir) ?? environment.t3Home;
+  const configuredBaseDir = Option.getOrUndefined(input.baseDir) ?? environment.t3Home;
   const baseDir = yield* resolveBaseDir(configuredBaseDir);
-  const allowDevFallback = Option.isNone(flags.baseDir) && !environment.t3Home?.trim();
-  const rawWorkspaceRoot =
-    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
-  const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
+  const allowDevFallback = Option.isNone(input.baseDir) && !environment.t3Home?.trim();
   const userId = yield* HostProcess.UserId;
   const resolveAddress = (stateSubdirectory: "userdata" | "dev") =>
     resolveDesktopAppControlAddress({
@@ -228,13 +259,10 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     });
   const random = yield* SecureRandom.SecureRandom;
   const requestId = yield* random.uuidV4();
-  const request: DesktopAppActivationRequest = {
-    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-    requestId,
-    type: "open-workspace",
-    workspaceRoot,
-    platform: hostPlatform,
-  };
+  const request = input.makeRequest(
+    { version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION, requestId, platform: hostPlatform },
+    { agentThreadId: environment.agentThreadId },
+  );
   const address = resolveAddress("userdata");
   const fallbackAddress = allowDevFallback ? resolveAddress("dev") : undefined;
 
@@ -253,9 +281,25 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
             ? [address.address]
             : [address.address, fallbackAddress.address],
         requestId: request.requestId,
-        workspaceRoot,
+        workspaceRoot: input.workspaceRoot,
         cause,
       }),
+  });
+  return response;
+});
+
+const runAppCommand = Effect.fn("cli.app")(function* (flags: {
+  readonly baseDir: Option.Option<string>;
+  readonly workspaceRoot: Option.Option<string>;
+}) {
+  const path = yield* Path.Path;
+  const rawWorkspaceRoot =
+    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
+  const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
+  const response = yield* sendToDesktopApp({
+    baseDir: flags.baseDir,
+    workspaceRoot,
+    makeRequest: (base) => ({ ...base, type: "open-workspace", workspaceRoot }),
   });
   if (!response.ok) {
     return yield* new DesktopAppRequestFailedError({
@@ -269,6 +313,81 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   yield* Console.log(`Opened ${workspaceRoot} in T3 Code.`);
 });
 
+/** A bare name runs `<T3 home>/userdata/scripts/<name>.ts` in the app; anything else is a file. */
+const readScriptArgument = Effect.fn("cli.app.run.readScript")(function* (argument: string) {
+  if (isAppScriptName(argument)) {
+    return { kind: "name", name: argument } as const;
+  }
+  const path = yield* Path.Path;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const scriptPath = path.resolve(yield* expandHomePath(argument));
+  const failure = (reason: AppScriptLoadError["reason"], detail?: string) =>
+    new AppScriptLoadError({
+      reason,
+      path: scriptPath,
+      ...(detail === undefined ? {} : { detail }),
+    });
+  const info = yield* fileSystem
+    .stat(scriptPath)
+    .pipe(
+      Effect.mapError((error) =>
+        failure(error.reason._tag === "NotFound" ? "not-found" : "read-failed"),
+      ),
+    );
+  if (info.type !== "File") return yield* failure("not-found");
+  if (Number(info.size) > MAX_APP_SCRIPT_SOURCE_BYTES) return yield* failure("too-large");
+  const source = yield* fileSystem
+    .readFileString(scriptPath)
+    .pipe(Effect.mapError(() => failure("read-failed")));
+  const code = yield* Effect.try({
+    try: () => stripAppScriptTypes(source),
+    catch: (cause) =>
+      failure("invalid-typescript", cause instanceof Error ? cause.message : String(cause)),
+  });
+  return { kind: "code", label: path.basename(scriptPath), code } as const;
+});
+
+const runAppScriptCommand = Effect.fn("cli.app.run")(function* (flags: {
+  readonly baseDir: Option.Option<string>;
+  readonly script: string;
+}) {
+  const script = yield* readScriptArgument(flags.script);
+  const label = script.kind === "name" ? script.name : script.label;
+  const response = yield* sendToDesktopApp({
+    baseDir: flags.baseDir,
+    workspaceRoot: label,
+    makeRequest: (base, { agentThreadId }) => ({
+      ...base,
+      type: "run-script",
+      script,
+      ...(agentThreadId === undefined ? {} : { agentThreadId }),
+    }),
+  });
+  if (!response.ok) {
+    return yield* new DesktopAppScriptFailedError({
+      code: response.code,
+      requestId: response.requestId,
+      script: label,
+      detail: response.message,
+    });
+  }
+  if ("output" in response && response.output !== null) yield* Console.log(response.output);
+});
+
+const appRunCommand = Command.make("run", {
+  baseDir: baseDirFlag,
+  script: Argument.String("script").pipe(
+    Argument.withDescription(
+      "A script name from the scripts folder in T3 Code's data folder, or a .ts file path.",
+    ),
+  ),
+}).pipe(
+  Command.withDescription(
+    "Run an app script in the T3 Code desktop window. Off unless enabled in Settings → Labs → App scripts.",
+  ),
+  Command.withHandler(runAppScriptCommand),
+);
+
 export const appCommand = Command.make("app", {
   baseDir: baseDirFlag,
   workspaceRoot: Argument.String("path").pipe(
@@ -278,4 +397,5 @@ export const appCommand = Command.make("app", {
 }).pipe(
   Command.withDescription("Open a project in the running T3 Code desktop app."),
   Command.withHandler(runAppCommand),
+  Command.withSubcommands([appRunCommand]),
 );

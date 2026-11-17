@@ -115,7 +115,8 @@ Invalid rules are ignored; if the file cannot be parsed, T3 Code uses defaults.
 Each rule requires a `key` shortcut and a `command` ID. An optional `when`
 expression restricts when it runs.
 
-Project scripts use `script.{id}.run`, such as `script.test.run`.
+Project scripts use `script.{id}.run`, such as `script.test.run`. [App scripts](./app-scripts.md)
+use `user.{name}.run` and are off until you turn them on.
 
 Custom scripts use `bash:{command}`, such as `bash:npm test`. The command runs in
 a new terminal in the thread's checkout or worktree, on the thread's machine,

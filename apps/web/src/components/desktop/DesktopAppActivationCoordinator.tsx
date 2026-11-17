@@ -1,6 +1,7 @@
 import type { DesktopAppActivationRequest } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useRef } from "react";
 
+import { handleRunScriptRequest } from "../../appScripts/appScripts";
 import { useOpenLocalWorkspace } from "../../hooks/useOpenLocalWorkspace";
 
 export function DesktopAppActivationCoordinator() {
@@ -10,7 +11,9 @@ export function DesktopAppActivationCoordinator() {
   const ready = activation !== undefined && openLocalWorkspace.ready;
 
   const processRequest = useEffectEvent(async (request: DesktopAppActivationRequest) =>
-    openLocalWorkspace.open(request),
+    request.type === "run-script"
+      ? handleRunScriptRequest(request)
+      : openLocalWorkspace.open(request),
   );
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to desktop activation requests over the bridge and marks the renderer ready
@@ -19,6 +22,13 @@ export function DesktopAppActivationCoordinator() {
 
     let subscribed = true;
     const unsubscribe = activation.onRequest((request) => {
+      // A script that never settles must not hold up opening projects or later scripts.
+      if (request.type === "run-script") {
+        void processRequest(request)
+          .then((response) => activation.complete(response))
+          .catch(() => undefined);
+        return;
+      }
       queueRef.current = queueRef.current.then(async () => {
         const response = await processRequest(request);
         await activation.complete(response);

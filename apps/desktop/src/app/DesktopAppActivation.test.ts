@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import {
+  DEFAULT_CLIENT_SETTINGS,
   ProjectId,
   ThreadId,
   type DesktopAppActivationRequest,
@@ -16,7 +17,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect } from "vite-plus/test";
 
-import { startDesktopAppControlServer } from "./DesktopAppActivation.ts";
+import { gateControlRequest, startDesktopAppControlServer } from "./DesktopAppActivation.ts";
 
 const openServers: Array<{ close: () => Promise<void> }> = [];
 
@@ -63,7 +64,7 @@ function startOkServer(target: ReturnType<typeof makeTarget>, userId: number | u
   });
 }
 
-function exchange(address: string, payload: DesktopAppActivationRequest) {
+function exchange(address: string, payload: DesktopAppActivationRequest | object) {
   return new Promise<DesktopAppActivationResponse>((resolve, reject) => {
     const socket = NodeNet.createConnection(address);
     socket.setEncoding("utf8");
@@ -159,6 +160,96 @@ describe("desktop app control server", () => {
           ok: true,
           requestId: "reclaimed",
         });
+        await NodeFSP.rm(root, { recursive: true, force: true });
+      });
+    }),
+  );
+});
+
+describe("app script gate", () => {
+  const scriptRequest = (agentThreadId?: string): DesktopAppActivationRequest => ({
+    version: 1,
+    requestId: "script-1",
+    type: "run-script",
+    platform: "linux",
+    script: { kind: "name", name: "open-inbox" },
+    ...(agentThreadId === undefined ? {} : { agentThreadId }),
+  });
+  const forwarded: DesktopAppActivationRequest[] = [];
+  const gate = (settings: Partial<typeof DEFAULT_CLIENT_SETTINGS> | null) =>
+    gateControlRequest({
+      readSettings: async () =>
+        settings === null ? null : { ...DEFAULT_CLIENT_SETTINGS, ...settings },
+      forward: async (input) => {
+        forwarded.push(input);
+        return { version: 1, requestId: input.requestId, ok: true, output: null };
+      },
+    });
+
+  it.each([
+    ["unreadable settings", null, undefined, false],
+    ["default settings", {}, undefined, false],
+    ["scripts on, terminal off", { appScriptsEnabled: true }, undefined, false],
+    ["terminal on", { appScriptsEnabled: true, appScriptsFromTerminal: true }, undefined, true],
+    [
+      "terminal on, agent caller",
+      { appScriptsEnabled: true, appScriptsFromTerminal: true },
+      "thread-agent",
+      false,
+    ],
+    [
+      "agents allowed",
+      { appScriptsEnabled: true, appScriptsFromTerminal: true, appScriptsFromAgents: true },
+      "thread-agent",
+      true,
+    ],
+  ] as const)("%s", async (_name, settings, agentThreadId, allowed) => {
+    forwarded.length = 0;
+    const response = await gate(settings)(scriptRequest(agentThreadId));
+    expect(response.ok).toBe(allowed);
+    expect(forwarded).toHaveLength(allowed ? 1 : 0);
+    if (!allowed) expect(response).toMatchObject({ code: "scripts-disabled" });
+  });
+
+  it("always forwards opening a project", async () => {
+    forwarded.length = 0;
+    await gate({})(request("open-1", "linux"));
+    expect(forwarded.map((input) => input.type)).toEqual(["open-workspace"]);
+  });
+
+  it.effect("rejects a script name that could leave the scripts folder before handling it", () =>
+    Effect.gen(function* () {
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
+      yield* Effect.promise(async () => {
+        const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-script-test-"));
+        const target = makeTarget(NodePath.join(root, "userdata"), platform, userId);
+        const handled: string[] = [];
+        const server = await startDesktopAppControlServer({
+          ...target,
+          userId,
+          handle: async (input) => {
+            handled.push(input.requestId);
+            return { version: 1, requestId: input.requestId, ok: true, output: null };
+          },
+          cancel: () => undefined,
+          onReclaimError: () => undefined,
+        });
+        openServers.push(server);
+        const traversal = {
+          ...scriptRequest(),
+          requestId: "traversal",
+          script: { kind: "name", name: "../secrets" },
+        };
+
+        await expect(exchange(target.address, traversal)).resolves.toMatchObject({
+          ok: false,
+          code: "invalid-request",
+        });
+        await expect(
+          exchange(target.address, { ...scriptRequest(), requestId: "valid" }),
+        ).resolves.toMatchObject({ ok: true });
+        expect(handled).toEqual(["valid"]);
         await NodeFSP.rm(root, { recursive: true, force: true });
       });
     }),

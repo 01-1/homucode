@@ -417,6 +417,9 @@ export function commandLabel(command: KeybindingCommand): string {
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
     return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
   }
+  if (raw.startsWith("user.") && raw.endsWith(".run")) {
+    return `Run App Script: ${raw.slice("user.".length, -".run".length)}`;
+  }
   return raw.split(".").map(titleCaseCommandSegment).join(": ");
 }
 

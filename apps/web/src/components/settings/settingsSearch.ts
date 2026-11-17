@@ -589,6 +589,26 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta fast worktree checkout clone apfs copy-on-write cache macos speed"],
   },
   {
+    id: "app-scripts",
+    title: "App scripts",
+    to: "/settings/labs",
+    searchTerms: ["typescript user scripts automation macro keybinding run code window api"],
+  },
+  {
+    id: "app-scripts-terminal",
+    title: "Run app scripts from the terminal",
+    to: "/settings/labs",
+    desktopOnly: true,
+    searchTerms: ["t3 app run cli terminal command script automation"],
+  },
+  {
+    id: "app-scripts-agents",
+    title: "Let agents run app scripts",
+    to: "/settings/labs",
+    desktopOnly: true,
+    searchTerms: ["agent shell t3 app run allow scripts security"],
+  },
+  {
     id: "voice-transcription-destination",
     title: "Transcribe with",
     to: "/settings/voice",
