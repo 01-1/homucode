@@ -117,6 +117,14 @@ expression restricts when it runs.
 
 Project scripts use `script.{id}.run`, such as `script.test.run`.
 
+Custom scripts use `bash:{command}`, such as `bash:npm test`. The command runs in
+a new terminal in the thread's checkout or worktree, on the thread's machine,
+whatever project it is in. It is one line, up to 2048 characters. To add one in
+Settings → Keybindings, choose Add keybinding, press **Bash**, and type the
+command in place of picking one. Press **Bash** again to go back to the command
+list. A saved custom script's command stays editable in its row. The **TS**
+button is for TypeScript app scripts and is unavailable for now.
+
 ## Key syntax
 
 Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.

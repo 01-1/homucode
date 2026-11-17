@@ -8,9 +8,11 @@ import {
 import { resolveShortcutCommand } from "../../keybindings";
 
 import {
+  buildKeybindingCommandOptions,
   buildKeybindingRows,
   buildWhenVariableOptions,
   filterKeybindingCommandOptions,
+  groupKeybindingRows,
   keybindingConflictLabels,
   keybindingFromKeyboardEvent,
   parseWhenExpressionDraft,
@@ -72,6 +74,22 @@ describe("KeybindingsSettings.logic", () => {
     expect(buildKeybindingRows(bindings.slice(1)).map((row) => row.id)).toEqual(
       rows.map((row) => row.id),
     );
+  });
+
+  it("lists custom script bindings under their own group, removable but not offered as commands", () => {
+    const bindings = compileResolvedKeybindingsConfig([
+      { command: "bash:npm run build.prod", key: "mod+shift+b" },
+      { command: "script.test.run", key: "mod+shift+t" },
+    ]);
+    const rows = buildKeybindingRows(bindings);
+    const custom = rows.find((row) => row.command === "bash:npm run build.prod");
+    expect(custom).toMatchObject({ source: "Custom", defaultKey: null });
+    expect(groupKeybindingRows(rows).map((group) => group.title)).toEqual([
+      "Project scripts",
+      "Custom scripts",
+    ]);
+    expect(buildKeybindingCommandOptions(bindings)).toContain("script.test.run");
+    expect(buildKeybindingCommandOptions(bindings)).not.toContain("bash:npm run build.prod");
   });
 
   it("captures platform-specific mod shortcuts", () => {

@@ -207,7 +207,7 @@ import { shortcutLabelForCommand } from "../keybindings";
 import { cn } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { toastManager } from "./ui/toast";
-import { projectScriptIdFromCommand } from "~/projectScripts";
+import { customScriptFromCommand, projectScriptIdFromCommand } from "~/projectScripts";
 import { newMessageId } from "~/lib/utils";
 import {
   isInSideChatPane,
@@ -2825,8 +2825,24 @@ export default function ChatView(props: ChatViewProps) {
       },
     },
     fallback: (command) => {
+      if (!activeProject || !canOperateTerminal) return undefined;
+      const customScript = customScriptFromCommand(command);
+      if (customScript?.language === "bash") {
+        const script = {
+          id: "keybinding",
+          name: customScript.source,
+          command: customScript.source,
+          icon: "play",
+          runOnWorktreeCreate: false,
+        } as const;
+        return () =>
+          void runProjectScriptStable(script, {
+            rememberAsLastInvoked: false,
+            preferNewTerminal: true,
+          });
+      }
       const scriptId = projectScriptIdFromCommand(command);
-      if (!scriptId || !activeProject || !canOperateTerminal) return undefined;
+      if (!scriptId) return undefined;
       const script = activeProjectScripts.find((entry) => entry.id === scriptId);
       return script ? () => void runProjectScriptStable(script) : undefined;
     },

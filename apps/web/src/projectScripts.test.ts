@@ -4,9 +4,11 @@ import { settleProjectScript, setupProjectScript } from "@t3tools/shared/project
 
 import {
   commandForProjectScript,
+  commandForCustomScript,
   nextProjectScriptId,
   primaryProjectScript,
   releaseClaimedRoles,
+  customScriptFromCommand,
 } from "./projectScripts";
 
 describe("projectScripts helpers", () => {
@@ -22,6 +24,18 @@ describe("projectScripts helpers", () => {
       ]);
     },
   );
+
+  it("round-trips Bash custom scripts and rejects blank, multi-line, or not-yet-bindable ones", () => {
+    const bash = (source: string) => commandForCustomScript({ language: "bash", source });
+    expect(bash("  npm test ")).toBe("bash:npm test");
+    expect(customScriptFromCommand("bash:npm test")).toEqual({
+      language: "bash",
+      source: "npm test",
+    });
+    expect(["", "   ", "a\nb", "x".repeat(2049)].map(bash)).toEqual([null, null, null, null]);
+    expect(commandForCustomScript({ language: "ts", source: "console.log(1)" })).toBeNull();
+    expect(customScriptFromCommand("script.test.run")).toBeNull();
+  });
 
   it("slugifies and dedupes project script ids", () => {
     expect(nextProjectScriptId("Run Tests", [])).toBe("run-tests");

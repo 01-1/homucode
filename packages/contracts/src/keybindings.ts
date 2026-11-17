@@ -129,9 +129,23 @@ export const SCRIPT_RUN_COMMAND_PATTERN = Schema.TemplateLiteral([
   Schema.Literal(".run"),
 ]);
 
+const MAX_CUSTOM_SCRIPT_LENGTH = 2048;
+// Custom scripts store their language as the command prefix. `ts:` is reserved for app scripts.
+export const BASH_SCRIPT_COMMAND_PREFIX = "bash:";
+
+/** Runs the Bash command after the prefix in the thread's terminal, like a project action. */
+export const BASH_SCRIPT_COMMAND_PATTERN = Schema.TemplateLiteral([
+  Schema.Literal(BASH_SCRIPT_COMMAND_PREFIX),
+  Schema.String.check(
+    Schema.isMaxLength(MAX_CUSTOM_SCRIPT_LENGTH),
+    Schema.isPattern(/^[^\r\n]*\S[^\r\n]*$/),
+  ),
+]);
+
 export const KeybindingCommand = Schema.Union([
   Schema.Literals(STATIC_KEYBINDING_COMMANDS),
   SCRIPT_RUN_COMMAND_PATTERN,
+  BASH_SCRIPT_COMMAND_PATTERN,
 ]);
 export type KeybindingCommand = typeof KeybindingCommand.Type;
 

@@ -14,6 +14,7 @@ import {
 } from "@t3tools/shared/keybindings";
 
 import { shortcutConflictKey, shortcutKeyFromEvent } from "../../keybindings";
+import { customScriptFromCommand } from "../../projectScripts";
 import { isMacPlatform } from "../../lib/utils";
 import { METRIC_OPTIONS, WINDOW_OPTIONS } from "../usage/usageShortcuts";
 
@@ -220,11 +221,13 @@ const KEYBINDING_GROUPS = [
   { id: "preview", title: "Preview & diff", prefixes: ["preview", "diff"] },
   { id: "appearance", title: "Appearance", prefixes: ["theme", "appearance", "themeEditor"] },
   { id: "scripts", title: "Project scripts", prefixes: ["script"] },
+  { id: "custom-scripts", title: "Custom scripts", prefixes: ["custom"] },
 ] as const;
 const OTHER_KEYBINDING_GROUP = { id: "other", title: "Other" } as const;
 
 function keybindingGroupFor(command: KeybindingCommand): { id: string; title: string } {
-  const prefix = String(command).split(".")[0] ?? "";
+  const prefix =
+    customScriptFromCommand(command) === null ? (String(command).split(".")[0] ?? "") : "custom";
   return (
     KEYBINDING_GROUPS.find((group) => (group.prefixes as ReadonlyArray<string>).includes(prefix)) ??
     OTHER_KEYBINDING_GROUP
@@ -363,7 +366,7 @@ export function buildKeybindingCommandOptions(
 ): ReadonlyArray<KeybindingCommandOption> {
   const commands = new Set<KeybindingCommand>(STATIC_KEYBINDING_COMMANDS);
   for (const binding of keybindings) {
-    commands.add(binding.command);
+    if (customScriptFromCommand(binding.command) === null) commands.add(binding.command);
   }
   return [...commands].toSorted((left, right) => compareCommands(left, right, commandLabel));
 }
@@ -408,6 +411,8 @@ export function commandLabel(command: KeybindingCommand): string {
   if (command === "view.reopenClosed") return "Reopen Closed Tab";
   if (command === "preview.focusUrl") return "Preview: Focus URL";
   if (command === "preview.find") return "Preview: Find on Page";
+  const customScript = customScriptFromCommand(command);
+  if (customScript) return `Custom Script: ${customScript.source}`;
   const raw = String(command);
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
     return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
