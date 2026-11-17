@@ -1373,16 +1373,14 @@ export function filterSidebarSearchThreads<T extends EnvironmentThreadShell>(
   filters: SidebarSearchFilters,
   context: {
     readonly now: number;
-    readonly sectionOf: (thread: T) => SidebarSection | undefined;
+    readonly shelfOf: (thread: T) => SidebarSearchShelf | undefined;
     readonly lastVisitedAtOf: (thread: T) => string | undefined;
   },
 ): T[] {
   if (!sidebarSearchFiltersNarrowList(filters)) return [...threads];
   return threads.filter((thread) => {
     if (filters.shelves.length > 0) {
-      const section = context.sectionOf(thread);
-      // The Working shelf holds active threads while they run.
-      const shelf = section === "working" ? "active" : section;
+      const shelf = context.shelfOf(thread);
       if (shelf === undefined || !filters.shelves.includes(shelf)) return false;
     }
     if (filters.statuses.length > 0) {
@@ -1417,17 +1415,39 @@ export function filterSidebarSearchThreads<T extends EnvironmentThreadShell>(
 
 const titleCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** Orders search results; "relevance" keeps the order they were ranked in. */
-export function sortSidebarSearchResults<T extends EnvironmentThreadShell>(
+/**
+ * Search results in the chosen order. Best match keeps title matches above message-only
+ * matches, so message rows the server sends late never jump above rows already shown.
+ * Every other order sorts all results, and with no query Best match lists by recent activity.
+ */
+export function orderSidebarSearchResults<T extends EnvironmentThreadShell>(input: {
+  readonly titleMatches: readonly T[];
+  readonly contentMatches: readonly T[];
+  readonly sort: SidebarSearchSort;
+  readonly hasQuery: boolean;
+  readonly projectNameOf: (thread: T) => string;
+}): readonly T[] {
+  const results = [...input.titleMatches, ...input.contentMatches];
+  if (input.sort === "relevance" && input.hasQuery) return results;
+  return sortSidebarSearchResults(
+    results,
+    input.sort === "relevance" ? "recent" : input.sort,
+    input.projectNameOf,
+  );
+}
+
+function sortSidebarSearchResults<T extends EnvironmentThreadShell>(
   threads: readonly T[],
-  sort: SidebarSearchSort,
+  sort: Exclude<SidebarSearchSort, "relevance">,
   projectNameOf: (thread: T) => string,
 ): readonly T[] {
-  if (sort === "relevance" || threads.length < 2) return threads;
+  if (threads.length < 2) return threads;
   const keyed = threads.map((thread) => ({
     thread,
     activity: threadActivityMs(thread),
     created: toSortableTimestamp(thread.createdAt) ?? 0,
+    // The search subject counts this client's own opens the server has not merged yet.
+    opened: sort === "opened" ? (threadSearchSubject(thread, null).opens?.openedAt ?? 0) : 0,
   }));
   type Keyed = (typeof keyed)[number];
   const byActivity = (left: Keyed, right: Keyed) => right.activity - left.activity;
@@ -1438,9 +1458,7 @@ export function sortSidebarSearchResults<T extends EnvironmentThreadShell>(
       case "stale":
         return (left, right) => left.activity - right.activity;
       case "opened":
-        return (left, right) =>
-          (right.thread.opens?.openedAt ?? 0) - (left.thread.opens?.openedAt ?? 0) ||
-          byActivity(left, right);
+        return (left, right) => right.opened - left.opened || byActivity(left, right);
       case "newest":
         return (left, right) => right.created - left.created || byActivity(left, right);
       case "oldest":

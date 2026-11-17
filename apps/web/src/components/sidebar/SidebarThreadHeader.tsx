@@ -33,8 +33,10 @@ export interface SidebarThreadHeaderProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onSearchKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
-  /** A query or a list filter is applied. */
+  /** A query or a list filter replaces the thread list. */
   isSearching: boolean;
+  /** A query or any search filter is set. */
+  canClearSearch: boolean;
   searchResultCount: number;
   activeSearchResultIndex: number;
   onClearSearch: () => void;
@@ -55,6 +57,7 @@ export function SidebarThreadHeader({
   onSearchQueryChange,
   onSearchKeyDown,
   isSearching,
+  canClearSearch,
   searchResultCount,
   activeSearchResultIndex,
   onClearSearch,
@@ -93,8 +96,19 @@ export function SidebarThreadHeader({
     };
   }, [engaged]);
 
+  // Using the controls while filters alone keep them shown engages search too, so
+  // clearing the last filter from the menu does not swap the menu away under it.
+  const engageWhileSearching = () => {
+    if (searchMode && !engaged) setEngaged(true);
+  };
+
   return (
-    <div ref={rowRef} className="flex items-center gap-1">
+    <div
+      ref={rowRef}
+      className="flex items-center gap-1"
+      onPointerDownCapture={engageWhileSearching}
+      onFocusCapture={engageWhileSearching}
+    >
       <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-within:bg-sidebar-row-hover focus-within:text-sidebar-foreground focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring/70">
         <SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />
         <SidebarInput
@@ -107,7 +121,13 @@ export function SidebarThreadHeader({
           onKeyDown={(event) => {
             onSearchKeyDown(event);
             // With nothing left to clear, Escape leaves search.
-            if (event.key === "Escape" && !event.defaultPrevented && !isSearching) {
+            if (
+              event.key === "Escape" &&
+              !event.defaultPrevented &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229 &&
+              !canClearSearch
+            ) {
               setEngaged(false);
               event.currentTarget.blur();
             }
@@ -125,7 +145,7 @@ export function SidebarThreadHeader({
           }
           className="min-w-0 flex-1"
         />
-        {isSearching ? (
+        {canClearSearch ? (
           <Button
             type="button"
             size="icon-micro"

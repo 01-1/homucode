@@ -246,9 +246,11 @@ import {
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
   SidebarSearchSort,
+  countSidebarSearchFilters,
+  orderSidebarSearchResults,
   sidebarSearchFiltersNarrowList,
-  sortSidebarSearchResults,
   type SidebarSearchFilters,
+  type SidebarSearchShelf,
   sidebarListItemId,
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
@@ -381,6 +383,8 @@ const sidebarProviderEntriesAtom = Atom.make((get) => {
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
 const NO_SEARCH_MATCHES = { titleMatches: EMPTY_THREADS, contentMatches: EMPTY_THREADS };
+const NO_MESSAGE_MATCH_KEYS: ReadonlySet<string> = new Set();
+const SEARCH_RESULTS_PAGE_COUNT = 50;
 
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
@@ -584,10 +588,8 @@ function useSidebarThreads(input: {
   const settledFolderThreadCount = threadFolderBlocks
     .filter((block) => block.settled)
     .reduce((total, block) => total + block.threads.length, 0);
-  const settledCount =
-    settledThreads.length +
-    settledFolderThreadCount +
-    olderSettledShelf.unloadedCount(partition.visibleThreads);
+  const unloadedSettledCount = olderSettledShelf.unloadedCount(partition.visibleThreads);
+  const settledCount = settledThreads.length + settledFolderThreadCount + unloadedSettledCount;
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -682,6 +684,15 @@ function useSidebarThreads(input: {
         ...settledThreads,
       ]),
     ],
+    // Shelves before folders fold their members away, which a collapsed folder would hide.
+    searchShelves: [
+      ["pinned", partition.pinnedThreads],
+      ["active", partition.activeThreads],
+      ["active", partition.workingThreads],
+      ["snoozed", partition.snoozedThreads],
+      ["settled", partition.settledThreads],
+    ] as const,
+    unloadedSettledCount,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1261,6 +1272,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const hasThreadSearchQuery = threadSearchQuery.trim().length > 0;
   const isSearchingThreads = hasThreadSearchQuery || sidebarSearchFiltersNarrowList(searchFilters);
+  const canClearThreadSearch = hasThreadSearchQuery || countSidebarSearchFilters(searchFilters) > 0;
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1448,6 +1460,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     settledThreads,
     snoozeNow,
     searchableThreads,
+    searchShelves,
+    unloadedSettledCount,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1492,12 +1506,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
   });
 
+  const searchShelfByKey = new Map<string, SidebarSearchShelf>();
+  if (isSearchingThreads && searchFilters.shelves.length > 0) {
+    for (const [shelf, shelfThreads] of searchShelves) {
+      for (const thread of shelfThreads) searchShelfByKey.set(threadShellKey(thread), shelf);
+    }
+  }
   const searchCandidates =
     isSearchingThreads && sidebarSearchFiltersNarrowList(searchFilters)
       ? filterSidebarSearchThreads(searchableThreads, searchFilters, {
           // oxlint-disable-next-line react/purity -- Age filters sample the clock when the search inputs change; the compiler recomputes it only then.
           now: Date.now(),
-          sectionOf: (thread) => sectionByThreadKey.get(threadShellKey(thread)),
+          shelfOf: (thread) => searchShelfByKey.get(threadShellKey(thread)),
           lastVisitedAtOf: (thread) =>
             resolveThreadLastVisitedAt(
               thread.lastVisitedAt,
@@ -1546,20 +1566,41 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const { titleMatches, contentMatches } = !isSearchingThreads
     ? NO_SEARCH_MATCHES
     : hasThreadSearchQuery
-      ? searchSidebarThreads(searchCandidates, threadSearchQuery, new Set(messageOrder.keys))
+      ? searchSidebarThreads(
+          searchCandidates,
+          threadSearchQuery,
+          searchFilters.titlesOnly ? NO_MESSAGE_MATCH_KEYS : new Set(messageOrder.keys),
+        )
       : { titleMatches: searchCandidates, contentMatches: EMPTY_THREADS };
-  // Best match needs a query to rank by; filters alone list by recent activity.
-  const resultSort = searchSort === "relevance" && !hasThreadSearchQuery ? "recent" : searchSort;
-  const projectNameOf = (thread: EnvironmentThreadShell) =>
-    projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? "";
-  // Title matches stay above message matches, so rows that arrive late from the
-  // server's message search never jump above the rows already shown.
-  const threadTitleResults = sortSidebarSearchResults(titleMatches, resultSort, projectNameOf);
-  const threadContentResults = sortSidebarSearchResults(contentMatches, resultSort, projectNameOf);
-  const threadSearchResults = [...threadTitleResults, ...threadContentResults];
+  const orderedSearchResults = orderSidebarSearchResults({
+    titleMatches,
+    contentMatches,
+    sort: searchSort,
+    hasQuery: hasThreadSearchQuery,
+    projectNameOf: (thread) =>
+      projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? "",
+  });
+  // Broad filters can match most threads; rows mount a page at a time.
+  const searchResultsKey = JSON.stringify([
+    threadSearchQuery.trim(),
+    searchFilters,
+    searchSort,
+    projectScopeKey,
+  ]);
+  const [searchResultsShown, setSearchResultsShown] = useState({
+    key: searchResultsKey,
+    count: SEARCH_RESULTS_PAGE_COUNT,
+  });
+  const threadSearchResults = orderedSearchResults.slice(
+    0,
+    searchResultsShown.key === searchResultsKey
+      ? searchResultsShown.count
+      : SEARCH_RESULTS_PAGE_COUNT,
+  );
+  const hiddenSearchResultCount = orderedSearchResults.length - threadSearchResults.length;
   // Only rows listed for their messages show one, and open find on it.
   const threadSearchMatchByKey = new Map(
-    threadContentResults.flatMap((thread) => {
+    contentMatches.flatMap((thread) => {
       const key = threadSearchMatchKey({
         environmentId: thread.environmentId,
         threadId: thread.id,
@@ -1669,7 +1710,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
   const handleThreadSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "Escape" && isSearchingThreads) {
+    if (event.key === "Escape" && canClearThreadSearch) {
       event.preventDefault();
       event.stopPropagation();
       clearThreadSearch();
@@ -4013,6 +4054,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               }}
               onSearchKeyDown={handleThreadSearchKeyDown}
               isSearching={isSearchingThreads}
+              canClearSearch={canClearThreadSearch}
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
@@ -4098,6 +4140,21 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     })}
                   </ul>
                 </DndContext>
+                {hiddenSearchResultCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSearchResultsShown({
+                        key: searchResultsKey,
+                        count: threadSearchResults.length + SEARCH_RESULTS_PAGE_COUNT,
+                      })
+                    }
+                    className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                  >
+                    <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
+                    {`Show ${Math.min(hiddenSearchResultCount, SEARCH_RESULTS_PAGE_COUNT)} more`}
+                  </button>
+                ) : null}
               </TooltipProvider>
             ) : (
               <p
@@ -4111,6 +4168,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     : "No threads match these filters"}
               </p>
             )
+          ) : null}
+          {/* Older settled threads load only for a query, so filters alone cannot list them. */}
+          {isSearchingThreads &&
+          !hasThreadSearchQuery &&
+          unloadedSettledCount > 0 &&
+          (searchFilters.shelves.length === 0 || searchFilters.shelves.includes("settled")) ? (
+            <p className="px-2.5 py-2 text-xs text-sidebar-muted-foreground">
+              {`${unloadedSettledCount} older settled ${unloadedSettledCount === 1 ? "thread is" : "threads are"} not listed. Type to search them too.`}
+            </p>
           ) : null}
           {/* A scope can hide every active thread; say so even when its project still has settled ones. */}
           {!isSearchingThreads &&

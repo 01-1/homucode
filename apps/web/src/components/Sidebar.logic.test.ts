@@ -25,8 +25,9 @@ import {
   searchSidebarThreads,
   filterSidebarSearchThreads,
   NO_SIDEBAR_SEARCH_FILTERS,
-  sortSidebarSearchResults,
+  orderSidebarSearchResults,
   type SidebarSearchFilters,
+  type SidebarSearchShelf,
   type SidebarSearchSort,
   shouldRecedeSidebarThread,
   sortInboxThreadsByReturn,
@@ -500,10 +501,9 @@ describe("sidebar search filters and sort", () => {
       }),
       shell("snoozed", { latestUserMessageAt: daysAgo(3) }),
     ];
-    const sections: Record<string, SidebarSection> = {
+    const shelves: Record<string, SidebarSearchShelf> = {
       pinned: "pinned",
-      // The Working shelf lists active threads while they run.
-      working: "working",
+      working: "active",
       "settled-old": "settled",
       snoozed: "snoozed",
     };
@@ -513,7 +513,7 @@ describe("sidebar search filters and sort", () => {
         { ...NO_SIDEBAR_SEARCH_FILTERS, ...filters },
         {
           now,
-          sectionOf: (thread) => sections[thread.id],
+          shelfOf: (thread) => shelves[thread.id],
           lastVisitedAtOf: () => daysAgo(41),
         },
       ).map((thread) => thread.id);
@@ -529,8 +529,8 @@ describe("sidebar search filters and sort", () => {
     expect(filter({ features: ["worktree", "pull-request"] })).toEqual([]);
   });
 
-  it("orders by recent activity, keeping ranked order only for best match", () => {
-    const ranked = [
+  it("orders all results by the chosen sort, keeping ranked groups only for best match", () => {
+    const [b, c, a] = [
       shell("b", {
         title: "alpha",
         createdAt: daysAgo(5),
@@ -541,12 +541,19 @@ describe("sidebar search filters and sort", () => {
       shell("a", { title: "Beta", createdAt: daysAgo(10), latestUserMessageAt: daysAgo(1) }),
     ];
     const projectNames: Record<string, string> = { a: "Zed", b: "Alpha", c: "alpha" };
-    const sort = (order: SidebarSearchSort) =>
-      sortSidebarSearchResults(ranked, order, (thread) => projectNames[thread.id]!).map(
-        (thread) => thread.id,
-      );
+    // "a" matched only in its messages, so best match lists it after the title matches.
+    const order = (sort: SidebarSearchSort, hasQuery = true) =>
+      orderSidebarSearchResults({
+        titleMatches: [b!, c!],
+        contentMatches: [a!],
+        sort,
+        hasQuery,
+        projectNameOf: (thread) => projectNames[thread.id]!,
+      }).map((thread) => thread.id);
+    const sort = (by: SidebarSearchSort) => order(by);
 
     expect(sort("relevance")).toEqual(["b", "c", "a"]);
+    expect(order("relevance", false)).toEqual(["a", "c", "b"]);
     expect(sort("recent")).toEqual(["a", "c", "b"]);
     expect(sort("stale")).toEqual(["b", "c", "a"]);
     expect(sort("opened")).toEqual(["b", "a", "c"]);

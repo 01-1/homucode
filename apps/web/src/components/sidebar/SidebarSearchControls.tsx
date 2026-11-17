@@ -352,7 +352,7 @@ function FilterMenuContent({
       >
         <span className="flex min-w-0 items-center gap-2">
           <TextIcon aria-hidden className="size-3.5" />
-          <span className="min-w-0 flex-1 truncate">Match titles only</span>
+          <span className="min-w-0 flex-1 truncate">Don't search messages</span>
         </span>
       </MenuCheckboxItem>
       <MenuSeparator />
@@ -436,7 +436,7 @@ export function SidebarSearchSortMenu({
           value={sort}
           onValueChange={(next) => onSortChange(next as SidebarSearchSort)}
         >
-          <MenuGroupLabel>Sort by</MenuGroupLabel>
+          <MenuGroupLabel>Sort results by</MenuGroupLabel>
           {SIDEBAR_SEARCH_SORT_OPTIONS.map((option) => (
             <MenuRadioItem key={option.value} value={option.value} closeOnClick>
               <span className="flex min-w-0 items-center gap-2">
