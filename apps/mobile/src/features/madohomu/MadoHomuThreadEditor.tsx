@@ -53,7 +53,13 @@ export function MadoHomuThreadEditor(props: {
       if (
         !(await actions.save({
           madohomuThreads: {
-            [props.thread.id]: { icon: icon.trim() || null, color, prompt: prompt.trim(), pinned },
+            [props.thread.id]: {
+              ...actions.settings.madohomuThreads[props.thread.id],
+              icon: icon.trim() || null,
+              color,
+              prompt: prompt.trim(),
+              pinned,
+            },
           },
         }))
       )

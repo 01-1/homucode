@@ -35,7 +35,7 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
-import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
+import { memo, useCallback, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
@@ -197,7 +197,7 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
 
-function ThreadListV2Section(props: {
+export function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
   readonly tone?: "default" | "snoozed";
@@ -704,6 +704,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly searchMatch?: EnvironmentThreadSearchMatch;
   readonly searchQuery?: string;
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
+  /** Drawn where the project icon goes, for lists that show their own icon instead. */
+  readonly leading?: ReactNode;
+  /** Menu items a list adds; their ids start with `extra:` and go to `onExtraMenuAction`. */
+  readonly extraMenuActions?: readonly MenuAction[];
+  readonly onExtraMenuAction?: (thread: EnvironmentThreadShell, event: string) => void;
 }) {
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const titleTypography = useScaledTextRole("body");
@@ -734,6 +739,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onUnpinThread,
     onSetThreadAutoSettle,
     onMoveThread,
+    onExtraMenuAction,
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
@@ -972,6 +978,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
       { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
       { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
+      ...(props.extraMenuActions ?? []),
     ];
     if (snoozedRow) {
       return layoutThreadListV2RowMenuActions({
@@ -1034,6 +1041,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     autoSettleMenuItems,
     canUnsettle,
     pinMenuItems,
+    props.extraMenuActions,
     props.settlementSupported,
     reorderMenuItems,
     snoozePresetActions,
@@ -1044,6 +1052,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   ]);
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
+      if (nativeEvent.event.startsWith("extra:")) {
+        onExtraMenuAction?.(thread, nativeEvent.event);
+        return;
+      }
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
       if (nativeEvent.event === "settle") handleSettle();
       if (nativeEvent.event === "unsettle") handleUnsettle();
@@ -1092,6 +1104,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }
     },
     [
+      onExtraMenuAction,
       onNewThreadOnBranch,
       thread,
       handleArchive,
@@ -1173,11 +1186,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
       : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
-  const titleTextInset = props.project ? projectIconSize + 8 : 0;
+  const titleTextInset = props.leading || props.project ? projectIconSize + 8 : 0;
   const cardContent = (
     <>
       <View className="flex-row items-start gap-2">
-        {props.project ? (
+        {props.leading ? (
+          <View
+            className="items-center justify-center"
+            style={{ height: titleLineHeight, width: projectIconSize }}
+          >
+            {props.leading}
+          </View>
+        ) : props.project ? (
           <View className="justify-center" style={{ height: titleLineHeight }}>
             <ProjectFavicon
               environmentId={thread.environmentId}
@@ -1497,7 +1517,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             sidebarPane && "px-3",
           )}
         >
-          {props.project ? (
+          {props.leading ? (
+            <View
+              className="items-center justify-center opacity-40"
+              style={{ width: projectIconSize }}
+            >
+              {props.leading}
+            </View>
+          ) : props.project ? (
             <View className="opacity-40">
               <ProjectFavicon
                 environmentId={thread.environmentId}
