@@ -127,16 +127,3 @@ export function mobilePreferencesPatchFromSyncedValues(
   }
   return patch as Partial<Preferences>;
 }
-
-/**
- * The server the phone first synced through, while it stays paired; otherwise the first paired
- * server that is connected. Null while that server is offline, since its config is only a cache.
- */
-export function pickSettingsSyncEnvironment<Id extends string>(
-  enabled: ReadonlyArray<Id>,
-  connected: ReadonlyArray<Id>,
-  saved: string | undefined,
-): Id | null {
-  const chosen = enabled.find((id) => id === saved) ?? enabled.find((id) => connected.includes(id));
-  return chosen !== undefined && connected.includes(chosen) ? chosen : null;
-}

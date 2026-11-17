@@ -15,6 +15,7 @@ import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { SheetIntro } from "../../components/ui/SheetIntro";
 import { updateMobilePreferencesAtom } from "../../state/preferences";
+import { useEnvironmentPresentation } from "../../state/presentation";
 import { SettingsSection } from "./components/SettingsSection";
 import {
   deferSettingsSyncPrompt,
@@ -47,7 +48,7 @@ export function SettingsSyncSheet() {
     <FitSheet header={<SheetHeader title="Settings sync" onClose={() => navigation.goBack()} />}>
       {prompt ? (
         <SettingsSyncChoices
-          key={prompt.conflicts.map(({ key }) => key).join()}
+          key={[prompt.environmentId, ...prompt.conflicts.map(({ key }) => key)].join()}
           prompt={prompt}
           onApply={(choices) => close(() => resolveSettingsSyncPrompt(choices))}
           onDecideLater={() => close(deferSettingsSyncPrompt)}
@@ -63,6 +64,9 @@ function SettingsSyncChoices(props: {
   readonly onDecideLater: () => void;
 }) {
   const { prompt } = props;
+  const server =
+    useEnvironmentPresentation(prompt.environmentId).presentation?.entry.target.label ??
+    "your server";
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
@@ -76,8 +80,8 @@ function SettingsSyncChoices(props: {
         title={prompt.firstSetup ? "Set up settings sync" : "Settings changed in two places"}
         description={
           prompt.firstSetup
-            ? "This phone's settings differ from the ones synced through your server. Choose which value to keep for each."
-            : "These settings changed on this phone and on another device since they last synced. Choose which value to keep for each."
+            ? `This phone's settings differ from the ones synced through ${server}. Choose which value to keep for each.`
+            : `These settings changed on this phone and through ${server} since they last synced. Choose which value to keep for each.`
         }
       />
       <View className="flex-row gap-2">
