@@ -52,6 +52,7 @@ import { canShareWithGuestAtom } from "../chat/guestShareAvailability";
 import { sidebarProviderEntriesAtom } from "../Sidebar";
 import { isTrailingDoubleClick, useSnoozeWakeClock } from "../Sidebar.logic";
 import { SidebarPointerSensor } from "../Sidebar.pointer";
+import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
 import { snoozeWakeLabel, type SnoozePreset } from "../Sidebar.snooze";
 import { SortableThreadRow, type SidebarProviderEntry } from "../sidebar/SidebarThreadRow";
 import { Button } from "../ui/button";
@@ -204,11 +205,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     return {
       items: [moveTo],
       afterRename: [{ id: MENU_EDIT, label: "Edit…", icon: "pencil", disabled: !canEdit }],
-      labels: {
-        pin: "Pin in T3 Code",
-        unpin: "Unpin in T3 Code",
-        folder: "Move to T3 Code folder",
-      },
+      labels: MADOHOMU_THREAD_MENU_LABELS,
       onSelect: (id) => {
         if (id === MENU_EDIT) setEditing(threadId);
         else if (id === MENU_SCRATCH) {

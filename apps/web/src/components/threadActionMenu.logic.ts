@@ -562,3 +562,10 @@ export function arrangeThreadActionMenu(
     ...arranged.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item)),
   ];
 }
+
+/** MadoHomu has its own pinning and sections, so T3's own items say whose they are. */
+export const MADOHOMU_THREAD_MENU_LABELS = {
+  pin: "Pin in T3 Code",
+  unpin: "Unpin in T3 Code",
+  folder: "Move to T3 Code folder",
+} as const;
