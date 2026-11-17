@@ -149,10 +149,7 @@ export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
  */
 export function findUntouchedMadoHomuThread<
   T extends Pick<EnvironmentThreadShell, "id" | "title" | "latestUserMessageAt" | "latestRun">,
->(
-  pinned: ReadonlyArray<T>,
-  settings: Pick<ServerSettings, "madohomuThreads">,
-): T | undefined {
+>(pinned: ReadonlyArray<T>, settings: Pick<ServerSettings, "madohomuThreads">): T | undefined {
   return pinned.find((thread) => {
     const entry = settings.madohomuThreads[thread.id];
     return (

@@ -315,9 +315,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const canSnoozeAll =
       configLoaded && selected.every((t) => canSnooze(t, { now: snoozeNow.toISOString() }));
     const presets = resolveSnoozePresets(snoozeNow, timestampFormat, environmentId);
-    const pinned = selected.filter((t) =>
-      isMadoHomuThreadPinned(settings.madohomuThreads[t.id]),
-    );
+    const pinned = selected.filter((t) => isMadoHomuThreadPinned(settings.madohomuThreads[t.id]));
     const clicked = await settlePromise(() =>
       api.contextMenu.show(
         [

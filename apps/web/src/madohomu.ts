@@ -57,8 +57,7 @@ export function readMadoHomuContext(router: AnyRouter) {
         t.deletedAt === null &&
         t.archivedAt === null,
     );
-  const openThreadId =
-    typeof search.threadId === "string" ? ThreadId.make(search.threadId) : null;
+  const openThreadId = typeof search.threadId === "string" ? ThreadId.make(search.threadId) : null;
   // The same list and choice as the sidebar, so commands act on the thread on screen.
   const groups = groupMadoHomuThreads(
     madohomuListedThreads(projectThreads, config.settings, openThreadId),
