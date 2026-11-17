@@ -1,5 +1,5 @@
 import { BehaviorSettingsSection } from "./BehaviorSettings";
-import { DuetSettings } from "./DuetSettings";
+import { MadoHomuSettings } from "./MadoHomuSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -894,7 +894,7 @@ export function GeneralSettingsPanel() {
         />
       </SettingsSection>
 
-      <DuetSettings />
+      <MadoHomuSettings />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow

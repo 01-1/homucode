@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { DuetPage } from "../components/duet/DuetPage";
+import { MadoHomuPage } from "../components/madohomu/MadoHomuPage";
 
-type DuetSearch = { environmentId?: EnvironmentId; threadId?: ThreadId; tab?: "chat" | "tasks" };
+type MadoHomuSearch = {
+  environmentId?: EnvironmentId;
+  threadId?: ThreadId;
+  tab?: "chat" | "tasks";
+};
 
-export const Route = createFileRoute("/_chat/duet")({
-  validateSearch: (search: Record<string, unknown>): DuetSearch => ({
+export const Route = createFileRoute("/_chat/madohomu")({
+  validateSearch: (search: Record<string, unknown>): MadoHomuSearch => ({
     ...(typeof search.environmentId === "string" && search.environmentId
       ? { environmentId: EnvironmentId.make(search.environmentId) }
       : {}),
@@ -14,5 +18,5 @@ export const Route = createFileRoute("/_chat/duet")({
       : {}),
     tab: search.tab === "tasks" ? ("tasks" as const) : ("chat" as const),
   }),
-  component: DuetPage,
+  component: MadoHomuPage,
 });

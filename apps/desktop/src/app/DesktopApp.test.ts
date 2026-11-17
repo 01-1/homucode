@@ -48,7 +48,7 @@ import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
-import * as DesktopDuet from "../window/DesktopDuet.ts";
+import * as DesktopMadoHomu from "../window/DesktopMadoHomu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 
@@ -226,7 +226,7 @@ it.effect.each([false, true])(
             Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
             Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),
             Layer.mock(DesktopIpc.DesktopIpc, {}),
-            Layer.mock(DesktopDuet.DesktopDuet, {}),
+            Layer.mock(DesktopMadoHomu.DesktopMadoHomu, {}),
             Layer.mock(DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth, {
               getBearerToken: record("token").pipe(
                 Effect.andThen(Deferred.succeed(tokenRequested, undefined)),

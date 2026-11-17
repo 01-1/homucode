@@ -138,28 +138,30 @@ function persistedLink(
 }
 
 describe("isAutoSettlementCandidate", () => {
-  it("keeps threads Duet keeps, only while Duet is on for their project", () => {
+  it("keeps threads MadoHomu keeps, only while MadoHomu is on for their project", () => {
     const kept = {
       ...DEFAULT_SERVER_SETTINGS,
-      duetEnabled: true,
-      duetProjectId: ProjectId.make("project-1"),
-      duetThreads: { [ThreadId.make("thread-1")]: { icon: null, prompt: "" } },
+      madohomuEnabled: true,
+      madohomuProjectId: ProjectId.make("project-1"),
+      madohomuThreads: { [ThreadId.make("thread-1")]: { icon: null, prompt: "" } },
     };
-    expect(ThreadSettlementService.isDuetKeptThread(kept, shell())).toBe(true);
+    expect(ThreadSettlementService.isMadoHomuKeptThread(kept, shell())).toBe(true);
     expect(
-      ThreadSettlementService.isDuetKeptThread(
+      ThreadSettlementService.isMadoHomuKeptThread(
         {
           ...kept,
-          duetThreads: { [ThreadId.make("thread-1")]: { icon: null, prompt: "", pinned: false } },
+          madohomuThreads: {
+            [ThreadId.make("thread-1")]: { icon: null, prompt: "", pinned: false },
+          },
         },
         shell(),
       ),
     ).toBe(false);
-    expect(ThreadSettlementService.isDuetKeptThread({ ...kept, duetEnabled: false }, shell())).toBe(
-      false,
-    );
     expect(
-      ThreadSettlementService.isDuetKeptThread(
+      ThreadSettlementService.isMadoHomuKeptThread({ ...kept, madohomuEnabled: false }, shell()),
+    ).toBe(false);
+    expect(
+      ThreadSettlementService.isMadoHomuKeptThread(
         kept,
         shell({ projectId: ProjectId.make("project-2") }),
       ),

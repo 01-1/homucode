@@ -7,12 +7,12 @@ import IconLeaf from "@tabler/icons-react-native/IconLeaf";
 import IconListCheck from "@tabler/icons-react-native/IconListCheck";
 import IconMessageCircle from "@tabler/icons-react-native/IconMessageCircle";
 import IconSun from "@tabler/icons-react-native/IconSun";
-import { DEFAULT_DUET_ICON } from "@t3tools/contracts";
+import { DEFAULT_MADOHOMU_ICON } from "@t3tools/contracts";
 import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 
-export const DUET_ICONS = [
+export const MADOHOMU_ICONS = [
   { id: "lucide:message-circle", label: "Chat", component: IconMessageCircle },
   { id: "lucide:list-todo", label: "Tasks", component: IconListCheck },
   { id: "lucide:calendar-days", label: "Calendar", component: IconCalendar },
@@ -24,14 +24,14 @@ export const DUET_ICONS = [
   { id: "lucide:sun", label: "Sun", component: IconSun },
 ] as const;
 
-export function DuetIcon({
+export function MadoHomuIcon({
   icon,
   color,
 }: {
   readonly icon: string | null;
   readonly color: string;
 }) {
-  const choice = DUET_ICONS.find((item) => item.id === (icon ?? DEFAULT_DUET_ICON));
+  const choice = MADOHOMU_ICONS.find((item) => item.id === (icon ?? DEFAULT_MADOHOMU_ICON));
   return (
     <View
       className="h-8 w-8 items-center justify-center rounded-lg"

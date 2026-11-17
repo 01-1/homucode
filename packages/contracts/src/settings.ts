@@ -1417,9 +1417,9 @@ export const SyncedClientSettings = Schema.Struct({
 });
 export type SyncedClientSettings = typeof SyncedClientSettings.Type;
 
-export const DUET_THREAD_PROMPT_MAX_LENGTH = 500;
-export const DEFAULT_DUET_ICON = "lucide:message-circle";
-export const DuetThreadSettings = Schema.Struct({
+export const MADOHOMU_THREAD_PROMPT_MAX_LENGTH = 500;
+export const DEFAULT_MADOHOMU_ICON = "lucide:message-circle";
+export const MadoHomuThreadSettings = Schema.Struct({
   pinned: Schema.optionalKey(Schema.Boolean),
   color: Schema.optionalKey(
     Schema.NullOr(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
@@ -1428,11 +1428,11 @@ export const DuetThreadSettings = Schema.Struct({
   icon: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(64))).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  prompt: TrimmedString.check(Schema.isMaxLength(DUET_THREAD_PROMPT_MAX_LENGTH)).pipe(
+  prompt: TrimmedString.check(Schema.isMaxLength(MADOHOMU_THREAD_PROMPT_MAX_LENGTH)).pipe(
     Schema.withDecodingDefault(Effect.succeed("")),
   ),
 });
-export type DuetThreadSettings = typeof DuetThreadSettings.Type;
+export type MadoHomuThreadSettings = typeof MadoHomuThreadSettings.Type;
 
 export const AgentMemorySettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1620,16 +1620,18 @@ export const ServerSettings = Schema.Struct({
   claudeHoldBackgroundCommands: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
-  /** Duet: a focused Chat + Tasks view locked to one project. */
-  duetDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  duetEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  duetProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
-  /** Per-thread Duet look and brief. The agent sees the icon, thread title and prompt each turn. */
-  duetThreads: Schema.Record(ThreadId, DuetThreadSettings).pipe(
+  /** MadoHomu: a focused Chat + Tasks view locked to one project. */
+  madohomuDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  madohomuEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  madohomuProjectId: Schema.NullOr(ProjectId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  /** Per-thread MadoHomu look and brief. The agent sees the icon, thread title and prompt each turn. */
+  madohomuThreads: Schema.Record(ThreadId, MadoHomuThreadSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  /** The scheduled task that sends the morning brief into a Duet thread. */
-  duetMorningBriefTaskId: Schema.NullOr(ScheduledTaskId).pipe(
+  /** The scheduled task that sends the morning brief into a MadoHomu thread. */
+  madohomuMorningBriefTaskId: Schema.NullOr(ScheduledTaskId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   /** Opt-in features this user has already been offered, by `FEATURE_OFFERS` id. */
@@ -2123,11 +2125,11 @@ export const ServerSettingsPatch = Schema.Struct({
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   claudeHoldBackgroundCommands: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
-  duetDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),
-  duetEnabled: Schema.optionalKey(Schema.Boolean),
-  duetProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
-  duetThreads: Schema.optionalKey(Schema.Record(ThreadId, DuetThreadSettings)),
-  duetMorningBriefTaskId: Schema.optionalKey(Schema.NullOr(ScheduledTaskId)),
+  madohomuDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),
+  madohomuEnabled: Schema.optionalKey(Schema.Boolean),
+  madohomuProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
+  madohomuThreads: Schema.optionalKey(Schema.Record(ThreadId, MadoHomuThreadSettings)),
+  madohomuMorningBriefTaskId: Schema.optionalKey(Schema.NullOr(ScheduledTaskId)),
   featureOffersSeen: Schema.optionalKey(Schema.Array(Schema.String)),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({

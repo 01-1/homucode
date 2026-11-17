@@ -395,7 +395,7 @@ it.each([
 });
 
 function makeLocalCommandHarness(input: {
-  readonly duet?: boolean;
+  readonly madohomu?: boolean;
   readonly text: string;
   /** The provider the new provider thread runs on. */
   readonly driver?: string;
@@ -1276,12 +1276,12 @@ function makeLocalCommandHarness(input: {
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
         layerWorktreeLocation(
           input.worktreesDir,
-          input.duet
+          input.madohomu
             ? {
-                duetEnabled: true,
-                duetProjectId: projection.thread.projectId,
-                duetMorningBriefTaskId: ScheduledTaskId.make("duet-brief"),
-                duetThreads: {
+                madohomuEnabled: true,
+                madohomuProjectId: projection.thread.projectId,
+                madohomuMorningBriefTaskId: ScheduledTaskId.make("madohomu-brief"),
+                madohomuThreads: {
                   [threadId]: { icon: "lucide:leaf", prompt: "Keep the garden healthy" },
                 },
               }
@@ -3194,19 +3194,19 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
 }
 
 effectIt.effect(
-  "adds Duet title and prompt only to provider context, leaving the transcript untouched",
+  "adds MadoHomu title and prompt only to provider context, leaving the transcript untouched",
   () =>
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
         text: "Continue",
-        duet: true,
+        madohomu: true,
         driver: "codex",
-        message: { scheduledTaskId: ScheduledTaskId.make("duet-brief") },
+        message: { scheduledTaskId: ScheduledTaskId.make("madohomu-brief") },
       });
       yield* harness.start;
       const delivered = harness.startTurn.mock.calls[0]?.[0];
       expect(delivered?.message.text).toContain(
-        `Duet thread ${JSON.stringify(harness.projection().thread.title)}`,
+        `MadoHomu thread ${JSON.stringify(harness.projection().thread.title)}`,
       );
       expect(delivered?.message.text).toContain("Keep the garden healthy");
       expect(delivered?.message.text).toContain("Icon: lucide:leaf");

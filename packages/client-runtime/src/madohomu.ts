@@ -1,5 +1,5 @@
 import type {
-  DuetThreadSettings,
+  MadoHomuThreadSettings,
   EnvironmentId,
   ModelSelection,
   ProjectId,
@@ -9,22 +9,22 @@ import type {
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "./state/models.ts";
 
-export function isDuetThreadPinned(entry: DuetThreadSettings | undefined): boolean {
+export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined): boolean {
   return entry !== undefined && entry.pinned !== false;
 }
 
-export function orderDuetThreads<T extends Pick<EnvironmentThreadShell, "id" | "updatedAt">>(
+export function orderMadoHomuThreads<T extends Pick<EnvironmentThreadShell, "id" | "updatedAt">>(
   threads: ReadonlyArray<T>,
-  entries: Readonly<Record<ThreadId, DuetThreadSettings>>,
+  entries: Readonly<Record<ThreadId, MadoHomuThreadSettings>>,
 ): T[] {
   return [...threads].sort(
     (a, b) =>
-      Number(isDuetThreadPinned(entries[b.id])) - Number(isDuetThreadPinned(entries[a.id])) ||
-      b.updatedAt.localeCompare(a.updatedAt),
+      Number(isMadoHomuThreadPinned(entries[b.id])) -
+        Number(isMadoHomuThreadPinned(entries[a.id])) || b.updatedAt.localeCompare(a.updatedAt),
   );
 }
 
-export const DUET_ICON_COLORS = [
+export const MADOHOMU_ICON_COLORS = [
   "#f43f5e",
   "#f97316",
   "#eab308",
@@ -35,16 +35,16 @@ export const DUET_ICON_COLORS = [
   "#d946ef",
 ] as const;
 
-export function duetIconColor(threadId: string, color?: string | null): string {
+export function madohomuIconColor(threadId: string, color?: string | null): string {
   if (color) return color;
   const index =
-    [...threadId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DUET_ICON_COLORS.length;
-  return DUET_ICON_COLORS[index]!;
+    [...threadId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % MADOHOMU_ICON_COLORS.length;
+  return MADOHOMU_ICON_COLORS[index]!;
 }
 export const MORNING_BRIEF_PROMPT =
   "Prepare the user's morning brief for this project. Summarise what is in progress, what needs the user's decision, and propose next steps. Do not carry out those steps or make changes. Ask for approval before acting.";
 
-export function findDuetMorningBriefThread<
+export function findMadoHomuMorningBriefThread<
   T extends Pick<
     EnvironmentThreadShell,
     "id" | "environmentId" | "projectId" | "title" | "deletedAt" | "archivedAt"
@@ -68,7 +68,7 @@ export function findDuetMorningBriefThread<
   );
 }
 
-export function duetMorningBriefInput(input: {
+export function madohomuMorningBriefInput(input: {
   readonly id: ScheduledTaskId;
   readonly projectId: ProjectId;
   readonly threadId: ThreadId;
@@ -93,12 +93,12 @@ export function duetMorningBriefInput(input: {
   };
 }
 
-type DuetTask = Pick<
+type MadoHomuTask = Pick<
   EnvironmentThreadShell,
   "id" | "hasPendingApprovals" | "hasPendingUserInput" | "updatedAt"
 > & { readonly runtime: Pick<NonNullable<EnvironmentThreadShell["runtime"]>, "status"> | null };
 
-export function duetTaskLabel(thread: DuetTask): string {
+export function madohomuTaskLabel(thread: MadoHomuTask): string {
   if (thread.hasPendingApprovals) return "Needs approval";
   if (thread.hasPendingUserInput) return "Needs input";
   if (
@@ -110,9 +110,9 @@ export function duetTaskLabel(thread: DuetTask): string {
   return "Recent";
 }
 
-export function orderDuetTasks<T extends DuetTask>(threads: ReadonlyArray<T>): T[] {
+export function orderMadoHomuTasks<T extends MadoHomuTask>(threads: ReadonlyArray<T>): T[] {
   const rank = (thread: T) => {
-    const label = duetTaskLabel(thread);
+    const label = madohomuTaskLabel(thread);
     return label === "Needs approval" || label === "Needs input" ? 0 : label === "Running" ? 1 : 2;
   };
   return [...threads].sort(
@@ -121,18 +121,19 @@ export function orderDuetTasks<T extends DuetTask>(threads: ReadonlyArray<T>): T
   );
 }
 
-export function selectDuetEnvironment(
+export function selectMadoHomuEnvironment(
   primary: EnvironmentId | null,
   environments: ReadonlyArray<{
     environmentId: EnvironmentId;
-    duetEnabled: boolean;
-    duetDesktopAppEnabled: boolean;
+    madohomuEnabled: boolean;
+    madohomuDesktopAppEnabled: boolean;
   }>,
 ): EnvironmentId | null {
-  const enabled = environments.filter((environment) => environment.duetEnabled);
+  const enabled = environments.filter((environment) => environment.madohomuEnabled);
   return (
-    enabled.find((e) => e.environmentId === primary && e.duetDesktopAppEnabled)?.environmentId ??
-    enabled.find((e) => e.duetDesktopAppEnabled)?.environmentId ??
+    enabled.find((e) => e.environmentId === primary && e.madohomuDesktopAppEnabled)
+      ?.environmentId ??
+    enabled.find((e) => e.madohomuDesktopAppEnabled)?.environmentId ??
     enabled.find((e) => e.environmentId === primary)?.environmentId ??
     enabled[0]?.environmentId ??
     null

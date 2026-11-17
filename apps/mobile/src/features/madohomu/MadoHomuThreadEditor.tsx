@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { DUET_ICON_COLORS, duetIconColor, isDuetThreadPinned } from "@t3tools/client-runtime/duet";
+import {
+  MADOHOMU_ICON_COLORS,
+  madohomuIconColor,
+  isMadoHomuThreadPinned,
+} from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  DEFAULT_DUET_ICON,
-  DUET_THREAD_PROMPT_MAX_LENGTH,
+  DEFAULT_MADOHOMU_ICON,
+  MADOHOMU_THREAD_PROMPT_MAX_LENGTH,
   type EnvironmentId,
 } from "@t3tools/contracts";
 
@@ -15,21 +19,21 @@ import { Sheet } from "../../components/ui/Sheet";
 import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { DuetIcon, DUET_ICONS } from "./DuetIcon";
-import { useDuetActions } from "./useDuetActions";
+import { MadoHomuIcon, MADOHOMU_ICONS } from "./MadoHomuIcon";
+import { useMadoHomuActions } from "./useMadoHomuActions";
 
-export function DuetThreadEditor(props: {
+export function MadoHomuThreadEditor(props: {
   readonly environmentId: EnvironmentId;
   readonly thread: EnvironmentThreadShell;
   readonly onClose: () => void;
 }) {
-  const actions = useDuetActions(props.environmentId);
-  const entry = actions.settings.duetThreads[props.thread.id];
+  const actions = useMadoHomuActions(props.environmentId);
+  const entry = actions.settings.madohomuThreads[props.thread.id];
   const [title, setTitle] = useState(props.thread.title);
   const [icon, setIcon] = useState(entry?.icon ?? "");
-  const [color, setColor] = useState(duetIconColor(props.thread.id, entry?.color));
+  const [color, setColor] = useState(madohomuIconColor(props.thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
-  const [pinned, setPinned] = useState(isDuetThreadPinned(entry));
+  const [pinned, setPinned] = useState(isMadoHomuThreadPinned(entry));
   const [busy, setBusy] = useState(false);
   const update = useAtomCommand(threadEnvironment.updateMetadata);
   const validColor = /^#[0-9a-fA-F]{6}$/.test(color);
@@ -48,7 +52,7 @@ export function DuetThreadEditor(props: {
         return;
       if (
         !(await actions.save({
-          duetThreads: {
+          madohomuThreads: {
             [props.thread.id]: { icon: icon.trim() || null, color, prompt: prompt.trim(), pinned },
           },
         }))
@@ -60,7 +64,7 @@ export function DuetThreadEditor(props: {
     });
   };
   return (
-    <Sheet title="Edit Duet thread" onClose={props.onClose} dismissDisabled={busy}>
+    <Sheet title="Edit MadoHomu thread" onClose={props.onClose} dismissDisabled={busy}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -79,23 +83,23 @@ export function DuetThreadEditor(props: {
         </View>
         <Text className="text-sm text-foreground-muted">Icon</Text>
         <View className="flex-row flex-wrap gap-2">
-          {DUET_ICONS.map((choice) => (
+          {MADOHOMU_ICONS.map((choice) => (
             <Pressable
               key={choice.id}
               accessibilityRole="button"
               accessibilityLabel={choice.label}
-              accessibilityState={{ selected: (icon || DEFAULT_DUET_ICON) === choice.id }}
+              accessibilityState={{ selected: (icon || DEFAULT_MADOHOMU_ICON) === choice.id }}
               disabled={busy}
               onPress={() => setIcon(choice.id)}
               className={
-                (icon || DEFAULT_DUET_ICON) === choice.id
+                (icon || DEFAULT_MADOHOMU_ICON) === choice.id
                   ? "rounded-xl border border-primary p-2"
                   : "rounded-xl border border-border-subtle p-2"
               }
             >
-              <DuetIcon
+              <MadoHomuIcon
                 icon={choice.id}
-                color={validColor ? color : duetIconColor(props.thread.id)}
+                color={validColor ? color : madohomuIconColor(props.thread.id)}
               />
             </Pressable>
           ))}
@@ -112,7 +116,7 @@ export function DuetThreadEditor(props: {
           />
         </View>
         <View className="flex-row flex-wrap gap-2">
-          {DUET_ICON_COLORS.map((swatch) => (
+          {MADOHOMU_ICON_COLORS.map((swatch) => (
             <Pressable
               key={swatch}
               accessibilityRole="button"
@@ -152,7 +156,7 @@ export function DuetThreadEditor(props: {
             value={prompt}
             onChangeText={setPrompt}
             multiline
-            maxLength={DUET_THREAD_PROMPT_MAX_LENGTH}
+            maxLength={MADOHOMU_THREAD_PROMPT_MAX_LENGTH}
             readOnly={busy}
             className="min-h-24 rounded-xl bg-grouped-card p-3 text-base text-foreground"
           />

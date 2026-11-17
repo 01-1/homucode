@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 vi.mock("electron", () => ({}));
-import * as DesktopDuet from "./DesktopDuet.ts";
+import * as DesktopMadoHomu from "./DesktopMadoHomu.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
@@ -32,26 +32,28 @@ const layerDesktopEnvironment = (appImagePath?: string) =>
 
 it.effect("adds and removes the Linux launcher only while both opt-ins are enabled", () => {
   const files = new Map<string, string>();
-  const file = "/home/user/.local/share/applications/t3code-duet.desktop";
+  const file = "/home/user/.local/share/applications/t3code-madohomu.desktop";
+  const legacyFile = "/home/user/.local/share/applications/t3code-duet.desktop";
+  files.set(legacyFile, "Exec=t3code --duet");
   return Effect.gen(function* () {
-    const duet = yield* DesktopDuet.DesktopDuet;
-    yield* duet.configure({ enabled: false, launcherEnabled: true, environmentId: "local" });
+    const madohomu = yield* DesktopMadoHomu.DesktopMadoHomu;
+    yield* madohomu.configure({ enabled: false, launcherEnabled: true, environmentId: "local" });
     expect(files.size).toBe(0);
-    yield* duet.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
-    expect(files.get(file)).toContain("Name=T3 Duet");
-    expect(files.get(file)).toContain('Exec="/opt/My Apps/HomuCode.AppImage" --duet');
-    expect(files.get(file)).toContain("StartupWMClass=t3code-duet");
+    yield* madohomu.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
+    expect(files.get(file)).toContain("Name=MadoHomu");
+    expect(files.get(file)).toContain('Exec="/opt/My Apps/HomuCode.AppImage" --madohomu');
+    expect(files.get(file)).toContain("StartupWMClass=t3code-madohomu");
     expect(files.get(file)).toContain(
       "Icon=/home/user/.local/share/icons/com.t3tools.T3Code.desktop.png",
     );
-    yield* duet.configure({ enabled: true, launcherEnabled: false, environmentId: "local" });
+    yield* madohomu.configure({ enabled: true, launcherEnabled: false, environmentId: "local" });
     expect(files.has(file)).toBe(false);
-    yield* duet.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
-    yield* duet.configure({ enabled: false, launcherEnabled: true, environmentId: "local" });
+    yield* madohomu.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
+    yield* madohomu.configure({ enabled: false, launcherEnabled: true, environmentId: "local" });
     expect(files.has(file)).toBe(false);
   }).pipe(
     Effect.provide(
-      DesktopDuet.layer.pipe(
+      DesktopMadoHomu.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
             layerDesktopEnvironment("/opt/My Apps/HomuCode.AppImage"),
@@ -80,7 +82,7 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
 });
 
 it.effect(
-  "keeps the selected thread when splitting and merging and closes Duet when disabled",
+  "keeps the selected thread when splitting and merging and closes MadoHomu when disabled",
   () => {
     const loaded: string[] = [];
     const sent: unknown[] = [];
@@ -110,20 +112,20 @@ it.effect(
       },
     } as unknown as import("electron").BrowserWindow;
     return Effect.gen(function* () {
-      const duet = yield* DesktopDuet.DesktopDuet;
+      const madohomu = yield* DesktopMadoHomu.DesktopMadoHomu;
       const settings = { enabled: true, launcherEnabled: false, environmentId: "local" };
-      yield* duet.configure(settings);
+      yield* madohomu.configure(settings);
       expect(created).toBe(1);
       expect(new URL(loaded[0]!).pathname).toBe("/");
-      expect(new URL(loaded[0]!).hash).toBe("#/duet?environmentId=local");
-      yield* duet.open;
+      expect(new URL(loaded[0]!).hash).toBe("#/madohomu?environmentId=local");
+      yield* madohomu.open;
       expect(created).toBe(1);
       expect(revealed).toBe(1);
       const location = { environmentId: "local", threadId: "selected", tab: "tasks" as const };
-      yield* duet.setWindowMode({ mode: "merged", ...location });
-      expect(sent).toEqual([{ view: "duet", ...location }]);
+      yield* madohomu.setWindowMode({ mode: "merged", ...location });
+      expect(sent).toEqual([{ view: "madohomu", ...location }]);
       expect(closed).toBe(1);
-      yield* duet.setWindowMode({ mode: "split", ...location });
+      yield* madohomu.setWindowMode({ mode: "split", ...location });
       expect(created).toBe(2);
       expect(new URLSearchParams(new URL(loaded.at(-1)!).hash.split("?")[1]).get("threadId")).toBe(
         "selected",
@@ -133,16 +135,16 @@ it.effect(
       );
       expect(sent.at(-1)).toEqual({ view: "code", ...location });
       const loads = loaded.length;
-      // The Duet window omits the destination, so the main window's choice stays.
-      yield* duet.configure({ enabled: true, launcherEnabled: false });
+      // The MadoHomu window omits the destination, so the main window's choice stays.
+      yield* madohomu.configure({ enabled: true, launcherEnabled: false });
       expect(loaded.length).toBe(loads);
-      yield* duet.configure({ enabled: false, launcherEnabled: false });
+      yield* madohomu.configure({ enabled: false, launcherEnabled: false });
       expect(closed).toBe(2);
-      yield* duet.configure({ ...settings, enabled: false });
+      yield* madohomu.configure({ ...settings, enabled: false });
       expect(closed).toBe(2);
     }).pipe(
       Effect.provide(
-        DesktopDuet.layer.pipe(
+        DesktopMadoHomu.layer.pipe(
           Layer.provide(
             Layer.mergeAll(
               layerDesktopEnvironment(),

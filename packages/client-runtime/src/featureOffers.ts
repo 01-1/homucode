@@ -27,9 +27,9 @@ export interface FeatureOffer {
 
 export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
-    id: "duet",
+    id: "madohomu",
     page: 1,
-    title: "Duet",
+    title: "MadoHomu",
     description:
       "A focused Chat and Tasks view for one project, with its own desktop app and an optional morning brief.",
   },
@@ -197,10 +197,10 @@ export function featureOfferPages(
 }
 
 export function enabledFeatureOffers(
-  settings: Pick<ServerSettings, "duetEnabled" | "autoreviewEnabled" | "quickModelSelection">,
+  settings: Pick<ServerSettings, "madohomuEnabled" | "autoreviewEnabled" | "quickModelSelection">,
 ): ReadonlySet<string> {
   return new Set([
-    ...(settings.duetEnabled ? ["duet"] : []),
+    ...(settings.madohomuEnabled ? ["madohomu"] : []),
     ...(settings.autoreviewEnabled ? ["autoreview"] : []),
     ...(settings.quickModelSelection ? ["quick-model"] : []),
   ]);
@@ -241,8 +241,8 @@ export function featureOfferSettingsPatch(
         ...offered.filter((offer) => !offer.platform).map((offer) => offer.id),
       ]),
     ],
-    ...(offered.some((offer) => offer.id === "duet") && selected.has("duet")
-      ? { duetEnabled: true }
+    ...(offered.some((offer) => offer.id === "madohomu") && selected.has("madohomu")
+      ? { madohomuEnabled: true }
       : {}),
     ...(offered.some((offer) => offer.id === "autoreview") && selected.has("autoreview")
       ? { autoreviewEnabled: true }

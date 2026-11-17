@@ -10,7 +10,7 @@ export const SETTINGS_PAGE_TARGETS = [
   "SettingsLanguage",
   "SettingsNavigation",
   "SettingsOrganization",
-  "SettingsDuet",
+  "SettingsMadoHomu",
   "SettingsProjectOverview",
   "SettingsEnvironmentSourceControl",
   "SettingsWorktrees",

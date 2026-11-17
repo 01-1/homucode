@@ -1,12 +1,12 @@
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { LegendList } from "@legendapp/list/react-native";
 import {
-  duetIconColor,
-  duetTaskLabel,
-  isDuetThreadPinned,
-  orderDuetTasks,
-  orderDuetThreads,
-} from "@t3tools/client-runtime/duet";
+  madohomuIconColor,
+  madohomuTaskLabel,
+  isMadoHomuThreadPinned,
+  orderMadoHomuTasks,
+  orderMadoHomuThreads,
+} from "@t3tools/client-runtime/madohomu";
 import { AuthOrchestrationOperateScope, EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -21,18 +21,18 @@ import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useVisibleThreadShells } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
 import { openSettings } from "../settings/settings-navigation";
-import { DuetIcon } from "./DuetIcon";
-import { DuetProjectPicker } from "./DuetProjectPicker";
-import { DuetThreadEditor } from "./DuetThreadEditor";
-import { useDuetActions } from "./useDuetActions";
+import { MadoHomuIcon } from "./MadoHomuIcon";
+import { MadoHomuProjectPicker } from "./MadoHomuProjectPicker";
+import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
+import { useMadoHomuActions } from "./useMadoHomuActions";
 
-export function DuetRouteScreen(props: StaticScreenProps<{ readonly environmentId: string }>) {
+export function MadoHomuRouteScreen(props: StaticScreenProps<{ readonly environmentId: string }>) {
   const environmentId = EnvironmentId.make(props.route.params.environmentId);
-  return <DuetWorkspace key={environmentId} environmentId={environmentId} />;
+  return <MadoHomuWorkspace key={environmentId} environmentId={environmentId} />;
 }
 
-function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const actions = useDuetActions(environmentId);
+function MadoHomuWorkspace({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<"chat" | "tasks">("chat");
@@ -49,8 +49,8 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
   );
   const rows =
     tab === "tasks"
-      ? orderDuetTasks(threads)
-      : orderDuetThreads(threads, actions.settings.duetThreads);
+      ? orderMadoHomuTasks(threads)
+      : orderMadoHomuThreads(threads, actions.settings.madohomuThreads);
   const edited = threads.find((thread) => thread.id === editing);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId }));
@@ -69,38 +69,41 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
   return (
     <View className="flex-1 bg-screen">
       <AppBar
-        title="Duet"
+        title="MadoHomu"
         subtitle={actions.project?.title}
         onBack={() => navigation.goBack()}
         actions={[
           {
             icon: "gearshape",
-            accessibilityLabel: "Duet settings",
-            onPress: () => openSettings(navigation, "SettingsDuet"),
+            accessibilityLabel: "MadoHomu settings",
+            onPress: () => openSettings(navigation, "SettingsMadoHomu"),
           },
         ]}
       />
-      {!actions.settings.duetEnabled ? (
+      {!actions.settings.madohomuEnabled ? (
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           contentContainerClassName="gap-4 p-5"
         >
           <Text className="text-base text-foreground-muted">
-            Enable Duet in Settings to use it.
+            Enable MadoHomu in Settings to use it.
           </Text>
-          <Button label="Duet settings" onPress={() => openSettings(navigation, "SettingsDuet")} />
+          <Button
+            label="MadoHomu settings"
+            onPress={() => openSettings(navigation, "SettingsMadoHomu")}
+          />
         </ScrollView>
       ) : !actions.project ? (
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           contentContainerClassName="gap-4 p-5"
         >
-          <Text className="text-base text-foreground">Choose the project Duet focuses on.</Text>
-          <DuetProjectPicker
+          <Text className="text-base text-foreground">Choose the project MadoHomu focuses on.</Text>
+          <MadoHomuProjectPicker
             environmentId={environmentId}
-            projectId={actions.settings.duetProjectId}
+            projectId={actions.settings.madohomuProjectId}
             disabled={!actions.canWrite}
-            onChange={(duetProjectId) => void actions.save({ duetProjectId })}
+            onChange={(madohomuProjectId) => void actions.save({ madohomuProjectId })}
           />
         </ScrollView>
       ) : (
@@ -108,7 +111,7 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
           <LegendList
             data={rows}
             extraData={{
-              entries: actions.settings.duetThreads,
+              entries: actions.settings.madohomuThreads,
               canEdit: actions.canWrite && canOperate,
               tab,
             }}
@@ -158,19 +161,24 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
                   onPress={() => open(thread.id)}
                   className="min-h-16 min-w-0 flex-1 flex-row items-center gap-3 py-3 active:opacity-70"
                 >
-                  <DuetIcon
-                    icon={actions.settings.duetThreads[thread.id]?.icon ?? null}
-                    color={duetIconColor(thread.id, actions.settings.duetThreads[thread.id]?.color)}
+                  <MadoHomuIcon
+                    icon={actions.settings.madohomuThreads[thread.id]?.icon ?? null}
+                    color={madohomuIconColor(
+                      thread.id,
+                      actions.settings.madohomuThreads[thread.id]?.color,
+                    )}
                   />
                   <View className="min-w-0 flex-1 gap-1">
                     <Text className="text-base text-foreground" numberOfLines={1}>
                       {thread.title}
                     </Text>
                     {tab === "tasks" ? (
-                      <Text className="text-sm text-foreground-muted">{duetTaskLabel(thread)}</Text>
+                      <Text className="text-sm text-foreground-muted">
+                        {madohomuTaskLabel(thread)}
+                      </Text>
                     ) : null}
                   </View>
-                  {!isDuetThreadPinned(actions.settings.duetThreads[thread.id]) ? (
+                  {!isMadoHomuThreadPinned(actions.settings.madohomuThreads[thread.id]) ? (
                     <Text className="text-xs text-foreground-muted">Temporary</Text>
                   ) : null}
                 </Pressable>
@@ -187,8 +195,8 @@ function DuetWorkspace({ environmentId }: { readonly environmentId: EnvironmentI
           />
         </>
       )}
-      {actions.settings.duetEnabled && edited ? (
-        <DuetThreadEditor
+      {actions.settings.madohomuEnabled && edited ? (
+        <MadoHomuThreadEditor
           key={edited.id}
           environmentId={environmentId}
           thread={edited}

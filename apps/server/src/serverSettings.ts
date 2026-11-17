@@ -381,6 +381,22 @@ const PersistedServerSettings = Schema.Struct({
 // Parse first and decode second, so a managed policy can fill its defaults in between.
 const decodeSettingsFileJsonExit = Schema.decodeUnknownExit(fromLenientJson(Schema.Unknown));
 const decodePersistedServerSettingsExit = Schema.decodeUnknownExit(PersistedServerSettings);
+
+// Duet was renamed MadoHomu; files written before then keep the old keys.
+function renameDuetSettings(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  const renamed: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const next = key.startsWith("duet") ? `madohomu${key.slice(4)}` : key;
+    if (next === key || !(next in value)) renamed[next] = entry;
+  }
+  if (Array.isArray(renamed.featureOffersSeen)) {
+    renamed.featureOffersSeen = renamed.featureOffersSeen.map((id) =>
+      id === "duet" ? "madohomu" : id,
+    );
+  }
+  return renamed;
+}
 const LegacyProviderSettingsJson = fromLenientJson(
   Schema.Struct({
     providers: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
@@ -724,7 +740,7 @@ const make = Effect.gen(function* () {
   const readStoredSettings = Effect.gen(function* () {
     if (!(yield* readConfigExists)) return undefined;
     const parsed = decodeSettingsFileJsonExit(yield* readRawConfig);
-    return Exit.isSuccess(parsed) ? parsed.value : undefined;
+    return Exit.isSuccess(parsed) ? renameDuetSettings(parsed.value) : undefined;
   });
 
   const writeSettingsAtomically = Effect.fnUntraced(
@@ -805,7 +821,7 @@ const make = Effect.gen(function* () {
       const parsed = decodeSettingsFileJsonExit(raw);
       const decoded = Exit.isFailure(parsed)
         ? parsed
-        : decodePersistedServerSettingsExit(managed.withDefaults(parsed.value));
+        : decodePersistedServerSettingsExit(managed.withDefaults(renameDuetSettings(parsed.value)));
       const legacySettings = decodeLegacyProviderSettingsJsonExit(raw);
       if (legacySettings._tag === "Success") {
         legacyProviders = legacySettings.value.providers;

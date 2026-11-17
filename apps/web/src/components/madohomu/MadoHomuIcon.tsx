@@ -9,8 +9,8 @@ import {
   MessageCircleIcon,
   SunIcon,
 } from "lucide-react";
-import { DEFAULT_DUET_ICON } from "@t3tools/contracts";
-import { DUET_ICON_COLORS } from "@t3tools/client-runtime/duet";
+import { DEFAULT_MADOHOMU_ICON } from "@t3tools/contracts";
+import { MADOHOMU_ICON_COLORS } from "@t3tools/client-runtime/madohomu";
 import { ProviderAccentColorPicker } from "../settings/ProviderAccentColorPicker";
 import { Input } from "../ui/input";
 
@@ -26,8 +26,8 @@ const ICONS = [
   { id: "lucide:sun", label: "Sun", component: SunIcon },
 ];
 
-export function DuetIcon({ icon, color }: { icon: string | null; color: string }) {
-  const choice = ICONS.find((item) => item.id === (icon ?? DEFAULT_DUET_ICON));
+export function MadoHomuIcon({ icon, color }: { icon: string | null; color: string }) {
+  const choice = ICONS.find((item) => item.id === (icon ?? DEFAULT_MADOHOMU_ICON));
   return (
     <span
       className="inline-flex size-5 shrink-0 items-center justify-center"
@@ -42,7 +42,7 @@ export function DuetIcon({ icon, color }: { icon: string | null; color: string }
   );
 }
 
-export function DuetIconPicker({
+export function MadoHomuIconPicker({
   icon,
   color,
   onIconChange,
@@ -62,7 +62,7 @@ export function DuetIconPicker({
             key={item.id}
             type="button"
             aria-label={item.label}
-            aria-pressed={(icon || DEFAULT_DUET_ICON) === item.id}
+            aria-pressed={(icon || DEFAULT_MADOHOMU_ICON) === item.id}
             className="rounded-md border p-2 hover:bg-muted aria-pressed:bg-muted"
             onClick={() => onIconChange(item.id)}
           >
@@ -81,7 +81,7 @@ export function DuetIconPicker({
       </label>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm">Color</span>
-        {DUET_ICON_COLORS.map((swatch) => (
+        {MADOHOMU_ICON_COLORS.map((swatch) => (
           <button
             key={swatch}
             type="button"
@@ -93,7 +93,7 @@ export function DuetIconPicker({
           />
         ))}
         <ProviderAccentColorPicker
-          displayName="Duet icon"
+          displayName="MadoHomu icon"
           layout="inline"
           value={color}
           onCommit={onColorChange}

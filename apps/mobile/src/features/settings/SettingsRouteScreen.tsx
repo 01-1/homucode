@@ -272,7 +272,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
     {
       rows: [
         page("SettingsOrganization", "gearshape", gt("General")),
-        serverPage("SettingsDuet", "bubble.left.and.bubble.right", gt("Duet")),
+        serverPage("SettingsMadoHomu", "bubble.left.and.bubble.right", gt("MadoHomu")),
         page("SettingsAppearance", "paintbrush", gt("Appearance")),
         page("SettingsLanguage", "globe", gt("Language"), {
           value: SUPPORTED_LOCALES.includes(language)

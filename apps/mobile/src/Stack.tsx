@@ -130,8 +130,8 @@ import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
-import { SettingsDuetRouteScreen } from "./features/settings/SettingsDuetRouteScreen";
-import { DuetRouteScreen } from "./features/duet/DuetRouteScreen";
+import { SettingsMadoHomuRouteScreen } from "./features/settings/SettingsMadoHomuRouteScreen";
+import { MadoHomuRouteScreen } from "./features/madohomu/MadoHomuRouteScreen";
 import { FeatureOffersSheet } from "./features/onboarding/FeatureOffersSheet";
 import { SettingsLabsRouteScreen } from "./features/settings/ThreadSettingsSections";
 import { SettingsEnvironmentFilterProvider } from "./features/settings/settings-environment-filter";
@@ -268,10 +268,10 @@ const SETTINGS_SCREENS = {
     linking: "settings/organization",
     options: settingsPage("General"),
   }),
-  SettingsDuet: createNativeStackScreen({
-    screen: SettingsDuetRouteScreen,
-    linking: "settings/duet",
-    options: settingsPage("Duet"),
+  SettingsMadoHomu: createNativeStackScreen({
+    screen: SettingsMadoHomuRouteScreen,
+    linking: "settings/madohomu",
+    options: settingsPage("MadoHomu"),
   }),
   SettingsLanguage: createNativeStackScreen({
     screen: SettingsLanguageRouteScreen,
@@ -570,10 +570,10 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: PullRequestEditScreen,
       options: sheetRoute({ detent: 0.75, androidFit: true }),
     }),
-    Duet: createNativeStackScreen({
-      screen: DuetRouteScreen,
-      linking: "duet/:environmentId",
-      options: pageRoute({ title: "Duet" }),
+    MadoHomu: createNativeStackScreen({
+      screen: MadoHomuRouteScreen,
+      linking: "madohomu/:environmentId",
+      options: pageRoute({ title: "MadoHomu" }),
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,

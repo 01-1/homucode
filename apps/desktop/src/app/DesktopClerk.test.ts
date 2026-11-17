@@ -1,4 +1,4 @@
-import * as DesktopDuet from "../window/DesktopDuet.ts";
+import * as DesktopMadoHomu from "../window/DesktopMadoHomu.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalFetchInEffect:off - Hosted handoff test uses a real localhost listener without an OpenAI account.
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
@@ -181,8 +181,8 @@ describe("DesktopClerk", () => {
     ["before configure", true],
     ["after configure", true],
   ] as const)(
-    "reveals the requested window when a second instance launches %s (Duet: %s)",
-    ([entry, isDuet]) => {
+    "reveals the requested window when a second instance launches %s (MadoHomu: %s)",
+    ([entry, isMadoHomu]) => {
       storageMock.mockReturnValue(storageAdapter);
       createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: true });
       const quit = vi.fn();
@@ -204,10 +204,10 @@ describe("DesktopClerk", () => {
       return Effect.gen(function* () {
         const clerk = yield* DesktopClerk.DesktopClerk;
         if (entry === "before configure")
-          listeners.get("second-instance")?.({}, isDuet ? ["t3", "--duet"] : ["t3"]);
+          listeners.get("second-instance")?.({}, isMadoHomu ? ["t3", "--madohomu"] : ["t3"]);
         yield* clerk.configure.pipe(
-          Effect.provideService(DesktopDuet.DesktopDuet, {
-            open: Effect.sync(() => revealed.resolve("duet")),
+          Effect.provideService(DesktopMadoHomu.DesktopMadoHomu, {
+            open: Effect.sync(() => revealed.resolve("madohomu")),
             configure: () => Effect.void,
             setWindowMode: () => Effect.void,
           }),
@@ -215,8 +215,11 @@ describe("DesktopClerk", () => {
 
         assert.equal(quit.mock.calls.length, 0);
         if (entry === "after configure")
-          listeners.get("second-instance")!({}, isDuet ? ["t3", "--duet"] : ["t3"]);
-        assert.strictEqual(yield* Effect.promise(() => revealed.promise), isDuet ? "duet" : window);
+          listeners.get("second-instance")!({}, isMadoHomu ? ["t3", "--madohomu"] : ["t3"]);
+        assert.strictEqual(
+          yield* Effect.promise(() => revealed.promise),
+          isMadoHomu ? "madohomu" : window,
+        );
       }).pipe(
         Effect.scoped,
         Effect.provide(layerDesktopClerk(true, [], "darwin", undefined, undefined, listeners)),
@@ -252,7 +255,7 @@ describe("DesktopClerk", () => {
       assert.deepEqual(received, []);
 
       yield* clerk.configure.pipe(
-        Effect.provideService(DesktopDuet.DesktopDuet, {
+        Effect.provideService(DesktopMadoHomu.DesktopMadoHomu, {
           open: Effect.void,
           configure: () => Effect.void,
           setWindowMode: () => Effect.void,
@@ -336,7 +339,7 @@ it.effect(
     return Effect.gen(function* () {
       const clerk = yield* DesktopClerk.DesktopClerk;
       yield* clerk.configure.pipe(
-        Effect.provideService(DesktopDuet.DesktopDuet, {
+        Effect.provideService(DesktopMadoHomu.DesktopMadoHomu, {
           open: Effect.void,
           configure: () => Effect.void,
           setWindowMode: () => Effect.void,
@@ -430,7 +433,7 @@ it.effect.each(["startup", "open-url", "early-second-instance"] as const)(
           listeners.get("second-instance")?.({}, ["t3", link]);
         }
         yield* clerk.configure.pipe(
-          Effect.provideService(DesktopDuet.DesktopDuet, {
+          Effect.provideService(DesktopMadoHomu.DesktopMadoHomu, {
             open: Effect.void,
             configure: () => Effect.void,
             setWindowMode: () => Effect.void,
@@ -476,7 +479,7 @@ it.effect("hands web and app links to the renderer and leaves other links alone"
     yield* Effect.gen(function* () {
       const clerk = yield* DesktopClerk.DesktopClerk;
       yield* clerk.configure.pipe(
-        Effect.provideService(DesktopDuet.DesktopDuet, {
+        Effect.provideService(DesktopMadoHomu.DesktopMadoHomu, {
           open: Effect.void,
           configure: () => Effect.void,
           setWindowMode: () => Effect.void,

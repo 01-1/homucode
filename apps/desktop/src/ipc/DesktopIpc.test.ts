@@ -9,10 +9,10 @@ vi.mock("electron", () => ({}));
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
 
-it.effect("answers only the top frames of the main and Duet app windows", () =>
+it.effect("answers only the top frames of the main and MadoHomu app windows", () =>
   Effect.gen(function* () {
     const mainFrame = {};
-    const duetFrame = {};
+    const madohomuFrame = {};
     const invoke = new Map<string, DesktopIpc.DesktopIpcHandleListener>();
     const sync = new Map<string, DesktopIpc.DesktopIpcSyncListener>();
     const ipc = yield* DesktopIpc.DesktopIpc.pipe(
@@ -27,7 +27,7 @@ it.effect("answers only the top frames of the main and Duet app windows", () =>
             Layer.mock(ElectronWindow.ElectronWindow, {
               appWindows: Effect.succeed([
                 {
-                  webContents: { id: 3, mainFrame: duetFrame },
+                  webContents: { id: 3, mainFrame: madohomuFrame },
                 } as unknown as Electron.BrowserWindow,
               ]),
               main: Effect.succeedSome({
@@ -50,8 +50,8 @@ it.effect("answers only the top frames of the main and Duet app windows", () =>
 
     const senders = {
       app: { sender: { id: 1 }, senderFrame: mainFrame },
-      duet: { sender: { id: 3 }, senderFrame: duetFrame },
-      duetSubframe: { sender: { id: 3 }, senderFrame: {} },
+      madohomu: { sender: { id: 3 }, senderFrame: madohomuFrame },
+      madohomuSubframe: { sender: { id: 3 }, senderFrame: {} },
       appSubframe: { sender: { id: 1 }, senderFrame: {} },
       previewGuest: { sender: { id: 2 }, senderFrame: {} },
     };
@@ -68,8 +68,8 @@ it.effect("answers only the top frames of the main and Duet app windows", () =>
     }
     assert.deepEqual(results, {
       app: ["secret", "secret"],
-      duet: ["secret", "secret"],
-      duetSubframe: ["rejected", undefined],
+      madohomu: ["secret", "secret"],
+      madohomuSubframe: ["rejected", undefined],
       appSubframe: ["rejected", undefined],
       previewGuest: ["rejected", undefined],
     });

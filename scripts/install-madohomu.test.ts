@@ -7,7 +7,7 @@ import * as NodePath from "node:path";
 import { expect, it } from "vite-plus/test";
 
 it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
-  "installs only a Duet launcher and reuses the supplied Homu runtime, then uninstalls without touching shared state",
+  "installs only a MadoHomu launcher and reuses the supplied Homu runtime, then uninstalls without touching shared state",
   async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "madohomu-install-"));
     try {

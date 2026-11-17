@@ -299,7 +299,7 @@ const layerThreadLaunchProvided = ThreadLaunchService.layer.pipe(
 const layerSecretRequestsProvided = SecretRequests.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
-const layerScheduledTaskProvided = ScheduledTaskService.layerDuetSettings.pipe(
+const layerScheduledTaskProvided = ScheduledTaskService.layerMadoHomuSettings.pipe(
   Layer.provideMerge(ScheduledTaskService.layer),
   Layer.provide(
     Layer.mergeAll(

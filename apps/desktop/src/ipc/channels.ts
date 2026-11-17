@@ -146,6 +146,6 @@ export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-lo
 
 export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
 
-export const CONFIGURE_DUET_CHANNEL = "desktop:configure-duet";
-export const DUET_WINDOW_MODE_CHANNEL = "desktop:duet-window-mode";
-export const DUET_NAVIGATE_CHANNEL = "desktop:duet-navigate";
+export const CONFIGURE_MADOHOMU_CHANNEL = "desktop:configure-madohomu";
+export const MADOHOMU_WINDOW_MODE_CHANNEL = "desktop:madohomu-window-mode";
+export const MADOHOMU_NAVIGATE_CHANNEL = "desktop:madohomu-navigate";

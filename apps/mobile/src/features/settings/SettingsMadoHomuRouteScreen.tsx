@@ -6,20 +6,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
-import { DuetProjectPicker } from "../duet/DuetProjectPicker";
-import { useDuetActions } from "../duet/useDuetActions";
+import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
+import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 
-export function SettingsDuetRouteScreen() {
+export function SettingsMadoHomuRouteScreen() {
   const menu = useSettingsEnvironmentMenu();
   const { selectedTargets, selectedProjectKey } = useSettingsEnvironmentFilter();
   const insets = useSafeAreaInsets();
   return (
-    <SettingsScreen title="Duet" menus={[menu]}>
+    <SettingsScreen title="MadoHomu" menus={[menu]}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -28,15 +28,15 @@ export function SettingsDuetRouteScreen() {
       >
         {selectedProjectKey !== null ? (
           <Text className="text-base text-foreground-muted">
-            Choose an environment in the filter to configure Duet.
+            Choose an environment in the filter to configure MadoHomu.
           </Text>
         ) : selectedTargets.length === 0 ? (
           <Text className="text-base text-foreground-muted">
-            Connect to an environment to configure Duet.
+            Connect to an environment to configure MadoHomu.
           </Text>
         ) : (
           selectedTargets.map((target) => (
-            <EnvironmentDuetSettings
+            <EnvironmentMadoHomuSettings
               key={target.environmentId}
               environmentId={target.environmentId}
               label={target.label}
@@ -48,18 +48,18 @@ export function SettingsDuetRouteScreen() {
   );
 }
 
-function EnvironmentDuetSettings(props: {
+function EnvironmentMadoHomuSettings(props: {
   readonly environmentId: EnvironmentId;
   readonly label: string;
 }) {
-  const actions = useDuetActions(props.environmentId);
+  const actions = useMadoHomuActions(props.environmentId);
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const savedTime =
     actions.task?.schedule.type === "fixed_time" ? actions.task.schedule.timeOfDay : "09:00";
   const briefEnabled =
-    actions.task?.enabled === true && actions.task.projectId === actions.settings.duetProjectId;
+    actions.task?.enabled === true && actions.task.projectId === actions.settings.madohomuProjectId;
   const validTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(time ?? savedTime);
   const canBrief =
     actions.canWrite &&
@@ -82,20 +82,20 @@ function EnvironmentDuetSettings(props: {
   return (
     <SettingsSection title={props.label}>
       <SettingsSwitchRow
-        label="Enable Duet"
-        subtitle="A focused Chat and Tasks view for one project. Every Duet thread starts pinned."
-        value={actions.settings.duetEnabled}
+        label="Enable MadoHomu"
+        subtitle="A focused Chat and Tasks view for one project. Every MadoHomu thread starts pinned."
+        value={actions.settings.madohomuEnabled}
         disabled={busy || !actions.canWrite}
-        onValueChange={(duetEnabled) => void run(() => actions.save({ duetEnabled }))}
+        onValueChange={(madohomuEnabled) => void run(() => actions.save({ madohomuEnabled }))}
       />
-      {actions.settings.duetEnabled ? (
+      {actions.settings.madohomuEnabled ? (
         <>
-          <Text className="px-4 pt-3 text-sm text-foreground-muted">Duet project</Text>
-          <DuetProjectPicker
+          <Text className="px-4 pt-3 text-sm text-foreground-muted">MadoHomu project</Text>
+          <MadoHomuProjectPicker
             environmentId={props.environmentId}
-            projectId={actions.settings.duetProjectId}
+            projectId={actions.settings.madohomuProjectId}
             disabled={busy || !actions.canWrite}
-            onChange={(duetProjectId) => void run(() => actions.save({ duetProjectId }))}
+            onChange={(madohomuProjectId) => void run(() => actions.save({ madohomuProjectId }))}
           />
           <SettingsSwitchRow
             label="Morning brief"

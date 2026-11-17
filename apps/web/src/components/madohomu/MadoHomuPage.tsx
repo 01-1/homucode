@@ -1,19 +1,19 @@
 import { useAtomValue } from "@effect/atom-react";
-import { duetDestinationEnvironmentIdAtom } from "../../duet";
+import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { DuetIcon, DuetIconPicker } from "./DuetIcon";
+import { MadoHomuIcon, MadoHomuIconPicker } from "./MadoHomuIcon";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
-  duetIconColor,
-  duetTaskLabel,
-  isDuetThreadPinned,
-  orderDuetTasks,
-  orderDuetThreads,
-} from "@t3tools/client-runtime/duet";
+  madohomuIconColor,
+  madohomuTaskLabel,
+  isMadoHomuThreadPinned,
+  orderMadoHomuTasks,
+  orderMadoHomuThreads,
+} from "@t3tools/client-runtime/madohomu";
 import {
   AuthOrchestrationOperateScope,
-  DUET_THREAD_PROMPT_MAX_LENGTH,
+  MADOHOMU_THREAD_PROMPT_MAX_LENGTH,
   ProjectId,
   type EnvironmentId,
   type ThreadId,
@@ -44,17 +44,17 @@ import {
   DialogPanel,
   DialogFooter,
 } from "../ui/dialog";
-import { useDuetActions } from "./useDuetActions";
+import { useMadoHomuActions } from "./useMadoHomuActions";
 
-function useDuetEnvironmentId() {
-  const search = useSearch({ from: "/_chat/duet" });
+function useMadoHomuEnvironmentId() {
+  const search = useSearch({ from: "/_chat/madohomu" });
   const primary = usePrimaryEnvironmentId();
-  const destination = useAtomValue(duetDestinationEnvironmentIdAtom);
+  const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   return search.environmentId ?? destination ?? primary;
 }
 
-export function DuetProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
-  const actions = useDuetActions(environmentId);
+export function MadoHomuProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
   const projects = useProjects().filter(
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
@@ -62,10 +62,10 @@ export function DuetProjectPicker({ environmentId }: { environmentId: Environmen
     <label className="grid gap-2 text-sm">
       Project
       <select
-        aria-label="Duet project"
+        aria-label="MadoHomu project"
         className="rounded-md border bg-background p-2"
         disabled={!actions.canWrite}
-        value={actions.settings.duetProjectId ?? ""}
+        value={actions.settings.madohomuProjectId ?? ""}
         onChange={(event) =>
           void actions.changeProject(event.target.value ? ProjectId.make(event.target.value) : null)
         }
@@ -81,20 +81,20 @@ export function DuetProjectPicker({ environmentId }: { environmentId: Environmen
   );
 }
 
-export function DuetPage() {
-  const environmentId = useDuetEnvironmentId();
+export function MadoHomuPage() {
+  const environmentId = useMadoHomuEnvironmentId();
   return environmentId ? (
-    <DuetWorkspace environmentId={environmentId} />
+    <MadoHomuWorkspace environmentId={environmentId} />
   ) : (
     <SidebarInset>
-      <p className="p-6">Connect to an environment to use Duet.</p>
+      <p className="p-6">Connect to an environment to use MadoHomu.</p>
     </SidebarInset>
   );
 }
 
-function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
-  const { settings, project } = useDuetActions(environmentId);
-  const search = useSearch({ from: "/_chat/duet" });
+function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
+  const { settings, project } = useMadoHomuActions(environmentId);
+  const search = useSearch({ from: "/_chat/madohomu" });
   const navigate = useNavigate();
   const threads = useVisibleThreadShells().filter(
     (t) =>
@@ -105,14 +105,14 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
   );
   const selected = threads.find((t) => t.id === search.threadId) ?? threads[0];
   const open = (threadId: ThreadId) =>
-    void navigate({ to: "/duet", search: { environmentId, threadId, tab: "chat" } });
-  if (!settings.duetEnabled)
+    void navigate({ to: "/madohomu", search: { environmentId, threadId, tab: "chat" } });
+  if (!settings.madohomuEnabled)
     return (
       <SidebarInset>
         <div className="p-6">
-          Enable Duet in{" "}
-          <Link to="/settings/general" hash="duet-enabled">
-            Settings → Duet
+          Enable MadoHomu in{" "}
+          <Link to="/settings/general" hash="madohomu-enabled">
+            Settings → MadoHomu
           </Link>
           .
         </div>
@@ -122,9 +122,9 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
     return (
       <SidebarInset>
         <div className="mx-auto w-full max-w-md space-y-4 p-6">
-          <h1 className="text-xl font-semibold">Duet</h1>
-          <p>Choose the project Duet focuses on.</p>
-          <DuetProjectPicker environmentId={environmentId} />
+          <h1 className="text-xl font-semibold">MadoHomu</h1>
+          <p>Choose the project MadoHomu focuses on.</p>
+          <MadoHomuProjectPicker environmentId={environmentId} />
         </div>
       </SidebarInset>
     );
@@ -135,7 +135,7 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
           <SidebarTrigger />
         </div>
         <span className="min-w-0 flex-1 truncate text-sm">{project.title}</span>
-        {isElectron && window.desktopBridge?.setDuetWindowMode ? (
+        {isElectron && window.desktopBridge?.setMadoHomuWindowMode ? (
           <div className="[-webkit-app-region:no-drag]">
             <Button
               variant="ghost"
@@ -144,20 +144,26 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
                 const bridge = window.desktopBridge;
                 if (bridge)
                   void bridge
-                    .setDuetWindowMode?.({
-                      mode: bridge.isDuetWindow?.() ? "merged" : "split",
+                    .setMadoHomuWindowMode?.({
+                      mode: bridge.isMadoHomuWindow?.() ? "merged" : "split",
                       environmentId,
                       ...(selected ? { threadId: selected.id } : {}),
                       tab: search.tab ?? "chat",
                     })
-                    .catch(() => toastManager.add({ type: "error", title: "Could not move Duet" }));
+                    .catch(() =>
+                      toastManager.add({ type: "error", title: "Could not move MadoHomu" }),
+                    );
               }}
             >
-              {window.desktopBridge.isDuetWindow?.() ? "Merge" : "Split"}
+              {window.desktopBridge.isMadoHomuWindow?.() ? "Merge" : "Split"}
             </Button>
           </div>
         ) : null}
-        <div role="tablist" aria-label="Duet" className="flex gap-1 [-webkit-app-region:no-drag]">
+        <div
+          role="tablist"
+          aria-label="MadoHomu"
+          className="flex gap-1 [-webkit-app-region:no-drag]"
+        >
           {(["chat", "tasks"] as const).map((tab) => (
             <Button
               key={tab}
@@ -165,7 +171,7 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
               aria-selected={(search.tab ?? "chat") === tab}
               variant={(search.tab ?? "chat") === tab ? "secondary" : "ghost"}
               size="sm"
-              onClick={() => void navigate({ to: "/duet", search: { ...search, tab } })}
+              onClick={() => void navigate({ to: "/madohomu", search: { ...search, tab } })}
             >
               {tab === "chat" ? "Chat" : "Tasks"}
             </Button>
@@ -175,18 +181,18 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
       {search.tab === "tasks" ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <h1 className="mb-3 text-lg font-semibold">Tasks</h1>
-          {orderDuetTasks(threads).map((thread) => (
+          {orderMadoHomuTasks(threads).map((thread) => (
             <button
               key={thread.id}
               className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-muted"
               onClick={() => open(thread.id)}
             >
-              <DuetIcon
-                icon={settings.duetThreads[thread.id]?.icon ?? null}
-                color={duetIconColor(thread.id, settings.duetThreads[thread.id]?.color)}
+              <MadoHomuIcon
+                icon={settings.madohomuThreads[thread.id]?.icon ?? null}
+                color={madohomuIconColor(thread.id, settings.madohomuThreads[thread.id]?.color)}
               />
               <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-              <span className="text-xs text-muted-foreground">{duetTaskLabel(thread)}</span>
+              <span className="text-xs text-muted-foreground">{madohomuTaskLabel(thread)}</span>
             </button>
           ))}
           {threads.length === 0 ? (
@@ -204,17 +210,17 @@ function DuetWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
   );
 }
 
-export function DuetSidebar() {
-  const environmentId = useDuetEnvironmentId();
-  return environmentId ? <DuetThreadList environmentId={environmentId} /> : null;
+export function MadoHomuSidebar() {
+  const environmentId = useMadoHomuEnvironmentId();
+  return environmentId ? <MadoHomuThreadList environmentId={environmentId} /> : null;
 }
 
-function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
-  const actions = useDuetActions(environmentId);
-  const search = useSearch({ from: "/_chat/duet" });
+function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
+  const search = useSearch({ from: "/_chat/madohomu" });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
-  const threads = orderDuetThreads(
+  const threads = orderMadoHomuThreads(
     useVisibleThreadShells().filter(
       (t) =>
         t.environmentId === environmentId &&
@@ -222,7 +228,7 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
         t.deletedAt === null &&
         t.archivedAt === null,
     ),
-    actions.settings.duetThreads,
+    actions.settings.madohomuThreads,
   );
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const [editing, setEditing] = useState<ThreadId | null>(null);
@@ -230,23 +236,23 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
   const pending = useRef(false);
   const open = (threadId: ThreadId) => {
     if (isMobile) setOpenMobile(false);
-    void navigate({ to: "/duet", search: { environmentId, threadId, tab: "chat" } });
+    void navigate({ to: "/madohomu", search: { environmentId, threadId, tab: "chat" } });
   };
   const edited = threads.find((t) => t.id === editing);
   return (
     <>
       <SidebarHeader>
         <div className="flex items-center justify-between">
-          <Link to="/duet" search={{ environmentId }}>
-            ✦ Duet
+          <Link to="/madohomu" search={{ environmentId }}>
+            ✦ MadoHomu
           </Link>
-          <Link to="/settings/general" hash="duet-enabled">
+          <Link to="/settings/general" hash="madohomu-enabled">
             Settings
           </Link>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {actions.settings.duetEnabled ? (
+        {actions.settings.madohomuEnabled ? (
           <div className="space-y-1 p-2">
             <Button
               variant="outline"
@@ -280,12 +286,15 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
                   aria-current={search.threadId === thread.id ? "page" : undefined}
                   onClick={() => open(thread.id)}
                 >
-                  <DuetIcon
-                    icon={actions.settings.duetThreads[thread.id]?.icon ?? null}
-                    color={duetIconColor(thread.id, actions.settings.duetThreads[thread.id]?.color)}
+                  <MadoHomuIcon
+                    icon={actions.settings.madohomuThreads[thread.id]?.icon ?? null}
+                    color={madohomuIconColor(
+                      thread.id,
+                      actions.settings.madohomuThreads[thread.id]?.color,
+                    )}
                   />
                   <span className="truncate">{thread.title}</span>
-                  {!isDuetThreadPinned(actions.settings.duetThreads[thread.id]) ? (
+                  {!isMadoHomuThreadPinned(actions.settings.madohomuThreads[thread.id]) ? (
                     <span className="ml-auto text-xs text-muted-foreground">Temporary</span>
                   ) : null}
                 </button>
@@ -312,7 +321,7 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
         <Link to="/">Open T3 Code</Link>
       </SidebarFooter>
       {edited ? (
-        <DuetThreadEditor
+        <MadoHomuThreadEditor
           key={edited.id}
           environmentId={environmentId}
           thread={edited}
@@ -323,7 +332,7 @@ function DuetThreadList({ environmentId }: { environmentId: EnvironmentId }) {
   );
 }
 
-function DuetThreadEditor({
+function MadoHomuThreadEditor({
   environmentId,
   thread,
   onClose,
@@ -332,14 +341,14 @@ function DuetThreadEditor({
   thread: ReturnType<typeof useVisibleThreadShells>[number];
   onClose: () => void;
 }) {
-  const actions = useDuetActions(environmentId);
-  const entry = actions.settings.duetThreads[thread.id];
+  const actions = useMadoHomuActions(environmentId);
+  const entry = actions.settings.madohomuThreads[thread.id];
   const [title, setTitle] = useState(thread.title);
   const [icon, setIcon] = useState(entry?.icon ?? "");
-  const [color, setColor] = useState(duetIconColor(thread.id, entry?.color));
+  const [color, setColor] = useState(madohomuIconColor(thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
   const [busy, setBusy] = useState(false);
-  const [pinned, setPinned] = useState(isDuetThreadPinned(entry));
+  const [pinned, setPinned] = useState(isMadoHomuThreadPinned(entry));
   const update = useAtomCommand(threadEnvironment.updateMetadata);
   const save = async () => {
     setBusy(true);
@@ -373,7 +382,7 @@ function DuetThreadEditor({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Edit Duet thread</DialogTitle>
+          <DialogTitle>Edit MadoHomu thread</DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <div className="grid gap-4">
@@ -381,7 +390,7 @@ function DuetThreadEditor({
               Title
               <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={500} />
             </label>
-            <DuetIconPicker
+            <MadoHomuIconPicker
               icon={icon}
               color={color}
               onIconChange={setIcon}
@@ -392,7 +401,7 @@ function DuetThreadEditor({
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                maxLength={DUET_THREAD_PROMPT_MAX_LENGTH}
+                maxLength={MADOHOMU_THREAD_PROMPT_MAX_LENGTH}
               />
               <span className="text-xs text-muted-foreground">
                 Included privately with the title on every turn.

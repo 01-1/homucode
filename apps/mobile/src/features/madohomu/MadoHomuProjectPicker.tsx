@@ -5,7 +5,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { ListActionRow } from "../../components/ui/ListActionRow";
 import { useProjects } from "../../state/entities";
 
-export function DuetProjectPicker(props: {
+export function MadoHomuProjectPicker(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly disabled: boolean;
