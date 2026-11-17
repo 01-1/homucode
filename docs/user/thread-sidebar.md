@@ -56,6 +56,13 @@ children move together, including archived children. Their history, schedules,
 working folders and running turns stay attached. Moving changes where the thread
 is organized; the agent continues working in its original checkout.
 
+The menu also lists projects on other connected machines you can operate. Moving to one
+rebuilds the conversation there and archives the original; **Undo** restores the original.
+The source must be idle before a move to another machine. **Copy to project** rebuilds the
+conversation in a project on this machine or another and leaves the original alone.
+Copies carry your messages and the agent's replies, not tool activity, attachments, child
+threads, or the worktree. The destination agent receives the conversation on its first turn.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
@@ -192,12 +199,12 @@ close it. A closed folder shows how many threads it holds, and a dot when one of
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
 can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
-section is off. Each device keeps its own choice.
+section is off. This choice follows [Settings sync](./project-settings.md#settings-sync).
 
 ## Thread folders
 
-Folders group threads from one environment. They show above **Pinned** and work the same on
-every device connected to that environment.
+Folders group threads from one environment on web and desktop. They show above **Pinned**
+and are shared by those clients. Mobile does not show thread folders.
 
 To make a folder, right-click empty space in the sidebar and choose **New folder**, open a
 thread's menu and choose **Move to folder → New folder…**, or press `mod+g` on the open thread.
@@ -357,9 +364,9 @@ or send `/stopall` to stop its subagents too. To make ordinary Stop include suba
 change **Stop behavior** in **Settings → HomuCode → Extra features**.
 Before archiving the parent, wait for its delegated tasks to finish or cancel them.
 
-Subagent threads started by the agent can't take messages; message the parent
-thread instead. When such a subagent needs an approval or an answer, the parent
-thread asks for it.
+Provider-native subagents can't take messages; message the parent thread instead.
+T3-delegated subagents have their own threads and can receive messages. Their approval
+requests and questions also appear in the parent conversation.
 
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it

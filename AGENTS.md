@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
+HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `homura-ai/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
 
 What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summarized in the [README](README.md#changes-compared-to-t3-code). Keep the fork's changes easy to carry across upstream merges: prefer small, contained edits to upstream code over rewrites.
 
@@ -169,7 +169,7 @@ For mobile verification, a missing or outdated native client is an install step,
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
-- PRs go to HomuCode (`01-1/homucode`) unless the developer asks for upstream. A PR to the upstream T3 Code repo (`pingdotgg/t3code`) must follow [docs/upstream_contributing.md](docs/upstream_contributing.md), upstream's contribution policy, and must not carry HomuCode-only changes.
+- PRs go to HomuCode (`homura-ai/homucode`) unless the developer asks for upstream. A PR to the upstream T3 Code repo (`pingdotgg/t3code`) must follow [docs/upstream_contributing.md](docs/upstream_contributing.md), upstream's contribution policy, and must not carry HomuCode-only changes.
 - Every user-visible change to HomuCode adds or updates its entry in [CHANGES.md](CHANGES.md), and the short summary in the [README](README.md#changes-compared-to-t3-code) when it changes what that summary says. Do this in the same PR. Internal refactors, tests and CI need no entry.
 - `origin` is not always GitHub. Check `git remote get-url origin` before your first forge command and use that forge's CLI and skill. See [Forge mirror](docs/operations/development.md#forge-mirror-optional).
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.

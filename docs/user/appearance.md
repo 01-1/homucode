@@ -2,8 +2,8 @@
 
 On web and desktop, open **Settings → Appearance** to choose a theme and follow the system
 appearance or stay in light or dark mode. To use different themes for light and dark mode, select
-the corresponding preview within each theme. Appearance preferences are saved separately on each
-device or browser.
+the corresponding preview within each theme. Appearance preferences follow
+[Settings sync](./project-settings.md#settings-sync), which is on by default.
 
 To keep shared preferences the same across web, desktop and phone, opt into
 **Settings → HomuCode → Settings sync** on each device. If two devices change the
@@ -45,7 +45,7 @@ Wide formulas scroll horizontally while the surrounding text wraps. Copying a fo
 exporting a table preserves the TeX.
 
 The composer keeps TeX source editable, including when rich text is enabled. The Render math
-preference is saved separately on each device.
+preference also follows Settings sync, including on mobile.
 
 ## Motion
 
@@ -82,8 +82,9 @@ another theme.
 An agent on the same machine as the server can restyle T3 Code for you. Ask it to change the look,
 for example "make T3 Code's chat header taller" or "give T3 Code a solarized theme". It publishes
 an [environment theme](#environment-themes) with colors and CSS, and web and desktop clients of that
-server switch to it. It can also switch them to light, dark, or system mode. The thread must run
-in Full access. When you ask for a small change, such as darker message bubbles, it builds on the
+server switch to it. It can also switch them to light, dark, or system mode. Below Full access,
+T3 Code asks for your approval before changing the theme. When you ask for a small change, such
+as darker message bubbles, it builds on the
 theme you are using, so everything else stays as it was. To undo, ask it to set the theme you had
 before. HomuTheme is the default.
 

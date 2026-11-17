@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It has no releases or installers of its own: build it from source. Inside the app and the `t3` command it is still called T3 Code.
+HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. Linux x86_64 AppImages are available from [HomuCode releases](https://github.com/homura-ai/homucode/releases/latest). For other platforms, build it from source. Inside the app and the `t3` command it is still called T3 Code.
 
 ## Changes compared to T3 Code
 

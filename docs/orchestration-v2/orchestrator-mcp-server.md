@@ -433,8 +433,8 @@ belong to the environment, not a project, and a thread is in at most one.
 They are presentation state in `thread_folders`, not orchestration events, so
 moving a thread never changes its `updatedAt` or sidebar order. `list` is a read;
 `create` and `move` check each named thread like other thread writes; `update`,
-`reorder`, and `delete` are refused to fenced linked callers. The web and mobile sidebars use
-the same `ThreadFolderService` through `threadFolders.mutate`. New folders go first;
+`reorder`, and `delete` are refused to fenced linked callers. The web and desktop sidebars use
+`ThreadFolderService` through `threadFolders.mutate`. New folders go first;
 `reorder` places a folder before `beforeFolderId`, or last with null.
 `create` and `update` accept `rule` and `autoFile`; auto-file is off unless `autoFile` is true.
 Rules match new threads only;

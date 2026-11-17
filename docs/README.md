@@ -1,4 +1,7 @@
-# T3 Code docs
+# HomuCode docs
+
+These guides describe the T3 Code interface with HomuCode’s changes. For fork builds, start with
+[Install HomuCode](./user/install.md#homucode-builds); upstream downloads do not include the fork’s features.
 
 ## Using T3 Code
 
@@ -12,6 +15,7 @@
 - [Appearance and themes](./user/appearance.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [App scripts](./user/app-scripts.md)
+- [Duet](./user/duet.md)
 - [Voice input](./user/voice-input.md)
 - [Text generation models](./user/text-generation.md)
 - [SnapShots](./user/snap-shot.md)

@@ -26,7 +26,7 @@ HomuCode fixes that could go to upstream T3 Code (`pingdotgg/t3code`) but aren't
 
 Ask in an Ideas discussion or on the issue before writing a PR.
 
-- [ ] `--mode` for `t3 thread send` (`b0818dc7a9`). Issue #30205 is open with no maintainer reply.
+- [ ] `--mode` for `t3 thread send` (`b0818dc7a9`). Issue [#30205](https://github.com/pingdotgg/t3code/issues/30205) was closed as a feature request; the maintainer directed it to Discussions.
 - [ ] Continue conversations by default in schedules (`7a015c513a`).
 - [ ] `T3CODE_BACKGROUND_GIT=0` switch (`4e9a0080b2`).
 

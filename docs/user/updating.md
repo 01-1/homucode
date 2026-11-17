@@ -4,6 +4,17 @@ The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, the update button at the bottom
 of the sidebar and **Settings → Environments** offer to update it.
 
+## HomuCode builds
+
+Linux AppImages from [HomuCode releases](https://github.com/homura-ai/homucode/releases/latest)
+use the fork's update feed. Download the latest AppImage there if updating in the app fails.
+Builds you package yourself need a rebuild unless you configured an update feed.
+The upstream release channels, standalone CLI releases, and app-store updates described below
+do not supply HomuCode's fork features.
+
+For an AppImage staged to load on the next start, **Settings → About** shows the staged build.
+**Undo** disables that AppImage so the preceding staged build loads instead; the notice offers **Redo**.
+
 ## Update everything at once
 
 The update button at the bottom of the sidebar updates every connected machine

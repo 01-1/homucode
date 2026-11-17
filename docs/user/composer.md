@@ -64,7 +64,7 @@ See [images and videos](#images-and-videos-in-messages) for previewing and savin
 
 On web and desktop, choose **Settings → Chat → Follow-up behavior** to queue
 new messages for a later turn or steer the running turn immediately. The setting
-applies to this client; already queued messages keep their place. Queued messages
+follows [Settings sync](./project-settings.md#settings-sync); already queued messages keep their place. Queued messages
 are saved on the server and can be edited or removed before they send.
 When Enter sends, `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux uses
 the opposite action: it steers when your default is Queue and queues when your
@@ -329,6 +329,16 @@ Provider commands must start the message to run. T3 Code commands such as
 
 Send `/compact` in an existing conversation to reduce context usage when the
 provider supports it.
+
+On web and desktop, `/q <question>` asks one question on the **Quick model** selected in
+**Settings → Threads**, then returns to the thread's model for the next message. Choose a
+quick model first; it is off until you do.
+
+To change the folder a thread works in, send `/cd <folder>` on web or desktop. Relative paths
+start from its current folder, and `~` refers to the server's home directory. An existing
+thread must be idle; it keeps its conversation and uses the new folder on its next turn.
+In an unsent draft, `/cd` opens a new thread in the destination project. The project is added
+if it does not exist yet.
 
 Send `/clear` on its own, or pick it from the slash menu, to start a fresh session
 in the same thread. Your next message goes to a new provider session that doesn't see the

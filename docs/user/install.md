@@ -3,6 +3,17 @@
 T3 Code runs coding agents on your computer and lets you control them from its
 desktop, web, or mobile app. Set up the machine where the agents will work first.
 
+## HomuCode builds
+
+For HomuCode on Linux x86_64, download `T3-Code-x86_64.AppImage` from
+[HomuCode releases](https://github.com/homura-ai/homucode/releases/latest), make it executable,
+and launch it as shown under [Linux](#linux). These builds use the fork's update feed.
+For other platforms, [build from this repository](../operations/development.md#desktop-artifacts).
+
+The installers, package managers, and app-store links below install upstream T3 Code.
+They do not include HomuCode's changes. The desktop build includes its own `t3` command;
+see [The `t3` command](#the-t3-command).
+
 ## Requirements
 
 You need an installed, authenticated provider before starting a thread. You can
