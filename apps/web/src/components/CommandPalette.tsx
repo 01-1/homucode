@@ -1899,7 +1899,6 @@ function OpenCommandPaletteDialog(props: {
     now: searchNow,
   });
 
-  /** Where a newly added project leads: the opener's callback, else a new thread in it. */
   const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
     if (onProjectAdded) {
       onProjectAdded(projectRef);

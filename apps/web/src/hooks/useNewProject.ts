@@ -71,7 +71,6 @@ export function useNewProject() {
     readonly environmentId: EnvironmentId;
     readonly name: string;
     readonly publishTo: NewProjectPublishTarget | null;
-    /** Opens the created project; defaults to a new thread in it. */
     readonly openProject?: (projectRef: ScopedProjectRef) => Promise<void>;
   }): Promise<boolean> => {
     const result = await createNew({

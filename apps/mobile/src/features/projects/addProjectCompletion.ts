@@ -20,7 +20,6 @@ export function clearAddProjectCompletion(): void {
   pending = null;
 }
 
-/** Returns the pending completion and clears it. */
 export function takeAddProjectCompletion(): AddProjectCompletion | null {
   const completion = pending;
   pending = null;

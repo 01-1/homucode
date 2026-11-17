@@ -92,7 +92,6 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
   );
 }
 
-/** The MadoHomu page before a project is chosen: making a new one comes first. */
 export function MadoHomuNoProject({ environmentId }: { environmentId: EnvironmentId }) {
   const { canWrite } = useMadoHomuActions(environmentId);
   const newProject = useNewMadoHomuProject(environmentId);
