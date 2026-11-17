@@ -1,5 +1,6 @@
 import {
   BUILT_IN_THEMES,
+  HOMU_THEME,
   DEFAULT_THEME_ID,
   T3_CODE_LIGHT_THEME_COLORS,
   T3_CODE_DARK_THEME_COLORS,
@@ -27,9 +28,13 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly id: MobileThemeId;
   readonly label: string;
 }> = [
+  { id: HOMU_THEME.id, label: HOMU_THEME.label },
   { id: DEFAULT_MOBILE_THEME_ID, label: "T3 Code" },
   { id: "material-you", label: "Material You" },
-  ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
+  ...BUILT_IN_THEMES.filter((theme) => theme !== HOMU_THEME).map((theme) => ({
+    id: theme.id as MobileThemeId,
+    label: theme.label,
+  })),
 ];
 
 export type MobileThemeVariable = keyof ReturnType<typeof createMobileThemeVariables>;

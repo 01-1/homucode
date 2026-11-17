@@ -1,4 +1,4 @@
-import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEMES, HOMU_THEME } from "@t3tools/shared/themePalettes";
 import { MonitorIcon, MoonIcon, PaletteIcon, SunIcon } from "lucide-react";
 
 import { useCustomThemes } from "../hooks/useCustomThemes";
@@ -42,10 +42,11 @@ function useThemeCards() {
   const environmentThemes = useEnvironmentThemeDefinitions();
   const seen = new Set<string>();
   return [
+    getThemeCardDefinition(HOMU_THEME),
     ...STANDARD_THEME_CARDS.map((card) => ({ ...card, id: null })),
     ...[...BUILT_IN_THEMES, ...customThemes, ...environmentThemes]
       .filter((definition) => {
-        if (seen.has(definition.id)) return false;
+        if (definition.id === HOMU_THEME.id || seen.has(definition.id)) return false;
         seen.add(definition.id);
         return true;
       })

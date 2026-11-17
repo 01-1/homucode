@@ -1,7 +1,7 @@
 import { publishedThemeDefinitions } from "@t3tools/shared/themeColors";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { BUILT_IN_THEMES, LAVENDER_THEME } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEMES, HOMU_THEME } from "@t3tools/shared/themePalettes";
 import indexHtml from "../index.html?raw";
 import { readAppearanceModePreference, readThemePreference } from "./hooks/useTheme";
 import {
@@ -326,9 +326,9 @@ describe("index.html boot script", () => {
 
   it("paints the default palette when nothing is stored, following the OS", () => {
     for (const mode of ["light", "dark"] as const) {
-      const colors = getThemeColorsForMode(LAVENDER_THEME, mode)!;
+      const colors = getThemeColorsForMode(HOMU_THEME, mode)!;
       const boot = runBootScript({ storage: {}, prefersDark: mode === "dark" });
-      expect(boot.themeId).toBe(LAVENDER_THEME.id);
+      expect(boot.themeId).toBe(HOMU_THEME.id);
       expect(boot.isDark).toBe(mode === "dark");
       expect(boot.bootVariables["--boot-background"]).toBe(colors.canvas);
       expect(boot.backgroundColor).toBe(colors.chrome);
