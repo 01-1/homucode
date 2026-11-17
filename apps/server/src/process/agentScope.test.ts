@@ -241,6 +241,7 @@ describe("AgentScope service", () => {
       {
         memorySettings: {
           ...DEFAULT_AGENT_MEMORY_SETTINGS,
+          enabled: true,
           groupHighBytes: 2 * GiB,
           groupMaxBytes: 4 * GiB,
         },
