@@ -35,6 +35,13 @@ Partly proven.
 - A T3 Code checkout whose `package.json` pins an exact `engines.node` and
   `packageManager: pnpm@X.Y.Z`, with `pnpm-lock.yaml` committed.
 
+## In the app
+
+Enable **Show Building T3 settings** in **Settings → General**, then configure your checkout,
+boat CLI, machine type and output folder in **Building T3**. Enable cloud builds and choose a
+committed ref to build or focused test files to run. Status reports the result and artifact
+path. `T3_BUILD_BOAT_CLI` overrides the script's boat executable when called directly.
+
 ## Usage
 
 ```sh
