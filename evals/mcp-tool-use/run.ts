@@ -75,6 +75,7 @@ import {
 import { proxyConfig } from "../shared/proxy.ts";
 import { changeRequestsCreatedBy } from "../../apps/server/src/orchestration-v2/PullRequestSyncReactor.ts";
 import { type BackgroundWait, makeBackgroundWait } from "./backgroundWait.ts";
+import { themeRead } from "./themes.ts";
 import { DeviceExpect, gradeDevice } from "./device-grading.ts";
 import { FileLinksExpect, gradeFileLinks } from "./file-link-grading.ts";
 import {
@@ -284,6 +285,10 @@ const McpToolUseWorld = Schema.StructWithRest(
      * session. With them, T3's own t3_background_wait handler answers from this world.
      */
     backgroundTasks: Schema.optional(Schema.Array(Schema.String)),
+    /** The environment theme setting. With no `t3_theme_read` mock, T3's handler answers from it. */
+    defaultTheme: Schema.optional(Schema.String),
+    /** Published theme files, as `EnvironmentTheme`s, for T3's `t3_theme_read`. */
+    publishedThemes: Schema.optional(Schema.Array(Schema.Unknown)),
     /** PRs already linked to the thread, with the state T3 last saw. */
     linkedPullRequests: Schema.optional(
       Schema.Array(
@@ -1690,6 +1695,10 @@ export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(fun
   if (sample.backgroundWait && isT3Name(call.name) && name === "t3_background_wait" && fromWorld) {
     const result = yield* sample.backgroundWait(input);
     return result.isError ? failed(result.text) : toolResult(call.id, result.text);
+  }
+  if (isT3Name(call.name) && name === "t3_theme_read" && fromWorld) {
+    const result = yield* themeRead(testCase.setup.world, input);
+    return result.isError ? failed(result.value) : toolResult(call.id, result.value);
   }
   // A pasted secret is saved without a card, so a mocked card outcome does not apply.
   if (mock !== undefined && mock !== "default" && !pastedSecret(name, input)) {

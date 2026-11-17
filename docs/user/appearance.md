@@ -78,7 +78,9 @@ An agent on the same machine as the server can restyle T3 Code for you. Ask it t
 for example "make T3 Code's chat header taller" or "give T3 Code a solarized theme". It publishes
 an [environment theme](#environment-themes) with colors and CSS, and web and desktop clients of that
 server switch to it. It can also switch them to light, dark, or system mode. The thread must run
-in Full access. Ask the agent to set a built-in theme to undo it.
+in Full access. When you ask for a small change, such as darker message bubbles, it builds on the
+theme you are using, so everything else stays as it was. To undo, ask it to set the theme you had
+before. HomuTheme is the default.
 
 ## Environment themes
 
@@ -135,6 +137,17 @@ For an integration that generates a palette, this shorter format also works:
 Set `appearance` to `light` or `dark` and supply hex colors for `canvas` and `accent`. T3 Code
 generates the rest. The optional `colors` overrides use the names in the theme editor's advanced
 view. An optional `css` string adds [custom CSS](#custom-css).
+
+To change only a few colors of a built-in or published theme, put just those in a file and
+publish it on top of that theme:
+
+```bash
+t3 theme set lavender-darker.json --base lavender
+```
+
+The published theme keeps the base theme's other colors and its CSS, and the file's own `css`
+comes after the base's. `colors` describes the file's `appearance`, so a file with
+`"appearance": "dark"` changes the dark side of a light theme such as HomuTheme (id `lavender`).
 
 Write updates to a temporary file and rename it into place so clients never read a partial theme.
 Invalid files are not published.

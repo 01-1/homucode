@@ -1,4 +1,4 @@
-import { THEME_COLOR_ROLES } from "./themePalettes.ts";
+import { DEFAULT_THEME_ID, THEME_COLOR_ROLES } from "./themePalettes.ts";
 
 const FETCHES_BY_STRING = /image-set\(|\bsrc\(/i;
 // Only CSS whitespace may come first. \s also matches U+00A0, which makes the address relative.
@@ -75,6 +75,7 @@ export const THEME_GUIDE = [
   "Themes restyle T3 Code on web, desktop, and mobile. Web and desktop apply colors and CSS; mobile applies colors only.",
   "",
   "Colors: `canvas` and `accent` (hex) derive a full palette. `colors` overrides single roles, and `variants.light` or `variants.dark` does that for the other appearance. Prefer colors over CSS.",
+  "Without `base`, a theme is a whole new look: each role it leaves out comes from a generic palette, not the current theme, and the current theme's CSS is gone. To change part of the current look, set `base` to the theme id that `current` names, such as `lavender`, and give only the roles and CSS to change.",
   `Roles: ${THEME_COLOR_ROLES.join(", ")}.`,
   "",
   "CSS: `css` applies after the app's styles. Use `.dark` or `:root:not(.dark)` for one appearance.",
@@ -89,5 +90,5 @@ export const THEME_GUIDE = [
   ...THEME_CSS_HOOKS.map((hook) => `- ${hook.selector}: ${hook.styles}`),
   "",
   "You cannot see the result. Make small changes, then ask the user how it looks.",
-  "To undo, set a built-in theme: t3-chat, grove, ocean, ember, or iris.",
+  `To undo, set the theme that was \`current\` before, such as ${DEFAULT_THEME_ID}, the default.`,
 ].join("\n");

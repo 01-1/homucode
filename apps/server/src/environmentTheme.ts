@@ -12,6 +12,7 @@ import {
   THEME_CSS_MAX_LENGTH,
 } from "@t3tools/contracts";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
+import { findThemeFile, themeOnBase } from "@t3tools/shared/themeBase";
 import { themeCssLoadsRemoteFiles } from "@t3tools/shared/themeCss";
 import { BUILT_IN_THEME_IDS, UNPUBLISHABLE_THEME_IDS } from "@t3tools/shared/themePalettes";
 import * as Cause from "effect/Cause";
@@ -92,20 +93,21 @@ export class EnvironmentThemeNotSelectedError extends Schema.TaggedError<Environ
   }
 }
 
+export interface EnvironmentThemeRead {
+  readonly current: string;
+  readonly themes: ReadonlyArray<EnvironmentTheme>;
+  readonly theme?: EnvironmentThemeFile;
+}
+
 export class EnvironmentThemeService extends Context.Service<
   EnvironmentThemeService,
   {
     readonly current: Effect.Effect<ReadonlyArray<EnvironmentTheme>>;
 
     /** The default theme id and the published themes, plus the one named `themeId`. */
-    readonly read: (themeId?: string) => Effect.Effect<
-      {
-        readonly current: string;
-        readonly themes: ReadonlyArray<EnvironmentTheme>;
-        readonly theme?: EnvironmentTheme;
-      },
-      EnvironmentThemeRefusedError | ServerSettingsError
-    >;
+    readonly read: (
+      themeId?: string,
+    ) => Effect.Effect<EnvironmentThemeRead, EnvironmentThemeRefusedError | ServerSettingsError>;
 
     /**
      * Makes `themeId` the environment theme and `appearance` its mode, so connected clients
@@ -117,6 +119,8 @@ export class EnvironmentThemeService extends Context.Service<
         | {
             readonly themeId: string;
             readonly theme?: EnvironmentThemeFile | undefined;
+            /** A built-in or published theme `theme` builds on, kept wherever `theme` is silent. */
+            readonly base?: string | undefined;
             readonly appearance?: Exclude<DefaultAppearancePreference, ""> | undefined;
           }
         | { readonly appearance: Exclude<DefaultAppearancePreference, ""> },
@@ -236,6 +240,25 @@ export const readPublishedThemes = Effect.fn(function* (themesDir: string) {
   }
   return themes;
 });
+
+const unknownTheme = (themeId: string, themes: ReadonlyArray<EnvironmentTheme>) =>
+  new EnvironmentThemeRefusedError({
+    themeId,
+    problem: "is not a built-in or published theme.",
+    known: [...BUILT_IN_THEME_IDS, ...themes.map(({ id }) => id)],
+  });
+
+/** What `EnvironmentThemeService.read` answers for this setting and these published themes. */
+export const readEnvironmentThemes = (
+  defaultTheme: string,
+  themes: ReadonlyArray<EnvironmentTheme>,
+  themeId?: string,
+): Effect.Effect<EnvironmentThemeRead, EnvironmentThemeRefusedError> => {
+  if (themeId === undefined) return Effect.succeed({ current: defaultTheme, themes });
+  const theme = findThemeFile(themes, themeId);
+  if (theme === undefined) return Effect.fail(unknownTheme(themeId, themes));
+  return Effect.succeed({ current: defaultTheme, themes, theme });
+};
 
 const make = Effect.gen(function* () {
   const { environmentThemesDir } = yield* ServerConfig.ServerConfig;
@@ -362,6 +385,7 @@ const make = Effect.gen(function* () {
   )(function* (input) {
     const themeId = "themeId" in input ? input.themeId : undefined;
     const theme = "theme" in input ? input.theme : undefined;
+    const base = "base" in input ? input.base : undefined;
     const { appearance } = input;
     if (themeId !== undefined && !isEnvironmentThemeId(themeId)) {
       return yield* new EnvironmentThemeRefusedError({ themeId, problem: INVALID_ID });
@@ -384,18 +408,24 @@ const make = Effect.gen(function* () {
     yield* publishSemaphore.withPermits(1)(
       Effect.gen(function* () {
         if (themeId === undefined) return yield* select;
+        const { themes } = yield* refresh;
         if (theme === undefined) {
-          const known = [...BUILT_IN_THEME_IDS, ...(yield* refresh).themes.map(({ id }) => id)];
-          if (!known.includes(themeId)) {
-            return yield* new EnvironmentThemeRefusedError({
-              themeId,
-              problem: "is not a built-in or published theme.",
-              known,
-            });
+          if (findThemeFile(themes, themeId) === undefined) {
+            return yield* unknownTheme(themeId, themes);
           }
           return yield* select;
         }
-        const revert = yield* publish(themeId, theme);
+        let file = theme;
+        if (base !== undefined) {
+          const baseFile = findThemeFile(themes, base);
+          if (baseFile === undefined) return yield* unknownTheme(base, themes);
+          const built = themeOnBase(baseFile, theme);
+          if ("problem" in built) {
+            return yield* new EnvironmentThemeRefusedError({ themeId, problem: built.problem });
+          }
+          file = built;
+        }
+        const revert = yield* publish(themeId, file);
         yield* select.pipe(Effect.tapError(() => revert));
       }),
     );
@@ -406,16 +436,7 @@ const make = Effect.gen(function* () {
   )(function* (themeId) {
     const { themes } = yield* refresh;
     const { defaultTheme } = yield* settings.getSettings;
-    if (themeId === undefined) return { current: defaultTheme, themes };
-    const theme = themes.find((candidate) => candidate.id === themeId);
-    if (theme === undefined) {
-      return yield* new EnvironmentThemeRefusedError({
-        themeId,
-        problem: "is not a published theme.",
-        known: themes.map(({ id }) => id),
-      });
-    }
-    return { current: defaultTheme, themes, theme };
+    return yield* readEnvironmentThemes(defaultTheme, themes, themeId);
   });
 
   return {
