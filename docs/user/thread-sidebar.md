@@ -183,8 +183,8 @@ To keep threads watching a pull request in **Working** after their checks finish
 **Settings → General → Keep watched pull requests in Working**. The option is off by default.
 
 The Working section is on by default. Turn it off with **Settings → General → Working section** on web and desktop,
-or **Settings → General → Working section** on iOS and Android. Each device keeps its own
-choice.
+or **Settings → General → Working section** on iOS and Android. This choice follows
+[Settings sync](./project-settings.md#settings-sync).
 
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
