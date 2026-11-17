@@ -465,7 +465,7 @@ export const make = Effect.gen(function* () {
       const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
       for (const run of unattendedRuns) {
         if (
-          restartContinuationBlocked(projection, run, now, false, reaskRequests) ||
+          restartContinuationBlocked(projection, run, now, false) ||
           (yield* restartStopRequested(projections.getThreadRecords, projection.thread, run).pipe(
             Effect.mapError(
               (cause) =>
