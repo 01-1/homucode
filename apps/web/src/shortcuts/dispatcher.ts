@@ -101,6 +101,30 @@ function runScopes(scopes: readonly CommandScope[], event: KeyboardEvent): boole
   return false;
 }
 
+/** The command a keydown resolves to against the primary keybindings and the focus context. */
+export function resolveKeyDownCommand(event: KeyboardEvent): KeybindingCommand | null {
+  return resolveShortcutCommand(event, appAtomRegistry.get(primaryServerKeybindingsAtom), {
+    context: readFocusContext(event),
+  });
+}
+
+/**
+ * Runs a registered handler for a command as if its key were pressed. Returns false when no live
+ * scope handles it, as for commands that components handle in their own key listeners.
+ */
+export function runRegisteredCommand(command: KeybindingCommand): boolean {
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true });
+  for (const scopes of [captureScopes, globalScopes]) {
+    for (let index = scopes.length - 1; index >= 0; index -= 1) {
+      const scope = scopes[index];
+      if (!scope || (scope.options.when && !scope.options.when(event))) continue;
+      const handler = scope.commands[command];
+      if (handler && handler(event) !== false) return true;
+    }
+  }
+  return false;
+}
+
 function dispatchCaptureKeyDown(event: KeyboardEvent): void {
   runScopes(captureScopes, event);
 }

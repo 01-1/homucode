@@ -59,7 +59,9 @@ export class DesktopAppActivationBroker {
           failure(
             request.requestId,
             "request-timeout",
-            "The desktop app did not finish opening the project in time.",
+            request.type === "run-script"
+              ? "The app script did not finish in time."
+              : "The desktop app did not finish opening the project in time.",
           ),
         );
       }, this.#requestTimeoutMs);
@@ -89,7 +91,9 @@ export class DesktopAppActivationBroker {
           failure(
             pending.request.requestId,
             "renderer-unavailable",
-            "The T3 Code window closed before it opened the project.",
+            pending.request.type === "run-script"
+              ? "The T3 Code window closed before the app script finished."
+              : "The T3 Code window closed before it opened the project.",
           ),
         );
       }

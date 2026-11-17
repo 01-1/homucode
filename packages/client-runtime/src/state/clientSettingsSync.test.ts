@@ -84,4 +84,15 @@ describe("synced client setting values", () => {
       }),
     ).toEqual({ wordWrap: false });
   });
+
+  it("never syncs the app script gates in either direction", () => {
+    const gates = {
+      appScriptsEnabled: true,
+      appScriptsFromTerminal: true,
+      appScriptsFromAgents: true,
+    };
+    const values = syncedValuesFromClientSettings({ ...DEFAULT_CLIENT_SETTINGS, ...gates });
+    for (const key of Object.keys(gates)) expect(values).not.toHaveProperty(key);
+    expect(clientSettingsPatchFromSyncedValues(gates)).toEqual({});
+  });
 });

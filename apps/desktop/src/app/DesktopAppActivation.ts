@@ -8,8 +8,10 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import {
+  appScriptRunRefusal,
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
   DesktopAppActivationRequest,
+  type ClientSettings,
   type DesktopAppActivationResponse,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
@@ -26,6 +28,7 @@ import type * as Electron from "electron";
 
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { DESKTOP_APP_ACTIVATION_REQUEST_CHANNEL } from "../ipc/channels.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import { DesktopAppActivationBroker } from "./DesktopAppActivationBroker.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -283,6 +286,31 @@ export async function startDesktopAppControlServer(input: {
   };
 }
 
+/**
+ * Refuses `t3 app run` unless this device's settings allow it. The window checks again, but this
+ * process owns the settings file, so it decides before the request reaches the window.
+ */
+export function gateControlRequest(input: {
+  readonly readSettings: () => Promise<ClientSettings | null>;
+  readonly forward: (request: DesktopAppActivationRequest) => Promise<DesktopAppActivationResponse>;
+}) {
+  return async (request: DesktopAppActivationRequest): Promise<DesktopAppActivationResponse> => {
+    if (request.type !== "run-script") return input.forward(request);
+    const refusal = appScriptRunRefusal(await input.readSettings(), {
+      source: "terminal",
+      fromAgent: request.agentThreadId !== undefined,
+    });
+    if (refusal === null) return input.forward(request);
+    return {
+      version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+      requestId: request.requestId,
+      ok: false,
+      code: "scripts-disabled",
+      message: refusal,
+    };
+  };
+}
+
 export class DesktopAppActivation extends Context.Service<
   DesktopAppActivation,
   {
@@ -298,6 +326,7 @@ const { logWarning } = makeComponentLogger("desktop-app-activation");
 export const make = Effect.gen(function* () {
   const desktopEnvironment = yield* DesktopEnvironment.DesktopEnvironment;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
+  const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const path = yield* Path.Path;
   const userId = yield* HostProcess.UserId;
@@ -337,7 +366,16 @@ export const make = Effect.gen(function* () {
           startDesktopAppControlServer({
             ...address,
             userId,
-            handle: (request) => broker.request(request),
+            handle: gateControlRequest({
+              readSettings: () =>
+                runPromise(
+                  clientSettings.get.pipe(
+                    Effect.map(Option.getOrNull),
+                    Effect.orElseSucceed(() => null),
+                  ),
+                ),
+              forward: (request) => broker.request(request),
+            }),
             cancel: (requestId) => broker.cancel(requestId),
             onReclaimError: (cause) =>
               void runPromise(

@@ -3,7 +3,7 @@ import {
   findProjectByPath,
   inferProjectTitleFromPath,
 } from "@t3tools/client-runtime/state/projects";
-import type { DesktopAppActivationRequest } from "@t3tools/contracts";
+import type { DesktopAppOpenWorkspaceRequest } from "@t3tools/contracts";
 
 import { handleDesktopAppActivationRequest } from "../desktopAppActivation";
 import { newProjectId } from "../lib/utils";
@@ -37,7 +37,7 @@ export function useOpenLocalWorkspace() {
     primaryEnvironment.serverConfig !== null &&
     shellHasSnapshot;
 
-  const open = (request: DesktopAppActivationRequest) =>
+  const open = (request: DesktopAppOpenWorkspaceRequest) =>
     handleDesktopAppActivationRequest(request, {
       getTarget: () => {
         if (

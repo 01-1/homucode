@@ -14,6 +14,10 @@ const DEVICE_LOCAL_KEYS = new Set<string>([
   "scratchEnvironmentId",
   "voiceMicrophone",
   "voiceMicrophones",
+  // Another device or the server must never turn on code execution here.
+  "appScriptsEnabled",
+  "appScriptsFromTerminal",
+  "appScriptsFromAgents",
 ] satisfies ReadonlyArray<keyof ClientSettings>);
 
 export type SyncedValues = Readonly<Record<string, unknown>>;
