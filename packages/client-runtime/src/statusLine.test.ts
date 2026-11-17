@@ -131,6 +131,16 @@ describe("splitStatusLineItems", () => {
     ]);
   });
 
+  it("does not take a clock styled with the directory into the directory", () => {
+    const [line = []] = parseAnsiLines("~/repo up 2h [12:34:56] \u001b[38;5;183mmain");
+    expect(splitStatusLineItems(line).map((item) => item.kind)).toEqual([
+      "directory",
+      "text",
+      "clock",
+      "text",
+    ]);
+  });
+
   it("keeps a line without separators, directory, or clock as one item", () => {
     const line = [{ text: "A6 medium [1:2]", color: null, ...plain }];
     expect(splitStatusLineItems(line)).toEqual([{ kind: "text", segments: line }]);
@@ -176,6 +186,7 @@ describe("reserveStatusLineText", () => {
     ["8%", "100%"],
     ["5s", "00h00m"],
     ["1d02h", "00h00m"],
+    ["10m00s", "00h00m"],
     ["79.7k ", "000.0k "],
     ["(80k)", "(000k)"],
     ["6", "000.0k"],

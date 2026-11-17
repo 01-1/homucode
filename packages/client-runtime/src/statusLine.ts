@@ -416,7 +416,8 @@ export function splitStatusLineItems(
     const directory = start === 0 ? DIRECTORY_PATTERN.exec(text.slice(0, end)) : null;
     if (directory !== null) {
       // A script that styles its path apart from what follows keeps a path with spaces whole.
-      const styled = line.length > 1 ? (line[0]?.text.trimEnd().length ?? 0) : 0;
+      const first = line.length > 1 ? (line[0]?.text.trimEnd() ?? "") : "";
+      const styled = CLOCK_PATTERN.test(first) ? 0 : first.length;
       from = Math.min(end, Math.max(styled, directory[0].length));
       push("directory", 0, from);
     }
@@ -484,7 +485,7 @@ export function reserveStatusLineText(segment: AnsiSegment): string {
     .split(/([\s/(),]+)/)
     .map((token) => {
       const reserved = RESERVED_VALUES.find(([pattern]) => pattern.test(token))?.[1];
-      return reserved === undefined || reserved.length <= token.length ? token : reserved;
+      return reserved === undefined || reserved.length < token.length ? token : reserved;
     })
     .join("");
 }
