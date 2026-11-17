@@ -20,6 +20,7 @@ import {
   NodeSelection,
   Plugin,
   PluginKey,
+  Selection,
   TextSelection,
   type Transaction,
 } from "@tiptap/pm/state";
@@ -144,11 +145,17 @@ import {
 } from "./composerAttachmentInsertion";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
 
+/** Trailing empty lines count as text, so a caret above them is not at the end. */
+export function isCaretAtDocEnd(state: EditorState): boolean {
+  return state.selection.empty && state.selection.head === Selection.atEnd(state.doc).head;
+}
+
 export interface ComposerPromptEditorHandle {
   focus: () => void;
   focusAt: (cursor: number) => void;
   focusAtEnd: () => void;
   readSelectionRange: () => { start: number; end: number };
+  isCaretAtEnd: () => boolean;
   captureAttachmentInsertion: () => ComposerAttachmentInsertion | undefined;
   requestCitationComment: (request: ComposerCitationCommentRequest) => void;
   readSnapshot: () => {
@@ -1752,6 +1759,7 @@ function ComposerPromptEditorTiptapInner(
         readSnapshot();
         return selectionRangeRef.current;
       },
+      isCaretAtEnd: () => (editor ? isCaretAtDocEnd(editor.state) : false),
       captureAttachmentInsertion: () =>
         editor ? captureComposerAttachmentInsertion(editor) : undefined,
       requestCitationComment: (request) => {

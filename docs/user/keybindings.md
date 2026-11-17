@@ -185,8 +185,10 @@ in a text field such as the composer. Once you type or press another key, the
 field gets its own undo back. Terminals always keep their native shortcut.
 
 `thread.scrollToEnd` (`end` by default) scrolls the open thread to its latest message and
-resumes following new output. It does nothing while you type in the composer or another text
-field, or while a list, menu or other scrolling panel has focus; those keep their own End.
+resumes following new output. In the composer or the find-in-thread box it works once the caret
+is already at the end of the text, so the first press still moves the caret. A second End within half
+a second of one that did not scroll does not scroll either, so a quick double press is safe. Other text fields,
+lists, menus and scrolling panels with focus keep their own End.
 
 `thread.folder` (`mod+g` by default) moves the open thread into a new folder and starts
 renaming it. If the thread is already in a folder, it takes the thread out instead.
