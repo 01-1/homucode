@@ -180,9 +180,11 @@ generation. The same rows edit environment defaults or project overrides dependi
 project crumb.
 
 The Projects category, under Code, holds the project's name, icon, actions,
-checkouts and removal. Actions belong to a project: editing them creates the project's own list
-on each selected environment, and reset returns to the environment's shared list. A project's
-`t3.json` actions can be imported there. When a project has several checkouts on one environment,
+checkouts and removal. With **All projects** selected it edits the actions every project gets,
+on each selected environment, so a shortcut bound to one of them works in any project. Editing
+actions with a project selected gives that project its own copy of the list, which later edits for
+all projects no longer reach; reset returns it to the shared list. A project's `t3.json` actions
+can be imported there. When a project has several checkouts on one environment,
 choose one in the scope line at the top to see or change only that checkout's settings.
 
 Settings a repository can also declare in `t3.json`, such as the workspace for new threads,
