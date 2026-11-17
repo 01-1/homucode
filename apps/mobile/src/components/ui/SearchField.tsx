@@ -1,7 +1,8 @@
-import type { RefObject } from "react";
+import { type RefObject, startTransition, useState } from "react";
 import { Pressable, TextInput, type TextInputInstance, View } from "react-native";
 
 import { SymbolView } from "./AppSymbol";
+import { reconcileSearchFieldText, type SearchFieldTextState } from "./searchFieldText";
 import { useAndroidControlSizing } from "./useAndroidControlSizing";
 
 export interface SearchFieldProps {
@@ -24,6 +25,19 @@ export function SearchField({
   onChangeText,
 }: SearchFieldProps) {
   const { scale, mediumIconSize } = useAndroidControlSizing();
+  // The field owns its text and reports changes as a transition, so a slow parent render
+  // can't push a stale value back into the native input and eat keystrokes.
+  const [state, setState] = useState<SearchFieldTextState>({ text: value, pending: [] });
+  const [reportedValue, setReportedValue] = useState(value);
+  if (value !== reportedValue) {
+    setReportedValue(value);
+    setState(reconcileSearchFieldText(state, value));
+  }
+  const text = state.text;
+  const changeText = (next: string) => {
+    setState((current) => ({ text: next, pending: [...current.pending, next] }));
+    startTransition(() => onChangeText(next));
+  };
   return (
     <View
       className="min-w-0 flex-1 flex-row items-center rounded-full border border-input-border bg-input"
@@ -52,16 +66,16 @@ export function SearchField({
         selectionHandleColorClassName="accent-focus"
         className="min-w-0 flex-1 font-sans text-base text-foreground"
         style={{ paddingVertical: 7 * scale }}
-        value={value}
-        onChangeText={onChangeText}
+        value={text}
+        onChangeText={changeText}
       />
-      {value.length > 0 ? (
+      {text.length > 0 ? (
         <Pressable
           accessibilityLabel={clearAccessibilityLabel}
           accessibilityRole="button"
           hitSlop={10}
           onPress={() => {
-            onChangeText("");
+            changeText("");
             inputRef.current?.focus();
           }}
         >
