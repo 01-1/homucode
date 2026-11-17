@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/madohomu";
 import {
   ScheduledTaskId,
+  type MadoHomuThreadSettings,
   type EnvironmentId,
   type ProjectId,
   type ThreadId,
@@ -105,13 +106,25 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     return save({ madohomuMorningBriefTaskId: result.value.task.id });
   };
   const changeProject = (projectId: ProjectId | null) => save({ madohomuProjectId: projectId });
+  /** A thread's entry with `patch` applied; a patch replaces the whole entry, so this keeps the rest. */
+  const threadEntry = (
+    threadId: ThreadId,
+    patch: Partial<MadoHomuThreadSettings>,
+  ): MadoHomuThreadSettings => ({
+    icon: null,
+    prompt: "",
+    ...settings.madohomuThreads[threadId],
+    ...patch,
+  });
+  const patchThread = (threadId: ThreadId, patch: Partial<MadoHomuThreadSettings>) =>
+    save({ madohomuThreads: { [threadId]: threadEntry(threadId, patch) } });
   const setThreadSettings = (
     threadId: ThreadId,
     icon: string | null,
     prompt: string,
     color: string | null,
     pinned: boolean,
-  ) => save({ madohomuThreads: { [threadId]: { icon, prompt, color, pinned } } });
+  ) => patchThread(threadId, { icon, prompt, color, pinned });
   return {
     settings,
     project,
@@ -124,6 +137,8 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     createThread,
     setMorningBrief,
     changeProject,
+    threadEntry,
+    patchThread,
     setThreadSettings,
   };
 }

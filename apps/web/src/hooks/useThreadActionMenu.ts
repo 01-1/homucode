@@ -10,6 +10,7 @@ import {
 import { canSnooze, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
   AuthOrchestrationOperateScope,
+  type ContextMenuItem,
   type EnvironmentId,
   type ProjectId,
   type ScopedThreadRef,
@@ -73,14 +74,28 @@ function failureToast(title: string, error: unknown) {
   );
 }
 
+function menuItemIds(items: ReadonlyArray<ContextMenuItem>, ids = new Set<string>()) {
+  for (const item of items) {
+    ids.add(item.id);
+    if (item.children) menuItemIds(item.children, ids);
+  }
+  return ids;
+}
+
+/** Items a caller puts above the thread actions, and what to do when one is chosen. */
+export interface ThreadActionMenuExtras {
+  readonly items: ReadonlyArray<ContextMenuItem>;
+  readonly onSelect: (id: string) => void;
+}
+
 export function useThreadActionMenu(input: {
   readonly threadRef: ScopedThreadRef | null;
   readonly projectCwd: string | null;
-  readonly onStartRename: () => void;
+  readonly onStartRename: (threadRef: ScopedThreadRef) => void;
   readonly onFind?: ((threadRef: ScopedThreadRef) => void) | undefined;
   readonly canShareWithGuest: boolean;
 }) {
-  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
+  const { projectCwd, onStartRename, onFind, canShareWithGuest } = input;
   const router = useRouter();
   const projects = useProjects();
   const environments = useEnvironmentIdentities();
@@ -128,7 +143,16 @@ export function useThreadActionMenu(input: {
     onError: (error) => failureToast("Failed to copy thread ID", error),
   });
 
-  const openMenu = (position: { x: number; y: number }) => {
+  // A list passes each row's thread; the chat header uses the one it was given.
+  const openMenu = (
+    position: { x: number; y: number },
+    target: {
+      readonly threadRef: ScopedThreadRef;
+      readonly extras?: ThreadActionMenuExtras;
+    } | null = null,
+  ) => {
+    const threadRef = target?.threadRef ?? input.threadRef;
+    const extras = target?.extras;
     if (threadRef === null) return;
     void (async () => {
       const api = readLocalApi();
@@ -206,9 +230,22 @@ export function useThreadActionMenu(input: {
           (shell) => !threadRuntimeCanArchive(shell.runtime),
         ),
       });
-      const clicked = await settlePromise(() => api.contextMenu.show(items, position));
+      const shown: ReadonlyArray<ContextMenuItem> =
+        extras && extras.items.length > 0
+          ? [
+              ...extras.items,
+              ...items.map((item, index) =>
+                index === 0 ? { ...item, separatorBefore: true } : item,
+              ),
+            ]
+          : items;
+      const clicked = await settlePromise(() => api.contextMenu.show(shown, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
-      const action: ThreadActionMenuId = clicked.value;
+      if (extras && menuItemIds(extras.items).has(clicked.value)) {
+        extras.onSelect(clicked.value);
+        return;
+      }
+      const action = clicked.value as ThreadActionMenuId;
       if (
         threadActionRequiresOperate(action) &&
         !readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope)
@@ -343,7 +380,7 @@ export function useThreadActionMenu(input: {
           );
           return;
         case "rename":
-          onStartRename();
+          onStartRename(threadRef);
           return;
         case "regenerate-title": {
           if (isRegeneratingTitle) return;

@@ -558,6 +558,8 @@ type SidebarThreadRowProps = {
   pinningSupported: boolean;
   isPinned: boolean;
   sortable?: SortableThreadRowBag | undefined;
+  /** Replaces the project favicon on one-line rows; a folder row with one keeps the normal inset. */
+  leadingIcon?: ReactNode | undefined;
   // Thread folder members carry the folder's tint; the last one closes the card.
   folderTintClassName?: string | undefined;
   folderCardEnd?: boolean | undefined;
@@ -1276,7 +1278,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     ? "flex flex-col justify-center px-2.5 py-1.5"
                     : "flex h-9 items-center gap-2.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
-                  inFolder && "ps-9",
+                  inFolder && props.leadingIcon === undefined && "ps-9",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
@@ -1287,7 +1289,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           >
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
-              {inFolder ? null : (
+              {props.leadingIcon !== undefined ? (
+                <span className="flex shrink-0 items-center">{props.leadingIcon}</span>
+              ) : inFolder ? null : (
                 <span
                   className={cn(
                     "flex shrink-0 items-center transition-opacity",
