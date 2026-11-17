@@ -1,40 +1,70 @@
+import { StackActions, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { type EnvironmentId, type ProjectId } from "@t3tools/contracts";
+import { useCallback } from "react";
 import { View } from "react-native";
 
-import { AppText as Text } from "../../components/ui/AppText";
 import { ListActionRow } from "../../components/ui/ListActionRow";
+import * as Dialog from "../../components/ui/Dialog";
 import { useProjects } from "../../state/entities";
+import {
+  clearAddProjectCompletion,
+  setAddProjectCompletion,
+} from "../projects/addProjectCompletion";
 
+/**
+ * MadoHomu's project list: "New project" first, which runs the app's add-project flow and
+ * comes back here with the new project chosen, then the projects already in the environment.
+ */
 export function MadoHomuProjectPicker(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly disabled: boolean;
-  readonly onChange: (projectId: ProjectId | null) => void;
+  readonly onChange: (projectId: ProjectId) => void;
 }) {
+  const navigation = useNavigation();
+  const route = useRoute();
   const projects = useProjects().filter(
     (project) => project.environmentId === props.environmentId && project.archivedAt === null,
   );
+  // Back here means the add-project flow finished or was abandoned; either way it is done.
+  useFocusEffect(useCallback(() => clearAddProjectCompletion(), []));
+
+  const newProject = () => {
+    const { onChange, environmentId } = props;
+    setAddProjectCompletion((project) => {
+      navigation.dispatch(StackActions.popTo(route.name, route.params));
+      if (project.environmentId !== environmentId) {
+        Dialog.alert(
+          "Project added on another environment",
+          "MadoHomu stays on its own environment, so it kept its project.",
+        );
+        return;
+      }
+      onChange(project.projectId);
+    });
+    navigation.dispatch(StackActions.push("AddProject", { environmentId }));
+  };
+
   return (
-    <View>
+    <View className="gap-3">
       <ListActionRow
-        label="Choose a project"
-        detail={props.projectId === null ? "Selected" : undefined}
+        icon="folder.badge.plus"
+        label="New project"
         disabled={props.disabled}
-        onPress={() => props.onChange(null)}
+        onPress={newProject}
       />
-      {projects.map((project) => (
-        <ListActionRow
-          key={project.id}
-          label={project.title}
-          detail={props.projectId === project.id ? "Selected" : undefined}
-          disabled={props.disabled}
-          onPress={() => props.onChange(project.id)}
-        />
-      ))}
-      {projects.length === 0 ? (
-        <Text className="p-4 text-sm text-foreground-muted">
-          Add a project to this environment first.
-        </Text>
+      {projects.length > 0 ? (
+        <View>
+          {projects.map((project) => (
+            <ListActionRow
+              key={project.id}
+              label={project.title}
+              detail={props.projectId === project.id ? "Selected" : undefined}
+              disabled={props.disabled}
+              onPress={() => props.onChange(project.id)}
+            />
+          ))}
+        </View>
       ) : null}
     </View>
   );

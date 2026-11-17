@@ -107,6 +107,15 @@ describe("reduceCommandPaletteUiState", () => {
       session: 2,
     });
   });
+
+  it("keeps the add-project completion callback in the intent", () => {
+    const onProjectAdded = () => {};
+    const state = reduceCommandPaletteUiState(
+      { open: false, mode: "command", openIntent: null, session: 0 },
+      { _tag: "OpenAddProject", onProjectAdded },
+    );
+    expect(state.openIntent).toEqual({ kind: "add-project", onProjectAdded });
+  });
 });
 
 describe("resolveAddProjectEntry", () => {

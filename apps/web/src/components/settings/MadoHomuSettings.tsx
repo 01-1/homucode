@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { type EnvironmentId } from "@t3tools/contracts";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
-import { MadoHomuProjectPicker } from "../madohomu/MadoHomuPage";
+import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";

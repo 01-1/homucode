@@ -51,6 +51,7 @@ import {
   type DesktopWslState,
   type EnvironmentId,
   type FilesystemBrowseResult,
+  type ScopedProjectRef,
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
@@ -1885,6 +1886,19 @@ function OpenCommandPaletteDialog(props: {
     now: searchNow,
   });
 
+  // Read once per palette session, like the rest of the open intent.
+  const [onProjectAdded] = useState(() =>
+    props.openIntent?.kind === "add-project" ? (props.openIntent.onProjectAdded ?? null) : null,
+  );
+  /** Where a newly added project leads: the opener's callback, else a new thread in it. */
+  const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
+    if (onProjectAdded) {
+      onProjectAdded(projectRef);
+      return;
+    }
+    await handleNewThread(projectRef);
+  };
+
   const handleAddProjectForEnvironment = async (input: {
     readonly environmentId: EnvironmentId;
     readonly rawCwd: string;
@@ -1948,7 +1962,9 @@ function OpenCommandPaletteDialog(props: {
         existing.id,
         clientSettings.sidebarThreadSortOrder,
       );
-      if (latestThread && latestThread.settledOverride !== "settled") {
+      if (onProjectAdded) {
+        onProjectAdded(scopeProjectRef(existing.environmentId, existing.id));
+      } else if (latestThread && latestThread.settledOverride !== "settled") {
         await navigate({
           to: "/$environmentId/$threadId",
           params: buildThreadRouteParams(
@@ -2011,7 +2027,7 @@ function OpenCommandPaletteDialog(props: {
     }
 
     const navigationResult = await settlePromise(() =>
-      handleNewThread(scopeProjectRef(input.environmentId, projectId)),
+      openAddedProject(scopeProjectRef(input.environmentId, projectId)),
     );
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
@@ -2066,6 +2082,7 @@ function OpenCommandPaletteDialog(props: {
         environmentId: newProjectFlow.environmentId,
         name: newProjectName,
         publishTo: newProjectPublishes ? newProjectPublishTarget : null,
+        openProject: openAddedProject,
       }),
     );
     newProjectSubmittingRef.current = false;
@@ -2272,7 +2289,7 @@ function OpenCommandPaletteDialog(props: {
       startResult.value.projectId,
     );
     await waitForProject(projectRef, 3_000).catch(() => null);
-    const navigationResult = await settlePromise(() => handleNewThread(projectRef));
+    const navigationResult = await settlePromise(() => openAddedProject(projectRef));
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
       toastManager.add(
