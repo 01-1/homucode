@@ -22,22 +22,27 @@ export class DesktopStagedBuilds extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopStagedBuilds") {}
 
-export const make = Effect.gen(function* () {
-  const environment = yield* DesktopEnvironment.DesktopEnvironment;
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = environment.path;
-  // An AppImage run with APPIMAGE_EXTRACT_AND_RUN=1 leaves APPIMAGE unset; its runtime is our parent.
-  const runningAppImage = Effect.gen(function* () {
+export const resolveRunningAppImage = Effect.fn("desktop.stagedBuilds.resolveRunningAppImage")(
+  function* () {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    if (!environment.isPackaged || environment.platform !== "linux") return Option.none<string>();
     if (Option.isSome(environment.appImagePath)) return environment.appImagePath;
-    if (environment.platform !== "linux") return Option.none<string>();
+    const fileSystem = yield* FileSystem.FileSystem;
+    // APPIMAGE_EXTRACT_AND_RUN leaves APPIMAGE unset; the desktop's parent is the runtime.
     const exe = yield* fileSystem
       .readLink(`/proc/${process.ppid}/exe`)
       .pipe(Effect.option, Effect.map(Option.map((target) => target.replace(/ \(deleted\)$/, ""))));
-    return Option.filter(exe, (target) => path.basename(target).includes(".AppImage"));
-  });
+    return Option.filter(exe, (target) => environment.path.basename(target).endsWith(".AppImage"));
+  },
+);
+
+export const make = Effect.gen(function* () {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const path = environment.path;
+  const running = yield* resolveRunningAppImage();
 
   return DesktopStagedBuilds.of(
-    yield* makeStagedBuilds(runningAppImage).pipe(Effect.provideService(Path.Path, path)),
+    yield* makeStagedBuilds(Effect.succeed(running)).pipe(Effect.provideService(Path.Path, path)),
   );
 });
 export const layer = Layer.effect(DesktopStagedBuilds, make);

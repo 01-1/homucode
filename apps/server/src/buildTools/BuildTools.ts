@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off -- owns the optional LAN APK server and AppImage runtime discovery.
+// @effect-diagnostics nodeBuiltinImport:off -- owns the optional LAN APK server.
 import { makeStagedBuilds } from "@t3tools/shared/stagedBuilds";
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
@@ -29,20 +29,6 @@ export class BuildTools extends Context.Service<
   }
 >()("t3/buildTools/BuildTools") {}
 
-export class RunningAppImage extends Context.Reference<
-  Effect.Effect<string, never, FileSystem.FileSystem>
->("t3/buildTools/RunningAppImage", {
-  defaultValue: () =>
-    process.env.APPIMAGE
-      ? Effect.succeed(process.env.APPIMAGE)
-      : Effect.flatMap(FileSystem.FileSystem, (fs) =>
-          fs.readLink(`/proc/${process.ppid}/exe`).pipe(
-            Effect.map((target) => target.replace(/ \(deleted\)$/, "")),
-            Effect.orElseSucceed(() => ""),
-          ),
-        ),
-}) {}
-
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -57,7 +43,7 @@ const make = Effect.gen(function* () {
     yield* EffectConfig.option(EffectConfig.String("T3CODE_BACKGROUND_GIT")).pipe(Effect.orDie),
   );
   let lan: NodeHttp.Server | undefined;
-  const appImage = yield* yield* RunningAppImage;
+  const appImage = config.mode === "desktop" ? (config.desktopAppImagePath ?? "") : "";
   const appImageAvailable = appImage.includes(".AppImage");
   const initialSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
   const expand = (value: string) =>

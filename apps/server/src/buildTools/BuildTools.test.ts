@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import type { BuildToolsRequest } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -19,7 +20,7 @@ import * as BuildTools from "./BuildTools.ts";
 
 const decodeRequest = Schema.decodeSync(RequestSchema);
 const request = (action: BuildToolsRequest["action"]) => decodeRequest({ action, ref: "HEAD" });
-const fixture = Effect.gen(function* () {
+const fixture = Effect.fn("BuildTools.test.fixture")(function* (desktopAppImagePath = true) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* makeReplayServerConfig("build-tools");
@@ -71,14 +72,18 @@ print('fixture cloud build completed')
   const context = yield* Layer.build(
     BuildTools.layer.pipe(
       Layer.provideMerge(settings),
-      Layer.provide(Layer.succeed(Config.ServerConfig, config)),
-      Layer.provide(Layer.succeed(HostProcess.HomeDirectory, repo)),
       Layer.provide(
-        Layer.succeed(
-          BuildTools.RunningAppImage,
-          Effect.succeed(path.join(repo, "T3-Code-running.AppImage")),
-        ),
+        Layer.succeed(Config.ServerConfig, {
+          ...config,
+          ...(desktopAppImagePath
+            ? {
+                mode: "desktop" as const,
+                desktopAppImagePath: path.join(repo, "T3-Code-running.AppImage"),
+              }
+            : {}),
+        }),
       ),
+      Layer.provide(Layer.succeed(HostProcess.HomeDirectory, repo)),
     ),
   );
   const service = Context.get(context, BuildTools.BuildTools);
@@ -94,7 +99,7 @@ print('fixture cloud build completed')
 const fixtureLayer = ProcessRunner.layerWithSpawner.pipe(Layer.provideMerge(NodeServices.layer));
 it.live("keeps tools disabled, then reports fake cloud and APK artifacts and a fake loader", () =>
   Effect.gen(function* () {
-    const { service, saved, finish, fs, path, repo, sha } = yield* fixture;
+    const { service, saved, finish, fs, path, repo, sha } = yield* fixture();
     yield* service.run(request("cloud-build"));
     expect((yield* finish).message).toBe("Enable this build tool in Settings first.");
     const folder = path.join(repo, "custom-appimages");
@@ -146,7 +151,7 @@ it.live("keeps tools disabled, then reports fake cloud and APK artifacts and a f
 
 it.live("reports missing boat sign-in and missing artifacts instead of claiming success", () =>
   Effect.gen(function* () {
-    const { service, saved, finish, fs, boat, path, repo } = yield* fixture;
+    const { service, saved, finish, fs, boat, path, repo } = yield* fixture();
     yield* saved.updateSettings({ cloudBuildEnabled: true });
     yield* fs.writeFileString(boat, "#!/bin/sh\necho 'Sign in with boat login' >&2\nexit 1\n");
     yield* service.run(request("cloud-build"));
@@ -165,5 +170,22 @@ it.live("reports missing boat sign-in and missing artifacts instead of claiming 
     expect(absent.artifactPath).toBeNull();
     expect(absent.message).toContain("expected artifact");
     expect((yield* service.run(request("stop-serving"))).lanUrl).toBeNull();
+  }).pipe(Effect.scoped, Effect.provide(fixtureLayer)),
+);
+
+it.live("ignores an AppImage inherited by a standalone development server", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("APPIMAGE", "/live/T3-Code-running.AppImage");
+    try {
+      const { service } = yield* fixture(false);
+      const state = yield* service.run(request("stop-serving"));
+      expect(state.appImageAvailable).toBe(false);
+      expect(state.stagedBuilds).toBeNull();
+      expect((yield* service.run(request("undo")).pipe(Effect.flip)).cause).toMatchObject({
+        message: "This app is not running from an AppImage.",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }).pipe(Effect.scoped, Effect.provide(fixtureLayer)),
 );
