@@ -81,7 +81,7 @@ export function FeatureOfferChoices({
                   onValueChange={(value) => select(value === "default")}
                 >
                   <SelectTrigger aria-label={offer.title}>
-                    <SelectValue />
+                    <SelectValue>{selected.has(offer.id) ? options[0] : options[1]}</SelectValue>
                   </SelectTrigger>
                   <SelectPopup>
                     <SelectItem value="default">{options[0]}</SelectItem>

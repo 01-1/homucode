@@ -43,7 +43,9 @@ export function WorkAssistancePicker({
         }}
       >
         <SelectTrigger aria-label="Work assistance environment">
-          <SelectValue placeholder="Choose an environment" />
+          <SelectValue placeholder="Choose an environment">
+            {environments.find((entry) => entry.environmentId === chosenEnvironment)?.label}
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {environments.map((environment) => (
@@ -63,7 +65,14 @@ export function WorkAssistancePicker({
         }}
       >
         <SelectTrigger aria-label="Work assistance project">
-          <SelectValue placeholder="Choose a project" />
+          <SelectValue placeholder="Choose a project">
+            {
+              projects.find(
+                (entry) =>
+                  entry.environmentId === chosenEnvironment && entry.id === value?.projectId,
+              )?.title
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {projects

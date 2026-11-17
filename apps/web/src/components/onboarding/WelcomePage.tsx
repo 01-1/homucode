@@ -399,7 +399,9 @@ export function WelcomePage({
                           }}
                         >
                           <SelectTrigger aria-label="Setup theme">
-                            <SelectValue />
+                            <SelectValue>
+                              {BUILT_IN_THEMES.find((entry) => entry.id === theme)?.label}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectPopup>
                             {BUILT_IN_THEMES.map((entry) => (
