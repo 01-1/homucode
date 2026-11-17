@@ -55,7 +55,7 @@ if (process.argv.includes("--uninstall")) {
   }
   await NodeFSP.mkdir(NodePath.dirname(launcher), { recursive: true });
   await NodeFSP.mkdir(NodePath.dirname(desktop), { recursive: true });
-  await NodeFSP.writeFile(launcher, `#!/bin/sh\nexec ${quoteShell(runtime)} --madohomu "$@"\n`, {
+  await NodeFSP.writeFile(launcher, `#!/bin/sh\nexec ${quoteShell(runtime)} --duet "$@"\n`, {
     mode: 0o755,
   });
   await NodeFSP.chmod(launcher, 0o755);

@@ -21,7 +21,7 @@ it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
       NodeChildProcess.execFileSync(process.execPath, [installer], { env });
       const launcher = NodePath.join(root, ".local", "bin", "madohomu");
       expect(NodeChildProcess.execFileSync(launcher, ["example"], { encoding: "utf8" })).toBe(
-        "--madohomu\nexample\n",
+        "--duet\nexample\n",
       );
       const applications = NodePath.join(root, ".local", "share", "applications");
       expect(await NodeFSP.readdir(applications)).toEqual(["madohomu.desktop"]);
@@ -46,9 +46,7 @@ it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
       NodeChildProcess.execFileSync(process.execPath, ["--import", preload, installer], {
         env: { ...env, MADOHOMU_RUNTIME: "" },
       });
-      expect(NodeChildProcess.execFileSync(launcher, [], { encoding: "utf8" })).toBe(
-        "--madohomu\n",
-      );
+      expect(NodeChildProcess.execFileSync(launcher, [], { encoding: "utf8" })).toBe("--duet\n");
       NodeChildProcess.execFileSync(process.execPath, [installer, "--uninstall"], { env });
       expect(await NodeFSP.readFile(shared, "utf8")).toBe("shared settings");
     } finally {

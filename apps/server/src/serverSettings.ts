@@ -740,7 +740,7 @@ const make = Effect.gen(function* () {
   const readStoredSettings = Effect.gen(function* () {
     if (!(yield* readConfigExists)) return undefined;
     const parsed = decodeSettingsFileJsonExit(yield* readRawConfig);
-    return Exit.isSuccess(parsed) ? parsed.value : undefined;
+    return Exit.isSuccess(parsed) ? renameDuetSettings(parsed.value) : undefined;
   });
 
   const writeSettingsAtomically = Effect.fnUntraced(
