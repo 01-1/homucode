@@ -17,6 +17,7 @@ import {
   filterMadoHomuCodeThreads,
   reorderMadoHomuThreads,
   findMadoHomuMorningBriefThread,
+  findUntouchedMadoHomuThread,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
   selectMadoHomuEnvironment,
@@ -218,6 +219,31 @@ describe("MadoHomu sections", () => {
       ["Pinned", ["a"]],
       ["Scratch", ["outside", "busy"]],
     ]);
+  });
+
+  it("reopens an untouched New thread instead of making another", () => {
+    const fresh = {
+      id: ThreadId.make("a"),
+      title: "New thread",
+      latestUserMessageAt: null,
+      latestRun: null,
+    };
+    const touched = [
+      { ...fresh, id: ThreadId.make("b"), latestUserMessageAt: "2026-11-17" },
+      { ...fresh, id: ThreadId.make("new"), title: "Renamed" },
+      { ...fresh, id: ThreadId.make("later") },
+      { ...fresh, id: ThreadId.make("unpinned") },
+      { ...fresh, id: ThreadId.make("outside") },
+    ];
+    const withIcon = {
+      ...settings,
+      madohomuThreads: {
+        ...settings.madohomuThreads,
+        [ThreadId.make("later")]: entry({ icon: "☀️" }),
+      },
+    };
+    expect(findUntouchedMadoHomuThread(touched, withIcon)).toBeUndefined();
+    expect(findUntouchedMadoHomuThread([...touched, fresh], withIcon)).toBe(fresh);
   });
 
   it("moves a thread before another, or to the end", () => {

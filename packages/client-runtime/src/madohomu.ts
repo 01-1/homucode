@@ -114,6 +114,32 @@ export function reorderMadoHomuThreads(
   return index < 0 ? [...rest, moved] : [...rest.slice(0, index), moved, ...rest.slice(index)];
 }
 
+/** The title MadoHomu's "New thread" gives the threads it makes. */
+export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
+
+/**
+ * An untouched thread MadoHomu's "New thread" made (default title, no messages, no run, no icon
+ * or prompt, still pinned), so "New thread" reopens it instead of making another empty one.
+ */
+export function findUntouchedMadoHomuThread<
+  T extends Pick<EnvironmentThreadShell, "id" | "title" | "latestUserMessageAt" | "latestRun">,
+>(
+  pinned: ReadonlyArray<T>,
+  settings: Pick<ServerSettings, "madohomuThreads">,
+): T | undefined {
+  return pinned.find((thread) => {
+    const entry = settings.madohomuThreads[thread.id];
+    return (
+      thread.title === MADOHOMU_NEW_THREAD_TITLE &&
+      thread.latestUserMessageAt === null &&
+      thread.latestRun === null &&
+      isMadoHomuThreadPinned(entry) &&
+      !entry?.icon &&
+      !entry?.prompt
+    );
+  });
+}
+
 /** Whether the T3 Code thread list shows a thread of the MadoHomu project. */
 export function isMadoHomuThreadShownInCode(
   settings: Pick<

@@ -45,6 +45,7 @@ import {
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
+  EllipsisIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
   PinIcon,
@@ -596,6 +597,8 @@ type SidebarThreadRowProps = {
   isRenaming: boolean;
   renamingTitle: string;
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
+  /** A "…" button that opens the same menu as right-click: shown on hover and focus, always on touch. */
+  showActionsButton?: boolean | undefined;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
@@ -880,6 +883,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.preventDefault();
     onContextMenu(threadRef, { x: event.clientX, y: event.clientY });
   };
+  const handleActionsClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    onContextMenu(threadRef, { x: rect.left, y: rect.bottom + 4 });
+  };
+  const actionsButton =
+    props.showActionsButton && !isRenaming && !props.sortable?.isDragging ? (
+      <button
+        type="button"
+        aria-label={`Actions for ${thread.title}`}
+        onClick={handleActionsClick}
+        onKeyDown={(event) => event.stopPropagation()}
+        className="hidden size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:inline-flex focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-focus-within/sidebar-row:inline-flex group-any-hover/sidebar-row:inline-flex pointer-coarse:inline-flex"
+      >
+        <EllipsisIcon aria-hidden className="size-3.5" />
+      </button>
+    ) : null;
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
     if (
@@ -1309,6 +1330,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
+              {actionsButton}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title
