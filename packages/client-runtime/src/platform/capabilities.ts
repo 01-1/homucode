@@ -63,7 +63,7 @@ export class ClientPresentation extends Context.Service<
 >()("@t3tools/client-runtime/platform/capabilities/ClientPresentation") {}
 
 export const readClientDeviceName = (presentation: ClientPresentation["Service"]) =>
-  presentation.deviceName ?? Effect.succeed(undefined);
+  presentation.deviceName ?? Effect.undefined;
 
 export class PrimaryEnvironmentAuth extends Context.Service<
   PrimaryEnvironmentAuth,

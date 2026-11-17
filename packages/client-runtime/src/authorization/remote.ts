@@ -285,7 +285,7 @@ export const resolveRemoteWebSocketConnectionUrl = Effect.fn(
   readonly httpBaseUrl: string;
   readonly bearerToken: string;
   readonly clientMetadata?: AuthClientPresentationMetadata;
-  readonly deviceName?: string;
+  readonly deviceName?: string | undefined;
   readonly connectionMethod?: ClientConnectionMethod;
   readonly timeoutMs?: number;
 }) {
@@ -325,7 +325,7 @@ export const resolveRemoteDpopWebSocketConnectionUrl = Effect.fn(
     readonly accessToken: string;
   }) => Effect.Effect<string, E>;
   readonly clientMetadata?: AuthClientPresentationMetadata;
-  readonly deviceName?: string;
+  readonly deviceName?: string | undefined;
   readonly connectionMethod?: ClientConnectionMethod;
   readonly timeoutMs?: number;
 }) {
