@@ -26,7 +26,7 @@ import { Badge } from "../ui/badge";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { useThreadActionMenu, type ThreadActionMenuExtras } from "~/hooks/useThreadActionMenu";
 import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
@@ -66,6 +66,8 @@ interface ChatHeaderProps {
   /** Focused views (MadoHomu) show only the thread title. */
   hideProjectBreadcrumb?: boolean | undefined;
   trailingControls?: ReactNode | undefined;
+  /** A focused view's own items (MadoHomu's Move to and Edit…) for the thread menu. */
+  menuExtras?: ThreadActionMenuExtras | undefined;
 }
 
 function resolveRenameCommit(input: {
@@ -95,6 +97,7 @@ export const ChatHeader = memo(function ChatHeader({
   onFindInThread,
   hideProjectBreadcrumb = false,
   trailingControls,
+  menuExtras,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
@@ -222,7 +225,11 @@ export const ChatHeader = memo(function ChatHeader({
     hideProjectBreadcrumb && isServerThread
       ? openMenu(position, {
           threadRef: activeThreadRef,
-          extras: { items: [], labels: MADOHOMU_THREAD_MENU_LABELS, onSelect: () => {} },
+          extras: menuExtras ?? {
+            items: [],
+            labels: MADOHOMU_THREAD_MENU_LABELS,
+            onSelect: () => {},
+          },
         })
       : openMenu(position);
   const openMenuFromTitle = (event: ReactMouseEvent<HTMLButtonElement>) => {

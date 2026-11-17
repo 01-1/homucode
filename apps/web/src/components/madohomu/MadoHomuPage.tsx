@@ -1,18 +1,23 @@
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { CombineIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { useVisibleThreadShells } from "../../state/entities";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
 import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
+import { useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
+import {
+  useMadoHomuNewThread,
+  useMadoHomuSelectedThreadId,
+  useMadoHomuThreads,
+} from "./useMadoHomuThreads";
 
 export function MadoHomuPage() {
   const environmentId = useMadoHomuEnvironmentId();
@@ -64,16 +69,9 @@ function MadoHomuWindowModeButton({
 }
 
 function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
-  const { settings, project } = useMadoHomuActions(environmentId);
-  const search = useSearch({ from: "/_chat/madohomu" });
-  const threads = useVisibleThreadShells().filter(
-    (t) =>
-      t.environmentId === environmentId &&
-      t.projectId === project?.id &&
-      t.deletedAt === null &&
-      t.archivedAt === null,
-  );
-  const selected = threads.find((t) => t.id === search.threadId) ?? threads[0];
+  const { settings, project } = useMadoHomuThreads(environmentId);
+  const selectedId = useMadoHomuSelectedThreadId(environmentId);
+  const threadMenu = useMadoHomuThreadMenu(environmentId);
   if (!settings.madohomuEnabled)
     return (
       <MadoHomuMessage>
@@ -92,7 +90,7 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
         <MadoHomuNoProject environmentId={environmentId} />
       </SidebarInset>
     );
-  if (!selected)
+  if (!selectedId)
     return (
       <SidebarInset>
         <MadoHomuTitlebar trailing={windowMode} />
@@ -103,38 +101,29 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
     <SidebarInset className="h-dvh min-h-0 overflow-hidden">
       <ChatView
         environmentId={environmentId}
-        threadId={selected.id}
+        threadId={selectedId}
         routeKind="server"
         focusedHeader={{
           trailing: (
-            <MadoHomuWindowModeButton environmentId={environmentId} threadId={selected.id} />
+            <MadoHomuWindowModeButton environmentId={environmentId} threadId={selectedId} />
           ),
+          menuExtras: threadMenu.menuExtras(selectedId),
         }}
       />
+      {threadMenu.editor}
     </SidebarInset>
   );
 }
 
 function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) {
   const actions = useMadoHomuActions(environmentId);
-  const navigate = useNavigate();
-  const [creating, setCreating] = useState(false);
-  const create = () => {
-    setCreating(true);
-    void actions
-      .createThread()
-      .then((threadId) => {
-        if (threadId) void navigate({ to: "/madohomu", search: { environmentId, threadId } });
-        else toastManager.add({ type: "error", title: "Could not create thread" });
-      })
-      .finally(() => setCreating(false));
-  };
+  const { createThread, creating } = useMadoHomuNewThread(environmentId);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-sm text-muted-foreground">No threads yet.</p>
       <Button
         disabled={creating || !actions.modelSelection || !actions.canWrite}
-        onClick={create}
+        onClick={() => void createThread()}
       >
         <SquarePenIcon aria-hidden />
         New thread

@@ -1,10 +1,16 @@
-import { groupMadoHomuThreads } from "@t3tools/client-runtime/madohomu";
+import {
+  findUntouchedMadoHomuThread,
+  groupMadoHomuThreads,
+} from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useRef, useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useProjects, useVisibleThreadShells } from "../../state/entities";
 import { useSnoozeWakeClock } from "../Sidebar.logic";
+import { createMadoHomuThread } from "../../madohomu";
+import { toastManager } from "../ui/toast";
 
 /** MadoHomu's project threads, grouped the way the sidebar shows them. */
 export function useMadoHomuThreads(environmentId: EnvironmentId) {
@@ -43,4 +49,38 @@ export function useMadoHomuSelectedThreadId(environmentId: EnvironmentId): Threa
     return search.threadId;
   }
   return groups.flatMap((g) => g.threads)[0]?.id ?? null;
+}
+
+/**
+ * MadoHomu's "New thread": reopens an untouched empty one it made before, otherwise makes one,
+ * then opens it. `onOpen` runs before navigating (the sidebar closes its phone sheet there).
+ */
+export function useMadoHomuNewThread(environmentId: EnvironmentId, onOpen?: () => void) {
+  const navigate = useNavigate();
+  const { settings, groups } = useMadoHomuThreads(environmentId);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const open = (threadId: ThreadId) => {
+    onOpen?.();
+    void navigate({ to: "/madohomu", search: { environmentId, threadId } });
+  };
+  const createThread = async () => {
+    const untouched = findUntouchedMadoHomuThread(
+      groups.find((g) => g.kind === "pinned")?.threads ?? [],
+      settings,
+    );
+    if (untouched) return open(untouched.id);
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true);
+    try {
+      const id = await createMadoHomuThread(environmentId);
+      if (id) open(id);
+      else toastManager.add({ type: "error", title: "Could not create thread" });
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
+    }
+  };
+  return { createThread, creating };
 }
