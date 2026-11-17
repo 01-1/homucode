@@ -44,6 +44,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { ThreadHeaderStatusLine } from "./ThreadStatusBar";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -56,6 +57,7 @@ interface ChatHeaderProps {
   parentThreadLink: { threadId: ThreadId; title: string } | null;
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
+  statusLineKey?: string | null | undefined;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
@@ -82,6 +84,7 @@ export const ChatHeader = memo(function ChatHeader({
   parentThreadLink,
   onOpenThread,
   rightPanelOpen,
+  statusLineKey,
   onNewThreadInProject,
   onOpenProjectSettings,
   onFindInThread,
@@ -260,7 +263,11 @@ export const ChatHeader = memo(function ChatHeader({
     >
       <WorkspaceBreadcrumb
         ariaLabel="Thread breadcrumb"
-        className="flex-1 overflow-clip [overflow-clip-margin:2px]"
+        // With a status line beside it, the breadcrumb takes only its own width so the line starts after the title.
+        className={cn(
+          "overflow-clip [overflow-clip-margin:2px]",
+          statusLineKey ? "max-w-1/2 flex-none" : "flex-1",
+        )}
       >
         {activeProject ? (
           <>
@@ -407,6 +414,7 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {statusLineKey ? <ThreadHeaderStatusLine sessionKey={statusLineKey} /> : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

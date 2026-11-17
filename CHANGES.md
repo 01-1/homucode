@@ -43,7 +43,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Composer and messages
 
-- **Status line.** An optional line under the composer shows the model, context use and usage limits, like Claude Code's status line. Turn it on in Settings → Status line, which also takes a custom command. Web, desktop and mobile.
+- **Status line.** An optional line shows the model, context use and usage limits, like Claude Code's status line, across the full width under the composer and again in the top bar beside the thread title. Its colors follow the active theme, percentages draw as bars, the clock sits at the right edge and gives way before the text to its left, a long directory shortens with an ellipsis, and hovering opens the whole line wrapped over the page. Turn it on in Settings → Status line, which also takes a custom command. Web and desktop; mobile shows the line under the composer in theme colors.
 - **Plain-text sent messages.** A setting shows your sent messages as the plain text you typed instead of rendered Markdown. Find in thread matches what is shown.
 - **Keep `+` at the start of a line.** A setting keeps a `+` at the start of a line in your sent messages as typed, instead of turning it into a bullet.
 - **Answered questions keep their options.** Answered and cancelled questions show every option and its preview, not only the chosen one. Web and mobile.
