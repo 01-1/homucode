@@ -536,6 +536,7 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
     turn: ProviderAdapter.ProviderAdapterV2SteerInput,
   ) => Effect.Effect<void, ProviderAdapter.ProviderAdapterV2Error> = () => Effect.void,
   extraAdapters: ReadonlyArray<ProviderAdapter.ProviderAdapterV2["Service"]> = [],
+  bareStopWaitEnabled = false,
 ) {
   const driver = ProviderDriverKind.make(nativeGoals === undefined ? "codex" : "opencode");
   const cwd = yield* checkpointWorkspace(name);
@@ -673,7 +674,7 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
   const layer = ProviderReplayHarness.layerWithRegistry(
     { name },
     ProviderAdapterRegistry.layerFromAdapters([adapter, ...extraAdapters]),
-    { runEffectWorker: false },
+    { runEffectWorker: false, serverSettings: { bareStopWaitEnabled } },
   );
   const startFirstTurn = Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -2927,7 +2928,11 @@ it.effect("sends a steer again after Stop drops it unread", () =>
   }),
 );
 
-const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoals?: boolean) {
+const goalHarness = Effect.fn("goalHarness")(function* (
+  name: string,
+  nativeGoals?: boolean,
+  bareStopWaitEnabled = false,
+) {
   const harness = yield* nextTurnSelectionHarness(
     name,
     false,
@@ -2935,6 +2940,9 @@ const goalHarness = Effect.fn("goalHarness")(function* (name: string, nativeGoal
     Effect.void,
     true,
     nativeGoals,
+    undefined,
+    [],
+    bareStopWaitEnabled,
   );
   const send = (
     id: string,
@@ -3019,7 +3027,11 @@ it.effect.each([
   "stops the running turn and starts a bare %s sent with %s delivery from %s next",
   ([text, delivery, surface, label, reason]) =>
     Effect.gen(function* () {
-      const { steered, layer, startFirstTurn, send, read } = yield* goalHarness(`halt-${delivery}`);
+      const { steered, layer, startFirstTurn, send, read } = yield* goalHarness(
+        `halt-${delivery}`,
+        undefined,
+        true,
+      );
       yield* Effect.gen(function* () {
         const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
         const threadId = yield* startFirstTurn;

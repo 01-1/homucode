@@ -965,9 +965,7 @@ export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThrea
         type: "thread.stop",
         commandId: yield* allocateCommandId(input),
         threadId,
-        ...(input.includeSubagents === true
-          ? { stopDelegatedTasks: true }
-          : { leaveSubagentsRunning: true }),
+        ...(input.includeSubagents === true ? { stopDelegatedTasks: true } : {}),
       });
     }
   }

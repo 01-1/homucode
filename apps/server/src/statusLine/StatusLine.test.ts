@@ -27,7 +27,7 @@ const render = (
   }).pipe(
     Effect.provide(
       StatusLine.layer.pipe(
-        Layer.provide(ServerSettings.layerTest(settings)),
+        Layer.provide(ServerSettings.layerTest({ statusLineEnabled: true, ...settings })),
         Layer.provide(ProcessRunner.layer),
         Layer.provideMerge(NodeServices.layer),
       ),

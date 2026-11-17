@@ -12,7 +12,7 @@ const RUNNING = "T3-Code-0.1.7-running-x86_64.AppImage";
 const OLDER = "T3-Code-0.1.7-older-x86_64.AppImage";
 const STAGED = "T3-Code-0.1.7-staged-x86_64.AppImage";
 
-const setup = Effect.gen(function* () {
+const setup = Effect.fn("DesktopStagedBuilds.test.setup")(function* (extractAndRun = false) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const folder = yield* fs.makeTempDirectoryScoped();
@@ -34,17 +34,25 @@ const setup = Effect.gen(function* () {
       DesktopEnvironment.DesktopEnvironment.of({
         path,
         platform: "linux",
-        appImagePath: Option.some(path.join(folder, RUNNING)),
+        isPackaged: true,
+        appImagePath: extractAndRun ? Option.none() : Option.some(path.join(folder, RUNNING)),
       } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
     ),
+    Effect.provideService(FileSystem.FileSystem, {
+      ...fs,
+      readLink: (target) =>
+        target === `/proc/${process.ppid}/exe`
+          ? Effect.succeed(`${path.join(folder, RUNNING)} (deleted)`)
+          : fs.readLink(target),
+    }),
   );
   return { service, folder, fs, path };
 });
 
 it.layer(NodeServices.layer)("DesktopStagedBuilds", (it) => {
-  it.effect("undo makes the build staged before the newest load next, and redo restores it", () =>
+  it.effect.each([false, true])("undo and redo work with extract-and-run = %s", (extractAndRun) =>
     Effect.gen(function* () {
-      const { service, folder, fs, path } = yield* setup;
+      const { service, folder, fs, path } = yield* setup(extractAndRun);
 
       expect(yield* service.state).toEqual({
         folder,
@@ -71,7 +79,7 @@ it.layer(NodeServices.layer)("DesktopStagedBuilds", (it) => {
 
   it.effect("keeps one build to start, and redoes only undone builds in its folder", () =>
     Effect.gen(function* () {
-      const { service } = yield* setup;
+      const { service } = yield* setup();
       yield* service.undo;
       yield* service.undo;
 

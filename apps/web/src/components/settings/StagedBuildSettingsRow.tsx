@@ -1,4 +1,7 @@
-import type { DesktopStagedBuildsState } from "@t3tools/contracts";
+import { serverEnvironment } from "../../state/server";
+import { useAtomValue } from "@effect/atom-react";
+import { useAtomCommand } from "../../state/use-atom-command";
+import type { DesktopStagedBuildsState, EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { Atom } from "effect/reactivity";
 import { useState } from "react";
@@ -35,15 +38,41 @@ const failureToast = (title: string, error: unknown) =>
   );
 
 /** Undoes the last staged AppImage, so the next start loads the build staged before it. */
-export function StagedBuildSettingsRow() {
+export function StagedBuildSettingsRow({
+  environmentId,
+}: { readonly environmentId?: EnvironmentId } = {}) {
   const bridge = stagedBuilds();
   const query = useEnvironmentQuery(bridge ? stagedBuildsStateAtom : null);
+  const remote = useEnvironmentQuery(
+    environmentId ? serverEnvironment.buildToolsState({ environmentId, input: {} }) : null,
+  );
+  const run = useAtomCommand(serverEnvironment.buildToolsRun);
+  const canRun = useAtomValue(
+    serverEnvironment.buildToolsRun.permissionAtom(environmentId ?? null),
+  );
+  const remoteAction = async (action: "undo" | "redo", undoneAs = "") => {
+    if (!environmentId) return null;
+    const result = await run({
+      environmentId,
+      input: { action, undoneAs, ref: "origin/main", testFiles: [], stagedFile: "", sha256: "" },
+    });
+    return result._tag === "Success" ? result.value : null;
+  };
   const [pending, setPending] = useState(false);
-  const state = query.data;
-  if (!bridge || !state?.next) return null;
+  const state = environmentId ? remote.data?.stagedBuilds : query.data;
+  if (!state)
+    return environmentId ? (
+      <p className="text-sm text-muted-foreground">
+        Staged builds are not available on this installation.
+      </p>
+    ) : null;
 
   const redo = (undoneAs: string) => {
-    void bridge
+    if (environmentId) {
+      void remoteAction("redo", undoneAs);
+      return;
+    }
+    void bridge!
       .redo(undoneAs)
       .then(refresh)
       .catch((error: unknown) => failureToast("Could not redo the staged build", error));
@@ -51,8 +80,14 @@ export function StagedBuildSettingsRow() {
 
   const undo = () => {
     setPending(true);
-    void bridge
-      .undo()
+    const operation = environmentId
+      ? remoteAction("undo").then((result) => {
+          if (!result?.stagedBuilds || !result.undoneAs)
+            throw new Error("Could not undo this build.");
+          return { state: result.stagedBuilds, undoneAs: result.undoneAs };
+        })
+      : bridge!.undo();
+    void operation
       .then(({ state: after, undoneAs }) => {
         refresh();
         toastManager.add(
@@ -78,14 +113,18 @@ export function StagedBuildSettingsRow() {
       {...searchableSetting("staged-build")}
       description={
         state.previous
-          ? `${loads} Undo goes back to ${state.previous}.`
-          : `${loads} No earlier build in ${state.folder}.`
+          ? `Running ${state.running}. ${loads} Undo goes back to ${state.previous}.`
+          : `Running ${state.running}. ${loads} No earlier build in ${state.folder}.`
       }
       control={
         <Button
           size="sm"
           variant="outline"
-          disabled={pending || query.isPending || state.previous === null}
+          disabled={
+            pending ||
+            (environmentId ? !canRun || remote.isPending : query.isPending) ||
+            state.previous === null
+          }
           onClick={undo}
         >
           Undo

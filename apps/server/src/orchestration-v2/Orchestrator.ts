@@ -7797,7 +7797,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       goalCommand === null &&
       dispatchMode.type !== "restart_active" &&
       command.createdBy === "user" &&
-      isHaltMessage(command)
+      isHaltMessage(
+        command,
+        (yield* serverSettings.getSettings.pipe(Effect.orDie)).bareStopWaitEnabled,
+      )
     ) {
       const target = projection.runs.findLast(isLiveRun);
       const targetMessage = projection.messages.find(

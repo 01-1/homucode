@@ -1309,16 +1309,16 @@ it("assistance metadata and launches refuse agent, OAuth, linked and non-MAIN cl
   );
 });
 
-it("human activity returns only MAIN web/mobile receipt timestamps, including archived and settled threads", async () => {
+it("human activity returns only configured web/mobile receipt timestamps, including archived and settled threads", async () => {
   await Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBeNull();
     const at = "2026-08-04T12:00:00.000Z";
     for (const [id, project, deleted, archived] of [
-      ["activity-main", WorkAssistance.MAIN_PROJECT, null, null],
+      ["activity-main", ProjectId.make("assistance-project"), null, null],
       ["activity-other", "other-project", null, null],
-      ["activity-deleted", WorkAssistance.MAIN_PROJECT, at, null],
-      ["activity-archived", WorkAssistance.MAIN_PROJECT, null, at],
+      ["activity-deleted", ProjectId.make("assistance-project"), at, null],
+      ["activity-archived", ProjectId.make("assistance-project"), null, at],
     ] as const) {
       yield* sql`INSERT INTO orchestration_v2_projection_threads ${sql.insert({
         thread_id: id,
@@ -1377,5 +1377,15 @@ it("human activity returns only MAIN web/mobile receipt timestamps, including ar
       "2026-08-04T12:02:00.000Z",
     );
     expect(yield* WorkAssistance.readLatestHumanMessageAt()).toBe("2026-08-04T12:02:00.000Z");
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory), Effect.runPromise);
+  }).pipe(
+    Effect.provide(
+      Layer.merge(
+        SqlitePersistence.layerMemory,
+        ServerSettings.layerTest({
+          workAssistanceTarget: { environmentId, projectId: ProjectId.make("assistance-project") },
+        }),
+      ),
+    ),
+    Effect.runPromise,
+  );
 });

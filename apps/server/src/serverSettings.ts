@@ -364,6 +364,7 @@ const PersistedResponseStreamingMode = Schema.Union([
 );
 const PersistedServerSettings = Schema.Struct({
   ...ServerSettings.fields,
+  statusLineEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   responseStreamingMode: PersistedResponseStreamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("paragraph" as const)),
   ),
@@ -676,6 +677,7 @@ const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const {
     settings: managed,
+    document: policyDocument,
     providers: managedProviders,
     summary: managedPolicy,
   } = yield* ManagedPolicy.ManagedPolicy;
@@ -727,7 +729,15 @@ const make = Effect.gen(function* () {
 
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
-      const stripped = stripDefaultServerSettings(settings, managed.defaults) ?? {};
+      const persistedDefaults = {
+        ...managed.defaults,
+        // Omission on disk retains the legacy default unless a policy supplies one.
+        statusLineEnabled:
+          policyDocument?.settings?.statusLineEnabled?.locked === false
+            ? managed.defaults.statusLineEnabled
+            : true,
+      };
+      const stripped = stripDefaultServerSettings(settings, persistedDefaults) ?? {};
       const sparseSettingsJson = yield* encodeServerSettingsJson(
         managed.keepStored === undefined
           ? stripped

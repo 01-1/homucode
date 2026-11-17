@@ -67,6 +67,7 @@ describe("sentFromConnection and sentFromLine", () => {
 
   it("adds nothing for agents, scheduled tasks, or slash commands", () => {
     const fromPhone = userMessage({ surface: "mobile", clientOs: "iOS" });
+    expect(withSentFromLine("Hello", fromPhone, false)).toBe("Hello");
     expect(withSentFromLine("Hello", fromPhone)).toBe("Hello\n\n[T3] Sent from: T3 mobile (iOS)");
     expect(sentFromLine({ ...fromPhone, createdBy: "agent" })).toBe("");
     expect(sentFromLine({ ...fromPhone, senderThreadId: ThreadId.make("parent") })).toBe("");

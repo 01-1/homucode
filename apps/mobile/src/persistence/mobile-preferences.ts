@@ -27,6 +27,7 @@ import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-sto
 
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const SETTINGS_SYNC_DEFAULT_KEY = "t3code.preferences.settings-sync-default";
 const encodeJson = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
 export const PullRequestListControls = Schema.Struct({
@@ -162,8 +163,10 @@ export interface Preferences {
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
-  /** Unset means on, as on web and desktop. */
+  /** Device-local opt-in; existing preference documents preserve their sync choice. */
   readonly settingsSyncEnabled?: boolean;
+  readonly fasterPhoneLaunch?: boolean;
+  readonly featureOffersSeen?: ReadonlyArray<string>;
   /** Per server, the synced copy this phone last agreed with. */
   readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
   /** The synced theme last applied and the phone themes it became. */
@@ -200,6 +203,7 @@ export class MobilePreferencesStore extends Context.Service<
   MobilePreferencesStore,
   {
     readonly load: Effect.Effect<Preferences, MobilePreferencesLoadError>;
+    readonly settingsSyncDefault: Effect.Effect<boolean, MobilePreferencesLoadError>;
     readonly savePatch: (
       patch: Partial<Preferences>,
     ) => Effect.Effect<Preferences, MobilePreferencesSaveError>;
@@ -256,6 +260,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
     settingsSyncEnabled?: boolean;
+    fasterPhoneLaunch?: boolean;
+    featureOffersSeen?: ReadonlyArray<string>;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
   } = {};
@@ -409,6 +415,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (isWorkspaceSelections(parsed.workspaceSelections)) {
     preferences.workspaceSelections = parsed.workspaceSelections;
   }
+  if (typeof parsed.fasterPhoneLaunch === "boolean")
+    preferences.fasterPhoneLaunch = parsed.fasterPhoneLaunch;
+  if (Array.isArray(parsed.featureOffersSeen))
+    preferences.featureOffersSeen = parsed.featureOffersSeen.filter(
+      (id): id is string => typeof id === "string",
+    );
   if (typeof parsed.settingsSyncEnabled === "boolean") {
     preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
   }
@@ -584,11 +596,27 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       }
     }
 
-    return parsed === null ? {} : sanitizePreferences(parsed);
+    return {
+      preferences: parsed === null ? {} : sanitizePreferences(parsed),
+      hasDocument: parsed !== null,
+    };
   });
 
   const load = lock
     .withPermits(1)(loadUnlocked)
+    .pipe(
+      Effect.map(({ preferences }) => preferences),
+      Effect.mapError((cause) => new MobilePreferencesLoadError({ cause })),
+    );
+
+  const settingsSyncDefault = lock
+    .withPermits(1)(
+      Effect.gen(function* () {
+        const { hasDocument } = yield* loadUnlocked;
+        if (!hasDocument) return false;
+        return (yield* secureStorage.getItem(SETTINGS_SYNC_DEFAULT_KEY)) !== "false";
+      }),
+    )
     .pipe(Effect.mapError((cause) => new MobilePreferencesLoadError({ cause })));
 
   const update = Effect.fn("MobilePreferencesStore.update")(
@@ -596,13 +624,15 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       lock
         .withPermits(1)(
           Effect.gen(function* () {
-            const current = yield* loadUnlocked;
+            const { preferences: current, hasDocument } = yield* loadUnlocked;
             const patch = yield* Effect.try({
               try: () => transform(current),
               catch: (cause) => new MobilePreferencesSaveError({ cause }),
             });
             const next: Preferences = { ...current, ...patch };
             const payload = yield* encode(PREFERENCES_KEY, next);
+            // Keep a new phone opted out after its first ordinary preference write.
+            if (!hasDocument) yield* secureStorage.setItem(SETTINGS_SYNC_DEFAULT_KEY, "false");
             yield* saveJson(payload);
             return next;
           }),
@@ -616,6 +646,7 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   return MobilePreferencesStore.of({
     load,
+    settingsSyncDefault,
     update,
     savePatch: Effect.fn("MobilePreferencesStore.savePatch")((patch) => update(() => patch)),
   });

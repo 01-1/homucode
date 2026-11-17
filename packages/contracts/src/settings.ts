@@ -55,6 +55,7 @@ import {
   ProviderInstanceConfig,
   ProviderInstanceId,
   ProviderDriverKind,
+  type ProviderInstanceMutation,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
 import {
@@ -623,14 +624,21 @@ export const ClientSettingsSchema = Schema.Struct({
   // Opt-in TeX typesetting in rendered Markdown. Off keeps math parsing and
   // KaTeX out of the render path entirely.
   mathRenderingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  // Device-local: sync these settings through the primary server.
-  settingsSyncEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Device-local: sync these settings through connected servers.
+  settingsSyncEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Device-local and never synced: each gate lets code run in this window.
   appScriptsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   appScriptsFromTerminal: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   appScriptsFromAgents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  fasterPhoneLaunch: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
+
+// Old persisted documents inherited sync-on; new devices use ClientSettingsSchema's opt-in default.
+export const PersistedClientSettingsSchema = Schema.Struct({
+  ...ClientSettingsSchema.fields,
+  settingsSyncEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientSettingsSchema)({});
 
@@ -1256,6 +1264,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enableAgentDeviceAccess: Schema.optionalKey(Schema.Boolean),
+  /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelection),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
@@ -1577,7 +1586,34 @@ export const ServerSettings = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Off refuses new autoreviewers and pauses attached ones: no new batches, no findings. */
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
+  bareStopWaitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  claudeSteersSurviveStop: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  messageSentFromEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  stopThreadSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  backgroundGitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  buildToolsSettingsVisible: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  cloudBuildEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  loadBuildEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  androidBuildEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  buildRepoPath: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  buildBoatCliPath: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("boat"))),
+  buildMachineType: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("large"))),
+  buildOutputFolder: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  buildAppImageFolder: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  workAssistanceTarget: Schema.NullOr(
+    Schema.Struct({ environmentId: EnvironmentId, projectId: ProjectId }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  deviceNames: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      surface: Schema.optional(Schema.String),
+      os: Schema.optional(Schema.String),
+      deviceModel: Schema.optional(Schema.String),
+      browser: Schema.optional(Schema.String),
+      connectionMethod: Schema.optional(Schema.String),
+      deviceType: Schema.optional(Schema.String),
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   claudeHoldBackgroundCommands: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -1650,7 +1686,7 @@ export const ServerSettings = Schema.Struct({
   /** Clones default to `<addProjectBaseDirectory>/<host>/<owner>/<repo>`, like ghq. */
   ghqCloneLayout: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Shows a line under the composer, like Claude Code's status line. */
-  statusLineEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  statusLineEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Shell command that reads Claude Code's status line JSON on stdin. Empty runs the built-in script. */
   statusLineCommand: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   textGenerationModelSelection: ModelSelection.pipe(
@@ -2063,6 +2099,24 @@ export const ServerSettingsPatch = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   autoreviewEnabled: Schema.optionalKey(Schema.Boolean),
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
+  bareStopWaitEnabled: Schema.optionalKey(Schema.Boolean),
+  claudeSteersSurviveStop: Schema.optionalKey(Schema.Boolean),
+  messageSentFromEnabled: Schema.optionalKey(Schema.Boolean),
+  stopThreadSubagents: Schema.optionalKey(Schema.Boolean),
+  backgroundGitEnabled: Schema.optionalKey(Schema.Boolean),
+  buildToolsSettingsVisible: Schema.optionalKey(Schema.Boolean),
+  cloudBuildEnabled: Schema.optionalKey(Schema.Boolean),
+  loadBuildEnabled: Schema.optionalKey(Schema.Boolean),
+  androidBuildEnabled: Schema.optionalKey(Schema.Boolean),
+  buildRepoPath: Schema.optionalKey(Schema.String),
+  buildBoatCliPath: Schema.optionalKey(Schema.String),
+  buildMachineType: Schema.optionalKey(Schema.String),
+  buildOutputFolder: Schema.optionalKey(Schema.String),
+  buildAppImageFolder: Schema.optionalKey(Schema.String),
+  workAssistanceTarget: Schema.optionalKey(
+    Schema.toType(ServerSettings.fields.workAssistanceTarget),
+  ),
+  deviceNames: Schema.optionalKey(Schema.toType(ServerSettings.fields.deviceNames)),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
   claudeHoldBackgroundCommands: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
@@ -2188,6 +2242,17 @@ export function requiredScopesForServerSettingsPatch(
   ];
 }
 
+export function requiredScopesForSettingsUpdate(input: {
+  readonly patch: ServerSettingsPatch;
+  readonly providerInstanceMutation?: ProviderInstanceMutation;
+}): ReadonlyArray<AuthEnvironmentScope> {
+  const scopes = requiredScopesForServerSettingsPatch(input.patch);
+  if (input.providerInstanceMutation === undefined) return scopes;
+  return Object.values(input.patch).every((value) => value === undefined)
+    ? [AuthProvidersManageScope]
+    : [...new Set([...scopes, AuthProvidersManageScope])];
+}
+
 /** Host-executed project scripts require settings-write authority in addition to orchestration:operate. */
 export function requiredScopesForProjectMutation(
   mutation: ProjectMutation,
@@ -2297,5 +2362,6 @@ export const ClientSettingsPatch = Schema.Struct({
   appScriptsEnabled: Schema.optionalKey(Schema.Boolean),
   appScriptsFromTerminal: Schema.optionalKey(Schema.Boolean),
   appScriptsFromAgents: Schema.optionalKey(Schema.Boolean),
+  fasterPhoneLaunch: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

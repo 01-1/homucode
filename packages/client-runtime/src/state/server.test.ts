@@ -1,4 +1,5 @@
 import {
+  AuthProvidersManageScope,
   EnvironmentId,
   ProviderDriverKind,
   ServerSelfUpdateError,
@@ -73,6 +74,7 @@ import {
   runDesktopCommitWithReconnectObserver,
 } from "./server.ts";
 import { applyServerConfigProjection } from "./serverConfigProjection.ts";
+import { createEnvironmentSessionAtoms } from "./session.ts";
 
 const CONFIG = {
   availableEditors: [],
@@ -1807,8 +1809,29 @@ describe("provider setup commands", () => {
       const atoms = createServerEnvironmentAtoms(runtime, {
         initialConfigValueAtom: () => Atom.make(CONFIG),
       });
-      const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (registry) =>
-        Effect.sync(() => registry.dispose()),
+      const registry = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          AtomRegistry.make({
+            initialValues: [
+              [
+                createEnvironmentSessionAtoms(runtime).sessionStateAtom(TARGET.environmentId),
+                AsyncResult.success({
+                  authenticated: true,
+                  auth: {
+                    policy: "remote-reachable",
+                    bootstrapMethods: [],
+                    sessionMethods: [],
+                    sessionCookieName: "test",
+                  },
+                  scopes: [AuthProvidersManageScope],
+                  permissions: [AuthProvidersManageScope],
+                }),
+                { skipInitialRun: true },
+              ],
+            ],
+          }),
+        ),
+        (registry) => Effect.sync(() => registry.dispose()),
       );
 
       void atoms.updateProvider.run(registry, {
@@ -1816,7 +1839,7 @@ describe("provider setup commands", () => {
         input: { provider: ProviderDriverKind.make("opencode") },
       });
       yield* Deferred.await(updateStarted);
-      void atoms.mutateProviderInstance.run(registry, {
+      const mutation = atoms.mutateProviderInstance.run(registry, {
         environmentId: TARGET.environmentId,
         input: {
           patch: {},
@@ -1828,16 +1851,8 @@ describe("provider setup commands", () => {
         },
       });
 
-      const saved = yield* Deferred.await(settingsSaved).pipe(
-        Effect.as(true),
-        Effect.timeoutOrElse({
-          duration: Duration.seconds(1),
-          orElse: () => Effect.succeed(false),
-        }),
-        Effect.forkChild,
-      );
-      yield* TestClock.adjust(Duration.seconds(1));
-      expect(yield* Fiber.join(saved)).toBe(true);
+      expect(yield* Effect.promise(() => mutation)).toMatchObject({ _tag: "Success" });
+      yield* Deferred.await(settingsSaved);
     }),
   );
 });

@@ -157,9 +157,19 @@ describe("restoreLastCloudAccount", () => {
     deactivateCloudRelayAccount({ signedOut: false });
     const launch = fakeClerk();
     const detach = cloudAccountService.attach(launch.clerk);
-    await restoreLastCloudAccount(launch.clerk);
+    await restoreLastCloudAccount(launch.clerk, true);
     return { ...launch, [Symbol.dispose]: detach };
   }
+
+  it("does not restore an account until faster launch is enabled", async () => {
+    activateCloudRelayAccount("account-1", async () => null);
+    await vi.waitFor(() => expect(secureStore.size).toBe(1));
+    deactivateCloudRelayAccount({ signedOut: false });
+    const { clerk } = fakeClerk();
+    using _detach = { [Symbol.dispose]: cloudAccountService.attach(clerk) };
+    await restoreLastCloudAccount(clerk);
+    expect(appAtomRegistry.get(managedRelaySessionAtom)).toBeNull();
+  });
 
   it("connects as the last account before Clerk loads, reading tokens only once it has", async () => {
     using launch = await launchWithStoredAccount("account-1");
@@ -209,7 +219,7 @@ describe("restoreLastCloudAccount", () => {
     using _detach = { [Symbol.dispose]: cloudAccountService.attach(clerk) };
     emit("account-2");
 
-    await restoreLastCloudAccount(clerk);
+    await restoreLastCloudAccount(clerk, true);
 
     expect(appAtomRegistry.get(managedRelaySessionAtom)?.accountId).not.toBe("account-1");
   });

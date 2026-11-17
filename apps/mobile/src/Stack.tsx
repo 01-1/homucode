@@ -1,3 +1,4 @@
+import { SettingsBuildingT3RouteScreen } from "./features/settings/SetupBehaviorSettings";
 import { isDraftThreadRoute } from "./features/threads/thread-route-state";
 import { ComponentCatalogScreen } from "./features/development/ComponentCatalogScreen";
 import { PullRequestGuideStopScreen } from "./features/pull-requests/guide/PullRequestGuideScreen";
@@ -221,6 +222,11 @@ const SETTINGS_SCREENS = {
     screen: SettingsNotificationsRouteScreen,
     linking: "settings/notifications",
     options: settingsPage("Notifications"),
+  }),
+  SettingsBuildingT3: createNativeStackScreen({
+    screen: SettingsBuildingT3RouteScreen,
+    linking: "settings/building-t3",
+    options: settingsPage("Building T3"),
   }),
   SettingsThreads: createNativeStackScreen({
     screen: SettingsThreadsRouteScreen,

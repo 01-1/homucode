@@ -2,6 +2,7 @@ import { RegistryContext } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
+  AuthSettingsWriteScope,
   AuthRelayReadScope,
   AuthRelayWriteScope,
   AuthTerminalOperateScope,
@@ -220,6 +221,7 @@ function session(scopes: ReadonlyArray<AuthEnvironmentScope>): AuthSessionState 
   return {
     authenticated: true,
     scopes: [AuthOrchestrationReadScope, ...scopes],
+    permissions: [AuthOrchestrationReadScope, ...scopes],
     auth: {
       policy: "remote-reachable",
       bootstrapMethods: ["one-time-token"],
@@ -403,6 +405,27 @@ it("rechecks after project creation and can retry its history without recreating
   expect(state.createProject).toHaveBeenCalledTimes(2);
   expect(state.importThreads).toHaveBeenCalledTimes(2);
   expect(state.onDone).toHaveBeenCalledOnce();
+});
+
+it("imports selected projects before asking for the work-assistance destination", async () => {
+  using _now = setup();
+  appAtomRegistry.set(
+    sessionAtom(primaryId),
+    AsyncResult.success(session([AuthOrchestrationOperateScope, AuthSettingsWriteScope])),
+  );
+  await using _screen = await mountWelcome();
+  await click("Next");
+  const offer = [...document.querySelectorAll("label")].find((label) =>
+    label.textContent?.startsWith("Work assistance"),
+  );
+  expect(offer).toBeDefined();
+  await act(async () => offer?.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click());
+  await click("Next");
+  await click("Next");
+  await vi.waitFor(() => expect(state.createProject).toHaveBeenCalledTimes(2));
+  expect(state.waitForProject).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[aria-label="Work assistance project"]')).not.toBeNull();
+  expect(state.completeOnboarding).not.toHaveBeenCalled();
 });
 
 it("completes accepted imports when permission is revoked after the final server write", async () => {

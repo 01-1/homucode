@@ -12,7 +12,11 @@ import { useSyncExternalStore } from "react";
 
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import {
+  mobilePreferencesAtom,
+  updateMobilePreferencesAtom,
+  mobileSettingsSyncEnabledAtom,
+} from "../../state/preferences";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import {
@@ -33,7 +37,7 @@ function savePreferences(transform: (current: Preferences) => Partial<Preference
 
 const runner = createClientSettingsSyncRunner({
   isReady: () => readPreferences() !== null,
-  isEnabled: () => readPreferences()?.settingsSyncEnabled !== false,
+  isEnabled: () => appAtomRegistry.get(mobileSettingsSyncEnabledAtom),
   targets: () =>
     settingsSyncTargets(
       appAtomRegistry.get(connectedEnvironmentIdsAtom),

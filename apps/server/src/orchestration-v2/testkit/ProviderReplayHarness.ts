@@ -355,9 +355,9 @@ export function layerWithRegistry<Error>(
     CommandReceiptStore.layer,
     layerEffectOutboxProvided,
     TurnItemPositionStore.layer,
-  ).pipe(Layer.provide(layerDatabase));
+  ).pipe(Layer.provide(layerDatabase), Layer.provide(layerServerSettings));
   const layerEventSinkProvided = EventSink.layerFromStores.pipe(
-    Layer.provide(Layer.mergeAll(layerStores, layerDatabase)),
+    Layer.provide(Layer.mergeAll(layerStores, layerDatabase, layerServerSettings)),
   );
   const layerRuntime = RuntimePolicy.layerEnforcingCeiling.pipe(
     Layer.provide(Layer.merge(layerRuntimeBase, layerServerSettings)),

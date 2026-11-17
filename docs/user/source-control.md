@@ -364,10 +364,11 @@ even when its changes look independent. Stack actions require an environment tha
 
 ## Disable background Git
 
-Start the host with `T3CODE_BACKGROUND_GIT=0` to stop automatic Git status and branch
+Turn off **Background Git** in **Settings → Threads → Extra features** to stop automatic Git status and branch
 subscriptions, fetch and auto-pull, PR discovery/sync/watches and auto-settlement,
-new turn checkpoints, and automatic worktree cleanup. Restart the host to apply or
-remove this override; leaving it unset keeps the normal behavior.
+new turn checkpoints, and automatic worktree cleanup. It is on by default. Restart the host
+to apply; Settings shows its running value and any pending change. `T3CODE_BACKGROUND_GIT`
+overrides the saved setting when set: `0` turns it off, other values turn it on.
 
 New turns have no checkpoint diff or checkpoint undo while disabled. Branch and
 Changes displays do not update automatically. Open the Git action menu to explicitly

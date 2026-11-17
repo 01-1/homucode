@@ -9164,6 +9164,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               input.status === "completed" ? "completed" : "cancelled",
               // Only a CLI proven to echo prompt uuids can show a steer went unread.
               input.status === "interrupted" &&
+                Option.isSome(serverSettings) &&
+                (yield* serverSettings.value.getSettings.pipe(Effect.orDie))
+                  .claudeSteersSurviveStop &&
                 (liveQuery.promptEchoMode === "early" || liveQuery.promptEchoMode === "result_only")
                 ? true
                 : undefined,

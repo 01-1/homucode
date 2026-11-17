@@ -63,6 +63,7 @@ function layerEnvironment(
     readonly platform?: NodeJS.Platform;
     readonly resourcesPath?: string;
     readonly appVersion?: string;
+    readonly appImagePath?: string;
     readonly processArch?: NodeJS.Architecture;
     readonly otlpTracesUrl?: string;
     readonly otlpMetricsUrl?: string;
@@ -90,6 +91,7 @@ function layerEnvironment(
           T3CODE_MODE: "desktop",
           T3CODE_DESKTOP_LAN_HOST: "192.168.1.50",
           VITE_DEV_SERVER_URL: options?.devServerUrl,
+          APPIMAGE: options?.appImagePath,
           T3CODE_OTLP_TRACES_URL: options?.otlpTracesUrl,
           T3CODE_OTLP_METRICS_URL: options?.otlpMetricsUrl,
           T3CODE_OTLP_LOGS_URL: options?.otlpLogsUrl,
@@ -109,6 +111,7 @@ const withHarness = <A, E, R>(
     | DesktopBackendConfiguration.DesktopBackendConfiguration
   >,
   prepared = true,
+  environmentOptions?: Parameters<typeof layerEnvironment>[1],
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -123,7 +126,7 @@ const withHarness = <A, E, R>(
           Layer.provideMerge(DesktopAppSettings.layerTest()),
           Layer.provideMerge(DesktopWslEnvironment.layerTest()),
           Layer.provideMerge(DesktopWslServerTree.layerTest()),
-          Layer.provideMerge(layerEnvironment(baseDir)),
+          Layer.provideMerge(layerEnvironment(baseDir, environmentOptions)),
         ),
       ),
     );
@@ -271,6 +274,23 @@ describe("DesktopBackendConfiguration", () => {
         );
       }),
     ),
+  );
+
+  it.effect.each([
+    { isPackaged: true, expected: "/builds/T3-Code-running.AppImage" },
+    { isPackaged: false, expected: undefined },
+  ])(
+    "hands the AppImage path only to a packaged desktop backend ($isPackaged)",
+    ({ isPackaged, expected }) =>
+      withHarness(
+        Effect.gen(function* () {
+          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+          const config = yield* configuration.resolvePrimary;
+          assert.equal(config.bootstrap.desktopAppImagePath, expected);
+        }),
+        true,
+        { platform: "linux", appImagePath: "/builds/T3-Code-running.AppImage", isPackaged },
+      ),
   );
 
   it.effect("resolvePrimary starts from server.asar without materializing the WSL tree", () =>

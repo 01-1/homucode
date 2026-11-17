@@ -12,6 +12,7 @@ health check alone decides.
 import argparse
 from datetime import datetime, timedelta, timezone
 import hashlib
+import shutil
 import os
 from pathlib import Path
 import subprocess
@@ -30,8 +31,10 @@ GUARDS = (STATE / 'no-restart-until',) + tuple(
 PAUSE_FILE = Path(os.environ['T3_LOAD_PAUSE_FILE']).expanduser() if os.environ.get('T3_LOAD_PAUSE_FILE') else None
 T3_CLI = HOME / '.t3/bin/t3'
 LAUNCHER = HOME / '.local/bin/t3code'
+BUILD_FOLDER = Path(os.environ['T3_BUILD_FOLDER']).expanduser() if os.environ.get('T3_BUILD_FOLDER') else None
+PREVIOUS_BUILD = Path(os.environ['T3_BUILD_PREVIOUS']).expanduser() if os.environ.get('T3_BUILD_PREVIOUS') else None
 WAKE_THREAD = os.environ.get('T3_LOAD_WAKE_THREAD', '')
-SETTINGS = ('T3_LOAD_GUARDS', 'T3_LOAD_PAUSE_FILE', 'T3_LOAD_WAKE_THREAD')  # passed on by --detach
+SETTINGS = ('T3_LOAD_GUARDS', 'T3_LOAD_PAUSE_FILE', 'T3_LOAD_WAKE_THREAD', 'T3_BUILD_FOLDER', 'T3_BUILD_PREVIOUS')  # passed on by --detach
 SETTLE = 90
 ROLLBACK_TEXT = ('The T3 build loader tried to load a staged build ({live}); T3 did not come back healthy or the wake '
                  'message could not be delivered, so it rolled back (the new build is now {live}.off; log: ~/.local/state/t3-load-build/load.log). '
@@ -77,6 +80,8 @@ class Real:
 
     @staticmethod
     def stop_t3(sleep):
+        if subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'big-t3-watchdog.service']).returncode == 0:
+            subprocess.run(['systemctl', '--user', 'stop', 'big-t3-watchdog.service'], check=True)
         subprocess.run(['pkill', '-TERM', '-x', 't3code'])
         sleep(8)
         subprocess.run(['pkill', '-KILL', '-x', 't3code'], stderr=subprocess.DEVNULL)
@@ -84,7 +89,10 @@ class Real:
 
     @staticmethod
     def start_t3():
-        subprocess.run(['systemd-run', '--user', f'--unit=t3code-app-{int(time.time())}', '--collect', str(LAUNCHER)],
+        launcher = (max(BUILD_FOLDER.glob('T3-Code-*.AppImage'), key=lambda file: file.stat().st_mtime, default=PREVIOUS_BUILD) if BUILD_FOLDER else LAUNCHER)
+        if launcher is None:
+            raise RuntimeError('No AppImage is available in the build folder')
+        subprocess.run(['systemd-run', '--user', f'--unit=t3code-app-{int(time.time())}', '--collect', str(launcher)],
                        capture_output=True)
 
     @staticmethod
@@ -133,8 +141,13 @@ def load(staged, sha, wake_file, deps=Real, live=None, settle=SETTLE):
     except OSError:
         log('wake message file unreadable, nothing done', deps)
         return 1
+    if live.exists():
+        log('destination already exists, nothing done', deps)
+        return 1
+    live.parent.mkdir(parents=True, exist_ok=True)
     pause_watchdog(deps, 8)
-    staged.rename(live)
+    shutil.move(staged, live)
+    live.chmod(live.stat().st_mode | 0o100)
     os.utime(live)
     log(f'stopping T3; loading {live.name}', deps)
     deps.stop_t3(deps.sleep)

@@ -345,7 +345,9 @@ On web and desktop, use **Agents** to follow work delegated to subagents.
 On mobile, open a subagent from its conversation card or **Agents**. On iOS
 layouts with an inspector, its thread opens beside the parent. Maximize it to
 fill the screen; close the full-screen view to return to the parent and inspector.
-Stop on a thread also stops the subagents it delegated to.
+Stop ends only the current thread by default. Shift-click Stop, use background Stop,
+or send `/stopall` to stop its subagents too. To make ordinary Stop include subagents,
+change **Stop behavior** in **Settings → Threads → Extra features**.
 Before archiving the parent, wait for its delegated tasks to finish or cancel them.
 
 Subagent threads started by the agent can't take messages; message the parent

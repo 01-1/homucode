@@ -7,7 +7,7 @@ import {
   AuthAccessReadScope,
   ServerSettingsPatch,
   ProviderInstanceMutation,
-  requiredScopesForServerSettingsPatch,
+  requiredScopesForSettingsUpdate,
   requiredScopesForProjectMutation,
   ProjectMutation,
   AuthSettingsWriteScope,
@@ -90,6 +90,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverRemoveKeybinding]: AuthSettingsWriteScope,
   [WS_METHODS.serverGetStorageCleanupReport]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetDatabaseStorage]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverMessageDevices]: AuthSettingsWriteScope,
   [WS_METHODS.serverGetSettings]: AuthOrchestrationReadScope,
   [WS_METHODS.peerLinksList]: AuthAccessReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthSettingsWriteScope,
@@ -247,15 +248,6 @@ const SettingsUpdate = Schema.Struct({
 // Middleware receives the payload already decoded, so it is checked against the decoded shape.
 const decodeSettingsUpdate = Schema.decodeUnknownSync(Schema.toType(SettingsUpdate));
 
-const requiredScopesForSettingsUpdate = (payload: unknown) => {
-  const input = decodeSettingsUpdate(payload);
-  const scopes = requiredScopesForServerSettingsPatch(input.patch);
-  if (input.providerInstanceMutation === undefined) return scopes;
-  return Object.values(input.patch).every((value) => value === undefined)
-    ? [AuthProvidersManageScope]
-    : [...new Set([...scopes, AuthProvidersManageScope])];
-};
-
 const decodeProjectMutation = Schema.decodeUnknownSync(ProjectMutation);
 const decodeAssetCreateUrlInput = Schema.decodeUnknownSync(AssetCreateUrlInput);
 
@@ -277,7 +269,8 @@ const requiredScopesForRpcCall = (
         : AuthOrchestrationReadScope,
     ];
   }
-  if (method === WS_METHODS.serverUpdateSettings) return requiredScopesForSettingsUpdate(payload);
+  if (method === WS_METHODS.serverUpdateSettings)
+    return requiredScopesForSettingsUpdate(decodeSettingsUpdate(payload));
   if (method === WS_METHODS.projectsMutate) {
     return requiredScopesForProjectMutation(decodeProjectMutation(payload));
   }

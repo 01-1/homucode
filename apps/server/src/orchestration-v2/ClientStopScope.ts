@@ -8,7 +8,10 @@ import { connectionStopActor, stoppedBy } from "./StopAttribution.ts";
  * socket, so phones and other clients that predate the flag get the same behavior; the server's
  * own Stops (tree walks, MCP tools) never pass through here.
  */
-export function withClientStopScope(command: OrchestrationV2Command): OrchestrationV2Command {
+export function withClientStopScope(
+  command: OrchestrationV2Command,
+  stopThreadSubagents = false,
+): OrchestrationV2Command {
   // `/stopall` sent as a message, from any app, stops the thread and its subagents.
   if (
     command.type === "message.dispatch" &&
@@ -27,14 +30,14 @@ export function withClientStopScope(command: OrchestrationV2Command): Orchestrat
     command.stopDelegatedTasks === undefined &&
     command.leaveSubagentsRunning === undefined
   ) {
-    return { ...command, leaveSubagentsRunning: true };
+    return { ...command, leaveSubagentsRunning: !stopThreadSubagents };
   }
   if (
     command.type === "run.interrupt" &&
     command.holdQueue === true &&
     command.leaveSubagentsRunning === undefined
   ) {
-    return { ...command, leaveSubagentsRunning: true };
+    return { ...command, leaveSubagentsRunning: !stopThreadSubagents };
   }
   return command;
 }

@@ -5,6 +5,11 @@ appearance or stay in light or dark mode. To use different themes for light and 
 the corresponding preview within each theme. Appearance preferences are saved separately on each
 device or browser.
 
+To keep shared preferences the same across web, desktop and phone, opt into
+**Settings → General → Settings sync** on each device. If two devices change the
+same preference, choose which value to keep in the sync dialog. Device-specific
+choices, including the sync switch and Faster phone launch, stay on that device.
+
 On web and desktop, use **Change theme** in the command palette to select a theme without leaving chat.
 Press **Cmd+Option+A** on macOS or **Ctrl+Alt+A** on Windows/Linux to open the theme picker directly.
 Use **Change appearance** in the command palette to choose System, Light, or Dark independently of

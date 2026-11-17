@@ -8,6 +8,20 @@ const commandId = CommandId.make("command");
 const runId = RunId.make("run");
 
 describe("withClientStopScope", () => {
+  it("uses the cascade preference while preserving explicit stop scope", () => {
+    const command = { type: "thread.stop", commandId, threadId } as const;
+    expect(withClientStopScope(command, true)).toEqual({
+      ...command,
+      leaveSubagentsRunning: false,
+    });
+    const explicit = { ...command, leaveSubagentsRunning: true };
+    expect(withClientStopScope(explicit, true)).toBe(explicit);
+    expect(withClientStopScope({ ...command, stopDelegatedTasks: true }, false)).toEqual({
+      ...command,
+      stopDelegatedTasks: true,
+    });
+  });
+
   it("makes an app's Stop leave subagents running, as older phones send it", () => {
     expect(withClientStopScope({ type: "thread.stop", commandId, threadId })).toEqual({
       type: "thread.stop",

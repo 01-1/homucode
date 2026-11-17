@@ -43,12 +43,12 @@ export function sentFromConnection(
  */
 export interface DeviceNameRule {
   readonly name: string;
-  readonly surface?: string;
-  readonly os?: string;
-  readonly deviceType?: string;
-  readonly deviceModel?: string;
-  readonly browser?: string;
-  readonly connectionMethod?: string;
+  readonly surface?: string | undefined;
+  readonly os?: string | undefined;
+  readonly deviceType?: string | undefined;
+  readonly deviceModel?: string | undefined;
+  readonly browser?: string | undefined;
+  readonly connectionMethod?: string | undefined;
 }
 
 const MATCH_FIELDS = [
@@ -100,7 +100,7 @@ export function withDeviceName(
       (field) => candidate[field] === undefined || candidate[field] === device[field],
     ),
   );
-  return rule === undefined ? device : { ...device, deviceName: rule.name };
+  return !rule?.name ? device : { ...device, deviceName: rule.name };
 }
 
 /** A message context stamped with the socket's device, replacing any the client claimed. */
@@ -185,7 +185,8 @@ export function sentFromLine(message: SentMessage): string {
  * The prompt with its device line after it. Slash commands go verbatim, since providers parse
  * them from the start and end of the prompt.
  */
-export function withSentFromLine(text: string, message: SentMessage): string {
+export function withSentFromLine(text: string, message: SentMessage, enabled = true): string {
+  if (!enabled) return text;
   const line = sentFromLine(message);
   if (line === "" || text.trimStart().startsWith("/")) return text;
   return text === "" ? line : `${text}\n\n${line}`;

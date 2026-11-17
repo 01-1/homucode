@@ -760,7 +760,6 @@ describe("V2 environment commands", () => {
             type: "thread.stop",
             commandId: "lineage-stop",
             threadId: childThreadId,
-            leaveSubagentsRunning: true,
           },
         ]);
       }).pipe(Effect.provide(layerTestRandom)),
@@ -789,7 +788,6 @@ describe("V2 environment commands", () => {
           type: "thread.stop",
           commandId: "stop-outside-history-window",
           threadId: v2ThreadId,
-          leaveSubagentsRunning: true,
         },
       ]);
     }).pipe(Effect.provide(layerTestRandom)),

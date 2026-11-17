@@ -153,6 +153,9 @@ describe("command permissions", () => {
   );
 
   it.effect.each([
+    { method: WS_METHODS.serverUpdateSettings, scope: AuthSettingsWriteScope },
+    { method: WS_METHODS.serverBuildToolsRun, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.serverBuildToolsState, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
   ])("requires the destination $scope grant for $method", ({ method, scope }) =>
@@ -172,6 +175,43 @@ describe("command permissions", () => {
       yield* command.authorize(registry, env);
       registry.set(sessions(other), AsyncResult.success(grant(false)));
       expect(registry.get(command.permissionAtom(other))).toBe(false);
+    }),
+  );
+
+  it.effect.each([
+    {
+      label: "provider-only",
+      input: { patch: {}, providerInstanceMutation: { operation: "remove", instanceId: "codex" } },
+      scopes: [AuthProvidersManageScope],
+    },
+    {
+      label: "access-only",
+      input: { patch: { requireConnectDeviceApproval: false } },
+      scopes: [AuthAccessWriteScope],
+    },
+    {
+      label: "long Connect session",
+      input: { patch: { connectDeviceLongSessions: true } },
+      scopes: [AuthAccessWriteScope],
+    },
+    {
+      label: "mixed provider and settings",
+      input: {
+        patch: { bareStopWaitEnabled: true },
+        providerInstanceMutation: { operation: "remove", instanceId: "codex" },
+      },
+      scopes: [AuthSettingsWriteScope, AuthProvidersManageScope],
+    },
+  ])("authorizes $label settings updates against their payload", ({ input, scopes }) =>
+    Effect.gen(function* () {
+      const registry = yield* setup;
+      const command = createCommandPermissions(runtime, WS_METHODS.serverUpdateSettings);
+      expect(command.requiredScopes(input)).toEqual(scopes);
+      registry.set(sessions(env), AsyncResult.success({ ...grant(false), permissions: scopes }));
+      expect(registry.get(command.permissionAtom(env, input))).toBe(true);
+      yield* command.authorize(registry, env, input);
+      registry.set(sessions(env), AsyncResult.success(grant(false)));
+      expect(registry.get(command.permissionAtom(env, input))).toBe(false);
     }),
   );
 

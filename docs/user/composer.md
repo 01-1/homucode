@@ -92,6 +92,11 @@ other action for a single message. From a hardware keyboard, `Cmd+Return`
 (`Ctrl+Shift+Return`) when Return inserts a new line. The button only offers
 Steer when the running agent supports it.
 
+In **Settings → Threads → Extra features**, you can opt into **Stop or wait jumps
+the queue**. A message containing only “stop” or “wait” then interrupts the current
+turn and goes ahead of queued messages. **Claude steers survive Stop** re-sends a
+message Claude held behind a running tool when you press Stop. Both options start off.
+
 ## Queue messages offline on mobile
 
 Mobile keeps local copies of draft attachments, so you can preview them and queue
@@ -130,10 +135,10 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-A line under the composer, repeated in the top bar beside the thread title, shows the
+Enable **Settings → Chat → Status line** to show a line under the composer, repeated in the top bar beside the thread title. It shows the
 model, effort, context use, and usage limits, like Claude Code's status line. It
 refreshes when the thread changes and every 30 seconds. Hover it to see the whole line
-when it is cut short. Turn it off in **Settings → Chat → Status line**.
+when it is cut short.
 
 The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
 script on the thread's machine, which needs `bash` and `jq`. To draw your own, set

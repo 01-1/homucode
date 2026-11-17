@@ -2,7 +2,6 @@ import {
   CommandId,
   IsoDateTime,
   NodeId,
-  ProjectId,
   ProviderInstanceId,
   RunId,
   ThreadId,
@@ -10,12 +9,19 @@ import {
   type ThreadActivityItem,
   type ThreadAssistResult,
 } from "@t3tools/contracts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as Option from "effect/Option";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-export const MAIN_PROJECT = ProjectId.make("00000000-0000-4000-8000-0000000000a1");
-export const MAIN_ENVIRONMENT = "00000000-0000-4000-8000-0000000000e1";
+const configuredProject = Effect.gen(function* () {
+  const service = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+  return Option.isSome(service)
+    ? ((yield* service.value.getSettings.pipe(Effect.orDie)).workAssistanceTarget?.projectId ??
+        null)
+    : null;
+});
 const EXCLUDED = new Set([
   "mcp:launch:0000000000000000000000000000000000000000000000000000000000000001",
   "mcp:launch:0000000000000000000000000000000000000000000000000000000000000002",
@@ -98,7 +104,7 @@ export const readLatestHumanMessageAt = Effect.fn("WorkAssistance.readLatestHuma
       SELECT MAX(m.created_at) AS latest_human_message_at
       FROM orchestration_v2_projection_messages m
       JOIN orchestration_v2_projection_threads t ON t.thread_id = m.thread_id
-      WHERE t.project_id = ${MAIN_PROJECT} AND t.deleted_at IS NULL
+      WHERE t.project_id = ${yield* configuredProject} AND t.deleted_at IS NULL
         AND m.role = 'user'
         AND json_extract(m.payload_json, '$.createdBy') = 'user'
         AND json_extract(m.payload_json, '$.creationSource') IN ('web', 'mobile')
@@ -184,7 +190,7 @@ export const readActivity = Effect.fn("WorkAssistance.readActivity")(function* (
     LEFT JOIN orchestration_v2_projection_provider_threads root_provider
       ON root_provider.provider_thread_id = r.provider_thread_id
     LEFT JOIN work_assistance_continuity c ON c.thread_id = t.thread_id
-    WHERE t.project_id = ${MAIN_PROJECT} AND t.deleted_at IS NULL
+    WHERE t.project_id = ${yield* configuredProject} AND t.deleted_at IS NULL
       AND (${threadId ?? null} IS NULL OR t.thread_id = ${threadId ?? null})
     ORDER BY t.thread_id
   `;
@@ -272,7 +278,7 @@ const refreshActivity = Effect.fn("WorkAssistance.refreshActivity")(function* (
 });
 
 // One projection transaction applies many events; only its final state is ever committed.
-// Re-reading every MAIN thread per event made provider-thread bursts re-run the activity
+// Re-reading every configured thread per event made provider-thread bursts re-run the activity
 // query hundreds of times per commit, so record per-event writes, then read once per batch.
 export const observeBatch = Effect.fn("WorkAssistance.observeBatch")(function* (
   events: ReadonlyArray<OrchestrationV2DomainEvent>,

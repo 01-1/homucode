@@ -1,8 +1,9 @@
 # Add-ons
 
-Optional tools that ship with this repo and stay off until you set one up. Nothing here is
-built, installed or started with T3 Code, and the app never calls them; each one runs only
-after you install it as its folder's README shows. They came from
+Optional tools that ship with this repo and stay off until you set one up. Cloud-build and load-build are available in the app: enable "Show Building T3 settings" in
+Settings → General, then enable and configure each tool in Settings → Building T3. They run
+the scripts from a configured checkout. The other four tools run only after you install them
+as their folder's README shows. They came from
 [t3code-tools](https://github.com/01-1/t3code-tools).
 
 Tools for running many coding agents at once in [T3 Code](https://github.com/pingdotgg/t3code):
@@ -57,6 +58,15 @@ and checksum, restarts T3 on it, wakes an agent thread, and rolls back to the pr
 itself if T3 doesn't come up. It needs a `~/.local/bin/t3code` launcher that starts the newest
 AppImage in the build folder (not part of T3 Code). Status: tested with fakes only. Tests:
 `python3 -m unittest discover -s load-build -p 'test_*.py' -v`.
+
+## In-app builds
+
+Building T3 also runs `scripts/homu-android/build.sh` for a committed ref (default `origin/main`).
+It shows the APK path and can serve the APK folder on the LAN, with an explicit off switch;
+the HTTP server stops with T3. Cloud and Android builds need a signed-in boat CLI on the server.
+Loading builds is available only on AppImage installs and restarts T3, with checksum verification
+and automatic rollback. The page shows the running and staged builds and shares Undo/Redo with
+Settings → About; About keeps the control while Building T3 is hidden. All tools start disabled.
 
 ## Install
 

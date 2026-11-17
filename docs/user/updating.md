@@ -214,3 +214,21 @@ download updates in the background and apply them when you next leave the app.
 It saves drafts and queued messages before restarting. If you keep the app open
 for a long time, it may ask to install immediately; choosing **Later** leaves the
 update queued for the next suitable moment.
+
+## Build a development version
+
+Enable **Show Building T3 settings** in **Settings → General**, then open **Building T3**.
+Choose the server's T3 Code checkout, boat CLI, machine type and output folder. Enable cloud
+builds or Android APK builds, choose a committed ref (default `origin/main`), and confirm the
+build. The boat CLI must be installed and signed in on that server. Status reports the result
+and artifact path. Uncommitted edits are excluded.
+
+Android builds return a signed development APK under `~/app/mobile`. **Serve APKs on LAN**
+provides a phone download URL on port 8767. Turn it off when finished; serving also stops when
+the server exits. The server needs its Android signing key configured before building.
+
+On AppImage installs, enable loading builds, choose a staged AppImage and its SHA-256 checksum,
+and confirm loading. T3 restarts and automatically rolls back if it fails to return. Set the
+AppImage folder to control which folder the loader launches from. The running and next builds
+are shown there; Undo excludes the newest build from the next launch, and Redo restores it.
+While Building T3 is hidden, Undo remains in **Settings → About**.

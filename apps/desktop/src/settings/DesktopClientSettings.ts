@@ -1,4 +1,4 @@
-import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
+import { PersistedClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import { resolveSymlinkTarget } from "@t3tools/shared/symlink";
 import * as Context from "effect/Context";
@@ -13,11 +13,11 @@ import * as Ref from "effect/Ref";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
-const ClientSettingsJson = fromLenientJson(ClientSettingsSchema);
+const ClientSettingsJson = fromLenientJson(PersistedClientSettingsSchema);
 const decodeClientSettingsDocument = Schema.decodeEffect(
   fromLenientJson(Schema.Record(Schema.String, Schema.Unknown)),
 );
-const decodeClientSettingsValue = Schema.decodeUnknownEffect(ClientSettingsSchema);
+const decodeClientSettingsValue = Schema.decodeUnknownEffect(PersistedClientSettingsSchema);
 const decodeClientSettingsJson = Effect.fnUntraced(function* (raw: string) {
   const document = yield* decodeClientSettingsDocument(raw);
   // Select the shape before validation so invalid legacy settings cannot become defaults.
