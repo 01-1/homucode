@@ -1302,6 +1302,7 @@ function ConnectionsSettingsContent({
                 environmentId={accessEnvironmentId}
                 canReadRelay={canReadRelay}
                 canManageRelay={canManageRelay}
+                connectDeviceLongSessions={accessServerConfig?.settings.connectDeviceLongSessions}
                 connectDeviceApproval={
                   accessServerConfig?.settings.requireConnectDeviceApproval === undefined
                     ? null

@@ -36,6 +36,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as SessionStore from "./SessionStore.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { traceAuthenticatedRelayRequest, traceRelayRequest } from "../cloud/traceRelayRequest.ts";
 import { deriveAuthClientMetadata } from "./utils.ts";
 import { checkRequestDpopProof } from "./dpop.ts";
@@ -279,6 +280,7 @@ export const layer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
     const sessions = yield* SessionStore.SessionStore;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
 
     return handlers
       .handle(
@@ -399,6 +401,13 @@ export const layer = HttpApiBuilder.group(
                   ),
                 )
               : undefined;
+            const settings = proof
+              ? yield* serverSettings.getSettings.pipe(
+                  Effect.catch((error) =>
+                    failEnvironmentInternal("access_token_issuance_failed", error),
+                  ),
+                )
+              : undefined;
             yield* appendCredentialResponseHeaders;
             return yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
               args.payload.subject_token,
@@ -413,7 +422,12 @@ export const layer = HttpApiBuilder.group(
                   ...(args.payload.client_os ? { os: args.payload.client_os } : {}),
                 },
               }),
-              proof ? { proofKeyThumbprint: proof.thumbprint } : undefined,
+              proof && settings
+                ? {
+                    proofKeyThumbprint: proof.thumbprint,
+                    connectDeviceLongSessions: settings.connectDeviceLongSessions,
+                  }
+                : undefined,
             );
           },
           traceRelayRequest,

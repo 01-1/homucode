@@ -1421,6 +1421,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     cloudOnly: true,
   },
   {
+    id: "connect-device-long-sessions",
+    title: "Stay signed in for 30 days",
+    to: "/settings/access",
+    targetId: "connections-environment",
+    searchTerms: ["t3 connect devices sessions pass token expiry reconnect cloud round trip"],
+    cloudOnly: true,
+    managedTunnelOnly: true,
+  },
+  {
     id: "connect-device-approval",
     title: "Require approval for new devices",
     to: "/settings/access",

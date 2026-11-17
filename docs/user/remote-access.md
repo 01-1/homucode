@@ -38,6 +38,15 @@ connection. Pull request diffs and provider settings keep working after the
 previous credential expires. A failed renewal affects that request; it does not
 disconnect an otherwise healthy conversation.
 
+To reconnect T3 Connect devices without a cloud round trip on most launches, turn
+on **Stay signed in for 30 days** beside device approval in **Settings → Sharing
+& access** on the host. It is off by default. New passes last 30 days instead of
+one hour; directly paired devices keep their existing lifetime. Removing a device
+from your T3 Connect account no longer cuts off its existing pass within the hour.
+Revoke it from **T3 Connect devices** on the host instead. Turning the setting off
+restores one-hour passes for future connections; revoke a device to end an
+existing pass immediately.
+
 ### Approve new devices
 
 By default, any device signed in to your T3 Connect account can open a linked

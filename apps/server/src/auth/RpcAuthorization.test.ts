@@ -277,7 +277,7 @@ describe("settings mutation authorization", () => {
   );
 
   it.effect(
-    "does not let a settings grant manage providers or turn off T3 Connect device approval",
+    "does not let a settings grant manage providers or change T3 Connect device access settings",
     () =>
       Effect.gen(function* () {
         let handled = false;
@@ -310,6 +310,14 @@ describe("settings mutation authorization", () => {
             patch: { requireConnectDeviceApproval: false },
           }).pipe(Effect.flip),
         ).toMatchObject({ requiredPermission: AuthAccessWriteScope });
+        expect(DEFAULT_SERVER_SETTINGS.connectDeviceLongSessions).toBe(false);
+        for (const connectDeviceLongSessions of [false, true]) {
+          expect(
+            yield* client[WS_METHODS.serverUpdateSettings]({
+              patch: { connectDeviceLongSessions },
+            }).pipe(Effect.flip),
+          ).toMatchObject({ requiredPermission: AuthAccessWriteScope });
+        }
         expect(handled).toBe(false);
       }),
   );

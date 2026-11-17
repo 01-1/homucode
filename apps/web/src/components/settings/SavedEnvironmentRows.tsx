@@ -520,10 +520,12 @@ function ConfiguredCloudLinkRow({
   environmentId,
   canManageRelay,
   connectDeviceApproval,
+  connectDeviceLongSessions,
 }: {
   readonly environmentId: EnvironmentId;
   readonly canManageRelay: boolean;
   readonly connectDeviceApproval: ConnectDeviceApprovalControl | null;
+  readonly connectDeviceLongSessions: boolean | undefined;
 }) {
   const updateEnvironmentSettings = useUpdateEnvironmentSettings(environmentId);
   const {
@@ -765,6 +767,28 @@ function ConfiguredCloudLinkRow({
           }
         />
       ) : null}
+      {managedTunnelActive && connectDeviceApproval && connectDeviceLongSessions !== undefined ? (
+        <SettingsRow
+          title={searchableSetting("connect-device-long-sessions").title}
+          description="T3 Connect devices reconnect without a cloud round trip. Removing a device from your T3 Connect account no longer cuts it off within the hour; revoke it here instead."
+          managed={connectDenial}
+          control={
+            <CloudLinkSwitch
+              ariaLabel="Stay signed in for 30 days"
+              checked={connectDeviceLongSessions}
+              disabled={!connectDeviceApproval.canManage}
+              disabledReason={
+                connectDeviceApproval.canManage
+                  ? null
+                  : "Your session does not have permission to manage access."
+              }
+              onCheckedChange={(enabled) =>
+                updateEnvironmentSettings({ connectDeviceLongSessions: enabled })
+              }
+            />
+          }
+        />
+      ) : null}
     </>
   );
 }
@@ -780,11 +804,13 @@ export function CloudLinkRow({
   canReadRelay,
   canManageRelay,
   connectDeviceApproval,
+  connectDeviceLongSessions,
 }: {
   readonly environmentId: EnvironmentId;
   readonly canReadRelay: boolean;
   readonly canManageRelay: boolean;
   readonly connectDeviceApproval: ConnectDeviceApprovalControl | null;
+  readonly connectDeviceLongSessions: boolean | undefined;
 }) {
   if (!hasCloudPublicConfig()) return null;
   if (!canReadRelay) {
@@ -800,6 +826,7 @@ export function CloudLinkRow({
       environmentId={environmentId}
       canManageRelay={canManageRelay}
       connectDeviceApproval={connectDeviceApproval}
+      connectDeviceLongSessions={connectDeviceLongSessions}
     />
   );
 }
