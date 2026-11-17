@@ -140,10 +140,10 @@ function ReorderItem(props: {
   const { version: dragVersion, source, insertion, lift } = props.drag;
   // Separate views, so the gap animation and the follow translation never write the same transform.
   const gap = useAnimatedStyle(() => {
-    const live = dragVersion.value === version && source.value >= 0;
-    const target = live ? threadDragGapOffset(offset, source.value, rowHeight, insertion.value) : 0;
+    const live = dragVersion.get() === version && source.get() >= 0;
+    const target = live ? threadDragGapOffset(offset, source.get(), rowHeight, insertion.get()) : 0;
     return {
-      zIndex: live && source.value === offset ? 1 : 0,
+      zIndex: live && source.get() === offset ? 1 : 0,
       transform: [
         {
           translateY: live
@@ -156,7 +156,7 @@ function ReorderItem(props: {
   const follow = useAnimatedStyle(() => ({
     transform: [
       {
-        translateY: dragVersion.value === version && source.value === offset ? lift.value : 0,
+        translateY: dragVersion.get() === version && source.get() === offset ? lift.get() : 0,
       },
     ],
   }));
@@ -207,7 +207,7 @@ export function MadoHomuReorderList(props: {
   const translation = useSharedValue(0);
   const startOffset = useSharedValue(0);
   const scrolled = useSharedValue(0);
-  const lift = useDerivedValue(() => translation.value + scrolled.value);
+  const lift = useDerivedValue(() => translation.get() + scrolled.get());
   const [liftedKey, setLiftedKey] = useState<string | null>(null);
   const drag = useMemo(
     () => ({ version: dragVersion, source, insertion, lift }),
@@ -220,11 +220,11 @@ export function MadoHomuReorderList(props: {
   const retarget = useMemo(
     () => () => {
       "worklet";
-      const center = source.value + rowHeight / 2 + translation.value + scrolled.value;
-      const next = nearestSlot(slots, source.value, rowHeight, center);
-      if (next < 0 || next === slot.value) return;
-      slot.value = next;
-      insertion.value = slots[next]!.y;
+      const center = source.get() + rowHeight / 2 + translation.get() + scrolled.get();
+      const next = nearestSlot(slots, source.get(), rowHeight, center);
+      if (next < 0 || next === slot.get()) return;
+      slot.set(next);
+      insertion.set(slots[next]!.y);
     },
     [slots, rowHeight, source, translation, scrolled, slot, insertion],
   );
@@ -232,14 +232,14 @@ export function MadoHomuReorderList(props: {
   const onFrame = useCallback(
     (frame: FrameInfo) => {
       "worklet";
-      if (!active.value) return;
+      if (!active.get()) return;
       const view = measure(scrollRef);
       const content = measure(contentRef);
       if (!view || !content) return;
       const offset = view.pageY - content.pageY;
-      scrolled.value = offset - startOffset.value;
+      scrolled.set(offset - startOffset.get());
       const center =
-        content.pageY + source.value + rowHeight / 2 + translation.value + scrolled.value;
+        content.pageY + source.get() + rowHeight / 2 + translation.get() + scrolled.get();
       const top = view.pageY + topBand;
       const bottom = view.pageY + view.height - bottomBand;
       const speed =
@@ -277,12 +277,12 @@ export function MadoHomuReorderList(props: {
   const autoScroll = useFrameCallback(onFrame, false);
 
   const reset = () => {
-    active.value = false;
+    active.set(false);
     autoScroll.setActive(false);
-    source.value = -1;
-    insertion.value = -1;
-    translation.value = 0;
-    scrolled.value = 0;
+    source.set(-1);
+    insertion.set(-1);
+    translation.set(0);
+    scrolled.set(0);
     setLiftedKey(null);
   };
   const began = (key: string) => {
@@ -319,6 +319,7 @@ export function MadoHomuReorderList(props: {
     reset();
   }, [version]);
 
+  /* oxlint-disable react/refs -- the gesture callbacks measure the scroll view when a native gesture event fires, never while rendering */
   const gestures = useMemo(() => {
     const result = new Map<string, ReturnType<typeof Gesture.Pan>>();
     for (const item of items) {
@@ -335,29 +336,29 @@ export function MadoHomuReorderList(props: {
           .minDistance(0)
           .shouldCancelWhenOutside(false)
           .onStart(() => {
-            if (active.value) return;
+            if (active.get()) return;
             const view = measure(scrollRef);
             const content = measure(contentRef);
-            active.value = true;
-            dragVersion.value = version;
-            source.value = offset;
-            insertion.value = offset;
-            slot.value = -1;
-            translation.value = 0;
-            scrolled.value = 0;
-            startOffset.value = view && content ? view.pageY - content.pageY : 0;
+            active.set(true);
+            dragVersion.set(version);
+            source.set(offset);
+            insertion.set(offset);
+            slot.set(-1);
+            translation.set(0);
+            scrolled.set(0);
+            startOffset.set(view && content ? view.pageY - content.pageY : 0);
             retarget();
             runOnJS(js.began)(key);
           })
           .onUpdate((event) => {
-            if (!active.value || source.value !== offset) return;
-            translation.value = event.translationY;
+            if (!active.get() || source.get() !== offset) return;
+            translation.set(event.translationY);
             retarget();
           })
           .onFinalize((_, success) => {
-            if (!active.value || source.value !== offset) return;
-            active.value = false;
-            const target = success && slot.value >= 0 ? slots[slot.value] : undefined;
+            if (!active.get() || source.get() !== offset) return;
+            active.set(false);
+            const target = success && slot.get() >= 0 ? slots[slot.get()] : undefined;
             runOnJS(js.finished)(
               threadId,
               from,
@@ -386,6 +387,7 @@ export function MadoHomuReorderList(props: {
     scrollRef,
     contentRef,
   ]);
+  /* oxlint-enable react/refs */
 
   const scroll = (
     <Reanimated.ScrollView
