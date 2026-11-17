@@ -93,7 +93,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer),
         ]).pipe(
           Effect.updateService(Console.Console, (console) => ({
             ...console,
-            log: (...args) => Effect.sync(() => output.push(args.join(" "))),
+            log: (...args) => {
+              output.push(args.join(" "));
+            },
           })),
         );
       }

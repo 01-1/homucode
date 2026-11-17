@@ -57,17 +57,18 @@ const refreshCommand = Command.make("refresh", {
         url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
         url.searchParams.set("orchestrationProtocol", String(ORCHESTRATION_PROTOCOL_VERSION));
         url.searchParams.set("wsTicket", Redacted.value(ticket.ticket));
-        const client = yield* RpcClient.make(RpcGroup.make(WsServerRefreshProvidersRpc)).pipe(
-          Effect.provide(
-            RpcClient.layerProtocolSocket().pipe(
-              Layer.provide(RpcSerialization.layerJson),
-              Layer.provide(
-                Socket.layerWebSocket(url.href).pipe(
-                  Layer.provide(Socket.layerWebSocketConstructorGlobal),
-                ),
+        const protocol = yield* Layer.build(
+          RpcClient.layerProtocolSocket().pipe(
+            Layer.provide(RpcSerialization.layerJson),
+            Layer.provide(
+              Socket.layerWebSocket(url.href).pipe(
+                Layer.provide(Socket.layerWebSocketConstructorGlobal),
               ),
             ),
           ),
+        );
+        const client = yield* RpcClient.make(RpcGroup.make(WsServerRefreshProvidersRpc)).pipe(
+          Effect.provideContext(protocol),
         );
         return yield* client[WS_METHODS.serverRefreshProviders]({
           ...(instanceId === undefined ? {} : { instanceId }),
