@@ -9,6 +9,7 @@ export const SUBAGENT_V2_APPROVAL_POLICY = {
 
 export function subagentV2ApprovalInput(): OrchestratorFixtureInput {
   return {
+    runtimeMode: "approval-required",
     steps: [
       { type: "message", text: SUBAGENT_V2_APPROVAL_PROMPT },
       {
