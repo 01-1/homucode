@@ -18,6 +18,8 @@ import {
   reorderMadoHomuThreads,
   findMadoHomuMorningBriefThread,
   findUntouchedMadoHomuThread,
+  madohomuListedThreads,
+  selectMadoHomuThread,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
   selectMadoHomuEnvironment,
@@ -219,6 +221,27 @@ describe("MadoHomu sections", () => {
       ["Pinned", ["a"]],
       ["Scratch", ["outside", "busy"]],
     ]);
+  });
+
+  it("lists filed subagents and the open one, and opens the URL thread or the first row", () => {
+    const sub = (id: string) => ({
+      id: ThreadId.make(id),
+      lineage: { relationshipToParent: "subagent" as const },
+    });
+    const top = { id: ThreadId.make("top"), lineage: { relationshipToParent: null } };
+    const listed = madohomuListedThreads(
+      [top, sub("a"), sub("loose"), sub("open")] as never,
+      settings,
+      ThreadId.make("open"),
+    );
+    expect(listed.map((t: { id: string }) => t.id)).toEqual(["top", "a", "open"]);
+    const groups = groupMadoHomuThreads(
+      [shell("a", "2026-11-10"), shell("outside", "2026-11-14")] as never,
+      settings,
+      { now: "2026-11-17T00:00:00.000Z" },
+    );
+    expect(selectMadoHomuThread(groups, ThreadId.make("outside"))?.id).toBe("outside");
+    expect(selectMadoHomuThread(groups, ThreadId.make("missing"))?.id).toBe("a");
   });
 
   it("reopens an untouched New thread instead of making another", () => {

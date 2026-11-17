@@ -1,7 +1,15 @@
-import { madohomuRuntimeMode, selectMadoHomuEnvironment } from "@t3tools/client-runtime/madohomu";
+import {
+  findUntouchedMadoHomuThread,
+  groupMadoHomuThreads,
+  madohomuListedThreads,
+  madohomuRuntimeMode,
+  selectMadoHomuEnvironment,
+  selectMadoHomuThread,
+} from "@t3tools/client-runtime/madohomu";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "./rpc/atomRegistry";
@@ -40,7 +48,7 @@ export function readMadoHomuContext(router: AnyRouter) {
     (p) => p.environmentId === environmentId && p.id === config.settings.madohomuProjectId,
   );
   if (!project) return null;
-  const threads = appAtomRegistry
+  const projectThreads = appAtomRegistry
     .get(environmentThreadShells.visibleThreadShellsAtom)
     .filter(
       (t) =>
@@ -49,10 +57,20 @@ export function readMadoHomuContext(router: AnyRouter) {
         t.deletedAt === null &&
         t.archivedAt === null,
     );
-  const thread = threads.find((t) => t.id === search.threadId) ?? threads[0] ?? null;
+  const openThreadId =
+    typeof search.threadId === "string" ? ThreadId.make(search.threadId) : null;
+  // The same list and choice as the sidebar, so commands act on the thread on screen.
+  const groups = groupMadoHomuThreads(
+    madohomuListedThreads(projectThreads, config.settings, openThreadId),
+    config.settings,
+    { now: new Date().toISOString(), isWorking: isThreadWorking },
+  );
+  const thread = selectMadoHomuThread(groups, openThreadId);
   return {
     environmentId,
     project,
+    groups,
+    settings: config.settings,
     thread,
     threadRef: thread ? scopeThreadRef(environmentId, thread.id) : null,
   };
@@ -100,7 +118,14 @@ export async function createMadoHomuThread(
 export async function startMadoHomuThread(router: AnyRouter) {
   const context = readMadoHomuContext(router);
   if (!context) return false;
-  const threadId = await createMadoHomuThread(context.environmentId);
+  // Reopens an untouched empty "New thread" instead of making another.
+  const untouched = findUntouchedMadoHomuThread(
+    context.groups
+      .filter((group) => group.kind === "pinned" || group.kind === "custom")
+      .flatMap((group) => group.threads),
+    context.settings,
+  );
+  const threadId = untouched?.id ?? (await createMadoHomuThread(context.environmentId));
   if (!threadId) return false;
   await router.navigate({
     to: "/madohomu",

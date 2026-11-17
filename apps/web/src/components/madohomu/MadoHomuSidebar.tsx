@@ -420,11 +420,6 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     }
   };
 
-  /** The first pinned thread after a section, so moving its last row down stays inside it. */
-  const nextManualAfter = (group: Group): ThreadId | null => {
-    const last = group.threads.at(-1);
-    return last ? (manualIds[manualIds.indexOf(last.id) + 1] ?? null) : null;
-  };
   // A pinned row's menu also has Move up and Move down, so reordering works without a mouse.
   const handleContextMenu = useStableCallback(
     (threadRef: ScopedThreadRef, position: { x: number; y: number }) => {
@@ -462,8 +457,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             if (id === MENU_UP) {
               void fileThread(threadRef.threadId, section, group.threads[index - 1]!.id);
             } else if (id === MENU_DOWN) {
-              const before = group.threads[index + 2]?.id ?? nextManualAfter(group);
-              void fileThread(threadRef.threadId, section, before);
+              // Order is shared by all sections, so the end of this one is the end of the order.
+              void fileThread(threadRef.threadId, section, group.threads[index + 2]?.id ?? null);
             } else extras.onSelect(id);
           },
         },
@@ -627,7 +622,10 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const to = manualIds.indexOf(overId as ThreadId);
     if (to < 0) return;
     // Like arrayMove: dragging down lands after the row it is over, dragging up before it.
-    const before = from >= 0 && from < to ? (manualIds[to + 1] ?? null) : (overId as ThreadId);
+    // The row after is looked up in the target section, since order is shared by all sections.
+    const overIndex = target.threads.findIndex((t) => t.id === overId);
+    const before =
+      from >= 0 && from < to ? (target.threads[overIndex + 1]?.id ?? null) : (overId as ThreadId);
     void fileThread(moved, groupSection(target), before);
   };
   const draggingGroup = dragging === null ? undefined : groupOf(dragging);

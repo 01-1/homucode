@@ -114,6 +114,32 @@ export function reorderMadoHomuThreads(
   return index < 0 ? [...rest, moved] : [...rest.slice(0, index), moved, ...rest.slice(index)];
 }
 
+/**
+ * The project threads MadoHomu lists. Subagents report to their parent, so only ones the user
+ * filed get a row, as in T3 Code, plus the open thread so it always has its row.
+ */
+export function madohomuListedThreads<T extends Pick<EnvironmentThreadShell, "id" | "lineage">>(
+  projectThreads: ReadonlyArray<T>,
+  settings: Pick<ServerSettings, "madohomuThreads">,
+  openThreadId: ThreadId | null | undefined,
+): T[] {
+  return projectThreads.filter(
+    (thread) =>
+      thread.lineage.relationshipToParent !== "subagent" ||
+      settings.madohomuThreads[thread.id] !== undefined ||
+      thread.id === openThreadId,
+  );
+}
+
+/** The thread MadoHomu shows: the one the URL names if it is listed, else the first row. */
+export function selectMadoHomuThread<T extends { readonly id: ThreadId }>(
+  groups: ReadonlyArray<MadoHomuGroup<T>>,
+  openThreadId: ThreadId | null | undefined,
+): T | null {
+  const rows = groups.flatMap((group) => group.threads);
+  return rows.find((thread) => thread.id === openThreadId) ?? rows[0] ?? null;
+}
+
 /** The title MadoHomu's "New thread" gives the threads it makes. */
 export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
 
