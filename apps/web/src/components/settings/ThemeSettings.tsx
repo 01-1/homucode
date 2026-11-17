@@ -23,7 +23,7 @@ import {
   type ThemeDefinition,
   type ThemeHalves,
 } from "../../themePalette";
-import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEMES, HOMU_THEME } from "@t3tools/shared/themePalettes";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -704,12 +704,32 @@ export function ThemeLibrary({
       .entries(),
   ];
 
+  const renderMaintainerCard = (maintainerTheme: ThemeDefinition) => (
+    <ThemeLibraryCard
+      activeModes={pickedModesFor(maintainerTheme.id)}
+      isActive={false}
+      key={maintainerTheme.id}
+      onDuplicate={() =>
+        openThemeEditor({
+          editingThemeId: null,
+          seedThemeId: maintainerTheme.id,
+          seedName: `${maintainerTheme.label} copy`,
+          initialAppearance,
+        })
+      }
+      onUse={() => persistTheme(maintainerTheme.id)}
+      onUseMode={handlePairPick(maintainerTheme.id)}
+      theme={getThemeCardDefinition(maintainerTheme)}
+    />
+  );
+
   const renderPairGrid = () => (
     <TooltipProvider>
       <div
         className="grid w-full gap-2"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))" }}
       >
+        {renderMaintainerCard(HOMU_THEME)}
         {STANDARD_THEME_CARDS.map((standardTheme) => (
           <ThemeLibraryCard
             activeModes={pickedModesFor(null)}
@@ -728,27 +748,7 @@ export function ThemeLibrary({
             theme={standardTheme}
           />
         ))}
-        {BUILT_IN_THEMES.map((maintainerTheme) => {
-          const card = getThemeCardDefinition(maintainerTheme);
-          return (
-            <ThemeLibraryCard
-              activeModes={pickedModesFor(maintainerTheme.id)}
-              isActive={false}
-              key={maintainerTheme.id}
-              onDuplicate={() =>
-                openThemeEditor({
-                  editingThemeId: null,
-                  seedThemeId: maintainerTheme.id,
-                  seedName: `${maintainerTheme.label} copy`,
-                  initialAppearance,
-                })
-              }
-              onUse={() => persistTheme(maintainerTheme.id)}
-              onUseMode={handlePairPick(maintainerTheme.id)}
-              theme={card}
-            />
-          );
-        })}
+        {BUILT_IN_THEMES.filter((theme) => theme !== HOMU_THEME).map(renderMaintainerCard)}
         {environmentThemes
           .filter(
             // Saved themes win id resolution; show only their card to avoid duplicate keys.

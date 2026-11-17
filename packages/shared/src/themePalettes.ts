@@ -920,9 +920,9 @@ export const IRIS_THEME: ThemeDefinition = {
   sidebarArtwork: true,
 };
 
-export const LAVENDER_THEME: ThemeDefinition = {
+export const HOMU_THEME: ThemeDefinition = {
   id: "lavender",
-  label: "Lavender",
+  label: "HomuTheme",
   appearance: "light",
   colors: {
     canvas: "oklch(0.941518 0.038079 311.144)",
@@ -1025,7 +1025,7 @@ export const LAVENDER_THEME: ThemeDefinition = {
       updateSurface: "oklch(0.256077 0.063004 342.914)",
       accentSurface: "oklch(0.305616 0.157443 306.531)",
       accentSurfaceForeground: "oklch(0.941518 0.038079 311.144)",
-      messageSurface: "oklch(0.305616 0.157443 306.531)",
+      messageSurface: "oklch(0.22 0.115 306.5)",
       messageForeground: "oklch(0.988037 0.006904 304.245)",
       messageAction: "oklch(0.227829 0.11832 305.028)",
       messageActionForeground: "oklch(0.941518 0.038079 311.144)",
@@ -1074,11 +1074,12 @@ code,pre,kbd,.chat-markdown-codeblock{font-family:"Adwaita Mono","Fira Mono",ui-
 .dark [data-app-sidebar] [data-sidebar-row]:has([class*="font-medium text-muted-foreground"]) [class*="text-start"]{color:#F0DCFF!important}
 .dark [data-app-sidebar] [data-sidebar-row][class*="opacity-70"] [class*="text-start"]{color:#DDADFF!important}
 .dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-start"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground"]{color:#FFFFFF!important}
-.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground/75"]:not([class*="text-start"]),.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-sidebar-muted-foreground"]{color:#F2E0FF!important}`,
+.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground/75"]:not([class*="text-start"]),.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-sidebar-muted-foreground"]{color:#F2E0FF!important}
+.dark [data-slot="composer-shell"]{--chat-composer-glass-surface:oklch(0.19 0.098 306.2)!important}`,
 };
 
 export const BUILT_IN_THEMES: ReadonlyArray<ThemeDefinition> = [
-  LAVENDER_THEME,
+  HOMU_THEME,
   T3_CHAT_THEME,
   GROVE_THEME,
   OCEAN_THEME,
