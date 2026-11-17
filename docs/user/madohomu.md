@@ -2,7 +2,7 @@
 
 Enable MadoHomu in Settings → General → MadoHomu, then choose the project it focuses on. If you have several connected environments, select the environment in Settings first. Open MadoHomu from the sidebar or the “Open MadoHomu” command palette action.
 
-On mobile, use Settings → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
+On mobile, use Settings → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list, or on Android wide layouts such as an unfolded phone, from MadoHomu in the navigation rail. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
 
 MadoHomu is one thread list in sections, and threads use your normal chat and composer.
 

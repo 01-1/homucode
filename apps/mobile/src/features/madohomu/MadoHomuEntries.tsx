@@ -4,11 +4,17 @@ import { ListActionRow } from "../../components/ui/ListActionRow";
 import { rootNavigationRef } from "../../lib/rootNavigation";
 import { useEnvironments } from "../../state/environments";
 
-export function MadoHomuEntries() {
+export function useMadoHomuEnvironments() {
   const { environments } = useEnvironments();
-  const enabled = environments.filter(
-    (environment) => environment.serverConfig?.settings.madohomuEnabled,
-  );
+  return environments.filter((environment) => environment.serverConfig?.settings.madohomuEnabled);
+}
+
+export function openMadoHomu(environmentId: string) {
+  rootNavigationRef.navigate("MadoHomu", { environmentId });
+}
+
+export function MadoHomuEntries() {
+  const enabled = useMadoHomuEnvironments();
   if (enabled.length === 0) return null;
   return (
     <View className="px-5">
@@ -18,9 +24,7 @@ export function MadoHomuEntries() {
           icon="bubble.left.and.bubble.right"
           label="MadoHomu"
           detail={environment.label}
-          onPress={() =>
-            rootNavigationRef.navigate("MadoHomu", { environmentId: environment.environmentId })
-          }
+          onPress={() => openMadoHomu(environment.environmentId)}
         />
       ))}
     </View>
