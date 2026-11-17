@@ -80,6 +80,8 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Smaller items
 
+- On pbox, the Vite+ wrapper runs heavy checks on Boat. It reuses one warm box, stops it after 15 idle minutes, and runs one low-priority local check at a time during a Boat outage. Android dev-client cache misses also build on Boat.
+
 - Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
 - **Find in thread from thread details.** The thread details card on web and desktop has a Find in thread row at the top. Hide it from the card's right-click menu or Settings → Appearance → Thread details.
 - **HomuTheme.** HomuTheme (formerly Lavender) is the default theme on web, desktop and mobile, and is listed first in Settings, the command palette and the phone app. In dark mode its message bubbles and composer are darker than they were.

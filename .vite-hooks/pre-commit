@@ -1,1 +1,4 @@
-vp staged
+if [ "$(hostname -s 2>/dev/null)" = pbox ] && [ -x "$HOME/.local/lib/homucode-checks/vp" ]; then
+  exec "$HOME/.local/lib/homucode-checks/vp" staged --no-concurrent
+fi
+exec vp staged

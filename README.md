@@ -12,6 +12,7 @@ The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 - **Queue and steering.** Auto and steer delivery that steers as soon as the turn can take it, Ctrl+Enter to steer every queued message, opt-in Claude steers that survive Stop, opt-in model and effort changes that restart a running turn on the new setting, and messages sent while the previous one is still sending that wait and send themselves.
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, answered questions that keep every option, no stray clicks on a question that just appeared, and End to jump to the latest message.
 - **Desktop, CLI and mobile.** Opt-in settings sync across web, desktop and phone, opt-in TypeScript app scripts run from a keybinding or `t3 app run`, faster CLI launches, an opt-in phone launch that connects without waiting for sign-in, Linux desktop link fixes, undo for a staged build, and smaller fixes.
+- **Development on pbox.** Heavy checks and uncached Android dev clients run on Boat.
 - **Add-ons.** Optional tools in [`addons/`](./addons/README.md), all off by default. The optional Building T3 settings page runs cloud builds and staged-build loading with rollback, builds Android APKs and serves them on the LAN. The agent team launcher, outside recovery agent, autoreviewer reports and Wekan board relay remain separate tools.
 
 Only builds from this repository have these changes; upstream's published apps don't. See [Known limits](./CHANGES.md#known-limits).
