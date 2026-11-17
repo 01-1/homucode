@@ -595,6 +595,18 @@ describe("orchestrator MCP toolkit", () => {
         expect(interruptedTask?.result).toMatch(
           /^Stopped by an agent: Allow the queued replay follow-up to run\./,
         );
+        // A read acknowledges the stopped result only once it shows who stopped the run.
+        expect(
+          finishedParent.contextTransfers.find(
+            (transfer) =>
+              transfer.type === "subagent_result" &&
+              transfer.sourcePoint.runId === runningFollowup.runId,
+          )?.sourcePoint.turnItemId,
+        ).toBe(
+          finalProjection.turnItems.find(
+            (item) => item.runId === runningFollowup.runId && item.type === "run_interrupt_result",
+          )?.id,
+        );
         expect(
           finishedParent.subagents.find((task) => task.id === followupTasks[1]!.id),
         ).toMatchObject({

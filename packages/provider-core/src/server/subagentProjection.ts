@@ -273,8 +273,11 @@ export function subagentResultForRun(
       executedModel === undefined
         ? text
         : withExecutedModelNote(text, run.modelSelection.model, executedModel),
-    messageId: failure === undefined ? (message?.id ?? turnItem?.messageId ?? null) : null,
-    turnItemId: failure?.id ?? turnItem?.id ?? null,
+    messageId:
+      failure === undefined && stop === undefined
+        ? (message?.id ?? turnItem?.messageId ?? null)
+        : null,
+    turnItemId: failure?.id ?? stop?.id ?? turnItem?.id ?? null,
   };
 }
 
