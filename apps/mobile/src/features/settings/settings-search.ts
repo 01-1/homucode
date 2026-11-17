@@ -51,7 +51,17 @@ const SETTINGS_SEARCH_TERMS = {
     "bluetooth",
   ],
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
-  SettingsMadoHomu: ["madohomu", "focused project", "morning brief", "daily time", "chat", "tasks"],
+  SettingsMadoHomu: [
+    "madohomu",
+    "focused project",
+    "morning brief",
+    "daily time",
+    "chat",
+    "tasks",
+    "show madohomu threads in t3 code",
+    "hide threads",
+    "scratch",
+  ],
   SettingsProjectOverview: ["project", "overview", "checkouts", "delete project"],
   SettingsOrganization: [
     "project grouping",

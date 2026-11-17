@@ -15,6 +15,7 @@ import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { THREAD_SIDEBAR_ROW_LAYOUT } from "./threadListAnimations";
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo, useRef, useState } from "react";
+import { useMadoHomuCodeThreads } from "../madohomu/useMadoHomuCodeThreads";
 import { Platform, StyleSheet, View } from "react-native";
 import { GestureDetector, useNativeGesture } from "react-native-gesture-handler";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -127,7 +128,11 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const insets = useSafeAreaInsets();
   const { fabClearance, fabSize } = useAndroidControlSizing();
   const projects = useProjects();
-  const threads = useAtomValue(steadyNavigationThreadShellsAtom);
+  const threads = useMadoHomuCodeThreads(
+    useAtomValue(steadyNavigationThreadShellsAtom),
+    props.searchQuery,
+    props.selectedThreadKey,
+  );
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);

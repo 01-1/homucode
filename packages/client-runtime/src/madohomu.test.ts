@@ -15,6 +15,7 @@ import {
   madohomuTaskLabel,
   groupMadoHomuThreads,
   isMadoHomuThreadShownInCode,
+  filterMadoHomuCodeThreads,
   reorderMadoHomuThreads,
   findMadoHomuMorningBriefThread,
   isMadoHomuThreadPinned,
@@ -225,7 +226,10 @@ describe("MadoHomu sections", () => {
       { now: "2026-11-17T00:00:00.000Z" },
     );
     expect(
-      groups.map((group) => [group.title, group.threads.map((thread: { id: string }) => thread.id)]),
+      groups.map((group) => [
+        group.title,
+        group.threads.map((thread: { id: string }) => thread.id),
+      ]),
     ).toEqual([
       ["Pinned", ["gone", "new", "b", "a"]],
       ["Work", ["filed"]],
@@ -261,5 +265,41 @@ describe("MadoHomu sections", () => {
         { id: ThreadId.make("a"), projectId: ProjectId.make("p") },
       ),
     ).toBe(true);
+  });
+});
+
+describe("filterMadoHomuCodeThreads", () => {
+  const env = EnvironmentId.make("env-a");
+  const other = EnvironmentId.make("env-b");
+  const mado = ProjectId.make("mado");
+  const thread = (id: string, environmentId = env, projectId = mado) => ({
+    environmentId,
+    id: ThreadId.make(id),
+    projectId,
+  });
+  const settings = { ...DEFAULT_SERVER_SETTINGS, madohomuEnabled: true, madohomuProjectId: mado };
+  const threads = [
+    thread("hidden"),
+    thread("open"),
+    thread("elsewhere", env, ProjectId.make("other")),
+    thread("same-project-other-env", other),
+  ];
+
+  it("hides the project's threads per environment but keeps the open thread", () => {
+    const shown = filterMadoHomuCodeThreads(
+      threads,
+      new Map([[env, settings]]),
+      (candidate) => candidate.id === "open",
+    );
+    expect(shown.map((candidate) => candidate.id)).toEqual([
+      "open",
+      "elsewhere",
+      "same-project-other-env",
+    ]);
+  });
+
+  it("returns the list untouched when no environment hides threads", () => {
+    const all = { ...settings, madohomuCodeVisibility: "all" as const };
+    expect(filterMadoHomuCodeThreads(threads, new Map([[env, all]]))).toBe(threads);
   });
 });
