@@ -788,7 +788,7 @@ export type CodexSettings = typeof CodexSettings.Type;
 
 const CLAUDE_AUTO_COMPACT_WINDOW_PATTERN = /^(?:|[1-9]\d{5}|1000000)$/;
 
-export const IDLE_COMPACTION_MODES = [
+const IDLE_COMPACTION_MODES = [
   { value: "onReturn", label: "When you return" },
   { value: "beforeCacheExpires", label: "Before the cache expires (beta)" },
   { value: "off", label: "Never" },
@@ -864,7 +864,7 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "Compact idle threads",
         description:
-          "When to compact an idle thread over 200,000 tokens: after you return, just before its prompt cache expires, or never. Overrides the default in Providers > Advanced.",
+          'When to compact an idle thread over 200,000 tokens: after you return, just before its prompt cache expires, or never. Whether "Before the cache expires" also compacts after you return when it misses its window follows the default in Providers > Advanced. Overrides that default.',
         providerSettingsForm: {
           control: "select",
           options: INSTANCE_IDLE_COMPACTION_MODES,
@@ -1544,6 +1544,8 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   idleCompaction: Schema.optionalKey(IdleCompactionMode),
+  /** With "Before the cache expires", whether a thread that missed its window compacts when you return. */
+  idleCompactionFallback: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   snoozePresets: SnoozePresetSettings.pipe(
@@ -1849,6 +1851,18 @@ export const resolveIdleCompaction = (
   return override === "default" ? globalIdleCompaction(settings) : override;
 };
 
+/** Whether a send after the prompt cache expired compacts the thread first. */
+export const compactsOnReturn = (
+  settings: Pick<
+    ServerSettings,
+    "providerInstances" | "compactIdleThreads" | "idleCompaction" | "idleCompactionFallback"
+  >,
+  instanceId: ProviderInstanceId,
+) => {
+  const mode = resolveIdleCompaction(settings, instanceId);
+  return mode === "onReturn" || (mode === "beforeCacheExpires" && settings.idleCompactionFallback);
+};
+
 export const ServerSettingsOperation = Schema.Literals([
   "normalize",
   "check-exists",
@@ -2028,6 +2042,7 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   compactIdleThreads: Schema.optionalKey(LegacyCompactIdleThreads),
   idleCompaction: Schema.optionalKey(IdleCompactionMode),
+  idleCompactionFallback: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),

@@ -17,6 +17,7 @@ import {
   idleCompactionPatch,
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
   requiredScopesForProjectMutation,
+  compactsOnReturn,
   resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
@@ -281,6 +282,18 @@ describe("resolveIdleCompaction", () => {
     );
     expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claude_personal"))).toBe("off");
     expect(resolveIdleCompaction(settings, ProviderInstanceId.make("claudeAgent"))).toBe("off");
+  });
+
+  it("compacts on return unless the mode is off or before the cache expires without fallback", () => {
+    const claude = ProviderInstanceId.make("claudeAgent");
+    const compacts = (input: Record<string, unknown>) =>
+      compactsOnReturn(decodeServerSettings(input), claude);
+    expect(compacts({})).toBe(true);
+    expect(compacts({ idleCompaction: "beforeCacheExpires" })).toBe(true);
+    expect(compacts({ idleCompaction: "beforeCacheExpires", idleCompactionFallback: false })).toBe(
+      false,
+    );
+    expect(compacts({ idleCompaction: "off" })).toBe(false);
   });
 
   it("reads the mode from the legacy switch, in either form servers saved it", () => {

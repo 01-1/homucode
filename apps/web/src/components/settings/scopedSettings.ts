@@ -203,13 +203,41 @@ export function scopedSettingsAreMixed(
   );
 }
 
+/** The global "Compact idle threads" choices: "Before the cache expires" with and without falling back to "When you return". */
+export const IDLE_COMPACTION_CHOICES = [
+  { value: "onReturn", label: "When you return", patch: { idleCompaction: "onReturn" } },
+  {
+    value: "beforeCacheExpires",
+    label: "Before cache expires, or on return (beta)",
+    patch: { idleCompaction: "beforeCacheExpires", idleCompactionFallback: true },
+  },
+  {
+    value: "beforeCacheExpiresOnly",
+    label: "Only before cache expires (beta)",
+    patch: { idleCompaction: "beforeCacheExpires", idleCompactionFallback: false },
+  },
+  { value: "off", label: "Never", patch: { idleCompaction: "off" } },
+] as const satisfies readonly { value: string; label: string; patch: ServerSettingsPatch }[];
+
+export function idleCompactionChoice(
+  settings: Pick<
+    ServerSettings,
+    "compactIdleThreads" | "idleCompaction" | "idleCompactionFallback"
+  >,
+): (typeof IDLE_COMPACTION_CHOICES)[number]["value"] {
+  const mode = globalIdleCompaction(settings);
+  return mode === "beforeCacheExpires" && !settings.idleCompactionFallback
+    ? "beforeCacheExpiresOnly"
+    : mode;
+}
+
 /**
  * Servers store the idle compaction mode differently by version, so selected
  * environments are compared by the mode each resolves to, and "Never" is offered
  * only when every one of them can store it.
  */
 export function scopedIdleCompaction(targets: readonly Pick<ScopedSettingsTarget, "settings">[]) {
-  const modes = targets.map((candidate) => globalIdleCompaction(candidate.settings));
+  const modes = targets.map((candidate) => idleCompactionChoice(candidate.settings));
   return {
     mixed: modes.some((mode) => mode !== modes[0]),
     neverAvailable: targets.every((candidate) => readsIdleCompactionModes(candidate.settings)),

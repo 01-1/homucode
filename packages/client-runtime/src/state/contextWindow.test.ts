@@ -195,6 +195,11 @@ describe("compactBeforeSendTokens", () => {
       expected: true,
     },
     {
+      name: "when the environment compacts only before the cache expires",
+      settings: { idleCompaction: "beforeCacheExpires", idleCompactionFallback: false },
+      expected: false,
+    },
+    {
       name: "past a reported TTL shorter than the fallback",
       promptCacheTtlMs: 5 * 60_000,
       now: "2026-10-30T14:30:00.000Z",

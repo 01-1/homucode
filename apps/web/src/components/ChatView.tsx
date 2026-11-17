@@ -76,7 +76,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   ProviderInteractionMode,
-  resolveIdleCompaction,
+  compactsOnReturn,
   RuntimeMode,
 } from "@t3tools/contracts";
 import {
@@ -2544,10 +2544,10 @@ export default function ChatView(props: ChatViewProps) {
   const resumeCompactionTokens =
     activeContextWindow &&
     pendingHandoff === null &&
-    resolveIdleCompaction(
+    compactsOnReturn(
       settings,
       activeProviderInstanceId ?? ProviderInstanceId.make("claudeAgent"),
-    ) !== "off" &&
+    ) &&
     !resumeCompactionPermanentlyDismissed &&
     !nativeResumeCompactionDismissed &&
     !compactDisabled &&
