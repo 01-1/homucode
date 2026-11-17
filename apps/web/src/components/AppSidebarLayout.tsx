@@ -40,7 +40,7 @@ import {
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
-import { DuetSidebar } from "./duet/DuetPage";
+import { MadoHomuSidebar } from "./madohomu/MadoHomuPage";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
@@ -488,8 +488,8 @@ export function AppSidebarLayout({
               }}
               style={windowControlsInsetStyle}
             >
-              {pathname === "/duet" ? (
-                <DuetSidebar />
+              {pathname === "/madohomu" ? (
+                <MadoHomuSidebar />
               ) : (
                 <ThreadSidebar routeReveal={sidebarRouteReveal} />
               )}

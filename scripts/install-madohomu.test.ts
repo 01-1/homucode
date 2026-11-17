@@ -7,7 +7,7 @@ import * as NodePath from "node:path";
 import { expect, it } from "vite-plus/test";
 
 it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
-  "installs only a Duet launcher and reuses the supplied Homu runtime, then uninstalls without touching shared state",
+  "installs only a MadoHomu launcher and reuses the supplied Homu runtime, then uninstalls without touching shared state",
   async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "madohomu-install-"));
     try {
@@ -21,7 +21,7 @@ it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
       NodeChildProcess.execFileSync(process.execPath, [installer], { env });
       const launcher = NodePath.join(root, ".local", "bin", "madohomu");
       expect(NodeChildProcess.execFileSync(launcher, ["example"], { encoding: "utf8" })).toBe(
-        "--duet\nexample\n",
+        "--madohomu\nexample\n",
       );
       const applications = NodePath.join(root, ".local", "share", "applications");
       expect(await NodeFSP.readdir(applications)).toEqual(["madohomu.desktop"]);
@@ -46,7 +46,9 @@ it.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
       NodeChildProcess.execFileSync(process.execPath, ["--import", preload, installer], {
         env: { ...env, MADOHOMU_RUNTIME: "" },
       });
-      expect(NodeChildProcess.execFileSync(launcher, [], { encoding: "utf8" })).toBe("--duet\n");
+      expect(NodeChildProcess.execFileSync(launcher, [], { encoding: "utf8" })).toBe(
+        "--madohomu\n",
+      );
       NodeChildProcess.execFileSync(process.execPath, [installer, "--uninstall"], { env });
       expect(await NodeFSP.readFile(shared, "utf8")).toBe("shared settings");
     } finally {

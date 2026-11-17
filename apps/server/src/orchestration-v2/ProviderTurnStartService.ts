@@ -1,4 +1,4 @@
-import { duetThreadContext } from "./DuetThreadContext.ts";
+import { madohomuThreadContext } from "./MadoHomuThreadContext.ts";
 import { withSentFromLine } from "./MessageSentFrom.ts";
 import { withMessageTimestamp } from "./MessageTimestamp.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
@@ -703,10 +703,10 @@ export const layer: Layer.Layer<
       });
       const { isCurrentAttemptInStatus } = runControls;
 
-      const duetSettings = yield* serverSettings.getSettings;
+      const madohomuSettings = yield* serverSettings.getSettings;
       const isMorningBrief =
         message.scheduledTaskId !== undefined &&
-        message.scheduledTaskId === duetSettings.duetMorningBriefTaskId;
+        message.scheduledTaskId === madohomuSettings.madohomuMorningBriefTaskId;
       const resolvedPolicy = yield* runtimePolicy
         .resolve({
           thread: isMorningBrief
@@ -869,7 +869,7 @@ export const layer: Layer.Layer<
           records: providerMessage.context?.records ?? [],
         }),
         providerMessage,
-        duetSettings.messageSentFromEnabled,
+        madohomuSettings.messageSentFromEnabled,
       );
       // Native goal commands go verbatim; handoff history waits a turn.
       const goalDriver =
@@ -1743,7 +1743,7 @@ export const layer: Layer.Layer<
           ],
         });
       });
-      const duetContext = duetThreadContext(duetSettings, projection.thread);
+      const madohomuContext = madohomuThreadContext(madohomuSettings, projection.thread);
       const startWithHandoffs = Effect.fn("ProviderTurnStartService.startWithHandoffs")(
         function* (turnInput: Parameters<typeof session.startTurn>[0], compact = false) {
           const delivery = yield* deliverContextHandoffs({
@@ -1770,7 +1770,7 @@ export const layer: Layer.Layer<
             sideChatHandoff === undefined || compact || goalCommand
               ? ""
               : sideChatHandoff.summaryText;
-          const context = [delivery.context, sideChatContext, restartNote, duetContext]
+          const context = [delivery.context, sideChatContext, restartNote, madohomuContext]
             .filter((part) => part !== "")
             .join("\n\n");
           const { restartContinuationOfRunId: _resumedRunId, ...promptedInput } = turnInput;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 import {
-  DuetThreadSettings,
+  MadoHomuThreadSettings,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -9,22 +9,22 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import {
-  duetMorningBriefInput,
-  duetTaskLabel,
-  findDuetMorningBriefThread,
-  isDuetThreadPinned,
+  madohomuMorningBriefInput,
+  madohomuTaskLabel,
+  findMadoHomuMorningBriefThread,
+  isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
-  orderDuetThreads,
-  orderDuetTasks,
-  selectDuetEnvironment,
-} from "./duet.ts";
+  orderMadoHomuThreads,
+  orderMadoHomuTasks,
+  selectMadoHomuEnvironment,
+} from "./madohomu.ts";
 
-it("keeps Duet entries pinned by default and treats other project threads as temporary", () => {
-  const decode = Schema.decodeUnknownSync(DuetThreadSettings);
-  expect(isDuetThreadPinned(undefined)).toBe(false);
-  expect(isDuetThreadPinned(decode({ icon: null, prompt: "" }))).toBe(true);
-  expect(isDuetThreadPinned(decode({ icon: "☀️", prompt: "", pinned: true }))).toBe(true);
-  expect(isDuetThreadPinned(decode({ icon: null, prompt: "", pinned: false }))).toBe(false);
+it("keeps MadoHomu entries pinned by default and treats other project threads as temporary", () => {
+  const decode = Schema.decodeUnknownSync(MadoHomuThreadSettings);
+  expect(isMadoHomuThreadPinned(undefined)).toBe(false);
+  expect(isMadoHomuThreadPinned(decode({ icon: null, prompt: "" }))).toBe(true);
+  expect(isMadoHomuThreadPinned(decode({ icon: "☀️", prompt: "", pinned: true }))).toBe(true);
+  expect(isMadoHomuThreadPinned(decode({ icon: null, prompt: "", pinned: false }))).toBe(false);
 });
 
 it("orders kept threads before temporary threads independently of device pins", () => {
@@ -42,13 +42,13 @@ it("orders kept threads before temporary threads independently of device pins", 
     [legacy.id]: { icon: null, prompt: "" },
     [temporary.id]: { icon: null, prompt: "", pinned: false },
   };
-  expect(orderDuetThreads(rows, entries)).toEqual([legacy, kept, temporary, other]);
+  expect(orderMadoHomuThreads(rows, entries)).toEqual([legacy, kept, temporary, other]);
   expect(rows[0]).toBe(temporary);
 });
 
-it("reuses a renamed bound brief thread within the Duet project, excluding other environments and closed threads", () => {
-  const environmentId = EnvironmentId.make("duet-environment");
-  const projectId = ProjectId.make("duet-project");
+it("reuses a renamed bound brief thread within the MadoHomu project, excluding other environments and closed threads", () => {
+  const environmentId = EnvironmentId.make("madohomu-environment");
+  const projectId = ProjectId.make("madohomu-project");
   const row = {
     environmentId,
     projectId,
@@ -65,9 +65,11 @@ it("reuses a renamed bound brief thread within the Duet project, excluding other
     { ...row, deletedAt: "2026-11-16" },
   ];
   const threads = [...unavailable, row, bound];
-  expect(findDuetMorningBriefThread(threads, environmentId, projectId, bound.id)).toBe(bound);
-  expect(findDuetMorningBriefThread(threads, environmentId, projectId, null)).toBe(row);
-  expect(findDuetMorningBriefThread(unavailable, environmentId, projectId, row.id)).toBeUndefined();
+  expect(findMadoHomuMorningBriefThread(threads, environmentId, projectId, bound.id)).toBe(bound);
+  expect(findMadoHomuMorningBriefThread(threads, environmentId, projectId, null)).toBe(row);
+  expect(
+    findMadoHomuMorningBriefThread(unavailable, environmentId, projectId, row.id),
+  ).toBeUndefined();
 });
 
 it.each(["web", "mobile"] as const)(
@@ -75,13 +77,13 @@ it.each(["web", "mobile"] as const)(
   (creationSource) => {
     const input = {
       id: ScheduledTaskId.make("morning-brief"),
-      projectId: ProjectId.make("duet-project"),
+      projectId: ProjectId.make("madohomu-project"),
       threadId: ThreadId.make("brief-thread"),
       modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" },
       timeOfDay: "08:30",
       creationSource,
     };
-    expect(duetMorningBriefInput(input)).toEqual({
+    expect(madohomuMorningBriefInput(input)).toEqual({
       id: input.id,
       title: "Morning brief",
       prompt: MORNING_BRIEF_PROMPT,
@@ -99,7 +101,7 @@ it.each(["web", "mobile"] as const)(
   },
 );
 
-describe("Duet tasks", () => {
+describe("MadoHomu tasks", () => {
   it("puts decisions before running work and recent threads, newest first within each group", () => {
     const task = (id: string, updatedAt: string, extra = {}) => ({
       id: ThreadId.make(id),
@@ -114,34 +116,41 @@ describe("Duet tasks", () => {
     const input = task("input", "2026-11-15", { hasPendingUserInput: true });
     const running = { ...task("running", "2026-11-16"), runtime: { status: "running" as const } };
     const rows = [recent, approval, input, running];
-    expect(orderDuetTasks(rows).map((row) => row.id)).toEqual([
+    expect(orderMadoHomuTasks(rows).map((row) => row.id)).toEqual([
       "input",
       "approval",
       "running",
       "recent",
     ]);
-    expect(rows.map(duetTaskLabel)).toEqual(["Recent", "Needs approval", "Needs input", "Running"]);
+    expect(rows.map(madohomuTaskLabel)).toEqual([
+      "Recent",
+      "Needs approval",
+      "Needs input",
+      "Running",
+    ]);
     expect(rows[0]?.id).toBe("recent");
   });
 });
 
-it("chooses an enabled remote Duet destination with a disabled primary or no primary, and removes it when disabled", () => {
+it("chooses an enabled remote MadoHomu destination with a disabled primary or no primary, and removes it when disabled", () => {
   const local = {
     environmentId: EnvironmentId.make("local"),
-    duetEnabled: false,
-    duetDesktopAppEnabled: false,
+    madohomuEnabled: false,
+    madohomuDesktopAppEnabled: false,
   };
   const remote = {
     environmentId: EnvironmentId.make("remote"),
-    duetEnabled: true,
-    duetDesktopAppEnabled: true,
+    madohomuEnabled: true,
+    madohomuDesktopAppEnabled: true,
   };
-  expect(selectDuetEnvironment(local.environmentId, [local, remote])).toBe(remote.environmentId);
-  expect(selectDuetEnvironment(null, [local, remote])).toBe(remote.environmentId);
+  expect(selectMadoHomuEnvironment(local.environmentId, [local, remote])).toBe(
+    remote.environmentId,
+  );
+  expect(selectMadoHomuEnvironment(null, [local, remote])).toBe(remote.environmentId);
   expect(
-    selectDuetEnvironment(local.environmentId, [local, { ...remote, duetEnabled: false }]),
+    selectMadoHomuEnvironment(local.environmentId, [local, { ...remote, madohomuEnabled: false }]),
   ).toBeNull();
   expect(
-    selectDuetEnvironment(local.environmentId, [{ ...local, duetEnabled: true }, remote]),
+    selectMadoHomuEnvironment(local.environmentId, [{ ...local, madohomuEnabled: true }, remote]),
   ).toBe(remote.environmentId);
 });

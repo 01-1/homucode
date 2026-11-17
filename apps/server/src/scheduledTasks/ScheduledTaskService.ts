@@ -260,8 +260,11 @@ interface WebhookDeliveryRow {
 export class ScheduledTaskService extends Context.Service<
   ScheduledTaskService,
   {
-    readonly reconcileDuet: (
-      settings: Pick<ServerSettings, "duetEnabled" | "duetProjectId" | "duetMorningBriefTaskId">,
+    readonly reconcileMadoHomu: (
+      settings: Pick<
+        ServerSettings,
+        "madohomuEnabled" | "madohomuProjectId" | "madohomuMorningBriefTaskId"
+      >,
     ) => Effect.Effect<void, ScheduledTaskError>;
     readonly list: () => Effect.Effect<ScheduledTaskListResult, ScheduledTaskError>;
     readonly subscribeList: () => Stream.Stream<ScheduledTaskListResult, ScheduledTaskError>;
@@ -1638,12 +1641,18 @@ export const layer = Layer.effect(
       };
     });
 
-    const reconcileDuet = Effect.fn("ScheduledTaskService.reconcileDuet")(function* (
-      settings: Pick<ServerSettings, "duetEnabled" | "duetProjectId" | "duetMorningBriefTaskId">,
+    const reconcileMadoHomu = Effect.fn("ScheduledTaskService.reconcileMadoHomu")(function* (
+      settings: Pick<
+        ServerSettings,
+        "madohomuEnabled" | "madohomuProjectId" | "madohomuMorningBriefTaskId"
+      >,
     ) {
-      if (!settings.duetMorningBriefTaskId) return;
-      const task = yield* findTask(settings.duetMorningBriefTaskId);
-      if (task?.enabled && (!settings.duetEnabled || settings.duetProjectId !== task.projectId)) {
+      if (!settings.madohomuMorningBriefTaskId) return;
+      const task = yield* findTask(settings.madohomuMorningBriefTaskId);
+      if (
+        task?.enabled &&
+        (!settings.madohomuEnabled || settings.madohomuProjectId !== task.projectId)
+      ) {
         yield* setEnabled({ id: task.id, enabled: false });
       }
     });
@@ -2656,7 +2665,7 @@ export const layer = Layer.effect(
     yield* scheduler.register("webhook-coalescing", dispatchPending());
 
     return ScheduledTaskService.of({
-      reconcileDuet,
+      reconcileMadoHomu,
       list,
       subscribeList,
       upsert,
@@ -2673,17 +2682,17 @@ export const layer = Layer.effect(
   }),
 );
 
-export const layerDuetSettings = Layer.effectDiscard(
+export const layerMadoHomuSettings = Layer.effectDiscard(
   Effect.gen(function* () {
     const settings = yield* ServerSettingsService.ServerSettingsService;
     const tasks = yield* ScheduledTaskService;
     const changes = yield* settings.subscribeChanges;
-    const reconcile = Effect.fn("ScheduledTaskService.reconcileDuetSettings")(
+    const reconcile = Effect.fn("ScheduledTaskService.reconcileMadoHomuSettings")(
       function* () {
-        yield* tasks.reconcileDuet(yield* settings.getSettings);
+        yield* tasks.reconcileMadoHomu(yield* settings.getSettings);
       },
       Effect.catchCause((cause) =>
-        Effect.logError("Could not reconcile Duet morning brief", cause),
+        Effect.logError("Could not reconcile MadoHomu morning brief", cause),
       ),
     );
     yield* reconcile();

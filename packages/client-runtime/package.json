@@ -591,9 +591,9 @@
       "types": "./src/featureOffers.ts",
       "default": "./src/featureOffers.ts"
     },
-    "./duet": {
-      "types": "./src/duet.ts",
-      "default": "./src/duet.ts"
+    "./madohomu": {
+      "types": "./src/madohomu.ts",
+      "default": "./src/madohomu.ts"
     }
   },
   "scripts": {

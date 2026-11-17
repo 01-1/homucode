@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-vi.mock("../duet", () => ({ readDuetContext: () => null, startDuetThread: vi.fn() }));
+vi.mock("../madohomu", () => ({ readMadoHomuContext: () => null, startMadoHomuThread: vi.fn() }));
 import type { EnvironmentId, ProjectId, RuntimeMode } from "@t3tools/contracts";
 
 const testState = vi.hoisted(() => {

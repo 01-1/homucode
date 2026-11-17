@@ -332,6 +332,23 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
     }).pipe(Effect.provide(layerServerSettings())),
   );
 
+  it.effect("reads settings saved under Duet's old keys as MadoHomu settings", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fs.writeFileString(
+        config.settingsPath,
+        `{ "duetEnabled": true, "duetProjectId": "project-1", "featureOffersSeen": ["duet", "autoreview"] }`,
+      );
+
+      const settings = yield* service.getSettings;
+      assert.strictEqual(settings.madohomuEnabled, true);
+      assert.equal(settings.madohomuProjectId, "project-1");
+      assert.deepEqual(settings.featureOffersSeen, ["madohomu", "autoreview"]);
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("tells clients it reads idle compaction modes before any settings are saved", () =>
     Effect.gen(function* () {
       const service = yield* ServerSettingsModule.ServerSettingsService;

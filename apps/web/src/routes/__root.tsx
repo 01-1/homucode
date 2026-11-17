@@ -1,5 +1,5 @@
 import { SettingsSyncDialogHost } from "../components/SettingsSyncDialog";
-import { DesktopDuetCoordinator } from "../components/desktop/DesktopDuetCoordinator";
+import { DesktopMadoHomuCoordinator } from "../components/desktop/DesktopMadoHomuCoordinator";
 import { FeatureOffersDialog } from "../components/onboarding/FeatureOffers";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -185,7 +185,7 @@ function RootRouteBranch() {
     <>
       {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
       <FeatureOffersDialog />
-      {isElectron ? <DesktopDuetCoordinator /> : null}
+      {isElectron ? <DesktopMadoHomuCoordinator /> : null}
       {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
         <DesktopWebLinkCoordinator />
       ) : null}

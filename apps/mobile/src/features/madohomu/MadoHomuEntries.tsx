@@ -4,10 +4,10 @@ import { ListActionRow } from "../../components/ui/ListActionRow";
 import { rootNavigationRef } from "../../lib/rootNavigation";
 import { useEnvironments } from "../../state/environments";
 
-export function DuetEntries() {
+export function MadoHomuEntries() {
   const { environments } = useEnvironments();
   const enabled = environments.filter(
-    (environment) => environment.serverConfig?.settings.duetEnabled,
+    (environment) => environment.serverConfig?.settings.madohomuEnabled,
   );
   if (enabled.length === 0) return null;
   return (
@@ -16,10 +16,10 @@ export function DuetEntries() {
         <ListActionRow
           key={environment.environmentId}
           icon="bubble.left.and.bubble.right"
-          label="Duet"
+          label="MadoHomu"
           detail={environment.label}
           onPress={() =>
-            rootNavigationRef.navigate("Duet", { environmentId: environment.environmentId })
+            rootNavigationRef.navigate("MadoHomu", { environmentId: environment.environmentId })
           }
         />
       ))}

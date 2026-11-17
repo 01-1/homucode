@@ -1,4 +1,4 @@
-import { DesktopDuetSettings, type DesktopDuetWindowMode } from "@t3tools/contracts";
+import { DesktopMadoHomuSettings, type DesktopMadoHomuWindowMode } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -15,33 +15,44 @@ import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
-import { DUET_NAVIGATE_CHANNEL } from "../ipc/channels.ts";
+import { MADOHOMU_NAVIGATE_CHANNEL } from "../ipc/channels.ts";
 
-export class DesktopDuetError extends Schema.TaggedError<DesktopDuetError>()("DesktopDuetError", {
-  operation: Schema.Literals(["configure", "open", "merge"]),
-  cause: Schema.Defect(),
-}) {
+export class DesktopMadoHomuError extends Schema.TaggedError<DesktopMadoHomuError>()(
+  "DesktopMadoHomuError",
+  {
+    operation: Schema.Literals(["configure", "open", "merge"]),
+    cause: Schema.Defect(),
+  },
+) {
   override get message() {
-    return `Could not ${this.operation} T3 Duet.`;
+    return `Could not ${this.operation} MadoHomu.`;
   }
 }
 
-export class DesktopDuet extends Context.Service<
-  DesktopDuet,
+export class DesktopMadoHomu extends Context.Service<
+  DesktopMadoHomu,
   {
-    readonly configure: (settings: DesktopDuetSettings) => Effect.Effect<void, DesktopDuetError>;
-    readonly open: Effect.Effect<void, DesktopDuetError>;
-    readonly setWindowMode: (input: DesktopDuetWindowMode) => Effect.Effect<void, DesktopDuetError>;
+    readonly configure: (
+      settings: DesktopMadoHomuSettings,
+    ) => Effect.Effect<void, DesktopMadoHomuError>;
+    readonly open: Effect.Effect<void, DesktopMadoHomuError>;
+    readonly setWindowMode: (
+      input: DesktopMadoHomuWindowMode,
+    ) => Effect.Effect<void, DesktopMadoHomuError>;
   }
->()("@t3tools/desktop/window/DesktopDuet") {}
+>()("@t3tools/desktop/window/DesktopMadoHomu") {}
 
-function duetDesktopEntry(execTarget: string, icon: string): string {
+// Launchers made before Duet was renamed MadoHomu still pass --duet.
+export const isMadoHomuLaunch = (argv: ReadonlyArray<string>) =>
+  argv.includes("--madohomu") || argv.includes("--duet");
+
+function madohomuDesktopEntry(execTarget: string, icon: string): string {
   return [
     "[Desktop Entry]",
     "Type=Application",
-    "Name=T3 Duet",
-    `Exec=${escapeDesktopEntryExecArgument(execTarget)} --duet`,
-    "StartupWMClass=t3code-duet",
+    "Name=MadoHomu",
+    `Exec=${escapeDesktopEntryExecArgument(execTarget)} --madohomu`,
+    "StartupWMClass=t3code-madohomu",
     `Icon=${icon}`,
     "Terminal=false",
     "Categories=Development;",
@@ -61,9 +72,9 @@ const make = Effect.gen(function* () {
   const args = yield* HostProcess.Arguments;
   const mutex = yield* Semaphore.make(1);
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
-  let requested = args.includes("--duet");
+  let requested = isMadoHomuLaunch(args);
   let configured = false;
-  let settings: Required<DesktopDuetSettings> = {
+  let settings: Required<DesktopMadoHomuSettings> = {
     enabled: false,
     launcherEnabled: false,
     environmentId: null,
@@ -75,10 +86,14 @@ const make = Effect.gen(function* () {
     ".local",
     "share",
     "applications",
+    "t3code-madohomu.desktop",
+  );
+  const legacyEntryPath = environment.path.join(
+    environment.path.dirname(entryPath),
     "t3code-duet.desktop",
   );
-  const duetUrl = (location?: Omit<DesktopDuetWindowMode, "mode">) => {
-    const route = new URL("https://route.invalid/duet");
+  const madohomuUrl = (location?: Omit<DesktopMadoHomuWindowMode, "mode">) => {
+    const route = new URL("https://route.invalid/madohomu");
     const environmentId = location?.environmentId ?? settings.environmentId;
     if (environmentId) route.searchParams.set("environmentId", environmentId);
     if (location?.threadId) route.searchParams.set("threadId", location.threadId);
@@ -87,20 +102,20 @@ const make = Effect.gen(function* () {
     url.hash = route.pathname + route.search;
     return url.href;
   };
-  const report = (effect: Effect.Effect<void, DesktopDuetError>) => {
+  const report = (effect: Effect.Effect<void, DesktopMadoHomuError>) => {
     runFork(
-      effect.pipe(Effect.catch((error) => Effect.logWarning("T3 Duet action failed", error))),
+      effect.pipe(Effect.catch((error) => Effect.logWarning("MadoHomu action failed", error))),
     );
   };
-  const openWindow = Effect.fn("DesktopDuet.openWindow")(
-    function* (location: Omit<DesktopDuetWindowMode, "mode"> | undefined) {
+  const openWindow = Effect.fn("DesktopMadoHomu.openWindow")(
+    function* (location: Omit<DesktopMadoHomuWindowMode, "mode"> | undefined) {
       requested = true;
       if (!configured) return;
       if (window && !window.isDestroyed()) {
         if (location) {
           yield* Effect.tryPromise({
-            try: () => window!.loadURL(duetUrl(location)),
-            catch: (cause) => new DesktopDuetError({ operation: "open", cause }),
+            try: () => window!.loadURL(madohomuUrl(location)),
+            catch: (cause) => new DesktopMadoHomuError({ operation: "open", cause }),
           });
         }
         yield* windows.reveal(window);
@@ -113,7 +128,7 @@ const make = Effect.gen(function* () {
           height: 820,
           minWidth: 360,
           minHeight: 480,
-          title: "T3 Duet",
+          title: "MadoHomu",
           show: false,
           autoHideMenuBar: true,
           webPreferences: {
@@ -122,22 +137,22 @@ const make = Effect.gen(function* () {
             contextIsolation: true,
             nodeIntegration: false,
             webviewTag: false,
-            additionalArguments: ["--t3-duet-window"],
+            additionalArguments: ["--t3-madohomu-window"],
           },
         },
         { auxiliary: true, app: true },
       );
       window = created;
-      yield* history.register(created.webContents, { surface: "duet" });
+      yield* history.register(created.webContents, { surface: "madohomu" });
       created.once("closed", () => {
         if (window === created) window = null;
       });
       created.once("ready-to-show", () => report(windows.reveal(created)));
       created.on("page-title-updated", (event) => {
         event.preventDefault();
-        created.setTitle("T3 Duet");
+        created.setTitle("MadoHomu");
       });
-      const origin = new URL(duetUrl());
+      const origin = new URL(madohomuUrl());
       const allowNavigation = (value: string) => {
         try {
           const url = new URL(value);
@@ -157,17 +172,17 @@ const make = Effect.gen(function* () {
         return { action: "deny" };
       });
       yield* Effect.tryPromise({
-        try: () => created.loadURL(duetUrl(location)),
-        catch: (cause) => new DesktopDuetError({ operation: "open", cause }),
+        try: () => created.loadURL(madohomuUrl(location)),
+        catch: (cause) => new DesktopMadoHomuError({ operation: "open", cause }),
       });
       requested = false;
     },
-    Effect.mapError((cause) => new DesktopDuetError({ operation: "open", cause })),
+    Effect.mapError((cause) => new DesktopMadoHomuError({ operation: "open", cause })),
   );
   const open = openWindow(undefined).pipe(mutex.withPermits(1));
-  const navigateMain = Effect.fn("DesktopDuet.navigateMain")(function* (
-    view: "duet" | "code",
-    location: Omit<DesktopDuetWindowMode, "mode">,
+  const navigateMain = Effect.fn("DesktopMadoHomu.navigateMain")(function* (
+    view: "madohomu" | "code",
+    location: Omit<DesktopMadoHomuWindowMode, "mode">,
   ) {
     const existing = yield* windows.main;
     const target = yield* main.revealOrCreateMain;
@@ -175,19 +190,19 @@ const make = Effect.gen(function* () {
       yield* Effect.tryPromise({
         try: () =>
           target.loadURL(
-            view === "duet" ? duetUrl(location) : getDesktopUrl(environment.isDevelopment),
+            view === "madohomu" ? madohomuUrl(location) : getDesktopUrl(environment.isDevelopment),
           ),
-        catch: (cause) => new DesktopDuetError({ operation: "merge", cause }),
+        catch: (cause) => new DesktopMadoHomuError({ operation: "merge", cause }),
       });
     } else {
-      target.webContents.send(DUET_NAVIGATE_CHANNEL, {
+      target.webContents.send(MADOHOMU_NAVIGATE_CHANNEL, {
         view,
         ...location,
       });
     }
   });
-  const configure = Effect.fn("DesktopDuet.configure")(
-    function* (input: DesktopDuetSettings) {
+  const configure = Effect.fn("DesktopMadoHomu.configure")(
+    function* (input: DesktopMadoHomuSettings) {
       const next = {
         enabled: input.enabled,
         launcherEnabled: input.launcherEnabled,
@@ -211,13 +226,14 @@ const make = Effect.gen(function* () {
         window = null;
       } else if (window && previousEnvironment !== next.environmentId) {
         yield* Effect.tryPromise({
-          try: () => window!.loadURL(duetUrl()),
-          catch: (cause) => new DesktopDuetError({ operation: "configure", cause }),
+          try: () => window!.loadURL(madohomuUrl()),
+          catch: (cause) => new DesktopMadoHomuError({ operation: "configure", cause }),
         });
       }
       const launcher = next.enabled && next.launcherEnabled;
       if (appliedLauncher !== launcher) {
         if (environment.platform === "linux") {
+          if (yield* fileSystem.exists(legacyEntryPath)) yield* fileSystem.remove(legacyEntryPath);
           if (launcher) {
             yield* fileSystem.makeDirectory(environment.path.dirname(entryPath), {
               recursive: true,
@@ -225,7 +241,7 @@ const make = Effect.gen(function* () {
             yield* fileSystem.writeFileString(
               entryPath,
               // The main app's launcher installs its icon here (DesktopPreReadyPlatform).
-              duetDesktopEntry(
+              madohomuDesktopEntry(
                 executable,
                 environment.path.join(
                   environment.homeDirectory,
@@ -243,11 +259,11 @@ const make = Effect.gen(function* () {
               ? [
                   {
                     program: executable,
-                    arguments: "--duet",
+                    arguments: "--madohomu",
                     iconPath: executable,
                     iconIndex: 0,
-                    title: "T3 Duet",
-                    description: "Open Duet",
+                    title: "MadoHomu",
+                    description: "Open MadoHomu",
                   },
                 ]
               : [],
@@ -255,7 +271,7 @@ const make = Effect.gen(function* () {
         } else if (environment.platform === "darwin") {
           Electron.app.dock?.setMenu(
             Electron.Menu.buildFromTemplate(
-              launcher ? [{ label: "T3 Duet", click: () => report(open) }] : [],
+              launcher ? [{ label: "MadoHomu", click: () => report(open) }] : [],
             ),
           );
         }
@@ -264,27 +280,27 @@ const make = Effect.gen(function* () {
       if (requested) yield* openWindow(undefined);
     },
     mutex.withPermits(1),
-    Effect.mapError((cause) => new DesktopDuetError({ operation: "configure", cause })),
+    Effect.mapError((cause) => new DesktopMadoHomuError({ operation: "configure", cause })),
   );
-  return DesktopDuet.of({
+  return DesktopMadoHomu.of({
     configure,
     open,
-    setWindowMode: Effect.fn("DesktopDuet.setWindowMode")(
+    setWindowMode: Effect.fn("DesktopMadoHomu.setWindowMode")(
       function* ({ mode, ...location }) {
         if (!settings.enabled) return;
         if (mode === "split") {
           yield* openWindow(location);
           yield* navigateMain("code", location);
         } else {
-          yield* navigateMain("duet", location);
+          yield* navigateMain("madohomu", location);
           window?.close();
           window = null;
         }
       },
       mutex.withPermits(1),
-      Effect.mapError((cause) => new DesktopDuetError({ operation: "merge", cause })),
+      Effect.mapError((cause) => new DesktopMadoHomuError({ operation: "merge", cause })),
     ),
   });
 });
 
-export const layer = Layer.effect(DesktopDuet, make);
+export const layer = Layer.effect(DesktopMadoHomu, make);

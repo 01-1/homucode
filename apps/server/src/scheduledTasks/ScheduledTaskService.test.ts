@@ -1081,7 +1081,7 @@ it.effect("a run interrupted right after it reserves the task does not block the
 );
 
 it.effect(
-  "disables the marked Duet brief after server settings disable Duet or change its project",
+  "disables the marked MadoHomu brief after server settings disable MadoHomu or change its project",
   () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -1090,9 +1090,9 @@ it.effect(
       yield* insertRow(sql, { id: "other", next: now, enabled: 1, status: "never" }, now);
       const current = {
         ...DEFAULT_SERVER_SETTINGS,
-        duetEnabled: true,
-        duetProjectId: ProjectId.make("project:test"),
-        duetMorningBriefTaskId: ScheduledTaskId.make("brief"),
+        madohomuEnabled: true,
+        madohomuProjectId: ProjectId.make("project:test"),
+        madohomuMorningBriefTaskId: ScheduledTaskId.make("brief"),
       };
       const changed = yield* Deferred.make<void>();
       const settings = yield* Ref.make(current);
@@ -1113,7 +1113,7 @@ it.effect(
       yield* Effect.scoped(
         Effect.gen(function* () {
           const context = yield* Layer.build(layer);
-          yield* ScheduledTaskService.layerDuetSettings.pipe(
+          yield* ScheduledTaskService.layerMadoHomuSettings.pipe(
             Layer.provide(Layer.succeedContext(context)),
             Layer.provide(
               Layer.mock(ServerSettings.ServerSettingsService)({
@@ -1131,12 +1131,15 @@ it.effect(
           assert.isTrue((yield* tasks.list()).tasks.find((t) => t.id === "brief")?.enabled);
           const events = yield* tasks.subscribeList().pipe(Stream.toPull);
           yield* events;
-          yield* Ref.set(settings, { ...current, duetEnabled: false });
+          yield* Ref.set(settings, { ...current, madohomuEnabled: false });
           yield* Deferred.succeed(changed, undefined);
           yield* events;
           assert.isFalse((yield* tasks.list()).tasks.find((t) => t.id === "brief")?.enabled);
-          yield* tasks.setEnabled({ id: current.duetMorningBriefTaskId, enabled: true });
-          yield* tasks.reconcileDuet({ ...current, duetProjectId: ProjectId.make("different") });
+          yield* tasks.setEnabled({ id: current.madohomuMorningBriefTaskId, enabled: true });
+          yield* tasks.reconcileMadoHomu({
+            ...current,
+            madohomuProjectId: ProjectId.make("different"),
+          });
           const after = yield* tasks.list();
           assert.isFalse(after.tasks.find((t) => t.id === "brief")?.enabled);
           assert.isTrue(after.tasks.find((t) => t.id === "other")?.enabled);

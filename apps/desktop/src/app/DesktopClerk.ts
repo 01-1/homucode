@@ -1,4 +1,4 @@
-import * as DesktopDuet from "../window/DesktopDuet.ts";
+import * as DesktopMadoHomu from "../window/DesktopMadoHomu.ts";
 import { createClerkBridge } from "@clerk/electron";
 import * as NodeURL from "node:url";
 import { storage } from "@clerk/electron/storage";
@@ -61,7 +61,7 @@ export class DesktopClerk extends Context.Service<
       never,
       | ElectronApp.ElectronApp
       | ElectronWindow.ElectronWindow
-      | DesktopDuet.DesktopDuet
+      | DesktopMadoHomu.DesktopMadoHomu
       | DesktopWebLinks.DesktopWebLinks
       | Scope.Scope
     >;
@@ -169,7 +169,7 @@ export const make = Effect.gen(function* () {
       const electronApp = yield* ElectronApp.ElectronApp;
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       const webLinks = yield* DesktopWebLinks.DesktopWebLinks;
-      const duet = yield* DesktopDuet.DesktopDuet;
+      const madohomu = yield* DesktopMadoHomu.DesktopMadoHomu;
       const context = yield* Effect.context<ElectronWindow.ElectronWindow>();
       const runPromise = Effect.runPromiseWith(context);
 
@@ -243,10 +243,10 @@ export const make = Effect.gen(function* () {
         void runPromise(webLinks.receive(NodeURL.pathToFileURL(path).href));
       });
       handleSecondInstance = (argv) => {
-        if (argv?.includes("--duet")) {
+        if (argv && DesktopMadoHomu.isMadoHomuLaunch(argv)) {
           void runPromise(
-            duet.open.pipe(
-              Effect.catch((error) => Effect.logWarning("Could not open Duet", error)),
+            madohomu.open.pipe(
+              Effect.catch((error) => Effect.logWarning("Could not open MadoHomu", error)),
             ),
           );
           return;

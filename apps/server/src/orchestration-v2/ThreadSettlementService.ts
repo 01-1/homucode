@@ -178,18 +178,18 @@ export function isAutoSettlementCandidate(
   return !isSnoozed(thread, nowMs);
 }
 
-/** Duet keeps its threads with a shared setting instead of a per-device pin, so they stay unsettled too. */
-export function isDuetKeptThread(
+/** MadoHomu keeps its threads with a shared setting instead of a per-device pin, so they stay unsettled too. */
+export function isMadoHomuKeptThread(
   settings: Pick<
     import("@t3tools/contracts").ServerSettings,
-    "duetEnabled" | "duetProjectId" | "duetThreads"
+    "madohomuEnabled" | "madohomuProjectId" | "madohomuThreads"
   >,
   thread: Pick<ProjectionStore.ProjectionSettlementCandidate, "id" | "projectId">,
 ): boolean {
-  const entry = settings.duetThreads[thread.id];
+  const entry = settings.madohomuThreads[thread.id];
   return (
-    settings.duetEnabled &&
-    thread.projectId === settings.duetProjectId &&
+    settings.madohomuEnabled &&
+    thread.projectId === settings.madohomuProjectId &&
     entry !== undefined &&
     entry.pinned !== false
   );
@@ -383,7 +383,7 @@ export const make = Effect.gen(function* () {
       (thread) =>
         (automaticSettlementEnabled || thread.lineage.relationshipToParent === "subagent") &&
         isAutoSettlementCandidate(thread, nowMs) &&
-        !isDuetKeptThread(settings, thread),
+        !isMadoHomuKeptThread(settings, thread),
     );
 
     // Runs per candidate thread, thousands per sweep on busy servers; the sweep owns the span.
@@ -403,7 +403,7 @@ export const make = Effect.gen(function* () {
         }
         // thread.auto-settle does not recheck settings, so read them per decision; reads are cached.
         const freshSettings = yield* settingsService.getSettings;
-        if (isDuetKeptThread(freshSettings, thread)) return thread;
+        if (isMadoHomuKeptThread(freshSettings, thread)) return thread;
         const currentSettings = resolveProjectSettings(freshSettings, thread.projectId).settings;
         const decisionNow = yield* DateTime.now;
         const settledAt = resolveAutoSettlementAt({

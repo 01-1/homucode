@@ -11,14 +11,14 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
   const settings = { ...DEFAULT_SERVER_SETTINGS, featureOffersSeen: ["previous-feature"] };
   const offered = FEATURE_OFFERS.slice(0, 2);
   const declined = featureOfferSettingsPatch(settings, offered, new Set());
-  expect(declined).toEqual({ featureOffersSeen: ["previous-feature", "duet", "autoreview"] });
+  expect(declined).toEqual({ featureOffersSeen: ["previous-feature", "madohomu", "autoreview"] });
   expect(unseenFeatureOffers({ ...settings, ...declined }).map((offer) => offer.id)).toEqual(
     FEATURE_OFFERS.slice(2)
       .filter((offer) => !offer.platform)
       .map((offer) => offer.id),
   );
-  expect(featureOfferSettingsPatch(settings, offered, new Set(["duet"]))).toMatchObject({
-    duetEnabled: true,
+  expect(featureOfferSettingsPatch(settings, offered, new Set(["madohomu"]))).toMatchObject({
+    madohomuEnabled: true,
   });
   expect(
     featureOfferSettingsPatch(settings, FEATURE_OFFERS, new Set(["quick-model"])),

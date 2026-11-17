@@ -1,4 +1,4 @@
-import { selectDuetEnvironment } from "@t3tools/client-runtime/duet";
+import { selectMadoHomuEnvironment } from "@t3tools/client-runtime/madohomu";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { EnvironmentId, type ThreadId } from "@t3tools/contracts";
@@ -13,31 +13,31 @@ import { newThreadId } from "./lib/utils";
 import { scheduledTaskDefaultModel } from "./components/settings/scheduledTasksSettings.logic";
 import { providerInstanceEntriesFor } from "./providerInstances";
 
-export const duetDestinationEnvironmentIdAtom = Atom.make((get) => {
+export const madohomuDestinationEnvironmentIdAtom = Atom.make((get) => {
   const configs = get(environmentServerConfigsAtom);
   const primary = get(primaryEnvironmentIdAtom);
-  return selectDuetEnvironment(
+  return selectMadoHomuEnvironment(
     primary,
     [...configs].map(([environmentId, config]) => ({
       environmentId,
-      duetEnabled: config.settings.duetEnabled,
-      duetDesktopAppEnabled: config.settings.duetDesktopAppEnabled,
+      madohomuEnabled: config.settings.madohomuEnabled,
+      madohomuDesktopAppEnabled: config.settings.madohomuDesktopAppEnabled,
     })),
   );
 });
 
-export function readDuetContext(router: AnyRouter) {
-  if (router.state.location?.pathname !== "/duet") return null;
+export function readMadoHomuContext(router: AnyRouter) {
+  if (router.state.location?.pathname !== "/madohomu") return null;
   const search = router.state.location.search as Record<string, unknown>;
   const environmentId =
     typeof search.environmentId === "string"
       ? EnvironmentId.make(search.environmentId)
-      : appAtomRegistry.get(duetDestinationEnvironmentIdAtom);
+      : appAtomRegistry.get(madohomuDestinationEnvironmentIdAtom);
   if (!environmentId) return null;
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
-  if (!config?.settings.duetEnabled) return null;
+  if (!config?.settings.madohomuEnabled) return null;
   const project = readProjects().find(
-    (p) => p.environmentId === environmentId && p.id === config.settings.duetProjectId,
+    (p) => p.environmentId === environmentId && p.id === config.settings.madohomuProjectId,
   );
   if (!project) return null;
   const threads = appAtomRegistry
@@ -58,15 +58,15 @@ export function readDuetContext(router: AnyRouter) {
   };
 }
 
-export async function createDuetThread(
+export async function createMadoHomuThread(
   environmentId: EnvironmentId,
   title = "New thread",
   icon: string | null = null,
 ): Promise<ThreadId | null> {
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
-  if (!config?.settings.duetEnabled) return null;
+  if (!config?.settings.madohomuEnabled) return null;
   const project = readProjects().find(
-    (p) => p.environmentId === environmentId && p.id === config.settings.duetProjectId,
+    (p) => p.environmentId === environmentId && p.id === config.settings.madohomuProjectId,
   );
   if (!project) return null;
   const modelSelection = scheduledTaskDefaultModel(
@@ -92,18 +92,18 @@ export async function createDuetThread(
   if (created._tag !== "Success") return null;
   const saved = await runAtomCommand(appAtomRegistry, serverEnvironment.updateSettings, {
     environmentId,
-    input: { patch: { duetThreads: { [threadId]: { icon, prompt: "", pinned: true } } } },
+    input: { patch: { madohomuThreads: { [threadId]: { icon, prompt: "", pinned: true } } } },
   });
   return saved._tag === "Success" ? threadId : null;
 }
 
-export async function startDuetThread(router: AnyRouter) {
-  const context = readDuetContext(router);
+export async function startMadoHomuThread(router: AnyRouter) {
+  const context = readMadoHomuContext(router);
   if (!context) return false;
-  const threadId = await createDuetThread(context.environmentId);
+  const threadId = await createMadoHomuThread(context.environmentId);
   if (!threadId) return false;
   await router.navigate({
-    to: "/duet",
+    to: "/madohomu",
     search: { environmentId: context.environmentId, threadId, tab: "chat" },
   });
   return true;

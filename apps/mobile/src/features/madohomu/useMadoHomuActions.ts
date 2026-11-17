@@ -1,5 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import { duetMorningBriefInput, findDuetMorningBriefThread } from "@t3tools/client-runtime/duet";
+import {
+  madohomuMorningBriefInput,
+  findMadoHomuMorningBriefThread,
+} from "@t3tools/client-runtime/madohomu";
 import {
   DEFAULT_SERVER_SETTINGS,
   AuthOrchestrationOperateScope,
@@ -18,7 +21,7 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
 
-export function useDuetActions(environmentId: EnvironmentId) {
+export function useMadoHomuActions(environmentId: EnvironmentId) {
   const config = useEnvironmentServerConfig(environmentId);
   const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
   const projects = useProjects();
@@ -27,7 +30,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
     projects.find(
       (candidate) =>
         candidate.environmentId === environmentId &&
-        candidate.id === settings.duetProjectId &&
+        candidate.id === settings.madohomuProjectId &&
         candidate.archivedAt === null,
     ) ?? null;
   const modelSelection = scheduledTaskDefaultModel(config, project);
@@ -35,7 +38,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
     serverEnvironment.scheduledTasksLive({ environmentId, input: {} }),
   );
   const task =
-    taskQuery.data?.tasks.find((row) => row.id === settings.duetMorningBriefTaskId) ?? null;
+    taskQuery.data?.tasks.find((row) => row.id === settings.madohomuMorningBriefTaskId) ?? null;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const create = useAtomCommand(threadEnvironment.create);
   const upsert = useAtomCommand(serverEnvironment.upsertScheduledTask);
@@ -50,7 +53,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
     (await update({ environmentId, input: { patch } }))._tag === "Success";
 
   const createThread = async (title = "New thread", icon: string | null = null) => {
-    if (!settings.duetEnabled || !project || !modelSelection || !canWrite || !canOperate)
+    if (!settings.madohomuEnabled || !project || !modelSelection || !canWrite || !canOperate)
       return null;
     const threadId = ThreadId.make(uuidv4());
     const result = await create({
@@ -68,25 +71,26 @@ export function useDuetActions(environmentId: EnvironmentId) {
       },
     });
     if (result._tag !== "Success") return null;
-    return (await save({ duetThreads: { [threadId]: { icon, prompt: "", pinned: true } } }))
+    return (await save({ madohomuThreads: { [threadId]: { icon, prompt: "", pinned: true } } }))
       ? threadId
       : null;
   };
 
   const setMorningBrief = async (enabled: boolean, timeOfDay: string) => {
     if (!enabled) {
-      if (!settings.duetMorningBriefTaskId || (taskQuery.isSuccess && !task)) return true;
+      if (!settings.madohomuMorningBriefTaskId || (taskQuery.isSuccess && !task)) return true;
       return (
         (
           await setEnabled({
             environmentId,
-            input: { id: settings.duetMorningBriefTaskId, enabled: false },
+            input: { id: settings.madohomuMorningBriefTaskId, enabled: false },
           })
         )._tag === "Success"
       );
     }
-    if (!settings.duetEnabled || !project || !modelSelection || !taskQuery.isSuccess) return false;
-    const existing = findDuetMorningBriefThread(
+    if (!settings.madohomuEnabled || !project || !modelSelection || !taskQuery.isSuccess)
+      return false;
+    const existing = findMadoHomuMorningBriefThread(
       threads,
       environmentId,
       project.id,
@@ -97,11 +101,11 @@ export function useDuetActions(environmentId: EnvironmentId) {
     if (existing) {
       if (
         !(await save({
-          duetThreads: {
+          madohomuThreads: {
             [threadId]: {
-              ...settings.duetThreads[threadId],
+              ...settings.madohomuThreads[threadId],
               icon: "☀️",
-              prompt: settings.duetThreads[threadId]?.prompt ?? "",
+              prompt: settings.madohomuThreads[threadId]?.prompt ?? "",
               pinned: true,
             },
           },
@@ -111,8 +115,8 @@ export function useDuetActions(environmentId: EnvironmentId) {
     }
     const result = await upsert({
       environmentId,
-      input: duetMorningBriefInput({
-        id: task?.id ?? settings.duetMorningBriefTaskId ?? ScheduledTaskId.make(uuidv4()),
+      input: madohomuMorningBriefInput({
+        id: task?.id ?? settings.madohomuMorningBriefTaskId ?? ScheduledTaskId.make(uuidv4()),
         projectId: project.id,
         threadId,
         modelSelection,
@@ -120,7 +124,7 @@ export function useDuetActions(environmentId: EnvironmentId) {
         creationSource: "mobile",
       }),
     });
-    return result._tag === "Success" && save({ duetMorningBriefTaskId: result.value.task.id });
+    return result._tag === "Success" && save({ madohomuMorningBriefTaskId: result.value.task.id });
   };
 
   return {

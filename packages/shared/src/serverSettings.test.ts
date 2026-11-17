@@ -1117,22 +1117,27 @@ describe("resolveSpeechPostProcessingModelSelection", () => {
   });
 });
 
-it("merges Duet thread entries without losing pin state or other threads and allows clearing icon, color and prompt", () => {
+it("merges MadoHomu thread entries without losing pin state or other threads and allows clearing icon, color and prompt", () => {
   const one = ThreadId.make("one");
   const two = ThreadId.make("two");
   const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
-    duetThreads: {
+    madohomuThreads: {
       [one]: { icon: "☀️", prompt: "Daily brief", color: "#ff0055", pinned: false },
       [two]: { icon: "lucide:code", prompt: "Keep this prompt" },
     },
   });
   const updated = applyServerSettingsPatch(initial, {
-    duetThreads: { [one]: { icon: null, prompt: "", color: null } },
+    madohomuThreads: { [one]: { icon: null, prompt: "", color: null } },
   });
-  expect(updated.duetThreads[one]).toEqual({ icon: null, prompt: "", color: null, pinned: false });
-  expect(updated.duetThreads[two]).toEqual(initial.duetThreads[two]);
+  expect(updated.madohomuThreads[one]).toEqual({
+    icon: null,
+    prompt: "",
+    color: null,
+    pinned: false,
+  });
+  expect(updated.madohomuThreads[two]).toEqual(initial.madohomuThreads[two]);
   const kept = applyServerSettingsPatch(updated, {
-    duetThreads: { [one]: { ...updated.duetThreads[one]!, pinned: true } },
+    madohomuThreads: { [one]: { ...updated.madohomuThreads[one]!, pinned: true } },
   });
-  expect(kept.duetThreads[one]).toEqual({ icon: null, prompt: "", color: null, pinned: true });
+  expect(kept.madohomuThreads[one]).toEqual({ icon: null, prompt: "", color: null, pinned: true });
 });

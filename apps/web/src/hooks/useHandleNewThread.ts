@@ -1,4 +1,4 @@
-import { readDuetContext, startDuetThread } from "../duet";
+import { readMadoHomuContext, startMadoHomuThread } from "../madohomu";
 import { useLocation } from "@tanstack/react-router";
 import {
   scopedProjectKey,
@@ -109,14 +109,14 @@ export function createNewThreadHandler(router: AnyRouter) {
       prompt?: string;
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
-    const duet = readDuetContext(router);
+    const madohomu = readMadoHomuContext(router);
     if (
-      duet &&
+      madohomu &&
       options === undefined &&
-      projectRef.environmentId === duet.environmentId &&
-      projectRef.projectId === duet.project.id
+      projectRef.environmentId === madohomu.environmentId &&
+      projectRef.projectId === madohomu.project.id
     ) {
-      return startDuetThread(router).then(() => null);
+      return startMadoHomuThread(router).then(() => null);
     }
     const projects = readProjects();
     const projectGroupingSettings = selectProjectGroupingSettings(getClientSettings());
@@ -503,10 +503,10 @@ export function useHandleNewThread() {
     defaultProjectFallbackReadyAtom(lastUsedProjectKey),
   );
   useLocation();
-  const duet = readDuetContext(useRouter());
+  const madohomu = readMadoHomuContext(useRouter());
   const routeTarget = useThreadRouteTarget();
   const routeThreadRef =
-    routeTarget?.kind === "server" ? routeTarget.threadRef : (duet?.threadRef ?? null);
+    routeTarget?.kind === "server" ? routeTarget.threadRef : (madohomu?.threadRef ?? null);
   const routeDraftId = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const activeThread = useQuietThreadShell(routeThreadRef);
   const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
@@ -519,8 +519,8 @@ export function useHandleNewThread() {
   );
   const projects = useProjects();
   const handleNewThread = useNewThreadHandler();
-  const defaultProjectRef = duet
-    ? scopeProjectRef(duet.environmentId, duet.project.id)
+  const defaultProjectRef = madohomu
+    ? scopeProjectRef(madohomu.environmentId, madohomu.project.id)
     : resolveDefaultProjectRef(
         projects,
         projectOrder,

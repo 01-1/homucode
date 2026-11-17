@@ -21,7 +21,7 @@ if (process.argv.includes("--uninstall")) {
 } else {
   if (NodeOS.platform() !== "linux")
     throw new Error(
-      "This installer supports Linux. On Windows or macOS, enable Duet's desktop app in HomuCode Settings → Duet.",
+      "This installer supports Linux. On Windows or macOS, enable MadoHomu's desktop app in HomuCode Settings → MadoHomu.",
     );
   let runtime = process.env.MADOHOMU_RUNTIME;
   if (runtime) {
@@ -55,13 +55,13 @@ if (process.argv.includes("--uninstall")) {
   }
   await NodeFSP.mkdir(NodePath.dirname(launcher), { recursive: true });
   await NodeFSP.mkdir(NodePath.dirname(desktop), { recursive: true });
-  await NodeFSP.writeFile(launcher, `#!/bin/sh\nexec ${quoteShell(runtime)} --duet "$@"\n`, {
+  await NodeFSP.writeFile(launcher, `#!/bin/sh\nexec ${quoteShell(runtime)} --madohomu "$@"\n`, {
     mode: 0o755,
   });
   await NodeFSP.chmod(launcher, 0o755);
   await NodeFSP.writeFile(
     desktop,
-    `[Desktop Entry]\nType=Application\nName=MadoHomu\nExec=${quoteExec(launcher)}\nStartupWMClass=t3code-duet\nTerminal=false\nCategories=Development;\n`,
+    `[Desktop Entry]\nType=Application\nName=MadoHomu\nExec=${quoteExec(launcher)}\nStartupWMClass=t3code-madohomu\nTerminal=false\nCategories=Development;\n`,
   );
   console.log(
     `Installed MadoHomu: ${launcher}\nOnly the MadoHomu launcher was installed. Its HomuCode runtime shares T3 Code's server and threads.`,

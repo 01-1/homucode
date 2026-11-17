@@ -77,7 +77,7 @@ import {
 } from "./threadListV2";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
-import { DuetEntries } from "../duet/DuetEntries";
+import { MadoHomuEntries } from "../madohomu/MadoHomuEntries";
 
 type SidebarListItem =
   | ThreadListV2ListItem
@@ -635,7 +635,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
-                ListHeaderComponent={<DuetEntries />}
+                ListHeaderComponent={<MadoHomuEntries />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
@@ -662,7 +662,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
       >
         {listItems.length === 0 ? (
           <>
-            <DuetEntries />
+            <MadoHomuEntries />
             <View className="flex-1 items-center justify-center">{listEmpty}</View>
           </>
         ) : (
@@ -692,7 +692,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
-                ListHeaderComponent={<DuetEntries />}
+                ListHeaderComponent={<MadoHomuEntries />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>

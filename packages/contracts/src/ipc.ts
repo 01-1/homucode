@@ -1074,28 +1074,30 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
-export const DesktopDuetSettings = Schema.Struct({
+export const DesktopMadoHomuSettings = Schema.Struct({
   enabled: Schema.Boolean,
   launcherEnabled: Schema.Boolean,
-  /** Omitted by the Duet window, which keeps the destination the main window set. */
+  /** Omitted by the MadoHomu window, which keeps the destination the main window set. */
   environmentId: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
-export type DesktopDuetSettings = typeof DesktopDuetSettings.Type;
+export type DesktopMadoHomuSettings = typeof DesktopMadoHomuSettings.Type;
 
-export const DesktopDuetWindowMode = Schema.Struct({
+export const DesktopMadoHomuWindowMode = Schema.Struct({
   mode: Schema.Literals(["split", "merged"]),
   environmentId: Schema.optionalKey(Schema.String),
   threadId: Schema.optionalKey(Schema.String),
   tab: Schema.optionalKey(Schema.Literals(["chat", "tasks"])),
 });
-export type DesktopDuetWindowMode = typeof DesktopDuetWindowMode.Type;
+export type DesktopMadoHomuWindowMode = typeof DesktopMadoHomuWindowMode.Type;
 
 export interface DesktopBridge {
-  configureDuet?: (settings: DesktopDuetSettings) => Promise<void>;
-  setDuetWindowMode?: (input: DesktopDuetWindowMode) => Promise<void>;
-  isDuetWindow?: () => boolean;
-  onDuetNavigate?: (
-    listener: (target: Omit<DesktopDuetWindowMode, "mode"> & { view: "duet" | "code" }) => void,
+  configureMadoHomu?: (settings: DesktopMadoHomuSettings) => Promise<void>;
+  setMadoHomuWindowMode?: (input: DesktopMadoHomuWindowMode) => Promise<void>;
+  isMadoHomuWindow?: () => boolean;
+  onMadoHomuNavigate?: (
+    listener: (
+      target: Omit<DesktopMadoHomuWindowMode, "mode"> & { view: "madohomu" | "code" },
+    ) => void,
   ) => () => void;
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;

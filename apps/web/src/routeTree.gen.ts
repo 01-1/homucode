@@ -22,7 +22,7 @@ import { Route as ChatUsageRouteImport } from './routes/_chat.usage'
 import { Route as ChatSettingsRouteImport } from './routes/_chat.settings'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatNewRouteImport } from './routes/_chat.new'
-import { Route as ChatDuetRouteImport } from './routes/_chat.duet'
+import { Route as ChatMadoHomuRouteImport } from './routes/_chat.madohomu'
 import { Route as ThreadsEnvironmentIdThreadIdRouteImport } from './routes/threads.$environmentId.$threadId'
 import { Route as ChatSettingsWorktreesRouteImport } from './routes/_chat.settings.worktrees'
 import { Route as ChatSettingsVoiceRouteImport } from './routes/_chat.settings.voice'
@@ -119,9 +119,9 @@ const ChatNewRoute = ChatNewRouteImport.update({
   path: '/new',
   getParentRoute: () => ChatRoute,
 } as any)
-const ChatDuetRoute = ChatDuetRouteImport.update({
-  id: '/duet',
-  path: '/duet',
+const ChatMadoHomuRoute = ChatMadoHomuRouteImport.update({
+  id: '/madohomu',
+  path: '/madohomu',
   getParentRoute: () => ChatRoute,
 } as any)
 const ThreadsEnvironmentIdThreadIdRoute =
@@ -294,7 +294,7 @@ export interface FileRoutesByFullPath {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/duet': typeof ChatDuetRoute
+  '/madohomu': typeof ChatMadoHomuRoute
   '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/settings': typeof ChatSettingsRouteWithChildren
@@ -339,7 +339,7 @@ export interface FileRoutesByTo {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/duet': typeof ChatDuetRoute
+  '/madohomu': typeof ChatMadoHomuRoute
   '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/settings': typeof ChatSettingsRouteWithChildren
@@ -387,7 +387,7 @@ export interface FileRoutesById {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/_chat/duet': typeof ChatDuetRoute
+  '/_chat/madohomu': typeof ChatMadoHomuRoute
   '/_chat/new': typeof ChatNewRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
   '/_chat/settings': typeof ChatSettingsRouteWithChildren
@@ -436,7 +436,7 @@ export interface FileRouteTypes {
     | '/guest'
     | '/pair'
     | '/welcome'
-    | '/duet'
+    | '/madohomu'
     | '/new'
     | '/pull-requests'
     | '/settings'
@@ -481,7 +481,7 @@ export interface FileRouteTypes {
     | '/guest'
     | '/pair'
     | '/welcome'
-    | '/duet'
+    | '/madohomu'
     | '/new'
     | '/pull-requests'
     | '/settings'
@@ -528,7 +528,7 @@ export interface FileRouteTypes {
     | '/guest'
     | '/pair'
     | '/welcome'
-    | '/_chat/duet'
+    | '/_chat/madohomu'
     | '/_chat/new'
     | '/_chat/pull-requests'
     | '/_chat/settings'
@@ -673,11 +673,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatNewRouteImport
       parentRoute: typeof ChatRoute
     }
-    '/_chat/duet': {
-      id: '/_chat/duet'
-      path: '/duet'
-      fullPath: '/duet'
-      preLoaderRoute: typeof ChatDuetRouteImport
+    '/_chat/madohomu': {
+      id: '/_chat/madohomu'
+      path: '/madohomu'
+      fullPath: '/madohomu'
+      preLoaderRoute: typeof ChatMadoHomuRouteImport
       parentRoute: typeof ChatRoute
     }
     '/threads/$environmentId/$threadId': {
@@ -967,7 +967,7 @@ const ChatSettingsRouteWithChildren = ChatSettingsRoute._addFileChildren(
 )
 
 interface ChatRouteChildren {
-  ChatDuetRoute: typeof ChatDuetRoute
+  ChatMadoHomuRoute: typeof ChatMadoHomuRoute
   ChatNewRoute: typeof ChatNewRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
   ChatSettingsRoute: typeof ChatSettingsRouteWithChildren
@@ -978,7 +978,7 @@ interface ChatRouteChildren {
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
-  ChatDuetRoute: ChatDuetRoute,
+  ChatMadoHomuRoute: ChatMadoHomuRoute,
   ChatNewRoute: ChatNewRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
   ChatSettingsRoute: ChatSettingsRouteWithChildren,

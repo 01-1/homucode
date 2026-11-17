@@ -1,4 +1,4 @@
-import { duetDestinationEnvironmentIdAtom } from "../../duet";
+import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
@@ -227,7 +227,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
-  const duetEnvironmentId = useAtomValue(duetDestinationEnvironmentIdAtom);
+  const madohomuEnvironmentId = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -280,13 +280,16 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
-          {duetEnvironmentId ? (
+          {madohomuEnvironmentId ? (
             <SidebarUtilityItem
               icon={<span>✦</span>}
-              label="Open Duet"
+              label="Open MadoHomu"
               onClick={() => {
                 closeMobileSidebar();
-                void navigate({ to: "/duet", search: { environmentId: duetEnvironmentId! } });
+                void navigate({
+                  to: "/madohomu",
+                  search: { environmentId: madohomuEnvironmentId! },
+                });
               }}
             />
           ) : null}

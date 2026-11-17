@@ -1,4 +1,4 @@
-import { readDuetContext, startDuetThread } from "../duet";
+import { readMadoHomuContext, startMadoHomuThread } from "../madohomu";
 import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 
@@ -53,9 +53,9 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
   });
 
   const readRouteTarget = () => {
-    const duet = readDuetContext(router);
-    return duet?.threadRef
-      ? { kind: "server" as const, threadRef: duet.threadRef }
+    const madohomu = readMadoHomuContext(router);
+    return madohomu?.threadRef
+      ? { kind: "server" as const, threadRef: madohomu.threadRef }
       : resolveThreadRouteTarget(router.state.matches.at(-1)?.params ?? {});
   };
   const readRouteThreadRef = () => {
@@ -118,8 +118,8 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
 
   const startNewLocal: CommandHandler = (event) => {
     claim(event);
-    if (readDuetContext(router)) {
-      void startDuetThread(router);
+    if (readMadoHomuContext(router)) {
+      void startMadoHomuThread(router);
       return;
     }
     // With no current or open project, such as when every project is archived, pick one.
@@ -149,7 +149,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         void scratch.startScratchThread(environmentId);
       },
       "chat.new": (event) => {
-        if (readDuetContext(router)) {
+        if (readMadoHomuContext(router)) {
           startNewLocal(event);
           return;
         }
