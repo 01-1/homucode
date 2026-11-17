@@ -56,7 +56,7 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
     <SettingsSection id="madohomu" title="MadoHomu">
       <SettingsRow
         {...searchableSetting("madohomu-enabled")}
-        description="A focused Chat and Tasks view for one project. Every MadoHomu thread starts pinned."
+        description="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
         control={
           <Switch
             aria-label="Enable MadoHomu"

@@ -24,17 +24,6 @@ export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined
   return entry !== undefined && entry.pinned !== false;
 }
 
-export function orderMadoHomuThreads<T extends Pick<EnvironmentThreadShell, "id" | "updatedAt">>(
-  threads: ReadonlyArray<T>,
-  entries: Readonly<Record<ThreadId, MadoHomuThreadSettings>>,
-): T[] {
-  return [...threads].sort(
-    (a, b) =>
-      Number(isMadoHomuThreadPinned(entries[b.id])) -
-        Number(isMadoHomuThreadPinned(entries[a.id])) || b.updatedAt.localeCompare(a.updatedAt),
-  );
-}
-
 /** The section for threads that are not pinned: made outside MadoHomu, or unpinned by the user. */
 export const MADOHOMU_SCRATCH_LABEL = "Scratch";
 
@@ -224,34 +213,6 @@ export function madohomuMorningBriefInput(input: {
     interactionMode: "plan",
     creationSource: input.creationSource,
   };
-}
-
-type MadoHomuTask = Pick<
-  EnvironmentThreadShell,
-  "id" | "hasPendingApprovals" | "hasPendingUserInput" | "updatedAt"
-> & { readonly runtime: Pick<NonNullable<EnvironmentThreadShell["runtime"]>, "status"> | null };
-
-export function madohomuTaskLabel(thread: MadoHomuTask): string {
-  if (thread.hasPendingApprovals) return "Needs approval";
-  if (thread.hasPendingUserInput) return "Needs input";
-  if (
-    thread.runtime &&
-    ["queued", "preparing", "starting", "running"].includes(thread.runtime.status)
-  ) {
-    return "Running";
-  }
-  return "Recent";
-}
-
-export function orderMadoHomuTasks<T extends MadoHomuTask>(threads: ReadonlyArray<T>): T[] {
-  const rank = (thread: T) => {
-    const label = madohomuTaskLabel(thread);
-    return label === "Needs approval" || label === "Needs input" ? 0 : label === "Running" ? 1 : 2;
-  };
-  return [...threads].sort(
-    (a, b) =>
-      rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
-  );
 }
 
 export function selectMadoHomuEnvironment(

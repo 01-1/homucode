@@ -99,7 +99,7 @@ function EnvironmentMadoHomuSettings(props: {
     <SettingsSection title={props.label}>
       <SettingsSwitchRow
         label="Enable MadoHomu"
-        subtitle="A focused Chat and Tasks view for one project. Every MadoHomu thread starts pinned."
+        subtitle="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
         value={actions.settings.madohomuEnabled}
         disabled={busy || !actions.canWrite}
         onValueChange={(madohomuEnabled) => void run(() => actions.save({ madohomuEnabled }))}
