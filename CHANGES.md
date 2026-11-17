@@ -40,6 +40,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 - **Auto and steer delivery.** Messages sent with delivery mode auto or steer are steered in as soon as the turn can take them. `t3 thread send` takes `--mode queue|auto|steer|restart`, and `t3 thread configure` sets permission and interaction modes.
 - **Steer all queued messages.** While a turn runs, Ctrl+Enter (Cmd+Enter on macOS) in an empty composer steers every queued message into the running turn in order, stopping before one that must start its own turn. With a draft, it still sends the draft with the opposite queue or steer action.
 - **Claude steers survive Stop.** When Claude holds a steered message behind a running tool and you press Stop, the message is sent again automatically: it steers a live run or starts the next turn. Upstream dropped it and asked you to resend.
+- **Send while the previous message is still sending.** A message sent before the previous one has gone through waits instead of being refused: it shows as the queued or steering message your follow-up setting makes, marked "Sends once your previous message goes through", and sends itself once the previous one does. Anything you type meanwhile stays in the composer. Web and desktop.
 
 ## Composer and messages
 

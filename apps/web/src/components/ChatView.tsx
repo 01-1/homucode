@@ -44,6 +44,7 @@ import { useQueuedRunEdit } from "./chat/useQueuedRunEdit";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
 import { useStableCallback } from "../hooks/useStableCallback";
+import { type HeldSendFn, useHeldSend } from "./chat/useHeldSend";
 import { useProjectScriptEditing } from "./chat/useProjectScriptEditing";
 import { RightPanelSurfaceContent } from "./chat/RightPanelSurfaceContent";
 import { usePendingThreadRequests } from "./chat/usePendingThreadRequests";
@@ -1572,8 +1573,24 @@ export default function ChatView(props: ChatViewProps) {
           { ...codexFeedbackMessage(submission, "assistant"), runId: null },
         ],
   );
+  const syncComposerPrompt = useStableCallback((prompt: string) => {
+    promptRef.current = prompt;
+    composerRef.current?.resetCursorState({ cursor: prompt.length, prompt });
+  });
+  const heldSendRef = useRef<HeldSendFn | null>(null);
+  const heldSend = useHeldSend({
+    sendRef: heldSendRef,
+    routeThreadKey,
+    composerDraftTarget,
+    enabled: isServerThread && !queuedRunEdit.isEditing,
+    sendBlocked: isSendBusy && !sendQueuesBehindSetup,
+    syncComposer: syncComposerPrompt,
+  });
+  const shownOptimisticMessages = heldSend.heldMessage
+    ? [...optimisticUserMessages, heldSend.heldMessage]
+    : optimisticUserMessages;
   const timelineEntriesInput = {
-    optimisticMessages: optimisticUserMessages,
+    optimisticMessages: shownOptimisticMessages,
     anchoredMessages: anchoredTimelineMessages,
     attachmentUrlById: timelineAttachmentUrlById,
     ...(serverProjection === null
@@ -2977,6 +2994,8 @@ export default function ChatView(props: ChatViewProps) {
     setThreadError,
   });
   const { onSend } = useComposerSend({
+    holdSend: heldSend.hold,
+    onSendSettled: heldSend.onSendSettled,
     environmentId,
     routeThreadKey,
     currentRouteThreadKeyRef,
@@ -3063,6 +3082,10 @@ export default function ChatView(props: ChatViewProps) {
   };
   const onWorktreeSetupWorkLocallyStable = useStableCallback(onWorktreeSetupWorkLocally);
   const onComposerSendStable = useStableCallback(onSend);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hands the committed send handler to the held send, which replays from an effect
+  useLayoutEffect(() => {
+    heldSendRef.current = onComposerSendStable;
+  }, [onComposerSendStable]);
   const sendPreviewAnnotation = (
     annotation: PreviewAnnotationPayload,
     image: ComposerImageAttachment | null,
@@ -3118,7 +3141,7 @@ export default function ChatView(props: ChatViewProps) {
           })}
           environmentId={activeThread.environmentId}
           threadId={activeThread.id}
-          optimisticMessages={optimisticUserMessages}
+          optimisticMessages={shownOptimisticMessages}
           editingRunId={queuedRunEdit.editingRunId}
           editBlockedReason={queuedRunEditBlockedReason({
             openQuestionCount: pendingUserInputs.length,
@@ -3181,7 +3204,7 @@ export default function ChatView(props: ChatViewProps) {
   // something, by its own rule: an optimistic message stops counting once the server has it.
   const hasQueuedTurns =
     queuedRunCount > 0 ||
-    optimisticUserMessages.some(
+    shownOptimisticMessages.some(
       (message) =>
         message.inputIntent === "queued_turn" &&
         !serverProjection?.messages.some((committed) => committed.id === message.id),

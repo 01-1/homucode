@@ -172,6 +172,12 @@ type UsageLimitsPanel = ReturnType<typeof useUsageLimitsPanel>;
 type TimelineFollow = ReturnType<typeof useTimelineFollow>;
 
 interface ComposerSendInput {
+  /** Keeps the draft to send once the previous message goes through; false when it cannot. */
+  readonly holdSend: (
+    dispatchMode: ComposerDispatchMode,
+    submissionIntent: ComposerSubmissionIntent,
+  ) => boolean;
+  readonly onSendSettled: () => void;
   readonly environmentId: EnvironmentId;
   readonly routeThreadKey: string;
   readonly currentRouteThreadKeyRef: { readonly current: string | null };
@@ -272,6 +278,8 @@ interface ComposerSendInput {
  */
 export function useComposerSend(input: ComposerSendInput) {
   const {
+    holdSend,
+    onSendSettled,
     environmentId,
     routeThreadKey,
     currentRouteThreadKeyRef,
@@ -464,7 +472,7 @@ export function useComposerSend(input: ComposerSendInput) {
     if ((isSendBusy && !sendQueuesBehindSetup) || sendInFlightRef.current) {
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
-      } else {
+      } else if (!holdSend(dispatchMode, submissionIntent)) {
         toastManager.add(
           stackedThreadToast({
             type: "info",
@@ -1668,7 +1676,9 @@ export function useComposerSend(input: ComposerSendInput) {
   };
 
   const onSendLatest = useStableCallback(onSend);
-  const onSendWithRouting = async (...args: Parameters<typeof onSend>) => {
+  const onSendWithRouting = (...args: Parameters<typeof onSend>) =>
+    sendWithRouting(...args).finally(onSendSettled);
+  const sendWithRouting = async (...args: Parameters<typeof onSend>) => {
     args[0]?.preventDefault();
     const refresh =
       args[3] || sendInFlightRef.current || readPendingEnvironmentChange() !== null

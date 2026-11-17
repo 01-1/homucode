@@ -2182,7 +2182,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           sendEvent,
           dispatchMode ??
             resolveComposerDispatchMode({
-              running: phase === "running" || phase === "connecting",
+              running: phase === "running" || phase === "connecting" || isSendBusy,
               alternateModifier: false,
               activeTurnDefault: followUpBehavior,
               canSteer,
@@ -2225,7 +2225,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       submitComposer(
         undefined,
         resolveComposerDispatchMode({
-          running: phase === "running" || phase === "connecting",
+          running: phase === "running" || phase === "connecting" || isSendBusy,
           alternateModifier: intent === "alternate",
           canSteer,
           activeTurnDefault: followUpBehavior,
@@ -2239,7 +2239,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     submitComposer(
       event,
       resolveComposerDispatchMode({
-        running: phase === "running" || phase === "connecting",
+        running: phase === "running" || phase === "connecting" || isSendBusy,
         alternateModifier: event.metaKey || event.ctrlKey,
         activeTurnDefault: followUpBehavior,
         canSteer,
@@ -2251,7 +2251,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return submitComposer(
       undefined,
       resolveComposerDispatchMode({
-        running: phase === "running" || phase === "connecting",
+        running: phase === "running" || phase === "connecting" || isSendBusy,
         alternateModifier: false,
         activeTurnDefault: followUpBehavior,
         canSteer,
@@ -2336,6 +2336,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       sendShortcut: settings.sendShortcut,
       routeKind,
       phase,
+      isSendBusy,
       canSteer,
       followUpBehavior,
       isSoftwareKeyboardOpen,

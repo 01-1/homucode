@@ -415,7 +415,16 @@ export function FoldedMessageHeader(props: {
   );
 }
 
+function WaitingForPreviousSendNote() {
+  return (
+    <p className="me-1 text-2xs text-muted-foreground">
+      Sends once your previous message goes through
+    </p>
+  );
+}
+
 function UserMessageProjectedStatus({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  if (row.message.waitingForPreviousSend) return <WaitingForPreviousSendNote />;
   const status = row.projectedItem?.item.status;
   if (
     status === undefined ||
