@@ -1,7 +1,12 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import { expect, it } from "vite-plus/test";
 
-import { pickIdleProviderUpdates } from "./ProviderIdleAutoUpdate.ts";
+import { pickIdleProviderUpdate } from "./ProviderIdleAutoUpdate.ts";
 
 const MINUTE = 60_000;
 const codex = ProviderDriverKind.make("codex");
@@ -37,21 +42,27 @@ it("updates a provider only after its own agents have been idle for five minutes
     [claude, 0],
   ]);
   const attempted = new Set<string>();
-  const runningCodex = [
-    { status: "running" as const, providerInstanceId: providers[0]!.instanceId },
+  const thread = ThreadId.make("codex-thread");
+  const codexThread = (status: "running" | "idle") => [
+    { id: thread, status, providerInstanceId: providers[0]!.instanceId },
   ];
-  const pick = (now: number, threads = runningCodex) =>
-    pickIdleProviderUpdates({ providers, threads, lastWorkingAt, attempted, now }).map(
-      (update) => update.driver,
-    );
+  const pick = (
+    now: number,
+    threads = codexThread("running"),
+    touched: ReadonlySet<ThreadId> = new Set(),
+  ) =>
+    pickIdleProviderUpdate({ providers, threads, touched, lastWorkingAt, attempted, now })
+      ?.driver ?? null;
 
-  expect(pick(4 * MINUTE)).toEqual([]);
+  expect(pick(4 * MINUTE)).toBeNull();
   // Codex agents keep working, so only Claude updates.
-  expect(pick(5 * MINUTE)).toEqual([claude]);
-  expect(pick(6 * MINUTE, [])).toEqual([]);
-  expect(pick(10 * MINUTE - 1, [])).toEqual([]);
-  expect(pick(10 * MINUTE, [])).toEqual([codex]);
-  expect(pick(20 * MINUTE, [])).toEqual([]);
+  expect(pick(5 * MINUTE)).toBe(claude);
+  expect(pick(6 * MINUTE, codexThread("idle"))).toBeNull();
+  // A turn that started and finished between checks counts as work.
+  expect(pick(7 * MINUTE, codexThread("idle"), new Set([thread]))).toBeNull();
+  expect(pick(12 * MINUTE - 1, codexThread("idle"))).toBeNull();
+  expect(pick(12 * MINUTE, codexThread("idle"))).toBe(codex);
+  expect(pick(20 * MINUTE, [])).toBeNull();
   providers[1] = provider(claude, "1.2.0");
-  expect(pick(21 * MINUTE, [])).toEqual([claude]);
+  expect(pick(21 * MINUTE, [])).toBe(claude);
 });

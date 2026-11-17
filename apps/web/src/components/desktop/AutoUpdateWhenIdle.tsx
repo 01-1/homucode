@@ -3,7 +3,6 @@ import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useEffect } from "react";
 
-import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
 import { serverEnvironment } from "../../state/server";
@@ -44,15 +43,15 @@ export function AutoUpdateWhenIdle() {
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!ready || !bridge) return;
+    // Work or the setting turning off cleans this up, so install runs only after unbroken idle time.
+    let cancelled = false;
     const timer = setTimeout(() => {
-      void runAutoUpdate({
-        bridge,
-        attempted,
-        isIdle: () =>
-          appAtomRegistry.get(autoUpdateEnabledAtom) && !appAtomRegistry.get(agentsWorkingAtom),
-      }).catch(() => {});
+      void runAutoUpdate({ bridge, attempted, isIdle: () => !cancelled }).catch(() => {});
     }, AUTO_UPDATE_IDLE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [ready]);
 
   return null;

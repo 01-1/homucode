@@ -1,7 +1,7 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 
-import { runAutoUpdate } from "./autoUpdateWhenIdle.logic";
+import { autoUpdateVersion, runAutoUpdate } from "./autoUpdateWhenIdle.logic";
 
 const available: DesktopUpdateState = {
   enabled: true,
@@ -61,4 +61,9 @@ it("does not install when an agent starts during the download", async () => {
   expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => idle })).toBe("skipped");
   expect(fake.installUpdate).not.toHaveBeenCalled();
   expect(attempted.size).toBe(0);
+});
+
+it("leaves a build that restarted without applying to a manual retry", () => {
+  expect(autoUpdateVersion(downloaded)).toBe("1.1.0");
+  expect(autoUpdateVersion({ ...downloaded, notAppliedVersion: "1.1.0" })).toBeNull();
 });

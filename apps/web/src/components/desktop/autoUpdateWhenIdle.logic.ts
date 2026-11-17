@@ -14,7 +14,9 @@ export const isAgentWorking = (status: string) => WORKING_STATUSES.has(status);
 /** The version an idle auto-update would install, or null when there is nothing to do. */
 export function autoUpdateVersion(state: DesktopUpdateState | null): string | null {
   if (!state || resolveDesktopUpdateButtonAction(state) === "none") return null;
-  return getDesktopUpdateDownloadedVersion(state);
+  const version = getDesktopUpdateDownloadedVersion(state);
+  // A build that restarted without applying stays a manual retry, or it would restart every session.
+  return version === state.notAppliedVersion ? null : version;
 }
 
 /**
