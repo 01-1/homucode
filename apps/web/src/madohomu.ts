@@ -115,7 +115,17 @@ export async function createMadoHomuThread(
   return saved._tag === "Success" ? threadId : null;
 }
 
-export async function startMadoHomuThread(router: AnyRouter) {
+// One New thread at a time: a second press while one is being made would miss it and make another.
+let startingThread: Promise<boolean> | null = null;
+
+export function startMadoHomuThread(router: AnyRouter): Promise<boolean> {
+  startingThread ??= startThread(router).finally(() => {
+    startingThread = null;
+  });
+  return startingThread;
+}
+
+async function startThread(router: AnyRouter) {
   const context = readMadoHomuContext(router);
   if (!context) return false;
   // Reopens an untouched empty "New thread" instead of making another.
