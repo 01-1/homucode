@@ -54,6 +54,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 - **Completions and CLI.** A durable local completion sink and native CLI task controls. Launch receipts and the AppImage runtime are reused across CLI calls.
 - **Desktop on Linux.** Thread links reuse the pinned AppImage cache, and URL launches request Wayland activation.
 - **Undo a staged build.** On AppImage installs, Settings → About shows the build the next start loads, with an Undo button that renames that AppImage to `.off` so the one staged before it loads instead. The toast after Undo offers Redo.
+- **Faster phone launch.** The phone app connects to your T3 Connect machines as soon as it opens, using the account you were last signed in to, instead of waiting for sign-in to load over the network. If sign-in then reports no account or a different one, the app drops the restored account at once.
 - **Android undo notice.** The thread undo notice shows at the top of the screen on Android.
 - **Find in thread on mobile.** The magnifying glass in a thread's header bar opens a find bar that searches the thread's messages and plans, shows the match count, and steps through matches newest first, scrolling to each one and loading earlier history when needed. Upstream has find in thread on web and desktop only.
 - **Faster Android start.** On Android the app starts running about 0.4 seconds sooner at launch. The release app loads each part of its code when it is first used; upstream loads all of it at launch.
