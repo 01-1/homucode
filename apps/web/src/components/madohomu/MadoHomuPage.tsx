@@ -1,9 +1,9 @@
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { type ReactNode } from "react";
-import { CombineIcon, SquareArrowOutUpRightIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CombineIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useVisibleThreadShells } from "../../state/entities";
@@ -28,7 +28,7 @@ function MadoHomuWindowModeButton({
   threadId,
 }: {
   environmentId: EnvironmentId;
-  threadId: ThreadId;
+  threadId?: ThreadId | undefined;
 }) {
   const bridge = isElectron ? window.desktopBridge : undefined;
   if (!bridge?.setMadoHomuWindowMode) return null;
@@ -49,7 +49,7 @@ function MadoHomuWindowModeButton({
                 .setMadoHomuWindowMode?.({
                   mode: split ? "merged" : "split",
                   environmentId,
-                  threadId,
+                  ...(threadId ? { threadId } : {}),
                 })
                 .catch(() => toastManager.add({ type: "error", title: "Could not move MadoHomu" }))
             }
@@ -84,16 +84,20 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
         .
       </MadoHomuMessage>
     );
+  const windowMode = <MadoHomuWindowModeButton environmentId={environmentId} />;
   if (!project)
     return (
       <SidebarInset>
-        <MadoHomuTitlebar />
+        <MadoHomuTitlebar trailing={windowMode} />
         <MadoHomuNoProject environmentId={environmentId} />
       </SidebarInset>
     );
   if (!selected)
     return (
-      <MadoHomuMessage>Make a thread with New thread in the sidebar to start.</MadoHomuMessage>
+      <SidebarInset>
+        <MadoHomuTitlebar trailing={windowMode} />
+        <MadoHomuNoThreads environmentId={environmentId} />
+      </SidebarInset>
     );
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden">
@@ -111,13 +115,45 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
   );
 }
 
-/** An empty title bar: room for the floating sidebar toggle and a strip that moves the window. */
-function MadoHomuTitlebar() {
+function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const create = () => {
+    setCreating(true);
+    void actions
+      .createThread()
+      .then((threadId) => {
+        if (threadId) void navigate({ to: "/madohomu", search: { environmentId, threadId } });
+        else toastManager.add({ type: "error", title: "Could not create thread" });
+      })
+      .finally(() => setCreating(false));
+  };
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-sm text-muted-foreground">No threads yet.</p>
+      <Button
+        disabled={creating || !actions.modelSelection || !actions.canWrite}
+        onClick={create}
+      >
+        <SquarePenIcon aria-hidden />
+        New thread
+      </Button>
+    </div>
+  );
+}
+
+/** A title bar without a thread: room for the floating sidebar toggle and a strip that moves the window. */
+function MadoHomuTitlebar({ trailing }: { trailing?: ReactNode }) {
   return (
     <div
-      aria-hidden
-      className={cn("h-[var(--workspace-topbar-height)] shrink-0", isElectron && "drag-region")}
-    />
+      className={cn(
+        "flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-end px-3",
+        isElectron && "drag-region wco:pr-(--workspace-native-controls-inset)",
+      )}
+    >
+      {trailing}
+    </div>
   );
 }
 

@@ -56,9 +56,14 @@ export function buildMadoHomuListRows(input: {
   readonly expanded: ReadonlySet<string>;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys?: ReadonlySet<string>;
+  readonly isWorking?: (thread: EnvironmentThreadShell) => boolean;
 }): MadoHomuListRow[] {
   const rows: MadoHomuListRow[] = [];
-  for (const group of groupMadoHomuThreads(input.threads, input.settings, { now: input.now })) {
+  const groups = groupMadoHomuThreads(input.threads, input.settings, {
+    now: input.now,
+    ...(input.isWorking ? { isWorking: input.isWorking } : {}),
+  });
+  for (const group of groups) {
     if (group.threads.length === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
     const collapsible = COLLAPSIBLE.has(group.kind);
     const expanded = collapsible ? input.expanded.has(group.id) : null;
@@ -82,7 +87,7 @@ export function buildMadoHomuListRows(input: {
         thread,
         variant: group.kind === "settled" ? ("slim" as const) : ("card" as const),
         snoozed: group.kind === "snoozed",
-        pinned: false,
+        pinned: thread.pinnedAt != null,
         wokeAt:
           group.kind === "settled" ? null : resolveThreadListV2WokeAt(thread, { now: input.now }),
         isLast: index === group.threads.length - 1,

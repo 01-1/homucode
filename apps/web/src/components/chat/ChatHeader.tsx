@@ -27,6 +27,7 @@ import { MiddleTruncate } from "../ui/middle-truncate";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
 import { canShareWithGuestAtom } from "./guestShareAvailability";
@@ -216,10 +217,18 @@ export const ChatHeader = memo(function ChatHeader({
     onFind: onFindInThread,
     canShareWithGuest,
   });
+  // A focused view (MadoHomu) relabels T3's own pin and folder items.
+  const openThreadMenu = (position: { x: number; y: number }) =>
+    hideProjectBreadcrumb && isServerThread
+      ? openMenu(position, {
+          threadRef: activeThreadRef,
+          extras: { items: [], labels: MADOHOMU_THREAD_MENU_LABELS, onSelect: () => {} },
+        })
+      : openMenu(position);
   const openMenuFromTitle = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (isTrailingDoubleClick(event.detail)) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    openMenu({ x: rect.left, y: rect.bottom + 4 });
+    openThreadMenu({ x: rect.left, y: rect.bottom + 4 });
   };
   // A native menu takes the second click, so only the in-page menu lets a double-click reach here.
   const handleTitleDoubleClick = (event: ReactMouseEvent) => {
@@ -245,7 +254,7 @@ export const ChatHeader = memo(function ChatHeader({
         });
       return;
     }
-    openMenu({ x: event.clientX, y: event.clientY });
+    openThreadMenu({ x: event.clientX, y: event.clientY });
   };
   const handleRenameKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;

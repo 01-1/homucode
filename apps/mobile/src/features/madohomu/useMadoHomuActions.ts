@@ -103,6 +103,18 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
       ),
     });
 
+  const moveSection = (id: string, direction: "up" | "down") => {
+    const sections = [...settings.madohomuSections];
+    const index = sections.findIndex((section) => section.id === id);
+    const target = index + (direction === "up" ? -1 : 1);
+    const moved = sections[index];
+    const other = sections[target];
+    if (!moved || !other || index < 0) return Promise.resolve(false);
+    sections[index] = other;
+    sections[target] = moved;
+    return save({ madohomuSections: sections });
+  };
+
   const deleteSection = (id: string) =>
     save({
       madohomuSections: settings.madohomuSections.filter((section) => section.id !== id),
@@ -181,6 +193,7 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     setThreadOrder,
     addSection,
     renameSection,
+    moveSection,
     deleteSection,
   };
 }

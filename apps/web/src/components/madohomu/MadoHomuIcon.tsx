@@ -53,6 +53,10 @@ export function MadoHomuIconPicker({
   onIconChange: (icon: string) => void;
   onColorChange: (color: string) => void;
 }) {
+  const usingEmoji = icon.trim() !== "" && !icon.startsWith("lucide:");
+  const customColor = MADOHOMU_ICON_COLORS.some((swatch) => swatch === color.toLowerCase())
+    ? undefined
+    : color;
   return (
     <div className="grid gap-3">
       <span className="text-sm">Icon</span>
@@ -62,7 +66,7 @@ export function MadoHomuIconPicker({
             key={item.id}
             type="button"
             aria-label={item.label}
-            aria-pressed={(icon || DEFAULT_MADOHOMU_ICON) === item.id}
+            aria-pressed={!usingEmoji && (icon.trim() || DEFAULT_MADOHOMU_ICON) === item.id}
             className="rounded-md p-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-muted"
             onClick={() => onIconChange(item.id)}
           >
@@ -71,10 +75,12 @@ export function MadoHomuIconPicker({
         ))}
       </div>
       <label className="grid gap-1 text-sm">
-        Custom emoji
+        <span className={usingEmoji ? "font-medium" : undefined}>
+          {usingEmoji ? "Custom emoji (in use)" : "Custom emoji"}
+        </span>
         <Input
-          value={icon.startsWith("lucide:") ? "" : icon}
-          placeholder="Type an emoji"
+          value={usingEmoji ? icon : ""}
+          placeholder="Type an emoji to use it instead"
           maxLength={16}
           onChange={(event) => onIconChange(event.target.value)}
         />
@@ -95,7 +101,8 @@ export function MadoHomuIconPicker({
         <ProviderAccentColorPicker
           displayName="MadoHomu icon"
           layout="inline"
-          value={color}
+          round
+          value={customColor}
           onCommit={onColorChange}
         />
       </div>
