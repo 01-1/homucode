@@ -118,7 +118,13 @@ export function MobileDeviceNames({
           </View>
         );
       })}
-      {query.error ? <Text>{query.error}</Text> : null}
+      {query.error ? (
+        <Text className="text-foreground-muted">
+          {
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update. You can name devices later in Settings."
+          }
+        </Text>
+      ) : null}
     </View>
   );
 }
