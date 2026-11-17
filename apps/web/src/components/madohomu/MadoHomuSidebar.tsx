@@ -284,13 +284,15 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     if (creatingRef.current) return;
     creatingRef.current = true;
     setCreating(true);
-    try {
-      const id = await actions.createThread();
-      if (id) open(id);
-    } finally {
-      creatingRef.current = false;
-      setCreating(false);
-    }
+    await actions
+      .createThread()
+      .then((id) => {
+        if (id) open(id);
+      })
+      .finally(() => {
+        creatingRef.current = false;
+        setCreating(false);
+      });
   };
 
   const saveSections = (sections: ReadonlyArray<MadoHomuSection>) =>
