@@ -2,6 +2,8 @@
 
 Rules for writing tests, and for asking for them in review. AGENTS.md carries the same writing rules under Verifying; change both together.
 
+On pbox, the [Vite+ wrapper](../../AGENTS.md#verifying) sends test commands to Boat.
+
 ## What to test
 
 - Test behavior that can break, such as orchestration and event-sourcing, provider protocol translation, auth and permission guards, persistence and migrations, external-format parsing, race fixes, and the logic a bug fix changed. Leave out tests for what types already guarantee, trivial logic, copy text, smoke runs, mock-call mirrors, callback wiring, and props rendered to static markup.

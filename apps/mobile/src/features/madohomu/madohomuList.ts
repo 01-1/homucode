@@ -15,7 +15,7 @@ import {
 
 type MadoHomuListSettings = Pick<
   ServerSettings,
-  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
 >;
 
 export interface MadoHomuSectionRow {

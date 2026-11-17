@@ -4,6 +4,7 @@ export const NESTED_SUBAGENT_APPROVAL_PENDING_SHELL_KEY = "nested-subagent-appro
 
 export function subagentV2NestedApprovalInput(): OrchestratorFixtureInput {
   return {
+    runtimeMode: "approval-required",
     steps: [
       { type: "message", text: SUBAGENT_V2_NESTED_APPROVAL_PROMPT },
       {
