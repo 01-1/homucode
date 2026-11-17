@@ -123,6 +123,14 @@ describe("splitStatusLineItems", () => {
     ]);
   });
 
+  it("keeps a styled directory with spaces whole", () => {
+    const [line = []] = parseAnsiLines("/repos/My Project \u001b[38;5;183mvi@pbox");
+    expect(splitStatusLineItems(line).map((item) => [item.kind, item.segments[0]?.text])).toEqual([
+      ["directory", "/repos/My Project"],
+      ["text", "vi@pbox"],
+    ]);
+  });
+
   it("keeps a line without separators, directory, or clock as one item", () => {
     const line = [{ text: "A6 medium [1:2]", color: null, ...plain }];
     expect(splitStatusLineItems(line)).toEqual([{ kind: "text", segments: line }]);
@@ -170,7 +178,9 @@ describe("reserveStatusLineText", () => {
     ["1d02h", "00h00m"],
     ["79.7k ", "000.0k "],
     ["(80k)", "(000k)"],
-    ["6", "000"],
+    ["6", "000.0k"],
+    ["999", "000.0k"],
+    ["1.0k", "000.0k"],
     ["+3 ", "+00 "],
     ["-120", "-120"],
     ["1234.5k", "1234.5k"],

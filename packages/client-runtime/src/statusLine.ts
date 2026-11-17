@@ -403,10 +403,12 @@ export function splitStatusLineItems(
     push("text", start, end, separator);
   };
   const pushRange = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
-    const directory = items.length === 0 ? DIRECTORY_PATTERN.exec(text.slice(start, end)) : null;
+    const directory = start === 0 ? DIRECTORY_PATTERN.exec(text.slice(0, end)) : null;
     if (directory !== null) {
-      push("directory", start, start + directory[0].length);
-      start += directory[0].length;
+      // A script that styles its path apart from what follows keeps a path with spaces whole.
+      const styled = line.length > 1 ? (line[0]?.text.trimEnd().length ?? 0) : 0;
+      start = Math.min(end, Math.max(styled, directory[0].length));
+      push("directory", 0, start);
     }
     const clock = CLOCK_PATTERN.exec(text.slice(start, end));
     if (clock === null) {
@@ -430,6 +432,7 @@ export function splitStatusLineItems(
   return items;
 }
 
+// The 01-1/statusline script's labels. `v` runs into its number, so its expansion brings the space.
 const STATUS_LINE_LABELS: Readonly<Record<string, string>> = {
   conx: "context",
   ctx: "context",
@@ -452,14 +455,14 @@ export function expandStatusLineLabel(segment: AnsiSegment): string | null {
   return expanded === undefined ? null : `${before}${expanded}${after}`;
 }
 
-// The widest form each kind of value usually takes; a shorter value is given this much room.
+// The widest form each kind of value usually takes; a shorter value is given this much room. A
+// count keeps one width from `6` through `999` to `101.3k`.
 const RESERVED_VALUES: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\d+(?:\.\d+)?%$/, "100%"],
   [/^(?:\d+[dhms]){1,2}$/, "00h00m"],
-  [/^\d+\.\d+[kM]$/, "000.0k"],
+  [/^\d+(?:\.\d+[kM])?$/, "000.0k"],
   [/^\d+[kM]$/, "000k"],
   [/^[+-]\d+$/, "+00"],
-  [/^\d+$/, "000"],
 ];
 
 /**

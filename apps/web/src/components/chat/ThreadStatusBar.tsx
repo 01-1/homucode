@@ -143,10 +143,10 @@ const ITEM_GAP =
  * One item in a slot of fixed width: an invisible copy with its values at their widest shares the
  * slot, so the items after it stay put while this one's value changes.
  */
-function StatusLineSlot(props: { readonly item: StatusLineItem; readonly lead: boolean }) {
+function StatusLineSlot(props: { readonly item: StatusLineItem; readonly beforeClock: boolean }) {
   return (
     <span
-      data-status-line-item={props.lead ? "lead" : "rest"}
+      data-status-line-item={props.beforeClock ? "before-clock" : "after-clock"}
       className={`inline-grid ${ITEM_GAP}`}
     >
       <span className="col-start-1 row-start-1">
@@ -159,7 +159,7 @@ function StatusLineSlot(props: { readonly item: StatusLineItem; readonly lead: b
   );
 }
 
-// From roomiest to tightest: labels written out or short, and how wide the gaps are.
+// From roomiest to tightest: labels written out or short, and how much room the gaps take.
 const FITS = [
   ["long", "wide"],
   ["long", "normal"],
@@ -167,26 +167,43 @@ const FITS = [
   ["short", "tight"],
 ] as const;
 
-function itemsWidth(row: HTMLElement, selector: string): number {
+// What a shortened directory keeps: room for `~/…`.
+const DIRECTORY_FLOOR_PX = 32;
+
+function itemsWidth(row: HTMLElement, kinds: ReadonlyArray<string>): number {
+  const selector = kinds.map((kind) => `[data-status-line-item="${kind}"]`).join(",");
   let width = 0;
   for (const item of row.querySelectorAll(selector)) width += item.getBoundingClientRect().width;
   return width;
 }
 
+// A theme can give the top bar its own font; the status line keeps the app's normal one.
+function keepBodyFont(element: HTMLElement | null | undefined) {
+  if (!element) return;
+  const fontFamily = getComputedStyle(document.body).fontFamily;
+  if (element.style.fontFamily !== fontFamily) element.style.fontFamily = fontFamily;
+}
+
 // Picks the roomiest fit the whole line has room for; the tightest also moves percentages inside
-// their bars. Past that the clock stays only while everything that came before it in the line
-// still fits. DOM attributes, so no re-render.
+// their bars. Past that the directory shortens to its floor and the tail is cut, and the clock
+// stays only while everything before it in the line still fits. DOM attributes, so no re-render.
 function fitRow(row: HTMLElement) {
+  keepBodyFont(row.parentElement);
   row.dataset.clock = "shown";
   // A pixel short of the edge, so rounding never clips the last item.
-  const room = row.getBoundingClientRect().width - 1;
-  for (const [labels, gaps] of FITS) {
+  const space = row.getBoundingClientRect().width - 1;
+  let directoryFloor = 0;
+  for (const [labels, room] of FITS) {
     row.dataset.labels = labels;
-    row.dataset.room = gaps;
-    if (itemsWidth(row, "[data-status-line-item]") <= room) return;
+    row.dataset.room = room;
+    const directory = itemsWidth(row, ["directory"]);
+    directoryFloor = Math.min(directory, DIRECTORY_FLOOR_PX);
+    row.style.setProperty("--status-line-directory-floor", `${directoryFloor}px`);
+    if (directory + itemsWidth(row, ["before-clock", "after-clock", "clock"]) <= space) return;
   }
-  const lead = '[data-status-line-item="lead"],[data-status-line-item="clock"]';
-  if (itemsWidth(row, lead) > room) row.dataset.clock = "hidden";
+  if (directoryFloor + itemsWidth(row, ["before-clock", "clock"]) > space) {
+    row.dataset.clock = "hidden";
+  }
 }
 
 /**
@@ -198,7 +215,7 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures each new line to fit it
   useLayoutEffect(() => {
     if (rowRef.current !== null) fitRow(rowRef.current);
-  });
+  }, [props.lines]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures when the row's width changes
   useEffect(() => {
     const row = rowRef.current;
@@ -215,8 +232,8 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
       className="group/status-line flex min-w-0 overflow-hidden whitespace-pre tabular-nums"
     >
       {directory === null ? null : (
-        <div className="min-w-8 shrink-[9999] overflow-hidden text-ellipsis">
-          <span data-status-line-item="lead" className={ITEM_GAP}>
+        <div className="min-w-(--status-line-directory-floor) shrink-[9999] overflow-hidden text-ellipsis">
+          <span data-status-line-item="directory" className={ITEM_GAP}>
             <Segments line={directory.segments} />
           </span>
         </div>
@@ -225,7 +242,7 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
         {items.map((item, index) =>
           item === directory || item === clock ? null : (
             // oxlint-disable-next-line react/no-array-index-key -- items have no identity beyond order
-            <StatusLineSlot key={index} item={item} lead={index < clockIndex} />
+            <StatusLineSlot key={index} item={item} beforeClock={index < clockIndex} />
           ),
         )}
       </div>
@@ -272,33 +289,33 @@ export function ThreadStatusLineRunner(props: {
     let cancelled = false;
     // The first draw can land before the environment reconnects; it retries without waiting a refresh.
     let quickRetries = 5;
-    let retry: number | undefined;
+    let timer: number | undefined;
     const draw = async () => {
-      if (document.visibilityState === "hidden") return;
-      const input = stampStatusLineInput(JSON.parse(inputKey), createdAt, Date.now());
-      const response = await runAtomCommand(
-        registry,
-        serverEnvironment.renderStatusLine,
-        { environmentId, input: { input } },
-        { reportFailure: false },
-      );
-      if (cancelled) return;
-      if (response._tag !== "Success") {
-        if (quickRetries-- > 0) retry = window.setTimeout(() => void draw(), RETRY_MS);
-        return;
+      let delay = REFRESH_MS;
+      if (document.visibilityState !== "hidden") {
+        const input = stampStatusLineInput(JSON.parse(inputKey), createdAt, Date.now());
+        const response = await runAtomCommand(
+          registry,
+          serverEnvironment.renderStatusLine,
+          { environmentId, input: { input } },
+          { reportFailure: false },
+        );
+        if (cancelled) return;
+        if (response._tag === "Success") {
+          registry.set(resultAtom, {
+            lines: parseAnsiLines(response.value.text),
+            error: response.value.error ?? null,
+          });
+        } else if (quickRetries-- > 0) {
+          delay = RETRY_MS;
+        }
       }
-      registry.set(resultAtom, {
-        lines: parseAnsiLines(response.value.text),
-        error: response.value.error ?? null,
-      });
+      timer = window.setTimeout(() => void draw(), delay);
     };
-    const debounce = window.setTimeout(() => void draw(), DEBOUNCE_MS);
-    const interval = window.setInterval(() => void draw(), REFRESH_MS);
+    timer = window.setTimeout(() => void draw(), DEBOUNCE_MS);
     return () => {
       cancelled = true;
-      window.clearTimeout(debounce);
-      window.clearTimeout(retry);
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
     };
   }, [enabled, inputKey, createdAt, environmentId, resultAtom, registry]);
 
@@ -311,14 +328,7 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the theme's font from the page
-  useLayoutEffect(() => {
-    // A theme can give the top bar its own font; the status line keeps the app's normal one.
-    const fontFamily = getComputedStyle(document.body).fontFamily;
-    const container = containerRef.current;
-    if (container !== null && container.style.fontFamily !== fontFamily) {
-      container.style.fontFamily = fontFamily;
-    }
-  });
+  useLayoutEffect(() => keepBodyFont(containerRef.current));
   if (result === null || (result.lines.length === 0 && result.error === null)) return null;
   const failed = result.lines.length === 0;
   // Not positioned itself, so the hover panel spans the whole top bar and opens below it.
