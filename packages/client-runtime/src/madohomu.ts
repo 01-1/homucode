@@ -43,7 +43,10 @@ type MadoHomuGroupSettings = Pick<
 
 /** The one grouping web and mobile both render: Pinned, custom sections, Scratch, Snoozed, Settled. */
 export function groupMadoHomuThreads<
-  T extends Pick<EnvironmentThreadShell, "id" | "updatedAt" | "settledOverride" | "runtime"> &
+  T extends Pick<
+    EnvironmentThreadShell,
+    "id" | "createdAt" | "updatedAt" | "settledOverride" | "runtime"
+  > &
     ThreadSnoozeShell,
 >(
   threads: ReadonlyArray<T>,
@@ -76,12 +79,14 @@ export function groupMadoHomuThreads<
   }
   const position = new Map(settings.madohomuThreadOrder.map((id, index) => [id, index]));
   for (const { kind, threads: members } of groups) {
+    // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
     const manual = kind === "pinned" || kind === "custom";
     members.sort(
       (a, b) =>
-        (manual ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) : 0) ||
-        b.updatedAt.localeCompare(a.updatedAt) ||
-        a.id.localeCompare(b.id),
+        (manual
+          ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
+            b.createdAt.localeCompare(a.createdAt)
+          : b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
     );
   }
   return groups;

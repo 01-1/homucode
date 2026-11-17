@@ -73,7 +73,11 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
           <SettingsRow {...searchableSetting("madohomu-project")}>
             <MadoHomuProjectPicker environmentId={environmentId} />
             <div className="py-2 text-sm">
-              <Link to="/madohomu" search={{ environmentId }}>
+              <Link
+                to="/madohomu"
+                search={{ environmentId }}
+                className="underline underline-offset-2"
+              >
                 Open MadoHomu
               </Link>
             </div>

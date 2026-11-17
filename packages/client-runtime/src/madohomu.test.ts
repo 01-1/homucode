@@ -128,6 +128,7 @@ describe("MadoHomu sections", () => {
   const shell = (id: string, updatedAt: string, extra: object = {}) => ({
     id: ThreadId.make(id),
     projectId: ProjectId.make("p"),
+    createdAt: updatedAt,
     updatedAt,
     settledOverride: null,
     runtime: null,
@@ -161,8 +162,8 @@ describe("MadoHomu sections", () => {
       [
         shell("a", "2026-11-10"),
         shell("b", "2026-11-11"),
-        shell("new", "2026-11-12"),
-        shell("gone", "2026-11-13"),
+        shell("new", "2026-11-12", { updatedAt: "2026-11-01" }),
+        shell("gone", "2026-11-11", { updatedAt: "2026-11-16" }),
         shell("filed", "2026-11-12"),
         shell("unpinned", "2026-11-12"),
         shell("outside", "2026-11-14"),
@@ -178,7 +179,7 @@ describe("MadoHomu sections", () => {
         group.threads.map((thread: { id: string }) => thread.id),
       ]),
     ).toEqual([
-      ["Pinned", ["gone", "new", "b", "a"]],
+      ["Pinned", ["new", "gone", "b", "a"]],
       ["Work", ["filed"]],
       ["Scratch", ["outside", "unpinned"]],
       ["Snoozed", ["later"]],

@@ -74,7 +74,7 @@ export function MadoHomuIconPicker({
         Custom emoji
         <Input
           value={icon.startsWith("lucide:") ? "" : icon}
-          placeholder="☀️"
+          placeholder="Type an emoji"
           maxLength={16}
           onChange={(event) => onIconChange(event.target.value)}
         />

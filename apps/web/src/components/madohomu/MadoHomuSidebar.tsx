@@ -736,12 +736,11 @@ function CustomSectionHeader({
       >
         {section.name}
       </h3>
-      <span className="text-xs text-muted-foreground/75 tabular-nums">{count}</span>
       {canEdit ? (
         <button
           type="button"
           aria-label={`Section actions for ${section.name}`}
-          className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-hover/section:opacity-100"
+          className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-hover/section:opacity-100 pointer-coarse:opacity-100"
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             onMenu({ x: rect.left, y: rect.bottom + 4 });
@@ -750,6 +749,7 @@ function CustomSectionHeader({
           <EllipsisIcon aria-hidden className="size-3.5" />
         </button>
       ) : null}
+      <span className="pr-1 text-xs text-muted-foreground tabular-nums">{count}</span>
     </div>
   );
 }

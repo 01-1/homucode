@@ -1646,7 +1646,7 @@ export const ServerSettings = Schema.Struct({
   madohomuSections: Schema.Array(MadoHomuSection).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
-  /** Manual order of pinned threads. Pinned threads not listed here come first, newest first. */
+  /** Manual order of pinned threads. Pinned threads not listed here come first, newest made first. */
   madohomuThreadOrder: Schema.Array(ThreadId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   madohomuCodeVisibility: MadoHomuCodeVisibility.pipe(
     Schema.withDecodingDefault(Effect.succeed("hidden" as const)),
