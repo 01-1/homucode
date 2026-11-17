@@ -5,6 +5,7 @@ import {
   createHomeListOffer,
   homeListCapturable,
   homeListRows,
+  homeLook,
   launchPictureCanLeave,
   sameHomeListRows,
   type HomeListRow,
@@ -163,4 +164,20 @@ it("stays covered until every cover is released, each only once", () => {
 
   releaseMenu();
   expect(covers.covered()).toBe(false);
+});
+
+it("names Home's look by the preferences it is drawn from and no others", () => {
+  const saved = {
+    themeMode: "dark",
+    baseFontSize: 16,
+    threadListFilters: { environmentId: null, projectKey: null },
+  } as const;
+  const look = homeLook(saved);
+  expect(homeLook({ ...saved, themeMode: "light" })).not.toBe(look);
+  expect(homeLook({ ...saved, baseFontSize: 18 })).not.toBe(look);
+  const filtered = { environmentId: null, projectKey: "project" };
+  expect(homeLook({ ...saved, threadListFilters: filtered })).not.toBe(look);
+  // Saved as threads and settings pages open; a picture of Home stays good through them.
+  const elsewhere = { workspaceSelections: { settings: "appearance" }, codeFontSize: 13 };
+  expect(homeLook({ ...saved, ...elsewhere })).toBe(look);
 });

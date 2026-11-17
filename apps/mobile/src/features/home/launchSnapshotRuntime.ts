@@ -1,22 +1,27 @@
+import { AsyncResult } from "effect/reactivity";
 import { AppState, Keyboard, Platform } from "react-native";
 
 import { overlayPortalOpen } from "../../components/ui/OverlayPortal";
 import {
   captureLaunchSnapshot,
+  clearLaunchSnapshot,
   hideLaunchSnapshot,
   launchSnapshotShowing,
 } from "../../lib/launchSnapshot";
 import { rootNavigationRef } from "../../lib/rootNavigation";
 import { appAtomRegistry } from "../../state/atom-registry";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { shellCachesReadAtom } from "../../state/shell";
 import {
   homeCoveredForLaunchSnapshot,
   homeListCapturable,
   homeListLaidOut,
   homeListRows,
+  homeLook,
   launchPictureCanLeave,
   offeredHomeList,
 } from "./home-launch-snapshot";
+import { readThreadUndoNotice } from "./thread-undo-notice";
 
 // The cached rows take their first server updates in this time. Every later background saves
 // the picture again, so this only covers a launch that never reaches one with Home showing.
@@ -37,7 +42,8 @@ function captureHomeList(): void {
     routeName: state?.routes[state.index]?.name,
     routeSettled: Date.now() - routeChangedAt >= ROUTE_SETTLE_MS,
     list,
-    covered: overlayPortalOpen() || homeCoveredForLaunchSnapshot(),
+    covered:
+      overlayPortalOpen() || homeCoveredForLaunchSnapshot() || readThreadUndoNotice() !== null,
     keyboardVisible: Keyboard.isVisible(),
   });
   if (capturable && list !== undefined) captureLaunchSnapshot(homeListRows(list));
@@ -78,9 +84,24 @@ export function handOverLaunchSnapshot(): void {
   check();
 }
 
-/** Saves the picture when the app leaves the foreground, so it is the last list the user saw. */
+/**
+ * Saves the picture when the app leaves the foreground, so it is the last list the user saw, and
+ * deletes it when a preference Home is drawn from changes.
+ */
 export function installLaunchSnapshotCapture(): () => void {
   if (Platform.OS !== "android") return () => {};
+  // The first preferences read are the ones the saved picture was taken under.
+  let look: string | undefined;
+  const unsubscribeLook = appAtomRegistry.subscribe(
+    mobilePreferencesAtom,
+    (preferences) => {
+      if (!AsyncResult.isSuccess(preferences)) return;
+      const next = homeLook(preferences.value);
+      if (look !== undefined && next !== look) clearLaunchSnapshot();
+      look = next;
+    },
+    { immediate: true },
+  );
   const subscription = AppState.addEventListener("change", (state) => {
     if (state === "background") captureHomeList();
   });
@@ -88,6 +109,7 @@ export function installLaunchSnapshotCapture(): () => void {
     routeChangedAt = Date.now();
   });
   return () => {
+    unsubscribeLook();
     subscription.remove();
     unsubscribeRoutes();
   };

@@ -142,10 +142,13 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
     }
   }
 
+  /** Deletes the saved picture, and takes it off the screen when this launch started on it. */
   fun clear() {
     val store = store ?: return
     clears.incrementAndGet()
     files.execute(store::delete)
+    // A picture still being decoded then finds its launch gone and is not attached.
+    main.post { launch?.let(::drop) }
   }
 
   override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) {

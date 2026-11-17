@@ -1,3 +1,32 @@
+import type { Preferences } from "../../persistence/mobile-preferences";
+
+const HOME_LOOK_PREFERENCES = [
+  "themeId",
+  "lightThemeId",
+  "darkThemeId",
+  "themeMode",
+  "baseFontSize",
+  "language",
+  "androidNavigationStyle",
+  "navigationTabOrder",
+  "hiddenNavigationTabs",
+  "projectGroupingEnabled",
+  "projectGroupingMode",
+  "workingShelfEnabled",
+  "threadListSettledShelfExpanded",
+  "threadListSnoozedShelfExpanded",
+  "threadListWorkingShelfExpanded",
+  "threadListFilters",
+] as const satisfies ReadonlyArray<keyof Preferences>;
+
+/**
+ * Names the saved preferences Home's first screen is drawn from: its colours, text, bars and
+ * which threads it lists. A picture saved under another name is not what a launch would draw.
+ */
+export function homeLook(preferences: Preferences): string {
+  return JSON.stringify(HOME_LOOK_PREFERENCES.map((key) => preferences[key] ?? null));
+}
+
 /** A row of the list. Shelf rows also carry their count and whether they are open. */
 export interface HomeListRow {
   readonly key: string;
