@@ -81,7 +81,7 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
             </MenuRadioItem>
           ))}
         </MenuRadioGroup>
-        {current && (
+        {actions.settings.madohomuProjectId !== null && (
           <>
             <MenuSeparator />
             <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>

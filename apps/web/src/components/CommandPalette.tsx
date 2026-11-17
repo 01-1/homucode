@@ -594,8 +594,21 @@ function OpenCommandPaletteDialog(props: {
       : null;
   };
 
+  // Read once per palette session, like the rest of the open intent.
+  const [{ onProjectAdded, addProjectOnlyEnvironmentId }] = useState(() => {
+    const intent = props.openIntent?.kind === "add-project" ? props.openIntent : null;
+    return {
+      onProjectAdded: intent?.onProjectAdded ?? null,
+      addProjectOnlyEnvironmentId: intent?.environmentId ?? null,
+    };
+  });
   const addProjectEnvironmentOptions = (() => {
     const options = environments
+      .filter(
+        (environment) =>
+          addProjectOnlyEnvironmentId === null ||
+          environment.environmentId === addProjectOnlyEnvironmentId,
+      )
       .filter((environment) => canCreateProjectInEnvironment(environment.connection.phase))
       .map((environment): AddProjectEnvironmentOption => {
         const isPrimary = environment.entry.target._tag === "PrimaryConnectionTarget";
@@ -1236,20 +1249,8 @@ function OpenCommandPaletteDialog(props: {
     setOpen(false);
     void navigate({ to: "/settings/connections" });
   };
-  // Read once per palette session, like the rest of the open intent.
-  const [{ onProjectAdded, addProjectOnlyEnvironmentId }] = useState(() => {
-    const intent = props.openIntent?.kind === "add-project" ? props.openIntent : null;
-    return {
-      onProjectAdded: intent?.onProjectAdded ?? null,
-      addProjectOnlyEnvironmentId: intent?.environmentId ?? null,
-    };
-  });
   const addProjectEntry = resolveAddProjectEntry(
-    addProjectOnlyEnvironmentId === null
-      ? addProjectEnvironmentOptions
-      : addProjectEnvironmentOptions.filter(
-          (option) => option.environmentId === addProjectOnlyEnvironmentId,
-        ),
+    addProjectEnvironmentOptions,
     addProjectOnlyEnvironmentId ?? defaultAddProjectEnvironmentId,
   );
 
