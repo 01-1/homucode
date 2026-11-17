@@ -16,7 +16,7 @@ import {
   MADOHOMU_SECTION_NAME_MAX_LENGTH,
   type ThreadId,
 } from "@t3tools/contracts";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,9 +40,17 @@ import { ThreadListV2Row, ThreadListV2Section } from "../threads/thread-list-v2-
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
 import { useOpenThreadPullRequests } from "../threads/use-open-thread-pull-requests";
 import { useThreadListNow } from "../threads/use-thread-list-now";
-import { buildMadoHomuListRows, moveMadoHomuThread, type MadoHomuListRow } from "./madohomuList";
+import {
+  buildMadoHomuListRows,
+  dropMadoHomuThread,
+  madohomuDropPatch,
+  moveMadoHomuThread,
+  type MadoHomuDrop,
+  type MadoHomuListRow,
+} from "./madohomuList";
 import { MadoHomuIcon } from "./MadoHomuIcon";
 import { MadoHomuProjectPicker } from "./MadoHomuProjectPicker";
+import { MadoHomuReorderList, type MadoHomuReorderThread } from "./MadoHomuReorderList";
 import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 
@@ -68,6 +76,28 @@ function promptSectionName(title: string, initialValue: string, onName: (name: s
   });
 }
 
+/** Pinned and custom sections for Reorder mode, and the other sections' headers to dim. */
+function reorderSectionsOf(
+  rows: ReadonlyArray<MadoHomuListRow>,
+  leading: (thread: EnvironmentThreadShell) => ReactNode,
+) {
+  const sections: { id: string; title: string; threads: MadoHomuReorderThread[] }[] = [];
+  const dimmed: string[] = [];
+  for (const row of rows) {
+    const manual = row.kind === "pinned" || row.kind === "custom";
+    if (row.type === "section") {
+      if (manual) sections.push({ id: row.id, title: row.title, threads: [] });
+      else dimmed.push(`${row.title} (${row.count})`);
+    } else if (row.type === "thread" && manual) {
+      const thread = row.row.item.thread;
+      sections
+        .at(-1)
+        ?.threads.push({ id: thread.id, title: thread.title, leading: leading(thread) });
+    }
+  }
+  return { sections, dimmed };
+}
+
 function MadoHomuWorkspace({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const actions = useMadoHomuActions(environmentId);
   const listActions = useThreadListActions();
@@ -76,6 +106,13 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const [editing, setEditing] = useState<ThreadId | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => rememberedExpanded);
   const [busy, setBusy] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  // A drop shows at once and holds until the next settings arrive from the server.
+  const [pendingDrop, setPendingDrop] = useState<{
+    readonly base: object;
+    readonly threadId: ThreadId;
+    readonly drop: MadoHomuDrop;
+  } | null>(null);
   const pending = useRef(false);
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
@@ -93,7 +130,18 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     titleRegenerationEnvironmentIds,
   } = useAtomValue(threadListEnvironmentsAtom);
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
-  const { settings } = actions;
+  const { settings: savedSettings } = actions;
+  const dropPatch =
+    pendingDrop && pendingDrop.base === savedSettings
+      ? madohomuDropPatch(savedSettings, pendingDrop.threadId, pendingDrop.drop)
+      : null;
+  const settings = dropPatch
+    ? {
+        ...savedSettings,
+        madohomuThreadOrder: dropPatch.madohomuThreadOrder,
+        madohomuThreads: { ...savedSettings.madohomuThreads, ...dropPatch.madohomuThreads },
+      }
+    : savedSettings;
   const threads = useVisibleThreadShells().filter(
     (thread) =>
       thread.environmentId === environmentId &&
@@ -113,6 +161,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     queuedThreadKeys,
     isWorking: isThreadWorking,
   });
+  // Reorder mode needs a project to edit; without one the screen shows the picker instead.
+  const reorderMode = reordering && settings.madohomuEnabled && actions.project !== null;
   const edited = threads.find((thread) => thread.id === editing);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId, madohomu: true }));
@@ -158,6 +208,32 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         },
       }),
     );
+
+  const stepThread = (threadId: ThreadId, direction: "up" | "down") => {
+    const order = moveMadoHomuThread({ threads, settings, now, threadId, direction });
+    if (order) void actions.setThreadOrder(order);
+  };
+  const dropThread = (threadId: ThreadId, sectionId: string, index: number) => {
+    if (!canEdit) return false;
+    const drop = dropMadoHomuThread({ threads, settings, now, threadId, sectionId, index });
+    if (!drop) return false;
+    const pending = { base: savedSettings, threadId, drop };
+    setPendingDrop(pending);
+    void actions.dropThread(threadId, drop).then((saved) => {
+      if (!saved) setPendingDrop((current) => (current === pending ? null : current));
+    });
+    return true;
+  };
+  const leadingOf = (thread: EnvironmentThreadShell) => {
+    const entry = settings.madohomuThreads[thread.id];
+    return (
+      <MadoHomuIcon
+        icon={entry?.icon ?? null}
+        color={madohomuIconColor(thread.id, entry?.color)}
+        size={18}
+      />
+    );
+  };
 
   const madohomuMenu = (row: Extract<MadoHomuListRow, { type: "thread" }>): MenuAction[] => {
     const entry = settings.madohomuThreads[row.row.item.thread.id];
@@ -234,14 +310,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       const section = event.slice("extra:section:".length);
       void actions.setThreadPlace(thread.id, { section: section || null });
     } else if (event === "extra:up" || event === "extra:down") {
-      const order = moveMadoHomuThread({
-        threads,
-        settings,
-        now,
-        threadId: thread.id,
-        direction: event === "extra:up" ? "up" : "down",
-      });
-      if (order) void actions.setThreadOrder(order);
+      stepThread(thread.id, event === "extra:up" ? "up" : "down");
     }
   };
 
@@ -340,7 +409,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     }
     const { row } = item;
     const thread = row.item.thread;
-    const entry = settings.madohomuThreads[thread.id];
     return (
       <ThreadListV2Row
         thread={thread}
@@ -354,13 +422,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         timeLabel={row.timeLabel}
         showTrailingDivider={row.showTrailingDivider}
         project={null}
-        leading={
-          <MadoHomuIcon
-            icon={entry?.icon ?? null}
-            color={madohomuIconColor(thread.id, entry?.color)}
-            size={18}
-          />
-        }
+        leading={leadingOf(thread)}
         providerInstance={resolveProviderInstance(thread)}
         providers={providersByEnvironmentId.get(thread.environmentId)}
         environmentLabel={null}
@@ -402,22 +464,37 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       <AppBar
         title="MadoHomu"
         onBack={() => navigation.goBack()}
-        actions={[
-          ...(settings.madohomuEnabled && actions.project && canEdit
-            ? [
+        {...(reorderMode
+          ? { confirm: { label: "Done", onPress: () => setReordering(false) } }
+          : {})}
+        actions={
+          reorderMode
+            ? []
+            : [
+                ...(settings.madohomuEnabled && actions.project && canEdit
+                  ? [
+                      {
+                        icon: "line.3.horizontal" as const,
+                        accessibilityLabel: "Reorder pinned threads",
+                        onPress: () => {
+                          openSwipeableRef.current?.close();
+                          setReordering(true);
+                        },
+                      },
+                      {
+                        icon: "folder.badge.plus" as const,
+                        accessibilityLabel: "New section",
+                        onPress: addSection,
+                      },
+                    ]
+                  : []),
                 {
-                  icon: "folder.badge.plus" as const,
-                  accessibilityLabel: "New section",
-                  onPress: addSection,
+                  icon: "gearshape",
+                  accessibilityLabel: "MadoHomu settings",
+                  onPress: () => openSettings(navigation, "SettingsMadoHomu"),
                 },
               ]
-            : []),
-          {
-            icon: "gearshape",
-            accessibilityLabel: "MadoHomu settings",
-            onPress: () => openSettings(navigation, "SettingsMadoHomu"),
-          },
-        ]}
+        }
       />
       {!settings.madohomuEnabled ? (
         <ScrollView
@@ -447,6 +524,15 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             onChange={(madohomuProjectId) => void actions.save({ madohomuProjectId })}
           />
         </ScrollView>
+      ) : reorderMode ? (
+        <MadoHomuReorderList
+          {...reorderSectionsOf(rows, leadingOf)}
+          // One drop at a time: the next settings push would drop a second pending one early.
+          disabled={!canEdit || dropPatch !== null}
+          bottomInset={Math.max(insets.bottom, 18) + 18}
+          onDrop={dropThread}
+          onStep={stepThread}
+        />
       ) : (
         <LegendList
           data={rows}
