@@ -5,6 +5,8 @@ import {
   buildStatusLineInput,
   parseAnsiLines,
   stampStatusLineInput,
+  type StatusLineColorRole,
+  statusLineColorRole,
   type StatusLineInputSource,
 } from "@t3tools/client-runtime/status-line";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
@@ -15,22 +17,38 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { serverEnvironment } from "../../state/server";
 import { useNowMinuteMs } from "../../lib/clock";
+import type { MobileThemeVariables } from "../../lib/mobileTheme";
 
 // Claude Code redraws on events; the timer keeps clocks and countdowns current while idle.
 const REFRESH_MS = 30_000;
 const DEBOUNCE_MS = 300;
 
-// The scripts pick colors for dark terminals, so light themes darken them to stay readable.
-function darken(color: string): string {
-  const value = Number.parseInt(color.slice(1), 16);
-  const channel = (shift: number) => Math.round(((value >> shift) & 255) * 0.6);
-  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
+// Scripts pick terminal colors; each text color takes the theme color with the same meaning.
+function roleColors(
+  theme: MobileThemeVariables,
+  dark: boolean,
+): Record<StatusLineColorRole, string | undefined> {
+  return {
+    foreground: undefined,
+    muted: theme["--color-foreground-muted"],
+    error: theme["--color-danger-foreground"],
+    warning: theme["--color-warning-foreground"],
+    // Success and info are not theme roles; these match the web's emerald and blue.
+    success: dark ? "#34d399" : "#047857",
+    info: dark ? "#60a5fa" : "#1d4ed8",
+    accent: theme["--color-focus"],
+  };
 }
 
-function segmentStyle(segment: AnsiSegment, dark: boolean): TextStyle {
+function segmentStyle(
+  segment: AnsiSegment,
+  colors: Record<StatusLineColorRole, string | undefined>,
+  subtle: string,
+): TextStyle {
+  const color = segment.color === null ? undefined : colors[statusLineColorRole(segment.color)];
   return {
-    ...(segment.color === null ? {} : { color: dark ? segment.color : darken(segment.color) }),
-    ...(segment.background === null ? {} : { backgroundColor: segment.background }),
+    ...(color === undefined ? {} : { color }),
+    ...(segment.background === null ? {} : { backgroundColor: subtle }),
     ...(segment.bold ? { fontWeight: "600" } : {}),
     ...(segment.dim ? { opacity: 0.6 } : {}),
     ...(segment.italic ? { fontStyle: "italic" } : {}),
@@ -45,7 +63,7 @@ export function ThreadStatusBar(props: {
   readonly source: Omit<StatusLineInputSource, "nowMs">;
 }) {
   const { environmentId, createdAt } = props;
-  const { themeAppearance } = useAppearancePreferences();
+  const { themeAppearance, themeVariables } = useAppearancePreferences();
   const enabled = useAtomValue(
     serverEnvironment.configValueAtom(environmentId),
     (config) =>
@@ -102,7 +120,7 @@ export function ThreadStatusBar(props: {
       </Text>
     );
   }
-  const dark = themeAppearance === "dark";
+  const colors = roleColors(themeVariables, themeAppearance === "dark");
   return lines.map((line, lineIndex) => (
     <Text
       // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
@@ -114,7 +132,7 @@ export function ThreadStatusBar(props: {
         <Text
           // oxlint-disable-next-line react/no-array-index-key -- segments have no identity beyond order
           key={segmentIndex}
-          style={segmentStyle(segment, dark)}
+          style={segmentStyle(segment, colors, themeVariables["--color-subtle"])}
         >
           {segment.text}
         </Text>

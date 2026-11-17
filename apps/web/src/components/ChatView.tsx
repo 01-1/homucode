@@ -384,7 +384,7 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
-import { ThreadStatusBar } from "./chat/ThreadStatusBar";
+import { ThreadStatusBar, ThreadStatusLineRunner } from "./chat/ThreadStatusBar";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useTimelineFollow } from "./chat/useTimelineFollow";
@@ -1652,6 +1652,12 @@ export default function ChatView(props: ChatViewProps) {
     panelAnimationsActive,
     panelAnimationDurationMs,
   );
+  const statusLineThread =
+    serverThread !== null && !embedded && !isDraftHeroState ? serverThread : null;
+  const statusLineKey =
+    statusLineThread === null
+      ? undefined
+      : scopedThreadKey(scopeThreadRef(statusLineThread.environmentId, statusLineThread.id));
   const turnDiffSummaries = useThreadCheckpointSummaries(routeThreadDetailRef);
   const availableRevertTurnCounts = deriveAvailableRevertTurnCounts(serverProjection);
   // A paged history window cannot identify the first loaded run as the thread start.
@@ -3408,6 +3414,7 @@ export default function ChatView(props: ChatViewProps) {
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
+              statusLineKey={statusLineKey}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
@@ -3882,21 +3889,6 @@ export default function ChatView(props: ChatViewProps) {
                           </div>
                         </div>
                       </ComposerSurface.Shell>
-                      {serverThread !== null && !embedded && !isDraftHeroState ? (
-                        <ThreadStatusBar
-                          environmentId={serverThread.environmentId}
-                          createdAt={serverThread.createdAt}
-                          source={{
-                            threadId: serverThread.id,
-                            cwd: gitCwd,
-                            modelSelection: serverThread.modelSelection,
-                            providers: providerStatuses,
-                            usageLimitSources:
-                              serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
-                            contextWindow: activeContextWindow,
-                          }}
-                        />
-                      ) : null}
                       {isDraftHeroState && composerBannerItems.length > 0 ? (
                         // Out of flow, like the headline, so a notice never moves the centered composer.
                         // Short windows pin the composer to the bottom, where an out-of-flow notice
@@ -3906,12 +3898,31 @@ export default function ChatView(props: ChatViewProps) {
                         </div>
                       ) : null}
                     </div>
-                    <div
-                      aria-hidden
-                      className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-                    />
                   </div>
                 </div>
+                {statusLineThread !== null && statusLineKey !== undefined ? (
+                  <>
+                    <ThreadStatusLineRunner
+                      statusLineKey={statusLineKey}
+                      environmentId={statusLineThread.environmentId}
+                      createdAt={statusLineThread.createdAt}
+                      source={{
+                        threadId: statusLineThread.id,
+                        cwd: gitCwd,
+                        modelSelection: statusLineThread.modelSelection,
+                        providers: providerStatuses,
+                        usageLimitSources:
+                          serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                        contextWindow: activeContextWindow,
+                      }}
+                    />
+                    <ThreadStatusBar statusLineKey={statusLineKey} />
+                  </>
+                ) : null}
+                <div
+                  aria-hidden
+                  className="h-[calc(env(safe-area-inset-bottom)+1rem)] sm:h-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+                />
               </div>
             </div>
 

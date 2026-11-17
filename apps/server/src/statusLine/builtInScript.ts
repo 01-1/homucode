@@ -55,8 +55,11 @@ segs=()
 [ -n "$model" ] && segs+=("$(c 183)\${model}\${effort:+ $(effort_color "$effort")$effort}")
 if [ -n "$ctx_k" ] || [ -n "$used" ]; then
   uc=$(c 15); [ -n "$used" ] && uc=$(used_color "$used")
-  s="$(c 8)conx \${uc}\${ctx_k}"
-  [ -n "$used" ] && s="$s\${ctx_k:+$(c 8)/}\${uc}$(printf '%.0f' "$used")%"
+  s="$(c 8)conx"
+  [ -n "$used" ] && s="$s \${uc}$(printf '%.0f' "$used")%"
+  if [ -n "$ctx_k" ]; then
+    if [ -n "$used" ]; then s="$s $(c 8)(\${uc}\${ctx_k}$(c 8))"; else s="$s \${uc}\${ctx_k}"; fi
+  fi
   segs+=("$s")
 fi
 now=$(date +%s)

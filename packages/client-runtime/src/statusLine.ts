@@ -204,6 +204,38 @@ function xterm256Color(index: number): string | null {
   return null;
 }
 
+/** The app color a status line color takes, so scripts written for terminals follow the active theme. */
+export type StatusLineColorRole =
+  | "foreground"
+  | "muted"
+  | "error"
+  | "warning"
+  | "success"
+  | "info"
+  | "accent";
+
+export function statusLineColorRole(color: string): StatusLineColorRole {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return "foreground";
+  const value = Number.parseInt(color.slice(1), 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  const max = Math.max(r, g, b);
+  const chroma = max - Math.min(r, g, b);
+  if (chroma < 40) return max < 200 ? "muted" : "foreground";
+  const hue =
+    max === r
+      ? (60 * ((g - b) / chroma) + 360) % 360
+      : max === g
+        ? 60 * ((b - r) / chroma) + 120
+        : 60 * ((r - g) / chroma) + 240;
+  if (hue < 20 || hue >= 330) return "error";
+  if (hue < 70) return "warning";
+  if (hue < 165) return "success";
+  if (hue < 250) return "info";
+  return "accent";
+}
+
 interface AnsiStyle {
   color: string | null;
   background: string | null;
@@ -298,4 +330,56 @@ export function parseAnsiLines(text: string): ReadonlyArray<ReadonlyArray<AnsiSe
   }
   while (lines.length > 0 && lines.at(-1)?.length === 0) lines.pop();
   return lines;
+}
+
+const CLOCK_PATTERN = /\[\d{1,2}:\d{2}(?::\d{2})?\]/;
+
+function sliceSegments(
+  line: ReadonlyArray<AnsiSegment>,
+  start: number,
+  end: number,
+): ReadonlyArray<AnsiSegment> {
+  const sliced: AnsiSegment[] = [];
+  let offset = 0;
+  for (const segment of line) {
+    const from = Math.max(start, offset);
+    const to = Math.min(end, offset + segment.text.length);
+    if (from < to)
+      sliced.push({ ...segment, text: segment.text.slice(from - offset, to - offset) });
+    offset += segment.text.length;
+  }
+  return sliced;
+}
+
+/** Splits a line around its `[HH:MM:SS]` clock, so the clock can sit at the right edge. */
+export function splitStatusLineClock(line: ReadonlyArray<AnsiSegment>): {
+  readonly before: ReadonlyArray<AnsiSegment>;
+  readonly clock: ReadonlyArray<AnsiSegment>;
+  readonly after: ReadonlyArray<AnsiSegment>;
+} | null {
+  const text = line.map((segment) => segment.text).join("");
+  const match = CLOCK_PATTERN.exec(text);
+  if (match === null) return null;
+  const end = match.index + match[0].length;
+  return {
+    before: sliceSegments(line, 0, match.index),
+    clock: sliceSegments(line, match.index, end),
+    after: sliceSegments(line, end, text.length),
+  };
+}
+
+const DIRECTORY_PATTERN = /^[~/]\S*/;
+
+/** Splits off a leading `~/…` or `/…` path, so a client can shorten it on its own. */
+export function splitStatusLineDirectory(line: ReadonlyArray<AnsiSegment>): {
+  readonly directory: ReadonlyArray<AnsiSegment>;
+  readonly rest: ReadonlyArray<AnsiSegment>;
+} | null {
+  const text = line.map((segment) => segment.text).join("");
+  const match = DIRECTORY_PATTERN.exec(text);
+  if (match === null) return null;
+  return {
+    directory: sliceSegments(line, 0, match[0].length),
+    rest: sliceSegments(line, match[0].length, text.length),
+  };
 }

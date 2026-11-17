@@ -6,7 +6,10 @@ import {
   buildStatusLineInput,
   parseAnsiLines,
   stampStatusLineInput,
+  statusLineColorRole,
   statusLineModelName,
+  splitStatusLineClock,
+  splitStatusLineDirectory,
 } from "./statusLine.ts";
 
 const plain = { background: null, bold: false, dim: false, italic: false, underline: false };
@@ -45,6 +48,66 @@ describe("parseAnsiLines", () => {
       [{ text: "one", color: "#00cd00", ...plain }],
       [{ text: "two", color: "#00cd00", ...plain }],
     ]);
+  });
+});
+
+describe("statusLineColorRole", () => {
+  it.each([
+    ["#cd0000", "error"],
+    ["#ff5f87", "error"],
+    ["#cdcd00", "warning"],
+    ["#ffaf00", "warning"],
+    ["#00cd00", "success"],
+    ["#00cdcd", "info"],
+    ["#5c5cff", "info"],
+    ["#d7afff", "accent"],
+    ["#cd00cd", "accent"],
+    ["#808080", "muted"],
+    ["#d0d0d0", "foreground"],
+    ["red", "foreground"],
+  ] as const)("maps %s to %s", (color, role) => {
+    expect(statusLineColorRole(color)).toBe(role);
+  });
+});
+
+describe("splitStatusLineClock", () => {
+  it("splits around the clock across styled segments", () => {
+    const [line = []] = parseAnsiLines(
+      "\u001b[38;5;8mup \u001b[38;5;183m1h02m \u001b[38;5;183m[\u001b[38;5;177m21:41:07\u001b[38;5;183m] \u001b[38;5;118m+3",
+    );
+    expect(splitStatusLineClock(line)).toEqual({
+      before: [
+        { text: "up ", color: "#808080", ...plain },
+        { text: "1h02m ", color: "#d7afff", ...plain },
+      ],
+      clock: [
+        { text: "[", color: "#d7afff", ...plain },
+        { text: "21:41:07", color: "#d787ff", ...plain },
+        { text: "]", color: "#d7afff", ...plain },
+      ],
+      after: [
+        { text: " ", color: "#d7afff", ...plain },
+        { text: "+3", color: "#87ff00", ...plain },
+      ],
+    });
+  });
+
+  it("leaves lines without a clock alone", () => {
+    expect(splitStatusLineClock([{ text: "no clock [1:2]", color: null, ...plain }])).toBeNull();
+  });
+});
+
+describe("splitStatusLineDirectory", () => {
+  it("splits off a leading directory", () => {
+    const [line = []] = parseAnsiLines("~/code/homucode \u001b[38;5;183mvi@pbox");
+    expect(splitStatusLineDirectory(line)).toEqual({
+      directory: [{ text: "~/code/homucode", color: null, ...plain }],
+      rest: [
+        { text: " ", color: null, ...plain },
+        { text: "vi@pbox", color: "#d7afff", ...plain },
+      ],
+    });
+    expect(splitStatusLineDirectory([{ text: "A6 medium", color: null, ...plain }])).toBeNull();
   });
 });
 
