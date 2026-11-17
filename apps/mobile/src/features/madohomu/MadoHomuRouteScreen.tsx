@@ -161,7 +161,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             image: "pin.slash",
             attributes: disabled,
           }
-        : { id: "extra:pin", title: "Pin", image: "pin", attributes: disabled },
+        : { id: "extra:pin", title: "Move to Pinned", image: "pin", attributes: disabled },
       {
         id: "extra:section",
         title: "Move to section",

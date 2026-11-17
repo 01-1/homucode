@@ -97,6 +97,28 @@ describe("moveMadoHomuThread", () => {
     ).toEqual([a, b, c]);
   });
 
+  it("keeps the saved position of a pinned thread that is snoozed", () => {
+    const x = ThreadId.make("x");
+    const snoozed = makeThreadShellFixture({
+      id: x,
+      title: "X",
+      snoozedUntil: "2026-06-03T00:00:00.000Z",
+    });
+    expect(
+      moveMadoHomuThread({
+        threads: [...threads, snoozed],
+        settings: {
+          ...settings,
+          madohomuThreads: { ...settings.madohomuThreads, [x]: { icon: null, prompt: "" } },
+          madohomuThreadOrder: [b, x, a, c],
+        },
+        now: NOW,
+        threadId: a,
+        direction: "up",
+      }),
+    ).toEqual([a, b, x, c]);
+  });
+
   it("does not move past a section's ends or move Scratch threads", () => {
     expect(
       moveMadoHomuThread({ threads, settings, now: NOW, threadId: a, direction: "down" }),

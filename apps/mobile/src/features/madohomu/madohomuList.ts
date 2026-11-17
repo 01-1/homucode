@@ -25,7 +25,6 @@ export interface MadoHomuSectionRow {
   readonly id: string;
   readonly title: string;
   readonly count: number;
-  /** Null for sections that do not collapse. */
   readonly expanded: boolean | null;
 }
 
@@ -50,12 +49,10 @@ export type MadoHomuListRow = MadoHomuSectionRow | MadoHomuEmptyRow | MadoHomuTh
 const COLLAPSIBLE: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed", "settled"]);
 const ALWAYS_SHOWN: ReadonlySet<MadoHomuGroupKind> = new Set(["pinned", "custom"]);
 
-/** The MadoHomu screen's rows: a header per section, then its threads as home-list rows. */
 export function buildMadoHomuListRows(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly settings: MadoHomuListSettings;
   readonly now: string;
-  /** Collapsible sections the user opened; Snoozed and Settled start collapsed. */
   readonly expanded: ReadonlySet<string>;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys?: ReadonlySet<string>;
@@ -111,19 +108,20 @@ export function buildMadoHomuListRows(input: {
   return rows;
 }
 
-/** Pinned and custom-section threads in the order they are shown. */
+// Keeps the saved positions of pinned threads that are snoozed or settled right now.
 function manualOrder<T extends { readonly id: ThreadId }>(
   groups: ReadonlyArray<MadoHomuGroup<T>>,
+  saved: ReadonlyArray<ThreadId>,
 ): ThreadId[] {
-  return groups
+  const listed = new Set(saved);
+  const unlisted = groups
     .filter((group) => ALWAYS_SHOWN.has(group.kind))
-    .flatMap((group) => group.threads.map((thread) => thread.id));
+    .flatMap((group) => group.threads.map((thread) => thread.id))
+    .filter((id) => !listed.has(id));
+  return [...unlisted, ...saved];
 }
 
-/**
- * The new `madohomuThreadOrder` after moving a pinned thread one place up or down
- * within its section, or null when it cannot move that way.
- */
+
 export function moveMadoHomuThread(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly settings: MadoHomuListSettings;
@@ -139,7 +137,7 @@ export function moveMadoHomuThread(input: {
   );
   if (!group) return null;
   const index = group.threads.findIndex((thread) => thread.id === input.threadId);
-  const order = manualOrder(groups);
+  const order = manualOrder(groups, input.settings.madohomuThreadOrder);
   if (input.direction === "up") {
     const before = group.threads[index - 1];
     return before ? reorderMadoHomuThreads(order, input.threadId, before.id) : null;
