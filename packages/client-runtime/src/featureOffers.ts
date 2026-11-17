@@ -10,6 +10,7 @@ type OfferSetting =
   | "stopThreadSubagents"
   | "threadTitleIdPrefix"
   | "backgroundGitEnabled"
+  | "autoUpdateWhenIdle"
   | "buildToolsSettingsVisible"
   | "connectDeviceLongSessions"
   | "claudeHoldBackgroundCommands"
@@ -135,6 +136,14 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     description:
       "Refresh Git status and fetch in the background. Restart to apply; T3CODE_BACKGROUND_GIT overrides this choice.",
     setting: "backgroundGitEnabled",
+  },
+  {
+    id: "auto-update-when-idle",
+    page: 2,
+    title: "Update when agents are idle",
+    description:
+      "Install app updates once this machine's agents have been idle for five minutes, and each provider's updates once its own agents have.",
+    setting: "autoUpdateWhenIdle",
   },
   {
     id: "work-assistance",
