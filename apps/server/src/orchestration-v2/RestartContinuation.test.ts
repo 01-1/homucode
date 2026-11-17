@@ -1368,7 +1368,7 @@ it.effect.each([
       assert.isDefined(restartContinuationRun(live, now, true));
       const reasked = yield* continuationTexts(cut, true);
       assert.lengthOf(reasked, 1);
-      assert.equal(reasked[0]!.includes("Make the same request again."), !shouldContinue);
+      assert.equal(reasked[0]!.includes("Make the same request again now."), !shouldContinue);
     }),
 );
 

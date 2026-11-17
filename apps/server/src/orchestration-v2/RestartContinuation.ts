@@ -38,8 +38,8 @@ import {
 const CONTINUE_PROMPT =
   "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.";
 
-const REASK_NOTE =
-  "The restart also closed the approval, question or secret request you were waiting on. It was never answered, and the action it asked about did not run. Make the same request again.";
+const REASK_PROMPT =
+  "Continue where you left off. T3 Code restarted while you were waiting for an approval, an answer or a secret. That request was never answered: any abort or decline you see for it came from the restart, not from the user, and the action it asked about did not run. Make the same request again now. Before you repeat any other action that changes state, confirm it did not take effect and is not still running.";
 
 const MAX_CONTINUATION_CHAIN = 3;
 const CONTINUATION_LOOP_WINDOW_MS = 5 * 60 * 1_000;
@@ -338,9 +338,7 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
     const noteText =
       note.work.length === 0 ? undefined : restartCancelledBackgroundWorkNote(note.work);
     const continuePrompt =
-      reaskRequests && restartCutRequest(projection, source)
-        ? `${CONTINUE_PROMPT}\n\n${REASK_NOTE}`
-        : CONTINUE_PROMPT;
+      reaskRequests && restartCutRequest(projection, source) ? REASK_PROMPT : CONTINUE_PROMPT;
     const text =
       noteText === undefined
         ? continuePrompt
