@@ -302,10 +302,7 @@ describe("t3 app", () => {
           desktop.received.map((request) =>
             request.type === "open-workspace" ? request.workspaceRoot : null,
           ),
-        ).toEqual([
-          workingDirectory,
-          explicitPath,
-        ]);
+        ).toEqual([workingDirectory, explicitPath]);
         expect(desktop.received.every((request) => request.platform === platform)).toBe(true);
       }).pipe(Effect.scoped),
     ),

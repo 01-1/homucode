@@ -18,7 +18,7 @@ import { serverEnvironment } from "../state/server";
 import { createAppScriptApi, type T3App } from "./appScriptApi";
 import { appScriptNameFromCommand, appScriptOutput, isLocalAppWindow } from "./appScripts.logic";
 
-export class AppScriptRefusedError extends Error {}
+class AppScriptRefusedError extends Error {}
 
 let api: T3App | null = null;
 
@@ -36,8 +36,10 @@ async function loadNamedScript(name: string): Promise<string> {
 }
 
 /** Checks this device's gates, then runs the script's default export with the `t3` API. */
-export async function runAppScript(input: {
-  readonly script: { readonly kind: "name"; readonly name: string } | { readonly kind: "code"; readonly code: string };
+async function runAppScript(input: {
+  readonly script:
+    | { readonly kind: "name"; readonly name: string }
+    | { readonly kind: "code"; readonly code: string };
   readonly source: AppScriptRunSource;
   readonly fromAgent: boolean;
 }): Promise<string | null> {
@@ -49,7 +51,8 @@ export async function runAppScript(input: {
     );
   }
   if (api === null) throw new Error("T3 Code is still starting.");
-  const code = input.script.kind === "name" ? await loadNamedScript(input.script.name) : input.script.code;
+  const code =
+    input.script.kind === "name" ? await loadNamedScript(input.script.name) : input.script.code;
   const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
   let module: { readonly default?: unknown };
   try {
@@ -103,15 +106,17 @@ export function installAppScripts(router: AnyRouter): () => void {
         event.preventDefault();
         event.stopPropagation();
         if (event.repeat) return;
-        void runAppScript({ script: { kind: "name", name }, source: "keybinding", fromAgent: false }).catch(
-          (error: unknown) => {
-            toastManager.add({
-              type: "error",
-              title: `App script ${name} failed`,
-              description: errorMessage(error),
-            });
-          },
-        );
+        void runAppScript({
+          script: { kind: "name", name },
+          source: "keybinding",
+          fromAgent: false,
+        }).catch((error: unknown) => {
+          toastManager.add({
+            type: "error",
+            title: `App script ${name} failed`,
+            description: errorMessage(error),
+          });
+        });
       },
     },
   );

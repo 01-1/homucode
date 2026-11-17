@@ -1,5 +1,8 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentProject, EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import type {
+  EnvironmentProject,
+  EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, KeybindingCommand } from "@t3tools/contracts";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
@@ -13,7 +16,12 @@ import { effectiveShortcutsForCommand } from "../keybindings";
 import { newMessageId } from "../lib/utils";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { runRegisteredCommand } from "../shortcuts/dispatcher";
-import { readProject, readProjects, readQuietThreadShells, readThreadShell } from "../state/entities";
+import {
+  readProject,
+  readProjects,
+  readQuietThreadShells,
+  readThreadShell,
+} from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { readEnvironmentScope } from "../state/session";
 import { threadEnvironment } from "../state/threads";
@@ -124,8 +132,12 @@ export function createAppScriptApi(router: AnyRouter): T3App {
           project: project ? toProject(project) : null,
         };
       }
-      const draft = target ? useComposerDraftStore.getState().getDraftSession(target.draftId) : null;
-      const project = draft ? readProject(scopeProjectRef(draft.environmentId, draft.projectId)) : null;
+      const draft = target
+        ? useComposerDraftStore.getState().getDraftSession(target.draftId)
+        : null;
+      const project = draft
+        ? readProject(scopeProjectRef(draft.environmentId, draft.projectId))
+        : null;
       return { thread: null, project: project ? toProject(project) : null };
     },
     projects: () =>
@@ -136,7 +148,8 @@ export function createAppScriptApi(router: AnyRouter): T3App {
       readQuietThreadShells()
         .filter(
           (thread) =>
-            thread.archivedAt === null && (projectId === undefined || thread.projectId === projectId),
+            thread.archivedAt === null &&
+            (projectId === undefined || thread.projectId === projectId),
         )
         .map(toThread),
     openThread: async (threadId) => {
@@ -160,7 +173,8 @@ export function createAppScriptApi(router: AnyRouter): T3App {
                   candidate.enabled &&
                   candidate.models.some((model) => model.slug === options.model),
               );
-              if (!provider) throw new Error(`No enabled provider offers the model ${options.model}.`);
+              if (!provider)
+                throw new Error(`No enabled provider offers the model ${options.model}.`);
               return { instanceId: provider.instanceId, model: options.model };
             })();
       const opened = await handleNewThread(

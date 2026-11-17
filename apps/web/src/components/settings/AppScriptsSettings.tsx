@@ -5,6 +5,9 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
+const APP_SCRIPTS_DOCS_URL =
+  "https://github.com/homura-ai/homucode/blob/main/docs/user/app-scripts.md";
+
 /** Each switch is this device's own; none of them sync or can be set by an agent's tools. */
 export function AppScriptsSettingsSection() {
   const settings = useScopedSettings();
@@ -16,9 +19,9 @@ export function AppScriptsSettingsSection() {
         <Alert variant="warning">
           <AlertTitle>Scripts can do anything you can do in this window</AlertTitle>
           <AlertDescription>
-            They can start and message agents, read your threads, and press any shortcut. Only
-            turn this on if you trust every file in the scripts folder, including ones an agent
-            could write there.
+            They can start and message agents, read your threads, and press any shortcut. Only turn
+            this on if you trust every file in the scripts folder, including ones an agent could
+            write there.
           </AlertDescription>
         </Alert>
       </div>
@@ -26,10 +29,12 @@ export function AppScriptsSettingsSection() {
         {...searchableSetting("app-scripts")}
         description={
           <>
-            Run TypeScript files from the <code>scripts</code> folder in T3 Code&apos;s data folder
-            (<code>~/.t3/userdata/scripts</code> by default) with a keybinding such as{" "}
-            <code>user.my-script.run</code>. Works in the desktop app and in a browser on this
-            machine. Off by default, on this device only.
+            Run <code>~/.t3/userdata/scripts/&lt;name&gt;.ts</code> with a{" "}
+            <code>user.&lt;name&gt;.run</code> keybinding, in the desktop app or a browser on this
+            machine. On this device only.{" "}
+            <a href={APP_SCRIPTS_DOCS_URL} className="underline underline-offset-2">
+              How to write one
+            </a>
           </>
         }
         control={
@@ -70,14 +75,16 @@ export function AppScriptsSettingsSection() {
       />
       <SettingsRow
         {...searchableSetting("app-scripts-agents")}
-        description="Also accept `t3 app run` from an agent's shell. Off, T3 Code refuses it when the command carries an agent's thread. An agent that hides that, or edits settings files directly, can still get past this, so treat it as a guard against mistakes, not a sandbox."
+        description="Also accept `t3 app run` from an agent's shell. A guard against mistakes, not a sandbox: an agent that hides its thread marker or edits settings files can get past it."
         control={
           <Switch
             checked={
               terminalAvailable && settings.appScriptsFromTerminal && settings.appScriptsFromAgents
             }
             disabled={!terminalAvailable || !settings.appScriptsFromTerminal}
-            onCheckedChange={(checked) => updateSettings({ appScriptsFromAgents: Boolean(checked) })}
+            onCheckedChange={(checked) =>
+              updateSettings({ appScriptsFromAgents: Boolean(checked) })
+            }
             aria-label="Let agents run app scripts"
           />
         }

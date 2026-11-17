@@ -142,7 +142,7 @@ export const BASH_SCRIPT_COMMAND_PATTERN = Schema.TemplateLiteral([
   ),
 ]);
 
-export const MAX_APP_SCRIPT_NAME_LENGTH = 48;
+const MAX_APP_SCRIPT_NAME_LENGTH = 48;
 
 /** A user app script's file name without `.ts`, as in `user.<name>.run`. */
 export const AppScriptName = Schema.NonEmptyString.check(

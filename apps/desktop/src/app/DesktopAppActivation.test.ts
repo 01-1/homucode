@@ -178,7 +178,8 @@ describe("app script gate", () => {
   const forwarded: DesktopAppActivationRequest[] = [];
   const gate = (settings: Partial<typeof DEFAULT_CLIENT_SETTINGS> | null) =>
     gateControlRequest({
-      readSettings: async () => (settings === null ? null : { ...DEFAULT_CLIENT_SETTINGS, ...settings }),
+      readSettings: async () =>
+        settings === null ? null : { ...DEFAULT_CLIENT_SETTINGS, ...settings },
       forward: async (input) => {
         forwarded.push(input);
         return { version: 1, requestId: input.requestId, ok: true, output: null };
@@ -189,12 +190,7 @@ describe("app script gate", () => {
     ["unreadable settings", null, undefined, false],
     ["default settings", {}, undefined, false],
     ["scripts on, terminal off", { appScriptsEnabled: true }, undefined, false],
-    [
-      "terminal on",
-      { appScriptsEnabled: true, appScriptsFromTerminal: true },
-      undefined,
-      true,
-    ],
+    ["terminal on", { appScriptsEnabled: true, appScriptsFromTerminal: true }, undefined, true],
     [
       "terminal on, agent caller",
       { appScriptsEnabled: true, appScriptsFromTerminal: true },
