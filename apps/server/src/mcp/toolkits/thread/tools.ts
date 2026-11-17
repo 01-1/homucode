@@ -47,7 +47,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Pin, snooze, settle, archive, mark unread, or move a thread. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling files the thread immediately; its active turn keeps running. `move_under` makes it a subagent of `parentThreadId` that reports there; `move_to_root` makes it top-level. Parent moves fail while it has unfinished work. `move_project` needs `projectId`; it moves descendants and keeps checkout paths and active turns.",
+    "Pin, snooze, settle, archive, mark read or unread, or move a thread to another project or parent. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling files the thread immediately; its active turn keeps running. `move_under` makes it a subagent of `parentThreadId` that reports there; `move_to_root` makes it top-level. Parent moves fail while it has unfinished work. `move_project` needs `projectId`; it moves descendants and keeps checkout paths and active turns. `reorder_pin` puts a pinned thread above `beforeThreadId`, or last with null. `auto_settle_off` keeps it out of automatic settling. `stop_session` ends the provider session; the next message starts a fresh one. `retry_setup` reruns failed worktree setup (`runId`, default newest failed run). `close_guest_share` ends the guest link.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
@@ -60,14 +60,23 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "unsettle",
       "archive",
       "unarchive",
+      "mark_read",
       "mark_unread",
       "move_project",
       "move_under",
       "move_to_root",
+      "reorder_pin",
+      "auto_settle_on",
+      "auto_settle_off",
+      "stop_session",
+      "retry_setup",
+      "close_guest_share",
     ]),
     snoozedUntil: Schema.optional(IsoDateTime),
     parentThreadId: Schema.optional(ThreadId),
     projectId: Schema.optional(ProjectId),
+    beforeThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+    runId: Schema.optional(RunId),
   }),
   success: Schema.Union([
     OrchestrationV2DispatchCommandResult,
@@ -104,7 +113,7 @@ const QUEUE_READ_ACTIONS = ["list", "read"] as const;
 const QueueTool = Tool.make("t3_queue", {
   ...commandTool,
   description:
-    "Manage a thread's queued messages. Omit `threadId` for this thread. list: send order, paged by `cursor` and `limit`. read: up to 16,000 chars of one. edit: replace its `text`; attachments stay. cancel. reorder: before `beforeRunId`, or to the end with null. promote_to_steer: send it now as steering to active `targetRunId`. Writes fail once the run is no longer queued.",
+    "Manage a thread's queued messages. Omit `threadId` for this thread. list: send order, paged by `cursor` and `limit`. read: up to 16,000 chars of one. edit: replace its `text`; attachments stay. cancel. reorder: before `beforeRunId`, or to the end with null. promote_to_steer: send it now as steering to active `targetRunId`. start: send one now as its own turn. resume: restart a paused queue (no `queuedRunId`). Writes fail once the run is no longer queued.",
   parameters: Schema.Struct({
     action: Schema.Literals([
       ...QUEUE_READ_ACTIONS,
@@ -112,6 +121,8 @@ const QueueTool = Tool.make("t3_queue", {
       "cancel",
       "reorder",
       "promote_to_steer",
+      "start",
+      "resume",
     ]),
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
@@ -149,9 +160,9 @@ const question = Schema.Struct({
 const PendingRequestTool = Tool.make("t3_pending_request", {
   ...commandTool,
   description:
-    "Pending user questions in a thread. Omit `threadId` for this thread. list: their ids; approvals are not listed. read: one by `requestId`. respond: answer one with `answers`; this cannot approve a permission request.",
+    "Pending user questions in a thread. Omit `threadId` for this thread. list: their ids; approvals are not listed. read: one by `requestId`. respond: answer one with `answers`; this cannot approve a permission request. dismiss: close one unanswered.",
   parameters: Schema.Struct({
-    action: Schema.Literals(["list", "read", "respond"]),
+    action: Schema.Literals(["list", "read", "respond", "dismiss"]),
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
     requestId: Schema.optional(RuntimeRequestId),

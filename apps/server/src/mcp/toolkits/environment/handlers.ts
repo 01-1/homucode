@@ -6,7 +6,7 @@ import * as Settings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { readCaller, unavailable } from "../../threadAccess.ts";
-import { EnvironmentToolkit } from "./tools.ts";
+import { AGENT_SETTINGS, EnvironmentToolkit } from "./tools.ts";
 
 export function preferences(settings: ServerSettings) {
   const {
@@ -18,6 +18,10 @@ export function preferences(settings: ServerSettings) {
   } = settings;
   const characters = Array.from(sourceControlWritingStyle.customInstructions);
   return {
+    ...(Object.fromEntries(AGENT_SETTINGS.map((key) => [key, settings[key]])) as Pick<
+      ServerSettings,
+      (typeof AGENT_SETTINGS)[number]
+    >),
     defaultThreadEnvMode,
     newWorktreesStartFromOrigin,
     enableProviderUpdateChecks,
