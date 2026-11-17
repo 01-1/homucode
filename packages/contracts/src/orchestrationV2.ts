@@ -3475,6 +3475,8 @@ export const OrchestrationV2Command = Schema.Union([
     turnOnlyModelSelection: Schema.optional(Schema.Boolean),
     sourcePlanRef: Schema.optional(Schema.Struct({ threadId: ThreadId, planId: PlanId })),
     restartContinuationOfRunId: Schema.optional(RunId),
+    /** Restarts this running run on the thread's new model or effort; a no-op once the run ends. */
+    selectionRestartOfRunId: Schema.optional(RunId),
     usageLimitContinuationOfRunId: Schema.optional(RunId),
     manualContinuationOfRunId: Schema.optional(RunId),
     steerFollowUpOfRunId: Schema.optional(RunId),

@@ -871,7 +871,11 @@ function threadCreateInitialMessage(
 function mayStartSubagentFollowup(
   command: Extract<OrchestrationV2Command, { readonly type: "message.dispatch" }>,
 ): boolean {
-  if (command.scheduledTaskId !== undefined || command.restartContinuationOfRunId !== undefined)
+  if (
+    command.scheduledTaskId !== undefined ||
+    command.restartContinuationOfRunId !== undefined ||
+    command.selectionRestartOfRunId !== undefined
+  )
     return false;
   if (command.notification !== undefined)
     return (
@@ -5377,11 +5381,35 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       !providerSwitchPlan.instanceChanged &&
       providerSwitchPlan.releaseProviderSessionIds.length === 0
     ) {
-      const { providerThread, providerTurn } = yield* projectionStore
+      const { run, providerThread, providerTurn } = yield* projectionStore
         .getRunningTurnContext(command.threadId)
         .pipe(mapDispatchError(command));
       const providerSessionId = providerThread?.providerSessionId;
-      if (providerThread !== undefined && providerTurn !== undefined && providerSessionId) {
+      if (
+        run !== undefined &&
+        providerThread !== undefined &&
+        providerTurn !== undefined &&
+        providerSessionId &&
+        // A live-applied pick leaves the run's selection stale, so compare with the thread's.
+        !modelSelectionsEqual(thread.modelSelection, command.modelSelection) &&
+        (yield* serverSettings.getSettings.pipe(Effect.orDie)).applyModelChangeNow
+      ) {
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:${command.commandId}:run.apply-model-selection-now`,
+            commandId: command.commandId,
+            threadId: command.threadId,
+            request: {
+              type: "run.apply-model-selection-now",
+              runId: run.id,
+              providerSessionId,
+              providerThreadId: providerThread.id,
+              modelSelection: command.modelSelection,
+            },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
+      } else if (providerThread !== undefined && providerTurn !== undefined && providerSessionId) {
         const session = yield* providerSessions.get(providerSessionId).pipe(
           Effect.mapError(
             (cause) =>
@@ -7269,6 +7297,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             keepRunIds: [
               command.manualContinuationOfRunId,
               command.restartContinuationOfRunId,
+              command.selectionRestartOfRunId,
               command.usageLimitContinuationOfRunId,
               command.steerFollowUpOfRunId,
               ...(command.dispatchMode.type === "steer_active" ||
@@ -7430,6 +7459,58 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
     }
 
+    // A later change, a Stop, or the turn's own end since the model change leaves nothing to restart.
+    if (command.selectionRestartOfRunId !== undefined) {
+      const source = projection.runs.find((run) => run.id === command.selectionRestartOfRunId);
+      const sourceTurn =
+        source === undefined
+          ? undefined
+          : latestProviderTurnForAttempt(
+              projection.providerTurns.filter((turn) => turn.nodeId === source.rootNodeId),
+              source.activeAttemptId,
+            );
+      const sourceMessage = projection.messages.find(
+        (message) => message.id === source?.userMessageId,
+      );
+      const sourceSessionId = projection.providerThreads.find(
+        (candidate) => candidate.id === source?.providerThreadId,
+      )?.providerSessionId;
+      const sourceSession = sourceSessionId
+        ? Option.getOrUndefined(
+            yield* providerSessions
+              .get(sourceSessionId)
+              .pipe(Effect.orElseSucceed(() => Option.none())),
+          )
+        : undefined;
+      // Without a live apply, the run's own selection is what its turn runs on.
+      const alreadyOnSelection =
+        source !== undefined &&
+        command.modelSelection !== undefined &&
+        sourceSession !== undefined &&
+        sourceSession.applyModelSelection === undefined &&
+        modelSelectionsEqual(source.modelSelection, command.modelSelection);
+      if (
+        source?.status !== "running" ||
+        (sourceTurn?.status !== "pending" && sourceTurn?.status !== "running") ||
+        command.modelSelection === undefined ||
+        !modelSelectionsEqual(projection.thread.modelSelection, command.modelSelection) ||
+        alreadyOnSelection ||
+        (sourceMessage !== undefined && isNativeMaintenanceCommand(sourceMessage)) ||
+        (yield* stopReachedRun(command, command.threadId, source.id))
+      ) {
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "thread.metadata-updated",
+          threadId: command.threadId,
+          occurredAt: yield* DateTime.now,
+          payload: projection.thread,
+        });
+        return;
+      }
+    }
+
     // The service checked idleness before this command; a run or a delegated result that landed
     // since makes the thread busy, and that turn refreshes the cache anyway.
     if (
@@ -7479,10 +7560,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
 
     // A run the thread queues for itself continues the task of the run that sent it.
+    const continuedRunId = command.restartContinuationOfRunId ?? command.selectionRestartOfRunId;
     const continuedTaskId = projection.runs.find((run) =>
-      command.restartContinuationOfRunId === undefined
+      continuedRunId === undefined
         ? command.senderThreadId === command.threadId && isActiveRun(run)
-        : run.id === command.restartContinuationOfRunId,
+        : run.id === continuedRunId,
     )?.delegatedTaskId;
 
     if (projection.thread.settledOverride !== null) {
@@ -7712,6 +7794,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           !(
             command.restartContinuationOfRunId !== undefined &&
             dispatchMode.type === "start_immediately"
+          ) &&
+          !(
+            command.selectionRestartOfRunId !== undefined && dispatchMode.type === "restart_active"
           )))
     ) {
       return yield* new OrchestratorDispatchError({
@@ -7784,7 +7869,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // The restart replaces the stopped turn, so an older held queue does not hold it.
         queuedRunStop = {
           runId: target.id,
-          reason: stoppedBy(messageStopActor(command), "to send a new message"),
+          reason:
+            command.selectionRestartOfRunId === undefined
+              ? stoppedBy(messageStopActor(command), "to send a new message")
+              : "Restarted on a new model or effort",
           skipsHeldQueue: true,
         };
         dispatchMode = { type: "queue_after_active" };
@@ -7961,7 +8049,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         effects,
         projection,
         modelSelection:
-          delegatedCompletion === undefined && notification === undefined
+          (delegatedCompletion === undefined && notification === undefined) ||
+          command.selectionRestartOfRunId !== undefined
             ? modelSelection
             : (projection.runs.find((run) => run.id === dispatchMode.targetRunId)?.modelSelection ??
               modelSelection),

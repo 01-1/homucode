@@ -51,6 +51,13 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     modelSelection: ModelSelection,
   }),
   Schema.Struct({
+    type: Schema.Literal("run.apply-model-selection-now"),
+    runId: RunId,
+    providerSessionId: ProviderSessionId,
+    providerThreadId: ProviderThreadId,
+    modelSelection: ModelSelection,
+  }),
+  Schema.Struct({
     type: Schema.Literal("provider-session.apply-thread-title"),
     title: Schema.String,
   }),
@@ -159,6 +166,7 @@ export const REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS = [
 
 export const PROCESS_BOUND_EFFECT_TYPES = [
   "provider-session.apply-model-selection",
+  "run.apply-model-selection-now",
   "provider-session.apply-thread-title",
   "provider-turn.start",
   "provider-turn.interrupt",

@@ -751,11 +751,14 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly steerTurn: (
     input: ProviderAdapterV2SteerInput,
   ) => Effect.Effect<void, ProviderAdapterV2Error>;
-  /** Applies a thread's new selection to its running process where the provider can; otherwise it waits for the next turn. */
+  /**
+   * Applies a thread's new selection to its running process where the provider can; otherwise it
+   * waits for the next turn. True when the running turn now uses it.
+   */
   readonly applyModelSelection?: (input: {
     readonly providerThread: OrchestrationV2ProviderThread;
     readonly modelSelection: ModelSelection;
-  }) => Effect.Effect<void, ProviderAdapterV2Error>;
+  }) => Effect.Effect<boolean, ProviderAdapterV2Error>;
   /** Renames the provider's native session while its process is running; otherwise the next turn does. */
   readonly applyThreadTitle?: (input: {
     readonly providerThread: OrchestrationV2ProviderThread;

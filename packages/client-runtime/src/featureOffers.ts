@@ -4,6 +4,7 @@ type OfferSetting =
   | "preferNativeSubagents"
   | "bareStopWaitEnabled"
   | "claudeSteersSurviveStop"
+  | "applyModelChangeNow"
   | "messageSentFromEnabled"
   | "threadTitleIncludeProjectName"
   | "stopThreadSubagents"
@@ -81,6 +82,14 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     description:
       "Re-send a steered message that Claude held behind a running tool when you press Stop.",
     setting: "claudeSteersSurviveStop",
+  },
+  {
+    id: "apply-model-change-now",
+    page: 2,
+    title: "Apply model and effort changes now",
+    description:
+      "Changing a working thread's model or effort restarts its turn on the new setting, and it carries on without a new message. Codex loses most of its prompt cache when effort changes.",
+    setting: "applyModelChangeNow",
   },
   {
     id: "faster-phone-launch",

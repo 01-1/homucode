@@ -603,6 +603,7 @@ it("decodes setup behavior defaults without opting into optional features", () =
     preferNativeSubagents: false,
     bareStopWaitEnabled: false,
     claudeSteersSurviveStop: false,
+    applyModelChangeNow: false,
     messageSentFromEnabled: true,
     stopThreadSubagents: false,
     backgroundGitEnabled: true,

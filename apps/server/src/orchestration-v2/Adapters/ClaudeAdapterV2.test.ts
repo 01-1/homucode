@@ -7008,10 +7008,11 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         assert.deepEqual(harness.liveSelectionChanges, []);
         assert.lengthOf(harness.offeredMessages, 2);
 
-        yield* harness.runtime.applyModelSelection!({
+        const appliedLive = yield* harness.runtime.applyModelSelection!({
           providerThread: harness.providerThread,
           modelSelection: { ...haiku, options: [{ id: "effort", value: "high" }] },
         });
+        assert.isTrue(appliedLive);
         assert.deepEqual(harness.liveSelectionChanges, [
           { effortLevel: "high", fastMode: null, ultracode: null },
         ]);
