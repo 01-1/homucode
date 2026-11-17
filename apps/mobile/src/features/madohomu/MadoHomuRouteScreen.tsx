@@ -527,7 +527,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       ) : reorderMode ? (
         <MadoHomuReorderList
           {...reorderSectionsOf(rows, leadingOf)}
-          disabled={!canEdit}
+          // One drop at a time: the next settings push would drop a second pending one early.
+          disabled={!canEdit || dropPatch !== null}
           bottomInset={Math.max(insets.bottom, 18) + 18}
           onDrop={dropThread}
           onStep={stepThread}

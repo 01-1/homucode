@@ -124,6 +124,7 @@ interface DragValues {
   readonly version: SharedValue<string>;
   readonly source: SharedValue<number>;
   readonly insertion: SharedValue<number>;
+  readonly lift: SharedValue<number>;
 }
 
 function ReorderItem(props: {
@@ -132,17 +133,17 @@ function ReorderItem(props: {
   readonly rowHeight: number;
   readonly version: string;
   readonly drag: DragValues;
-  /** The dragged row follows this; every other row gets a value that never changes. */
-  readonly lift: SharedValue<number>;
   readonly lifted: boolean;
   readonly children: ReactNode;
 }) {
-  const { offset, rowHeight, version, lift } = props;
-  const { version: dragVersion, source, insertion } = props.drag;
+  const { offset, rowHeight, version } = props;
+  const { version: dragVersion, source, insertion, lift } = props.drag;
+  // Separate views, so the gap animation and the follow translation never write the same transform.
   const gap = useAnimatedStyle(() => {
     const live = dragVersion.value === version && source.value >= 0;
     const target = live ? threadDragGapOffset(offset, source.value, rowHeight, insertion.value) : 0;
     return {
+      zIndex: live && source.value === offset ? 1 : 0,
       transform: [
         {
           translateY: live
@@ -152,13 +153,21 @@ function ReorderItem(props: {
       ],
     };
   });
-  const follow = useAnimatedStyle(() => ({ transform: [{ translateY: lift.value }] }), [lift]);
+  const follow = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: dragVersion.value === version && source.value === offset ? lift.value : 0,
+      },
+    ],
+  }));
   return (
-    <Reanimated.View
-      style={[{ height: props.height, zIndex: props.lifted ? 1 : 0 }, gap, follow]}
-      className={props.lifted ? "rounded-xl border border-border bg-screen" : "bg-screen"}
-    >
-      {props.children}
+    <Reanimated.View style={[{ height: props.height }, gap]}>
+      <Reanimated.View
+        style={[{ flex: 1 }, follow]}
+        className={props.lifted ? "rounded-xl border border-border bg-screen" : "bg-screen"}
+      >
+        {props.children}
+      </Reanimated.View>
     </Reanimated.View>
   );
 }
@@ -199,11 +208,10 @@ export function MadoHomuReorderList(props: {
   const startOffset = useSharedValue(0);
   const scrolled = useSharedValue(0);
   const lift = useDerivedValue(() => translation.value + scrolled.value);
-  const still = useSharedValue(0);
   const [liftedKey, setLiftedKey] = useState<string | null>(null);
   const drag = useMemo(
-    () => ({ version: dragVersion, source, insertion }),
-    [dragVersion, source, insertion],
+    () => ({ version: dragVersion, source, insertion, lift }),
+    [dragVersion, source, insertion, lift],
   );
   // Edge bands that start auto-scrolling; iOS draws the header over the top of the list.
   const topBand = (Platform.OS === "ios" ? insets.top + 44 : 0) + rowHeight;
@@ -315,9 +323,12 @@ export function MadoHomuReorderList(props: {
     const result = new Map<string, ReturnType<typeof Gesture.Pan>>();
     for (const item of items) {
       if (item.type !== "thread") continue;
+      // Worklets copy what they capture, so they take scalars, never the row's React elements.
+      const { key, offset } = item;
+      const threadId = item.thread.id;
       const from = { sectionId: item.sectionId, index: item.index };
       result.set(
-        item.key,
+        key,
         // oxlint-disable-next-line react/capitalized-calls -- Gesture.Pan is a gesture factory, not a React component.
         Gesture.Pan()
           .enabled(!props.disabled)
@@ -329,26 +340,26 @@ export function MadoHomuReorderList(props: {
             const content = measure(contentRef);
             active.value = true;
             dragVersion.value = version;
-            source.value = item.offset;
-            insertion.value = item.offset;
+            source.value = offset;
+            insertion.value = offset;
             slot.value = -1;
             translation.value = 0;
             scrolled.value = 0;
             startOffset.value = view && content ? view.pageY - content.pageY : 0;
             retarget();
-            runOnJS(js.began)(item.key);
+            runOnJS(js.began)(key);
           })
           .onUpdate((event) => {
-            if (!active.value || source.value !== item.offset) return;
+            if (!active.value || source.value !== offset) return;
             translation.value = event.translationY;
             retarget();
           })
           .onFinalize((_, success) => {
-            if (!active.value || source.value !== item.offset) return;
+            if (!active.value || source.value !== offset) return;
             active.value = false;
             const target = success && slot.value >= 0 ? slots[slot.value] : undefined;
             runOnJS(js.finished)(
-              item.thread.id,
+              threadId,
               from,
               target ? { sectionId: target.sectionId, index: target.index } : null,
               version,
@@ -394,7 +405,6 @@ export function MadoHomuReorderList(props: {
               rowHeight={rowHeight}
               version={version}
               drag={drag}
-              lift={lifted ? lift : still}
               lifted={lifted}
             >
               {item.type === "header" ? (
