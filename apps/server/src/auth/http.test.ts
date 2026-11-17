@@ -28,6 +28,7 @@ import { makeDpopKey } from "./dpop.testkit.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as AuthHttp from "./http.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 const DEV_TOKEN = "reusable-dev-auth-token-that-is-long-enough";
 class AuthTestApi extends HttpApi.make("environment").add(EnvironmentHttpApi.groups.auth) {}
@@ -54,6 +55,7 @@ const layerEnvironmentAuth = EnvironmentAuth.layer.pipe(
 );
 const layerRoutes = HttpApiBuilder.layer(AuthTestApi).pipe(
   Layer.provide(AuthHttp.layer),
+  Layer.provide(ServerSettings.layerTest()),
   Layer.provide(AuthHttp.layerAuthenticatedAuth),
   Layer.provideMerge(layerEnvironmentAuth),
   Layer.provide(layerConfig),

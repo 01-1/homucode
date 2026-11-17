@@ -504,6 +504,7 @@ export class EnvironmentAuth extends Context.Service<
       requestMetadata: AuthClientMetadata,
       input?: {
         readonly proofKeyThumbprint?: string;
+        readonly connectDeviceLongSessions?: boolean;
       },
     ) => Effect.Effect<
       AuthAccessTokenResult,
@@ -1072,7 +1073,10 @@ export const make = Effect.gen(function* () {
                 ...(input?.proofKeyThumbprint
                   ? {
                       proofKeyThumbprint: input.proofKeyThumbprint,
-                      ttl: Duration.hours(1),
+                      ttl:
+                        grant.subject === CLOUD_CONNECT_SUBJECT && input.connectDeviceLongSessions
+                          ? Duration.days(30)
+                          : Duration.hours(1),
                     }
                   : {}),
                 replaceActiveForSubjectAndMethod: grant.method === "desktop-bootstrap",

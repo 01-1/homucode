@@ -67,7 +67,7 @@ const makeLayerRoutes = (
       EnvironmentAuth.EnvironmentAuth.pipe(Effect.tap((auth) => Effect.sync(() => capture(auth)))),
     ),
     HttpApiBuilder.layer(AuthTestApi).pipe(
-      Layer.provide(AuthHttp.layer),
+      Layer.provide(AuthHttp.layer.pipe(Layer.provide(ServerSettings.layerTest()))),
       Layer.provide(
         McpOAuthHttp.layer.pipe(
           Layer.provide(McpOAuth.layer),

@@ -50,9 +50,10 @@ change the transport generation without a transport failure. Refresh failure
 belongs to the HTTP operation.
 
 The server closes a socket when its session is revoked or expires. T3 Connect
-access tokens last one hour, so the driver renews a live socket's token in its
-last minute. The server then moves the socket to the newer session for the same
-DPoP key, subject, and scopes
+access tokens last one hour, or 30 days when `connectDeviceLongSessions` is enabled
+on the server. The driver renews a live socket's token in its last minute. The
+server then moves the socket to the newer session for the same DPoP key, subject,
+and scopes
 ([`SessionStore.awaitInvalidation`](../../apps/server/src/auth/SessionStore.ts)).
 If renewal fails, the socket closes at expiry and the supervisor reconnects.
 

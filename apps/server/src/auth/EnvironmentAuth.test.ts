@@ -206,12 +206,23 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
           token,
           ["orchestration:read"],
           requestMetadata,
-          { proofKeyThumbprint: "test-proof-key" },
+          { proofKeyThumbprint: "test-proof-key", connectDeviceLongSessions: true },
         );
         expect(dpop.access_token).not.toBe(token);
         expect(dpop.access_token).not.toBe(exchanged.access_token);
         expect(dpop.token_type).toBe("DPoP");
+        expect(dpop.expires_in).toBe(60 * 60);
         expect(dpop.scope).toBe("orchestration:read");
+        const pairing = yield* serverAuth.issuePairingCredential({
+          scopes: ["orchestration:read"],
+        });
+        const pairedDpop = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
+          pairing.credential,
+          undefined,
+          requestMetadata,
+          { proofKeyThumbprint: "paired-proof-key", connectDeviceLongSessions: true },
+        );
+        expect(pairedDpop.expires_in).toBe(60 * 60);
 
         const secondBearer = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
           token,
@@ -304,9 +315,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       }).pipe(Effect.provide(layerEnvironmentAuth({ mode: "web", host: "192.168.1.50" }))),
     );
 
-    it.effect(
-      "holds an untrusted T3 Connect device until it is approved, and revocation cuts it off",
-      () =>
+    it.effect.each([false, true])(
+      "holds an untrusted T3 Connect device until approved, with long sessions %s, and revocation cuts it off",
+      (connectDeviceLongSessions) =>
         Effect.gen(function* () {
           const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
           const deviceKey = "Kq3vZ8sYbTn0eW1pLr5uXc7dHf9gJm2aQs4tVw6yBzE";
@@ -316,7 +327,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
               credential,
               undefined,
               requestMetadata,
-              { proofKeyThumbprint: deviceKey },
+              { proofKeyThumbprint: deviceKey, connectDeviceLongSessions },
             );
 
           // Relay mints can arrive together; they must share one request and one code.
@@ -349,7 +360,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
           expect(
             (yield* serverAuth.listPairingLinks()).some((link) => link.connectDeviceRequest),
           ).toBe(false);
-          yield* exchange(requested.credential);
+          const token = yield* exchange(requested.credential);
+          expect(token.token_type).toBe("DPoP");
+          expect(token.expires_in).toBe(connectDeviceLongSessions ? 30 * 24 * 60 * 60 : 60 * 60);
           expect(
             (yield* serverAuth.listConnectDevices()).map((device) => device.proofKeyThumbprint),
           ).toEqual([deviceKey]);
