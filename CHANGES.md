@@ -47,7 +47,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 - **Plain-text sent messages.** A setting shows your sent messages as the plain text you typed instead of rendered Markdown. Find in thread matches what is shown.
 - **Keep `+` at the start of a line.** A setting keeps a `+` at the start of a line in your sent messages as typed, instead of turning it into a bullet.
 - **Answered questions keep their options.** Answered and cancelled questions show every option and its preview, not only the chosen one. Web and mobile.
-- **End jumps to the latest message.** Pressing End while focus is outside the composer and other text fields scrolls the thread to its end and resumes following new output (`thread.scrollToEnd`). A list, menu or other scrolling panel with focus keeps its own End. Web and desktop.
+- **End jumps to the latest message.** Pressing End scrolls the thread to its end and resumes following new output (`thread.scrollToEnd`), from anywhere outside a text field, and from the composer or the find-in-thread box once the caret is already at the end of its text. A second End within half a second of one that did not scroll leaves the thread where it is. A list, menu or other scrolling panel with focus keeps its own End. Web and desktop.
 
 ## Desktop, CLI and mobile
 

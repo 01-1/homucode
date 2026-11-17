@@ -135,7 +135,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   {
     key: "end",
     command: "thread.scrollToEnd",
-    when: "!terminalFocus && !previewFocus && !editableFocus",
+    when: "!terminalFocus && !previewFocus",
   },
   ...THREAD_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
     key: `mod+${index + 1}`,

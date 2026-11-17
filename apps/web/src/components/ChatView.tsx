@@ -1927,6 +1927,7 @@ export default function ChatView(props: ChatViewProps) {
   };
   const sendAppMessageStable = useStableCallback(sendAppMessage);
   const queuedRunsControlRef = useRef<QueuedRunsControlHandle>(null);
+  const lastUnusedEndKeyAtRef = useRef(Number.NEGATIVE_INFINITY);
   const steerAllQueuedStable = useStableCallback(
     () => routeKind !== "draft" && queuedRunsControlRef.current?.steerAll() === true,
   );
@@ -2776,7 +2777,10 @@ export default function ChatView(props: ChatViewProps) {
         if (!event.repeat) copyActiveThreadReference();
       },
       "thread.scrollToEnd": ({ event }) => {
-        if (!endKeyScrollsThread(event.target)) return false;
+        if (!endKeyScrollsThread(event, lastUnusedEndKeyAtRef.current)) {
+          lastUnusedEndKeyAtRef.current = event.timeStamp;
+          return false;
+        }
         scrollToEnd(true);
       },
       "chat.find": () => {
