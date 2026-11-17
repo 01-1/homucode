@@ -256,7 +256,7 @@ const fingerprint = Effect.fn("nativeClient.fingerprint")(function* (platform: N
     "--eval",
     // Same hash on every machine: generated native projects and the config's `extra` (env-specific
     // values a dev client reads from Metro) stay out, so a Mac and a Linux VM share builds.
-    `const f = require('expo/fingerprint'); f.createFingerprintAsync(process.cwd(), { platforms: [process.argv[1]], silent: true, ignorePaths: ['android/**', 'ios/**'], sourceSkips: f.DEFAULT_SOURCE_SKIPS | f.SourceSkips.ExpoConfigExtraSection }).then(fp => console.log('T3_NATIVE_FINGERPRINT=' + fp.hash)).catch(e => { console.error(e); process.exitCode = 1; });`,
+    `const f = require('expo/fingerprint'); f.createFingerprintAsync(process.cwd(), { platforms: [process.argv[1]], silent: true, ignorePaths: ['android/**', 'ios/**', '**/*-gradle-plugin/.kotlin/**'], sourceSkips: f.DEFAULT_SOURCE_SKIPS | f.SourceSkips.ExpoConfigExtraSection }).then(fp => console.log('T3_NATIVE_FINGERPRINT=' + fp.hash)).catch(e => { console.error(e); process.exitCode = 1; });`,
     platform,
   ]);
   const hash = output
@@ -724,15 +724,30 @@ const build = Effect.fn("nativeClient.build")(function* (
     ["exec", "expo", "prebuild", "--clean", "--platform", platform, "--no-install"],
     true,
   ).pipe(Effect.asVoid);
+  const onBoat = platform === "android" && (yield* HostProcess.Hostname).split(".")[0] === "pbox";
   const onEas = platform === "ios" && !(yield* hasXcode);
-  if (platform === "android") yield* prebuildAndroid(mobile, prebuild);
-  else if (!onEas) yield* prebuild;
+  if (platform === "android") {
+    if (!onBoat) yield* prebuildAndroid(mobile, prebuild);
+  } else if (!onEas) yield* prebuild;
   const staging = yield* fs.makeTempDirectory({
     directory: path.dirname(target),
     prefix: ".build-",
   });
   yield* Effect.gen(function* () {
-    if (onEas) {
+    if (onBoat) {
+      yield* command(
+        "python3",
+        [
+          path.join(repo, "scripts/homu-boat/cloud.py"),
+          "android",
+          abi ?? "x86_64",
+          expected,
+          path.join(staging, artifactNames.android),
+        ],
+        true,
+        repo,
+      );
+    } else if (onEas) {
       yield* buildIosOnEas(staging);
     } else if (platform === "ios") {
       const output = yield* fs.makeTempDirectoryScoped({ prefix: "t3-native-client-" });
@@ -1008,13 +1023,18 @@ export const resolveArtifact = Effect.fn("nativeClient.resolveArtifact")(functio
       return { ...artifact, source: "remote" as const, buildMs: yield* readBuildMs(directory) };
     }
   }
-  if (remote && (yield* buildOnBlacksmith(remote, platform, abi, fingerprint, key, directory))) {
+  const onBoat = platform === "android" && (yield* HostProcess.Hostname).split(".")[0] === "pbox";
+  if (
+    remote &&
+    !onBoat &&
+    (yield* buildOnBlacksmith(remote, platform, abi, fingerprint, key, directory))
+  ) {
     yield* prune(path.dirname(directory), fingerprint);
     return { ...artifact, source: "remote" as const, buildMs: yield* readBuildMs(directory) };
   }
   const log = yield* BuildLog;
   yield* Console.error(
-    `No cached client for ${key}. Building it here once for every machine (5-15 min)${log ? `. Log: ${log}` : ""}`,
+    `No cached client for ${key}. Building it ${onBoat ? "on Boat" : "here"} once for every machine${log ? `. Log: ${log}` : ""}`,
   );
   const started = yield* Clock.currentTimeMillis;
   yield* build(platform, abi, directory, fingerprint);
