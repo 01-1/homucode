@@ -498,7 +498,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "autoreviewers",
-    title: "Autoreviewers",
+    title: "Autoreviewers (not recommended)",
     to: "/settings/threads",
     searchTerms: ["autoreview reviewer subagent code review watch thread findings lgtm"],
   },

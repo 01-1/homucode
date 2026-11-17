@@ -2115,14 +2115,14 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           {...searchableSetting("autoreviewers")}
-          description="Let agents attach reviewer subagents that watch a thread while it works. Turning this off pauses reviewers already attached until it is back on."
+          description="Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers."
           settingKeys={["autoreviewEnabled"]}
           control={
             <ScopedSwitch
               settingKeys={["autoreviewEnabled"]}
               checked={settings.autoreviewEnabled}
               onCheckedChange={(checked) => updateSettings({ autoreviewEnabled: Boolean(checked) })}
-              aria-label="Autoreviewers"
+              aria-label="Autoreviewers (not recommended)"
             />
           }
         />

@@ -150,8 +150,8 @@ export function AutoSettleSettingsRows(props: {
         <SettingsSection title="Autoreviewers">
           <SettingsSwitchRow
             icon="checkmark.circle"
-            label="Autoreviewers"
-            subtitle="Let agents attach reviewer subagents that watch a thread while it works. Turning this off pauses reviewers already attached until it is back on."
+            label="Autoreviewers (not recommended)"
+            subtitle="Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers."
             value={uniformMobileSetting(displayTargets, "autoreviewEnabled")}
             disabled={disabledFor("autoreviewEnabled")}
             onValueChange={(value) => writeToAll({ autoreviewEnabled: value })}

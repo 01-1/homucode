@@ -19,8 +19,9 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   },
   {
     id: "autoreview",
-    title: "Autoreviewers",
-    description: "Let agents attach reviewer subagents that check a thread's work as it happens.",
+    title: "Autoreviewers (not recommended)",
+    description:
+      "Let agents attach reviewer subagents that check a thread's work as it happens. Not recommended: reviewers lag behind the thread, so their findings are often stale.",
   },
   {
     id: "quick-model",
