@@ -132,6 +132,7 @@ export interface IdAllocatorV2Allocate {
 export interface IdAllocatorV2Derive {
   readonly providerSession: (input: {
     readonly providerInstanceId: ProviderInstanceId;
+    readonly threadId?: ThreadId;
   }) => ProviderSessionId;
   readonly delegatedTaskNode: (input: { readonly commandId: CommandId }) => NodeId;
   readonly delegatedTaskThread: (input: { readonly commandId: CommandId }) => ThreadId;
@@ -279,7 +280,15 @@ export const isDelegatedTaskThread = (threadId: ThreadId): boolean =>
 export const derive: IdAllocatorV2Derive = {
   providerSession: (input) =>
     ProviderSessionId.make(
-      joinId("provider-session", "provider-instance", input.providerInstanceId, "shared"),
+      input.threadId === undefined
+        ? joinId("provider-session", "provider-instance", input.providerInstanceId, "shared")
+        : joinId(
+            "provider-session",
+            "provider-instance",
+            input.providerInstanceId,
+            "thread",
+            input.threadId,
+          ),
     ),
   delegatedTaskNode: (input) => NodeId.make(joinId("node", "delegated-task", input.commandId)),
   delegatedTaskThread: (input) =>

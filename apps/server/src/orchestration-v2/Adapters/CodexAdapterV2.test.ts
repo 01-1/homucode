@@ -1466,7 +1466,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
   });
 
   const makeCodexReplayHarness = (
-    transcript: CodexReplay.CodexAppServerReplayTranscript,
+    transcript: CodexReplay.CodexAppServerReplayTranscript & { readonly isolatedSession?: boolean },
     onEvent: (event: ProviderAdapter.ProviderAdapterV2Event) => Effect.Effect<unknown> = () =>
       Effect.void,
     onRequest: (method: string, params: unknown) => Effect.Effect<void> = () => Effect.void,
@@ -1560,7 +1560,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       const threadId = ThreadId.make(`thread-${transcript.scenario}`);
       const runtime = yield* adapter.openSession({
         threadId,
-        providerSessionId: ProviderSessionId.make(`provider-session-${transcript.scenario}`),
+        providerSessionId:
+          transcript.isolatedSession === true
+            ? idAllocator.derive.providerSession({
+                providerInstanceId: CODEX_TEST_MODEL_SELECTION.instanceId,
+                threadId,
+              })
+            : ProviderSessionId.make(`provider-session-${transcript.scenario}`),
         modelSelection: CODEX_TEST_MODEL_SELECTION,
         runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
         promptSuggestions,
@@ -4101,6 +4107,145 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         ),
       ),
     ),
+  );
+
+  it.effect("isolates session ownership and waits for the native writer before transfer", () =>
+    Effect.gen(function* () {
+      const closing = yield* Deferred.make<void>();
+      const allowClose = yield* Deferred.make<void>();
+      const nativeThreadId = "transferred-thread";
+      const harness = yield* makeCodexReplayHarness(
+        {
+          ...makeCodexReplayTranscript({
+            scenario: "isolated-writer-transfer",
+            entries: [
+              ...codexReplayPreamble({
+                nativeThreadId,
+                nativeTurnId: "unused-turn",
+                prompt: "unused-prompt",
+              }).slice(0, 5),
+              {
+                type: "expect_outbound",
+                label: "unsubscribe",
+                frame: {
+                  id: 3,
+                  method: "thread/unsubscribe",
+                  params: { threadId: nativeThreadId },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "unsubscribe result",
+                frame: { id: 3, result: { status: "unsubscribed" } },
+              },
+              {
+                type: "emit_inbound",
+                label: "writer closed",
+                frame: { method: "thread/closed", params: { threadId: nativeThreadId } },
+              },
+            ],
+          }),
+          isolatedSession: true,
+        },
+        undefined,
+        undefined,
+        undefined,
+        (entry) =>
+          entry.label === "writer closed"
+            ? Deferred.succeed(closing, undefined).pipe(Effect.andThen(Deferred.await(allowClose)))
+            : Effect.void,
+      );
+      assert.isFalse(
+        harness.runtime.providerSession.capabilities.sessions
+          .supportsMultipleProviderThreadsPerSession,
+      );
+      const transfer = yield* harness.runtime.unloadThread!({
+        providerThread: harness.providerThread,
+        awaitClosed: true,
+      }).pipe(Effect.forkChild);
+      yield* Deferred.await(closing);
+      assert.isUndefined(transfer.pollUnsafe());
+      yield* Deferred.succeed(allowClose, undefined);
+      yield* Fiber.join(transfer);
+      yield* harness.runtime.unloadThread!({
+        providerThread: harness.providerThread,
+        awaitClosed: true,
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
+  it.effect.each(["notLoaded", "notSubscribed"] as const)(
+    "transfers a native writer already absent from the old runtime (%s)",
+    (status) =>
+      Effect.gen(function* () {
+        const nativeThreadId = "already-unloaded-thread";
+        const harness = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario: `already-unloaded-${status}`,
+            entries: [
+              ...codexReplayPreamble({
+                nativeThreadId,
+                nativeTurnId: "unused-turn",
+                prompt: "unused-prompt",
+              }).slice(0, 5),
+              {
+                type: "expect_outbound",
+                label: "unsubscribe",
+                frame: {
+                  id: 3,
+                  method: "thread/unsubscribe",
+                  params: { threadId: nativeThreadId },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "unsubscribe result",
+                frame: { id: 3, result: { status } },
+              },
+              ...(status === "notSubscribed"
+                ? [
+                    {
+                      type: "expect_outbound" as const,
+                      label: "verify writer absent",
+                      frame: {
+                        id: 4,
+                        method: "thread/read",
+                        params: { threadId: nativeThreadId, includeTurns: false },
+                      },
+                    },
+                    {
+                      type: "emit_inbound" as const,
+                      label: "writer absent",
+                      frame: { id: 4, result: { thread: { status: { type: "notLoaded" } } } },
+                    },
+                  ]
+                : []),
+            ],
+          }),
+        );
+        yield* harness.runtime.unloadThread!({
+          providerThread: harness.providerThread,
+          awaitClosed: true,
+        });
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
   );
 
   // regression: #33747 Codex refuses thread/resume until an unsubscribed thread finishes closing

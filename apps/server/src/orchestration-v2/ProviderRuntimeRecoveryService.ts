@@ -1,3 +1,4 @@
+import { AgentMemory } from "@t3tools/shared/AgentScope";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
@@ -192,6 +193,7 @@ function latestStartedRun(
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
+  const memory = yield* AgentMemory;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
@@ -396,7 +398,7 @@ export const make = Effect.gen(function* () {
       const unstartedRuns = runs.filter(
         (run) =>
           run.status === "starting" &&
-          neverStarted(run) &&
+          (neverStarted(run) || run.memoryWaiting === true) &&
           !projection.providerTurns.some((turn) => turn.runAttemptId === run.activeAttemptId) &&
           !projection.runtimeRequests.some(
             (request) =>
@@ -441,12 +443,14 @@ export const make = Effect.gen(function* () {
           .map((message) => message.id),
       );
       // A saved user message the provider never accepted stays available through the held queue.
-      const retryableRuns = unstartedRuns.filter((run) =>
-        retryableMessageIds.has(run.userMessageId),
+      const retryableRuns = unstartedRuns.filter(
+        (run) => retryableMessageIds.has(run.userMessageId) && run.memoryWaiting !== true,
       );
       // Nobody reviews a delegated, agent-sent or scheduled prompt, so it is sent again instead.
-      const unattendedRuns = continueAfterRestart
-        ? unstartedRuns.filter((run) =>
+      const unattendedRuns = unstartedRuns.filter(
+        (run) =>
+          run.memoryWaiting === true ||
+          (continueAfterRestart &&
             queuedMessages.some(
               (message) =>
                 message.id === run.userMessageId &&
@@ -454,9 +458,8 @@ export const make = Effect.gen(function* () {
                 message.notification === undefined &&
                 message.delegatedCompletion === undefined &&
                 (message.scheduledTaskId !== undefined || message.creationSource === "mcp"),
-            ),
-          )
-        : [];
+            )),
+      );
       const resentRuns: Array<OrchestrationV2ThreadProjection["runs"][number]> = [];
       const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
       for (const run of unattendedRuns) {
@@ -486,7 +489,10 @@ export const make = Effect.gen(function* () {
           ),
         );
         // A prompt whose start keeps crashing the server would otherwise be sent forever.
-        if (earlierResends.filter((effect) => effect.attemptCount > 0).length >= MAX_RESENDS) {
+        if (
+          run.memoryWaiting !== true &&
+          earlierResends.filter((effect) => effect.attemptCount > 0).length >= MAX_RESENDS
+        ) {
           yield* Effect.logWarning("Not resending a prompt that restarts cut too many times", {
             threadId: projection.thread.id,
             runId: run.id,
@@ -499,6 +505,7 @@ export const make = Effect.gen(function* () {
           commandId: resendCommandId,
           threadId: projection.thread.id,
           request: { type: "provider-turn.start", runId: run.id },
+          ...(run.memoryWaiting === true ? { availableAt: run.requestedAt } : {}),
         });
       }
       for (const run of resentRuns) {
@@ -1115,6 +1122,8 @@ export const make = Effect.gen(function* () {
     let closedRequests = 0;
     let retiredEffects = 0;
     const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
+    const memoryWaiters: Array<Parameters<(typeof AgentMemory)["Service"]["restore"]>[0][number]> =
+      [];
     const stoppedThisPass = new Map<string, RecoverySession>();
     const grouped = trigger === "shutdown" && threadIds.length > 1;
     const groupSize = grouped ? 32 : 1;
@@ -1145,6 +1154,22 @@ export const make = Effect.gen(function* () {
           }
           cancelledEffectIds.push(...result.cancelledEffectIds);
           resends.push(...result.resends);
+          if (trigger === "startup") {
+            for (const effect of result.resends) {
+              if (effect.request.type !== "provider-turn.start") continue;
+              const runId = effect.request.runId;
+              const run = projection.runs.find((candidate) => candidate.id === runId);
+              if (run?.memoryWaiting !== true) continue;
+              memoryWaiters.push({
+                id: run.id,
+                requestedAt: DateTime.toEpochMillis(run.requestedAt),
+                isPending: Effect.suspend(() => projections.getRun(threadId, runId)).pipe(
+                  Effect.map((current) => current?.status === "starting"),
+                  Effect.orElseSucceed(() => true),
+                ),
+              });
+            }
+          }
           terminalizedRuns += result.terminalizedRuns;
           stoppedSessions += result.stoppedSessions;
           closedRequests += result.closedRequests;
@@ -1169,6 +1194,7 @@ export const make = Effect.gen(function* () {
     // After the drain, which cancels every unsettled provider start. A crash before this write
     // leaves the run unstarted, so the next recovery sends it again.
     if (resends.length > 0) {
+      yield* memory.restore(memoryWaiters);
       yield* eventSink
         .writeWithEffects({ events: [], effects: resends })
         .pipe(

@@ -49,7 +49,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
-import { AgentScope } from "@t3tools/shared/AgentScope";
+import { AgentMemoryOwner, AgentScope } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   COMPUTER_USE_TOOL_SOURCE,
@@ -905,6 +905,7 @@ function providerSession(input: {
   readonly cwd: string | null;
   readonly model: string;
   readonly now: DateTime.Utc;
+  readonly isolated?: boolean;
 }): OrchestrationV2ProviderSession {
   return {
     id: input.providerSessionId,
@@ -913,7 +914,16 @@ function providerSession(input: {
     status: "ready",
     cwd: input.cwd ?? process.cwd(),
     model: input.model,
-    capabilities: CodexProviderCapabilitiesV2,
+    capabilities:
+      input.isolated === true
+        ? {
+            ...CodexProviderCapabilitiesV2,
+            sessions: {
+              ...CodexProviderCapabilitiesV2.sessions,
+              supportsMultipleProviderThreadsPerSession: false,
+            },
+          }
+        : CodexProviderCapabilitiesV2,
     createdAt: input.now,
     updatedAt: input.now,
     lastError: null,
@@ -1603,7 +1613,7 @@ export const makeCodexAppServerSpawnCommand = Effect.fn(
     name: "codex",
     threadId: input.threadId,
     env: input.env,
-    shared: true,
+    shared: (yield* AgentMemoryOwner)?.isolated !== true,
   });
   const spawnCommand = yield* resolveSpawnCommand(launch.command, launch.args, {
     ...(input.env === undefined ? {} : { env: input.env }),
@@ -1976,14 +1986,30 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     }),
                 ),
               );
-        const client = yield* clientFactory.open({
-          instanceId: adapterOptions.instanceId,
-          threadId: input.threadId,
-          providerSessionId: input.providerSessionId,
-          runtimePolicy: input.runtimePolicy,
-          settings: resolvedRuntime?.config ?? adapterOptions.settings,
-          environment: resolvedRuntime?.environment ?? adapterOptions.environment,
-        });
+        const isolated =
+          input.threadId !== null &&
+          input.providerSessionId ===
+            idAllocator.derive.providerSession({
+              providerInstanceId: adapterOptions.instanceId,
+              threadId: input.threadId,
+            });
+        const owner = yield* AgentMemoryOwner;
+        const client = yield* clientFactory
+          .open({
+            instanceId: adapterOptions.instanceId,
+            threadId: input.threadId,
+            providerSessionId: input.providerSessionId,
+            runtimePolicy: input.runtimePolicy,
+            settings: resolvedRuntime?.config ?? adapterOptions.settings,
+            environment: resolvedRuntime?.environment ?? adapterOptions.environment,
+          })
+          .pipe(
+            Effect.provideService(AgentMemoryOwner, {
+              runtimeId: input.providerSessionId,
+              ticketId: owner?.ticketId ?? input.providerSessionId,
+              isolated,
+            }),
+          );
         const codexZone = codexTimeZone(resolvedRuntime?.environment ?? adapterOptions.environment);
         const additionalContextByThread = yield* Ref.make(
           new Map<string, NonNullable<CodexTurnStartParams["additionalContext"]>>(),
@@ -2103,6 +2129,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           cwd: input.runtimePolicy.cwd,
           model: input.modelSelection.model,
           now,
+          isolated,
         });
         // Drain final notifications before the session manager retires the dead process.
         // Queue.fail lets readers take items already buffered before they see the failure.
@@ -2183,6 +2210,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
         /** Completed by thread/closed after this connection unsubscribes from the native thread. */
         const threadClosings = new Map<string, Deferred.Deferred<void>>();
+        const closedNativeThreads = new Set<string>();
         /** Codex acceptForSession covers only the exact command or patch, not future commands. */
         const sessionApprovals = new Map<
           string,
@@ -5367,6 +5395,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         // their command items, while the shared provider session stays alive.
         yield* client.handleServerNotification("thread/closed", (payload) =>
           Effect.gen(function* () {
+            closedNativeThreads.add(payload.threadId);
             const closing = threadClosings.get(payload.threadId);
             threadClosings.delete(payload.threadId);
             if (closing !== undefined) yield* Deferred.succeed(closing, undefined);
@@ -7581,7 +7610,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           threadId: string,
           params: Record<string, unknown>,
         ) {
-          const resume = client.raw.request("thread/resume", { threadId, ...params });
+          const resume = client.raw
+            .request("thread/resume", { threadId, ...params })
+            .pipe(Effect.tap(() => Effect.sync(() => closedNativeThreads.delete(threadId))));
           return yield* resume.pipe(
             Effect.catchTags({
               CodexAppServerRequestError: (cause) => {
@@ -8217,11 +8248,39 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               if (unloadInput.archive === true) {
                 yield* client.request("thread/archive", { threadId: nativeThreadId });
               } else {
-                // A resume may already wait on the pending entry; replacing it would strand that wait.
-                if (!threadClosings.has(nativeThreadId)) {
-                  threadClosings.set(nativeThreadId, yield* Deferred.make<void>());
+                if (unloadInput.awaitClosed === true && closedNativeThreads.has(nativeThreadId))
+                  return;
+                const pending = threadClosings.get(nativeThreadId);
+                const closing = pending ?? (yield* Deferred.make<void>());
+                threadClosings.set(nativeThreadId, closing);
+                let unloaded = false;
+                if (pending === undefined || unloadInput.awaitClosed !== true) {
+                  const response = yield* client
+                    .request("thread/unsubscribe", { threadId: nativeThreadId })
+                    .pipe(
+                      Effect.onError(() =>
+                        Effect.sync(() => {
+                          if (threadClosings.get(nativeThreadId) === closing)
+                            threadClosings.delete(nativeThreadId);
+                        }),
+                      ),
+                    );
+                  unloaded = response.status === "notLoaded";
+                  if (response.status === "notSubscribed" && unloadInput.awaitClosed === true) {
+                    unloaded = !(yield* readCodexThreadHistoryMetadata(client.raw, nativeThreadId))
+                      .loaded;
+                  }
+                } else {
+                  unloaded = !(yield* readCodexThreadHistoryMetadata(client.raw, nativeThreadId))
+                    .loaded;
                 }
-                yield* client.request("thread/unsubscribe", { threadId: nativeThreadId });
+                if (unloaded) {
+                  closedNativeThreads.add(nativeThreadId);
+                  if (threadClosings.get(nativeThreadId) === closing)
+                    threadClosings.delete(nativeThreadId);
+                  yield* Deferred.succeed(closing, undefined);
+                }
+                if (unloadInput.awaitClosed === true) yield* Deferred.await(closing);
               }
               // No turn/completed arrives for an unloaded thread, so a Stop Codex never
               // confirmed would otherwise keep its turn open for the life of the session.

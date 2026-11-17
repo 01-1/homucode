@@ -79,6 +79,8 @@ import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { AgentMemory } from "@t3tools/shared/AgentScope";
+import { DEFAULT_AGENT_MEMORY_SETTINGS } from "@t3tools/contracts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
@@ -1128,6 +1130,9 @@ function makeLocalCommandHarness(input: {
                   } as never)
                 : Effect.die("A local command must not open a native session."),
   );
+  const detach = vi.fn<ProviderSessionManager.ProviderSessionManagerV2Shape["detach"]>(
+    () => Effect.void,
+  );
   const startRootRun = vi.fn<
     (
       input: RunExecutionService.RunExecutionServiceV2StartRootRunInput,
@@ -1315,6 +1320,8 @@ function makeLocalCommandHarness(input: {
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
           open,
+          detach,
+          isLive: () => Effect.succeed(false),
           get: () =>
             Effect.succeed(
               input.previousTurn?.liveSession === false
@@ -1356,6 +1363,7 @@ function makeLocalCommandHarness(input: {
     resolveRuntimePolicy,
     createWorktree,
     open,
+    detach,
     fallbackEnsureThread,
     writeIfRunCurrent,
     startRootRun,
@@ -1380,6 +1388,128 @@ function makeLocalCommandHarness(input: {
     }).pipe(Effect.provide(layer)),
   };
 }
+
+effectIt.effect(
+  "persists a memory wait before opening a provider and releases admission after startup",
+  () =>
+    Effect.gen(function* () {
+      const waiting = yield* Deferred.make<void>();
+      const available = yield* Deferred.make<void>();
+      let released = false;
+      const harness = makeLocalCommandHarness({ text: "Continue", failReadsAfterRunning: true });
+      const memory = {
+        ...AgentMemory.defaultValue(),
+        settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+        acquire: ({ onWaiting }: Parameters<(typeof AgentMemory)["Service"]["acquire"]>[0]) =>
+          onWaiting.pipe(
+            Effect.andThen(Deferred.succeed(waiting, undefined)),
+            Effect.andThen(Deferred.await(available)),
+            Effect.as(
+              Effect.sync(() => {
+                released = true;
+              }),
+            ),
+          ),
+      };
+      const startup = yield* harness.start.pipe(
+        Effect.provideService(AgentMemory, memory),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(waiting);
+      expect(harness.projection().runs[0]?.memoryWaiting).toBe(true);
+      expect(harness.open).not.toHaveBeenCalled();
+      yield* Deferred.succeed(available, undefined);
+      yield* Fiber.join(startup);
+      expect(harness.projection().runs[0]?.memoryWaiting).toBe(false);
+      expect(harness.startRootRun).toHaveBeenCalledOnce();
+      expect(released).toBe(true);
+    }),
+);
+
+effectIt.effect("cancels memory admission before provider startup", () =>
+  Effect.gen(function* () {
+    const waiting = yield* Deferred.make<void>();
+    let cancelled = false;
+    const harness = makeLocalCommandHarness({ text: "Continue", failReadsAfterRunning: true });
+    const startup = yield* harness.start.pipe(
+      Effect.provideService(AgentMemory, {
+        ...AgentMemory.defaultValue(),
+        settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+        acquire: ({ onWaiting }) =>
+          onWaiting.pipe(
+            Effect.andThen(Deferred.succeed(waiting, undefined)),
+            Effect.andThen(Effect.never),
+            Effect.ensuring(
+              Effect.sync(() => {
+                cancelled = true;
+              }),
+            ),
+          ),
+      }),
+      Effect.forkChild,
+    );
+    yield* Deferred.await(waiting);
+    yield* Fiber.interrupt(startup);
+    expect(cancelled).toBe(true);
+    expect(harness.open).not.toHaveBeenCalled();
+  }),
+);
+
+effectIt.effect(
+  "unloads shared and adopted Codex sessions before resuming in an isolated runtime",
+  () =>
+    Effect.gen(function* () {
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      for (const previousThread of [undefined, ThreadId.make("another-owner")]) {
+        const harness = makeLocalCommandHarness({ text: "Continue", failReadsAfterRunning: true });
+        const projection = harness.projection();
+        const previous = ids.derive.providerSession({
+          providerInstanceId: harness.newInstanceId,
+          ...(previousThread === undefined ? {} : { threadId: previousThread }),
+        });
+        const isolated = ids.derive.providerSession({
+          providerInstanceId: harness.newInstanceId,
+          threadId: projection.thread.id,
+        });
+        harness.setProjection({
+          ...projection,
+          providerThreads: projection.providerThreads.map((thread) => ({
+            ...thread,
+            providerSessionId: previous,
+          })),
+          providerSessions: projection.providerSessions.map((session) => ({
+            ...session,
+            id: previous,
+          })),
+        });
+        const detaching = yield* Deferred.make<void>();
+        const unloaded = yield* Deferred.make<void>();
+        harness.detach.mockImplementationOnce(() =>
+          Deferred.succeed(detaching, undefined).pipe(Effect.andThen(Deferred.await(unloaded))),
+        );
+        const startup = yield* harness.start.pipe(
+          Effect.provideService(AgentMemory, {
+            ...AgentMemory.defaultValue(),
+            settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+          }),
+          Effect.forkChild,
+        );
+        yield* Deferred.await(detaching);
+        expect(harness.open).not.toHaveBeenCalled();
+        yield* Deferred.succeed(unloaded, undefined);
+        yield* Fiber.join(startup);
+        expect(harness.detach).toHaveBeenCalledWith({
+          providerSessionId: previous,
+          threadId: projection.thread.id,
+          awaitUnload: true,
+        });
+        expect(harness.open).toHaveBeenCalledWith(
+          expect.objectContaining({ providerSessionId: isolated }),
+        );
+        expect(harness.projection().providerThreads[0]?.providerSessionId).toBe(isolated);
+      }
+    }).pipe(Effect.provide(IdAllocator.layer)),
+);
 
 function layerStartEffectWorker(
   harness: ReturnType<typeof makeLocalCommandHarness>,

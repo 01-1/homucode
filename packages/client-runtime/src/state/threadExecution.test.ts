@@ -342,6 +342,10 @@ describe("thread execution presentation", () => {
 
     expect(deriveThreadActivityRun(starting)?.providerStartingLabel).toBe("Starting Claude");
     expect(
+      deriveThreadActivityRun({ ...starting, runs: [{ ...openRun, memoryWaiting: true }] })
+        ?.providerStartingLabel,
+    ).toBe("Waiting for memory");
+    expect(
       deriveThreadActivityRun({ ...starting, providerSessions: [] })?.providerStartingLabel,
     ).toBe("Starting");
     expect(

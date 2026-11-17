@@ -5105,15 +5105,15 @@ it.effect(
     }),
 );
 
-it.effect(
-  "ProviderSessionManagerV2 keeps an attached native child loaded when its parent detaches",
-  () =>
+it.effect.each([false, true])(
+  "ProviderSessionManagerV2 keeps an attached native child loaded when its parent detaches (await unload: %s)",
+  (awaitUnload) =>
     Effect.gen(function* () {
       const state = yield* Ref.make(emptyState);
       yield* Effect.gen(function* () {
         const { manager, parent, resumeChild } = yield* makeNativeChildFixture();
         yield* resumeChild;
-        yield* manager.detach(parent);
+        yield* manager.detach({ ...parent, awaitUnload });
 
         assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, []);
         // The child's next turn trusts the manager's loaded cache, so the

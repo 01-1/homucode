@@ -1,5 +1,46 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as Scope from "effect/Scope";
+import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tools/contracts";
+
+export class AgentMemory extends Context.Reference<{
+  readonly settings: Effect.Effect<AgentMemorySettings>;
+  readonly setLimitUpdater: (update: Effect.Effect<void>) => Effect.Effect<void>;
+  readonly track: (unit: string, owner: AgentMemoryOwnerValue | undefined) => Effect.Effect<void>;
+  readonly restore: (
+    waiters: ReadonlyArray<{
+      readonly id: string;
+      readonly requestedAt: number;
+      readonly isPending: Effect.Effect<boolean>;
+    }>,
+  ) => Effect.Effect<void>;
+  readonly acquire: (input: {
+    readonly id: string;
+    readonly threadId: string;
+    readonly requestedAt: number;
+    readonly reuseRuntimeId?: string;
+    readonly onWaiting: Effect.Effect<void>;
+  }) => Effect.Effect<Effect.Effect<void>, never, Scope.Scope>;
+}>("@t3tools/shared/AgentMemory", {
+  defaultValue: () => ({
+    settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false }),
+    setLimitUpdater: () => Effect.void,
+    track: () => Effect.void,
+    restore: () => Effect.void,
+    acquire: () => Effect.succeed(Effect.void),
+  }),
+}) {}
+
+export interface AgentMemoryOwnerValue {
+  readonly runtimeId: string;
+  readonly ticketId: string;
+  readonly isolated: boolean;
+}
+
+export const AgentMemoryOwner = Context.Reference<AgentMemoryOwnerValue | undefined>(
+  "@t3tools/shared/AgentMemoryOwner",
+  { defaultValue: () => undefined },
+);
 
 export interface AgentScopeShape {
   readonly wrap: (input: {

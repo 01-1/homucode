@@ -5,7 +5,8 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { AgentScope } from "@t3tools/shared/AgentScope";
+import { AgentScope, AgentMemory, AgentMemoryOwner } from "@t3tools/shared/AgentScope";
+import { DEFAULT_AGENT_MEMORY_SETTINGS, type AgentMemorySettings } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -60,6 +61,7 @@ const withFakeSystemd = <A, E>(
     readonly failingVerbs: Set<string>;
     readonly stateDir: string;
     readonly cgroupRoot: string;
+    readonly updateLimits: Effect.Effect<void>;
   }) => Effect.Effect<A, E>,
   // A user manager older than systemd 253 rejects OOMPolicy on scopes.
   {
@@ -67,11 +69,13 @@ const withFakeSystemd = <A, E>(
     stopFails = false,
     leftovers = false,
     liveOwner = false,
+    memorySettings,
   }: {
     readonly oomPolicy?: boolean;
     readonly stopFails?: boolean;
     readonly leftovers?: boolean;
     readonly liveOwner?: boolean;
+    readonly memorySettings?: AgentMemorySettings;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -82,6 +86,7 @@ const withFakeSystemd = <A, E>(
     const cgroupRoot = NodePath.join(bin, "cgroup");
     const units = new Map<string, FakeUnit>();
     const calls: Array<ReadonlyArray<string>> = [];
+    let updateLimits = Effect.void;
     const failingVerbs = new Set<string>();
     const output = (stdout: string, code = 0): ProcessRunner.ProcessRunOutput => ({
       stdout,
@@ -126,6 +131,16 @@ const withFakeSystemd = <A, E>(
       units.set(ownedAgentSlice(stateDir), { activeState: "active", result: "success" });
     }
     const scope = yield* make.pipe(
+      Effect.provideService(AgentMemory, {
+        ...AgentMemory.defaultValue(),
+        setLimitUpdater: (update) =>
+          Effect.sync(() => {
+            updateLimits = update;
+          }),
+        settings: Effect.succeed(
+          memorySettings ?? { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: false },
+        ),
+      }),
       Effect.provideService(ProviderProcesses.ProviderProcesses, { hasOtherLiveOwner: liveOwner }),
       Effect.provideService(ProcessRunner.ProcessRunner, runner),
       Effect.provideService(HostProcess.Platform, "linux"),
@@ -138,7 +153,15 @@ const withFakeSystemd = <A, E>(
           fileSystem.writeFileString(path.replace("/sys/fs/cgroup", cgroupRoot), data, options),
       }),
     );
-    return yield* body({ scope, units, calls, failingVerbs, stateDir, cgroupRoot }).pipe(
+    return yield* body({
+      scope,
+      units,
+      calls,
+      failingVerbs,
+      stateDir,
+      cgroupRoot,
+      updateLimits: Effect.suspend(() => updateLimits),
+    }).pipe(
       Effect.ensuring(Effect.sync(() => NodeFS.rmSync(bin, { recursive: true, force: true }))),
     );
   }).pipe(
@@ -195,6 +218,35 @@ const launchCodex = (scope: Effect.Success<typeof make>, threadId: string) =>
   );
 
 describe("AgentScope service", () => {
+  it.effect("applies configurable scope caps underneath the group cap", () =>
+    withFakeSystemd(
+      ({ scope }) =>
+        Effect.gen(function* () {
+          const launch = yield* scope.wrap({
+            command: "agent",
+            args: [],
+            name: "claude",
+            threadId: "a",
+          });
+          expect(launch.args).toContain(`--property=MemoryHigh=${2 * GiB}`);
+          expect(launch.args).toContain(`--property=MemoryMax=${4 * GiB}`);
+          const terminal = yield* scope.wrap({
+            command: "agent",
+            args: [],
+            name: "terminal",
+            survivesRestart: true,
+          });
+          expect(terminal.args.some((arg) => arg.startsWith("--property=MemoryMax="))).toBe(false);
+        }),
+      {
+        memorySettings: {
+          ...DEFAULT_AGENT_MEMORY_SETTINGS,
+          groupHighBytes: 2 * GiB,
+          groupMaxBytes: 4 * GiB,
+        },
+      },
+    ),
+  );
   it.effect("labels a thread from its newest scope until its next session clears it", () =>
     withFakeSystemd(({ scope, units }) =>
       Effect.gen(function* () {
@@ -271,6 +323,23 @@ describe("AgentScope service", () => {
       ),
   );
 
+  it.effect("owns an isolated Codex scope for OOM diagnosis and force stop", () =>
+    withFakeSystemd(({ scope, units, cgroupRoot }) =>
+      Effect.gen(function* () {
+        const codex = yield* launchCodex(scope, "isolated").pipe(
+          Effect.provideService(AgentMemoryOwner, {
+            runtimeId: "isolated-session",
+            ticketId: "isolated-start",
+            isolated: true,
+          }),
+        );
+        expect(codex.args).toContain("--property=OOMPolicy=stop");
+        exitedAgent(units, cgroupRoot, unitOf(codex), { populated: true, oomKills: 0 });
+        expect(yield* scope.kill("isolated")).toBe(true);
+      }),
+    ),
+  );
+
   it.effect("keeps a running scope while hundreds of other threads launch", () =>
     withFakeSystemd(({ scope, units }) =>
       Effect.gen(function* () {
@@ -329,6 +398,30 @@ describe("AgentScope service", () => {
         ]);
       }),
     ),
+  );
+
+  it.effect(
+    "registers the cached limit updater for admission before another scope launches",
+    () => {
+      memory.total = 16 * GiB;
+      return withFakeSystemd(({ calls, updateLimits }) =>
+        Effect.gen(function* () {
+          memory.total = 22 * GiB;
+          yield* updateLimits;
+          expect(calls.at(-1)).toEqual([
+            "--user",
+            "set-property",
+            "--runtime",
+            "app-t3code-agents.slice",
+            `MemoryHigh=${16 * GiB}`,
+            `MemoryMax=${18 * GiB}`,
+          ]);
+          const count = calls.length;
+          yield* updateLimits;
+          expect(calls).toHaveLength(count);
+        }),
+      );
+    },
   );
 
   it.effect("follows a live memory change at the next launch", () => {

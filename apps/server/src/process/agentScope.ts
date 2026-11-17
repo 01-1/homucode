@@ -4,6 +4,8 @@ import * as NodeOS from "node:os";
 
 import {
   AgentScope,
+  AgentMemory,
+  AgentMemoryOwner,
   agentScopeCommand,
   type AgentScopeShape,
   type AgentSystemdScope,
@@ -19,8 +21,8 @@ import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as ProviderProcesses from "./providerProcesses.ts";
+import { AGENT_SLICE, agentMemoryLimits } from "./agentMemory.ts";
 
-const AGENT_SLICE = "app-t3code-agents.slice";
 // Owns every agent slice and competes with the server's unit or scope under app.slice.
 const AGENTS_PARENT_SLICE = "app-t3code.slice";
 // Low weights yield CPU and disk to the server under contention, where the user manager
@@ -31,21 +33,6 @@ const AGENTS_PARENT_PROPERTIES = ["CPUWeight=10", "IOWeight=10", "TasksMax=25%"]
 export function ownedAgentSlice(stateDir: string): string {
   const hash = NodeCrypto.createHash("sha256").update(stateDir).digest("hex").slice(0, 12);
   return `app-t3code-agents-${hash}.slice`;
-}
-
-const GiB = 1024 ** 3;
-
-/**
- * Agents together leave about 6 GB free before they are throttled and 4 GB
- * before the kernel kills one, so the server, sshd, and tailscaled keep
- * working. Small machines still give agents at least half of RAM before
- * throttling and three quarters before a kill.
- */
-function agentSliceMemoryLimits(totalBytes: number) {
-  return {
-    high: Math.max(totalBytes - 6 * GiB, Math.floor(totalBytes / 2)),
-    max: Math.max(totalBytes - 4 * GiB, Math.floor(totalBytes * 0.75)),
-  };
 }
 
 export interface ScopeState {
@@ -107,6 +94,7 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const hostEnvironment = yield* HostProcess.Environment;
+  const memory = yield* AgentMemory;
   const { stateDir } = yield* ServerConfig.ServerConfig;
   const { hasOtherLiveOwner } = yield* ProviderProcesses.ProviderProcesses;
   const ownedSlice = ownedAgentSlice(stateDir);
@@ -205,15 +193,17 @@ export const make = Effect.gen(function* () {
       // VMs and containers can resize RAM live, so each launch re-checks the total
       // the limits came from. A failed update is retried by the next launch.
       let appliedTotal: number | undefined;
+      let appliedKey: string | undefined;
       const memoryLimitsLock = yield* Semaphore.make(1);
       const applyMemoryLimits = memoryLimitsLock.withPermits(1)(
         Effect.gen(function* () {
           const total = NodeOS.totalmem();
-          if (total === appliedTotal) return;
-          const limits = agentSliceMemoryLimits(total);
+          const limits = agentMemoryLimits(yield* memory.settings, total);
+          const key = `${total}:${limits.groupHigh}:${limits.groupMax}`;
+          if (key === appliedKey) return;
           const applied = yield* setProperties(AGENT_SLICE, [
-            `MemoryHigh=${limits.high}`,
-            `MemoryMax=${limits.max}`,
+            `MemoryHigh=${limits.groupHigh}`,
+            `MemoryMax=${limits.groupMax}`,
           ]);
           if (!applied) return;
           if (appliedTotal !== undefined) {
@@ -225,13 +215,15 @@ export const make = Effect.gen(function* () {
             });
           }
           appliedTotal = total;
+          appliedKey = key;
         }),
       );
+      yield* memory.setLimitUpdater(applyMemoryLimits);
       yield* applyMemoryLimits;
       yield* setProperties(AGENTS_PARENT_SLICE, AGENTS_PARENT_PROPERTIES);
       yield* Effect.logInfo("Agent scopes are on", {
         slice: AGENT_SLICE,
-        ...agentSliceMemoryLimits(NodeOS.totalmem()),
+        ...agentMemoryLimits(yield* memory.settings, NodeOS.totalmem()),
         oomPolicy: supportsOomPolicy,
       });
       return {
@@ -431,6 +423,9 @@ export const make = Effect.gen(function* () {
       if (scope === undefined) return agentScopeCommand({ command: resolved, args });
       yield* scope.applyMemoryLimits;
       const unit = `t3code-${name}-${NodeCrypto.randomUUID().slice(0, 8)}.scope`;
+      const config = yield* memory.settings;
+      const limits = agentMemoryLimits(config, NodeOS.totalmem());
+      if (!survivesRestart) yield* memory.track(unit, yield* AgentMemoryOwner);
       // A continuing shared scope cannot attribute a tool's OOM to one thread.
       // Clear the launch thread's previous scope instead.
       const continuing = shared === true && scope.supportsOomPolicy;
@@ -446,6 +441,12 @@ export const make = Effect.gen(function* () {
         // unload the unit even when it fails.
         options: [
           ...SCOPE_OPTIONS,
+          ...(config.enabled && !survivesRestart
+            ? [
+                `--property=MemoryHigh=${limits.agentHigh}`,
+                `--property=MemoryMax=${limits.agentMax}`,
+              ]
+            : []),
           ...(scope.supportsOomPolicy
             ? [`--property=OOMPolicy=${continuing ? "continue" : "stop"}`]
             : []),

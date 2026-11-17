@@ -120,6 +120,50 @@ protection takes effect at once. The server's protection from the kernel's
 out-of-memory killer takes effect after `t3 service restart`. `t3 service status` reports whether
 the protection is in place, and `t3 service protect --undo` removes it.
 
+## Agent memory controls
+
+On Linux with a systemd user manager and cgroups v2, each agent process is
+limited to 6 GiB before throttling and 8 GiB before a possible out-of-memory
+kill. The cap for all agents still applies; the smaller limit wins. Codex
+uses one session per thread while memory controls are enabled. Native
+subagents and tools share their owning process's cap; providers with a
+shared service have one cap for that service.
+
+The server reserves at least 1 GiB for each agent, or 110% of its current
+memory use when that is larger, up to its cap. These are admission budgets,
+not preallocated RAM or kernel `MemoryLow` guarantees. When another minimum
+reservation will not fit, the turn shows "Waiting for memory" and starts
+automatically in request order when there is room. Stop cancels a waiting
+start. Waiting starts survive a server restart and remain automatic even
+when continuation of interrupted runs is disabled.
+
+Edit the `agentMemory` object in `~/.t3/userdata/settings.json`. All fields
+are optional; these are their defaults (byte values use GiB):
+
+```json
+{
+  "agentMemory": {
+    "enabled": true,
+    "perAgentHighBytes": 6442450944,
+    "perAgentMaxBytes": 8589934592,
+    "groupHighBytes": null,
+    "groupMaxBytes": null,
+    "minimumReservationBytes": 1073741824,
+    "headroomPercent": 10,
+    "pollIntervalMs": 2000
+  }
+}
+```
+
+Null group limits keep the automatic limits: RAM minus 6 GiB for throttling
+and minus 4 GiB for the hard cap (at least half and three quarters of RAM,
+respectively). The effective minimum and throttle limit cannot exceed the
+hard cap. Reservations and group limits follow settings changes on the next
+poll; process caps apply to new processes. Setting
+`enabled` to false releases waiting starts and stops applying per-process
+caps to new processes. Existing process caps remain until those processes
+exit. The group cap stays in place.
+
 ## Troubleshooting
 
 Start with `t3 service status` on the host. It prints the log path and, on Linux,

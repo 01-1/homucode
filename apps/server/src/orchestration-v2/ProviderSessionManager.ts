@@ -256,6 +256,7 @@ export interface ProviderSessionManagerV2Shape {
     readonly threadId: ThreadId;
     readonly detail?: string;
     readonly revokeMcpCredential?: boolean;
+    readonly awaitUnload?: boolean;
   }) => Effect.Effect<void, ProviderSessionManagerV2Error>;
   /**
    * Releases the session unless, at the moment of removal, a turn is busy on it other than one
@@ -3272,13 +3273,23 @@ export const layerWithOptions = (
             const key = sessionKey(input.providerSessionId);
             const currentEntry = (yield* Ref.get(sessions)).get(key);
             let detachedProviderThreads: ReadonlyArray<OrchestrationV2ProviderThread> = [];
-            if (currentEntry?.supportsMultipleProviderThreads === true) {
+            if (
+              currentEntry !== undefined &&
+              (currentEntry.supportsMultipleProviderThreads || input.awaitUnload === true)
+            ) {
               const projection = yield* Effect.option(
                 projectionStore.getThreadRecords(input.threadId, [
                   "providerThreads",
                   "providerTurns",
                 ]),
               );
+              if (Option.isNone(projection) && input.awaitUnload === true) {
+                return yield* new ProviderSessionReleaseError({
+                  providerSessionId: input.providerSessionId,
+                  reason: "manual_shutdown",
+                  cause: "Cannot transfer a native thread without reading its previous ownership.",
+                });
+              }
               if (Option.isSome(projection)) {
                 const providerThreads = new Map(
                   projection.value.providerThreads
@@ -3316,6 +3327,13 @@ export const layerWithOptions = (
             }
             const detachResult = yield* Ref.modify(sessions, (current) => {
               const entry = current.get(key);
+              if (
+                entry !== undefined &&
+                !entry.attachedThreadIds.has(input.threadId) &&
+                input.awaitUnload === true
+              ) {
+                return [Option.some({ entry, idleUnloadFiber: null }), current] as const;
+              }
               if (entry === undefined || !entry.attachedThreadIds.has(input.threadId)) {
                 return [
                   Option.none<{
@@ -3385,7 +3403,10 @@ export const layerWithOptions = (
               return;
             }
             const unloadThread = detached.value.exposedRuntime.unloadThread;
-            if (detached.value.supportsMultipleProviderThreads && unloadThread !== undefined) {
+            if (
+              (detached.value.supportsMultipleProviderThreads || input.awaitUnload === true) &&
+              unloadThread !== undefined
+            ) {
               // The projection includes native children owned by other app threads;
               // lock each owner so an attached child stays loaded and later attaches wait.
               for (const providerThread of detachedProviderThreads) {
@@ -3398,21 +3419,25 @@ export const layerWithOptions = (
                   }),
                   Effect.gen(function* () {
                     const entry = (yield* Ref.get(sessions)).get(key);
-                    if (
-                      entry?.runtime !== detached.value.runtime ||
-                      entry.attachedThreadIds.has(ownerThreadId)
-                    ) {
-                      return;
-                    }
-                    yield* unloadThread({ providerThread }).pipe(
+                    if (entry?.runtime !== detached.value.runtime) return;
+                    if (entry.attachedThreadIds.has(ownerThreadId)) return;
+                    yield* unloadThread({
+                      providerThread,
+                      ...(input.awaitUnload === true ? { awaitClosed: true } : {}),
+                    }).pipe(
                       Effect.timeout(UNLOAD_THREAD_TIMEOUT_MS),
                       Effect.catchCause((cause) =>
-                        Effect.logWarning("orchestration-v2.driver-session.detach-unload-failed", {
-                          providerSessionId: input.providerSessionId,
-                          threadId: ownerThreadId,
-                          providerThreadId: providerThread.id,
-                          cause,
-                        }),
+                        input.awaitUnload === true
+                          ? Effect.failCause(cause)
+                          : Effect.logWarning(
+                              "orchestration-v2.driver-session.detach-unload-failed",
+                              {
+                                providerSessionId: input.providerSessionId,
+                                threadId: ownerThreadId,
+                                providerThreadId: providerThread.id,
+                                cause,
+                              },
+                            ),
                       ),
                     );
                   }),
