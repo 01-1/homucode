@@ -8,7 +8,6 @@ import IconListCheck from "@tabler/icons-react-native/IconListCheck";
 import IconMessageCircle from "@tabler/icons-react-native/IconMessageCircle";
 import IconSun from "@tabler/icons-react-native/IconSun";
 import { DEFAULT_MADOHOMU_ICON } from "@t3tools/contracts";
-import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 
@@ -27,23 +26,16 @@ export const MADOHOMU_ICONS = [
 export function MadoHomuIcon({
   icon,
   color,
+  size = 20,
 }: {
   readonly icon: string | null;
   readonly color: string;
+  readonly size?: number;
 }) {
   const choice = MADOHOMU_ICONS.find((item) => item.id === (icon ?? DEFAULT_MADOHOMU_ICON));
-  return (
-    <View
-      className="h-8 w-8 items-center justify-center rounded-lg"
-      style={{ backgroundColor: `${color}22` }}
-    >
-      {choice ? (
-        <choice.component size={20} color={color} accessibilityLabel={choice.label} />
-      ) : (
-        <Text style={{ color }} className="text-lg">
-          {icon}
-        </Text>
-      )}
-    </View>
+  return choice ? (
+    <choice.component size={size} color={color} accessibilityLabel={choice.label} />
+  ) : (
+    <Text style={{ color, fontSize: size * 0.9, lineHeight: size }}>{icon}</Text>
   );
 }

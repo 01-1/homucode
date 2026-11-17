@@ -10,6 +10,7 @@ import {
   ScheduledTaskId,
   ThreadId,
   type EnvironmentId,
+  type MadoHomuThreadSettings,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
 
@@ -77,6 +78,43 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
       : null;
   };
 
+  const entryOf = (threadId: ThreadId) =>
+    settings.madohomuThreads[threadId] ?? { icon: null, prompt: "" };
+
+  /** Pins a thread (optionally into a custom section), or moves it to Scratch. */
+  const setThreadPlace = (threadId: ThreadId, place: { readonly section: string | null } | null) =>
+    save({
+      madohomuThreads: {
+        [threadId]:
+          place === null
+            ? { ...entryOf(threadId), pinned: false, section: null }
+            : { ...entryOf(threadId), pinned: true, section: place.section },
+      },
+    });
+
+  const setThreadOrder = (madohomuThreadOrder: ThreadId[]) => save({ madohomuThreadOrder });
+
+  const addSection = (name: string) =>
+    save({ madohomuSections: [...settings.madohomuSections, { id: uuidv4(), name }] });
+
+  const renameSection = (id: string, name: string) =>
+    save({
+      madohomuSections: settings.madohomuSections.map((section) =>
+        section.id === id ? { ...section, name } : section,
+      ),
+    });
+
+  /** Deletes a custom section; its threads return to Pinned. */
+  const deleteSection = (id: string) =>
+    save({
+      madohomuSections: settings.madohomuSections.filter((section) => section.id !== id),
+      madohomuThreads: Object.fromEntries(
+        Object.entries(settings.madohomuThreads)
+          .filter(([, entry]) => entry.section === id)
+          .map(([threadId, entry]) => [threadId, { ...entry, section: null }]),
+      ) as Record<ThreadId, MadoHomuThreadSettings>,
+    });
+
   const setMorningBrief = async (enabled: boolean, timeOfDay: string) => {
     if (!enabled) {
       if (!settings.madohomuMorningBriefTaskId || (taskQuery.isSuccess && !task)) return true;
@@ -141,5 +179,10 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     save,
     createThread,
     setMorningBrief,
+    setThreadPlace,
+    setThreadOrder,
+    addSection,
+    renameSection,
+    deleteSection,
   };
 }
