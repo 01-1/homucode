@@ -75,10 +75,14 @@ type CodexRateLimitsProbe =
 const CodexRoutingConfig = Schema.Struct({
   model_provider: Schema.optionalKey(Schema.NullOr(Schema.String)),
   openai_base_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  model_catalog_json: Schema.optionalKey(Schema.NullOr(Schema.String)),
   model_providers: Schema.optionalKey(
     Schema.Record(
       Schema.String,
-      Schema.Struct({ base_url: Schema.optionalKey(Schema.NullOr(Schema.String)) }),
+      Schema.Struct({
+        base_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        model_catalog_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+      }),
     ),
   ),
 });
@@ -643,12 +647,16 @@ export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(fu
   readonly launchArgs?: string | undefined;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv | undefined;
+  readonly configOverrides?: ReadonlyArray<string>;
 }) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const environment = yield* codexProcessEnvironment(input);
   const spawnCommand = yield* resolveSpawnCommand(
     input.binaryPath,
-    codexAppServerArgs(input.launchArgs),
+    [
+      ...codexAppServerArgs(input.launchArgs),
+      ...(input.configOverrides ?? []).flatMap((override) => ["-c", override]),
+    ],
     { env: environment, extendEnv: true },
   );
   const child = yield* spawner
@@ -771,13 +779,47 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   );
 
   const cyberAccess = Option.getOrUndefined(decodeCodexCyberAccessConfig(config));
+  let discoveredModels = models;
+  const routing = Option.getOrUndefined(decodeCodexRoutingConfig(config));
+  const providerId = routing?.model_provider ?? "openai";
+  const baseUrl = codexRouteBaseUrl(config);
+  if (
+    routing &&
+    !routing.model_catalog_json &&
+    routing.model_providers?.[providerId]?.model_catalog_url == null &&
+    baseUrl &&
+    codexCustomEndpoint(config)
+  ) {
+    // Custom API providers otherwise get Codex's bundled catalog, even in a fresh process.
+    const catalogUrl = `${baseUrl.replace(/\/$/, "")}/models`;
+    const remoteModels = yield* withCodexDiscoveryDeadline(
+      Effect.gen(function* () {
+        const { client: catalogClient } = yield* withCodexAppServerClient({
+          ...input,
+          configOverrides: [
+            `model_providers.${providerId}.model_catalog_url=${JSON.stringify(catalogUrl)}`,
+          ],
+        });
+        return yield* requestAllCodexModels(catalogClient);
+      }).pipe(
+        Effect.scoped,
+        Effect.catch((cause) =>
+          Effect.logDebug("Codex custom model catalog unavailable.", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      ),
+      deadlineMs,
+    );
+    if (remoteModels !== undefined) discoveredModels = remoteModels;
+  }
   return {
     account: accountResponse,
     endpoint: config ? codexCustomEndpoint(config) : undefined,
     nativeUsage,
     ...(rateLimits ? { rateLimits } : {}),
     version,
-    models,
+    models: discoveredModels,
     serviceTier: config?.service_tier ?? undefined,
     daybreakEnabled: config === undefined ? undefined : cyberAccess?.daybreak === true,
     // An unread config cannot rule out an API key with the programs turned off.

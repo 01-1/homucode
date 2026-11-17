@@ -1,10 +1,13 @@
 import { assert, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { CodexSettings } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Queue from "effect/Queue";
 import * as Scope from "effect/Scope";
+import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
@@ -13,13 +16,18 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import {
   applyPreferredCodexDefaultModel,
+  checkCodexProviderStatus,
   codexCustomEndpoint,
   codexRoutesSpendNativeQuota,
   makeCodexSkillsProbe,
   mapCodexModelCapabilities,
 } from "./CodexProvider.ts";
 
-function makeFakeCodexAppServers() {
+const decodeCodexSettings = Schema.decodeSync(CodexSettings);
+
+function makeFakeCodexAppServers(
+  resultFor?: (method: string, args: ReadonlyArray<unknown>) => unknown,
+) {
   const helpers: Array<{
     readonly codexHome: unknown;
     readonly crash: Effect.Effect<void>;
@@ -62,6 +70,11 @@ function makeFakeCodexAppServers() {
                 readonly params?: { readonly cwds: ReadonlyArray<string> };
               };
               if (frame.id === undefined) return Effect.void;
+              const result = resultFor?.(
+                frame.method,
+                command._tag === "StandardCommand" ? command.args : [],
+              );
+              if (result !== undefined) return respond(frame.id, result);
               if (frame.method === "initialize") {
                 return respond(frame.id, {
                   codexHome: "/codex-home",
@@ -100,6 +113,55 @@ function makeFakeCodexAppServers() {
   );
   return { helpers, spawner };
 }
+
+it.layer(NodeServices.layer)("Codex custom provider discovery", (it) => {
+  it.effect("refetches the custom endpoint catalog on every provider check", () =>
+    Effect.gen(function* () {
+      let available = ["gpt-6.1-sol"];
+      const { spawner } = makeFakeCodexAppServers((method, args) => {
+        if (method === "account/read") return { account: null, requiresOpenaiAuth: false };
+        if (method === "config/read") {
+          return {
+            config: {
+              model_provider: "proxy",
+              model_providers: { proxy: { base_url: "http://localhost:8317/v1" } },
+            },
+            origins: {},
+          };
+        }
+        if (method !== "model/list") return undefined;
+        const remote = args.includes(
+          'model_providers.proxy.model_catalog_url="http://localhost:8317/v1/models"',
+        );
+        return {
+          data: (remote ? available : ["gpt-6.1-sol"]).map((model) => ({
+            id: model,
+            model,
+            displayName: model,
+            description: "",
+            hidden: false,
+            isDefault: false,
+            defaultReasoningEffort: "low",
+            supportedReasoningEfforts: [],
+          })),
+        };
+      });
+      const settings = decodeCodexSettings({});
+      const check = checkCodexProviderStatus(settings).pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
+      assert.deepStrictEqual(
+        (yield* check).models.map((model) => model.slug),
+        available,
+      );
+      available = ["gpt-6.1-sol", "gpt-6.2-sol", "gpt-6.2-astra"];
+      assert.deepStrictEqual(
+        (yield* check).models.map((model) => model.slug),
+        available,
+      );
+    }),
+  );
+});
 
 it.effect("reuses one Codex skills helper per launch until it idles out", () =>
   Effect.gen(function* () {

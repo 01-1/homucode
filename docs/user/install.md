@@ -35,12 +35,17 @@ one alone and stops. Set `T3CODE_CHANNEL=nightly` to install the nightly train, 
 | Use it from your other devices        | `t3 up` ([details](./remote-access.md))                                 |
 | Keep it running in the background     | `t3 service install` ([details](./background-service.md))               |
 | Move to the newest release            | `t3 update`                                                             |
+| Refetch provider status and models    | `t3 provider refresh`                                                   |
 | Reclaim database space                | `t3 doctor` ([details](./background-service.md#reclaim-database-space)) |
 | Remove it again                       | `t3 uninstall`                                                          |
 
 Run `t3 help` or `t3 --help` for the full reference. To start in a new working
 directory, use an explicit path such as `t3 ./my-project`. A bare directory name
 is accepted only if it already exists.
+
+`t3 provider refresh` reaches the running server and refreshes the same provider
+status and model lists as **Settings → Providers → Refresh**. Use
+`--provider <instanceId>` to refresh one instance, or `--json` for structured output.
 
 If `t3` or `t3 start` reports an already running server, run the `t3 pair`
 command it names and open the pairing URL to connect to that server. Stop it
