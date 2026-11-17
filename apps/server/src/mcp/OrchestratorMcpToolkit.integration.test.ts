@@ -588,9 +588,25 @@ describe("orchestrator MCP toolkit", () => {
             ),
           );
         const finishedParent = yield* orchestrator.getThreadProjection(parentThreadId);
+        const interruptedTask = finishedParent.subagents.find(
+          (task) => task.id === followupTasks[0]!.id,
+        );
+        expect(interruptedTask?.status).toBe("interrupted");
+        expect(interruptedTask?.result).toMatch(
+          /^Stopped by an agent: Allow the queued replay follow-up to run\./,
+        );
+        // A read acknowledges the stopped result only once it shows who stopped the run.
         expect(
-          finishedParent.subagents.find((task) => task.id === followupTasks[0]!.id)?.status,
-        ).toBe("interrupted");
+          finishedParent.contextTransfers.find(
+            (transfer) =>
+              transfer.type === "subagent_result" &&
+              transfer.sourcePoint.runId === runningFollowup.runId,
+          )?.sourcePoint.turnItemId,
+        ).toBe(
+          finalProjection.turnItems.find(
+            (item) => item.runId === runningFollowup.runId && item.type === "run_interrupt_result",
+          )?.id,
+        );
         expect(
           finishedParent.subagents.find((task) => task.id === followupTasks[1]!.id),
         ).toMatchObject({
