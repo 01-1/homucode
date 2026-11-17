@@ -78,9 +78,9 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
     id: "claude-steer-recovery",
     page: 2,
-    title: "Claude steers survive Stop",
+    title: "Resend unread steers after Stop",
     description:
-      "Re-send a steered message that Claude held behind a running tool when you press Stop.",
+      "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, T3 sends it again for you.",
     setting: "claudeSteersSurviveStop",
   },
   {
