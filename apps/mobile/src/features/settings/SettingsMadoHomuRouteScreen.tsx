@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { TextInput, View } from "react-native";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
+import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
+import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
@@ -13,6 +15,20 @@ import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+
+const CODE_VISIBILITY_OPTIONS: ReadonlyArray<{
+  readonly value: ServerSettings["madohomuCodeVisibility"];
+  readonly label: string;
+  readonly description: string;
+}> = [
+  { value: "hidden", label: "None", description: "T3 Code lists none of them." },
+  {
+    value: "scratch",
+    label: `${MADOHOMU_SCRATCH_LABEL} only`,
+    description: "T3 Code lists the threads not pinned in MadoHomu.",
+  },
+  { value: "all", label: "All", description: "T3 Code lists every thread of the project." },
+];
 
 export function SettingsMadoHomuRouteScreen() {
   const menu = useSettingsEnvironmentMenu();
@@ -97,6 +113,20 @@ function EnvironmentMadoHomuSettings(props: {
             disabled={busy || !actions.canWrite}
             onChange={(madohomuProjectId) => void run(() => actions.save({ madohomuProjectId }))}
           />
+          <Text className="px-4 pt-3 text-sm text-foreground-muted">
+            Show MadoHomu threads in T3 Code
+          </Text>
+          {CODE_VISIBILITY_OPTIONS.map((option, index) => (
+            <ListChoiceRow
+              key={option.value}
+              label={option.label}
+              description={option.description}
+              selected={actions.settings.madohomuCodeVisibility === option.value}
+              separated={index > 0}
+              disabled={busy || !actions.canWrite}
+              onPress={() => void run(() => actions.save({ madohomuCodeVisibility: option.value }))}
+            />
+          ))}
           <SettingsSwitchRow
             label="Morning brief"
             subtitle="A daily summary and proposed next steps. The agent plans and asks for approval before acting."

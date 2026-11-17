@@ -195,6 +195,8 @@ import { useThreadSearch } from "../state/queries";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { madohomuCodeVisibilitySettingsAtom } from "../madohomuCodeVisibility";
+import { filterMadoHomuCodeThreads } from "@t3tools/client-runtime/madohomu";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import {
@@ -1221,14 +1223,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const threads = useQuietThreadShells();
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
-  const listedThreads =
-    promotingDraftThreadKeys.length === 0
-      ? threads
-      : threads.map((thread) =>
-          promotingDraftThreadKeys.includes(threadShellKey(thread))
-            ? asLaunchingThread(thread)
-            : thread,
-        );
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1243,6 +1237,23 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
+  // MadoHomu keeps its threads out of this list; search and the open thread still reach them.
+  const madohomuSettings = useAtomValue(madohomuCodeVisibilitySettingsAtom);
+  const codeThreads = isSearchingThreads
+    ? threads
+    : filterMadoHomuCodeThreads(
+        threads,
+        madohomuSettings,
+        (thread) => threadShellKey(thread) === routeRowThreadKey,
+      );
+  const listedThreads =
+    promotingDraftThreadKeys.length === 0
+      ? codeThreads
+      : codeThreads.map((thread) =>
+          promotingDraftThreadKeys.includes(threadShellKey(thread))
+            ? asLaunchingThread(thread)
+            : thread,
+        );
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open

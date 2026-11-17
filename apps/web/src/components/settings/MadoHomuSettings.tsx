@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { type EnvironmentId } from "@t3tools/contracts";
+import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
+import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuPage";
@@ -9,6 +10,13 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+
+const CODE_VISIBILITY_LABELS = {
+  hidden: "None",
+  scratch: `${MADOHOMU_SCRATCH_LABEL} only`,
+  all: "All",
+} as const satisfies Record<ServerSettings["madohomuCodeVisibility"], string>;
 
 export function MadoHomuSettings() {
   const { target, targets, scope } = useSettingsScope();
@@ -70,6 +78,41 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
               </Link>
             </div>
           </SettingsRow>
+          <SettingsRow
+            {...searchableSetting("madohomu-code-visibility")}
+            description={`Which threads of the MadoHomu project T3 Code's thread list shows. ${MADOHOMU_SCRATCH_LABEL} threads are the ones not pinned in MadoHomu.`}
+            control={
+              <Select
+                value={actions.settings.madohomuCodeVisibility}
+                disabled={!actions.canWrite || busy}
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  void run(() => actions.save({ madohomuCodeVisibility: value }));
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Show MadoHomu threads in T3 Code"
+                  className="w-36"
+                  size="sm"
+                >
+                  <SelectValue>
+                    {CODE_VISIBILITY_LABELS[actions.settings.madohomuCodeVisibility]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {(
+                    Object.keys(CODE_VISIBILITY_LABELS) as Array<
+                      keyof typeof CODE_VISIBILITY_LABELS
+                    >
+                  ).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {CODE_VISIBILITY_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
           <SettingsRow
             {...searchableSetting("madohomu-morning-brief")}
             description="A daily summary of work in progress, decisions waiting on you, and proposed next steps. The agent plans and asks for approval before acting."

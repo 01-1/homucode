@@ -14,7 +14,11 @@ import {
   type LegacyProjectSettingsFields,
 } from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
-import { effectiveSnoozed, isShelvedSettled, type ThreadSnoozeShell } from "./state/threadSettled.ts";
+import {
+  effectiveSnoozed,
+  isShelvedSettled,
+  type ThreadSnoozeShell,
+} from "./state/threadSettled.ts";
 
 export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined): boolean {
   return entry !== undefined && entry.pinned !== false;
@@ -117,6 +121,31 @@ export function isMadoHomuThreadShownInCode(
   if (settings.madohomuCodeVisibility === "all") return true;
   if (settings.madohomuCodeVisibility === "hidden") return false;
   return !isMadoHomuThreadPinned(settings.madohomuThreads[thread.id]);
+}
+
+/**
+ * Drops the threads MadoHomu keeps out of T3 Code's thread lists, reading each
+ * thread's environment settings. `isOpenThread` keeps the thread on screen listed.
+ */
+export function filterMadoHomuCodeThreads<
+  T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
+>(
+  threads: ReadonlyArray<T>,
+  settingsByEnvironment: ReadonlyMap<
+    EnvironmentId,
+    Parameters<typeof isMadoHomuThreadShownInCode>[0]
+  >,
+  isOpenThread: (thread: T) => boolean = () => false,
+): ReadonlyArray<T> {
+  const hides = [...settingsByEnvironment.values()].some(
+    (settings) => settings.madohomuEnabled && settings.madohomuCodeVisibility !== "all",
+  );
+  if (!hides) return threads;
+  return threads.filter((thread) => {
+    if (isOpenThread(thread)) return true;
+    const settings = settingsByEnvironment.get(thread.environmentId);
+    return settings === undefined || isMadoHomuThreadShownInCode(settings, thread);
+  });
 }
 
 export const MADOHOMU_ICON_COLORS = [
