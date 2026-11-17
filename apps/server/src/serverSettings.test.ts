@@ -219,6 +219,44 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
       }),
     ).pipe(Effect.provide(layerServerSettings())),
   );
+  it.effect.each([
+    { label: "missing settings file", stored: undefined, expected: false },
+    { label: "existing sparse settings", stored: {}, expected: true },
+    {
+      label: "explicitly enabled status line",
+      stored: { statusLineEnabled: true },
+      expected: true,
+    },
+    {
+      label: "explicitly disabled status line",
+      stored: { statusLineEnabled: false },
+      expected: false,
+    },
+  ])("preserves the status line for $label across writes and reloads", ({ stored, expected }) =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+      if (stored !== undefined) {
+        yield* fs.writeFileString(config.settingsPath, JSON.stringify(stored));
+      }
+      assert.equal((yield* service.getSettings).statusLineEnabled, expected);
+      yield* service.updateSettings({ statusLineCommand: "custom-status" });
+      const persisted = JSON.parse(yield* fs.readFileString(config.settingsPath));
+      assert.equal(persisted.statusLineEnabled ?? true, expected);
+      const reloaded = yield* Effect.gen(function* () {
+        const fresh = yield* ServerSettingsModule.ServerSettingsService;
+        return yield* fresh.getSettings;
+      }).pipe(
+        Effect.provide(
+          Layer.fresh(ServerSettingsModule.layer).pipe(
+            Layer.provide(Layer.merge(ServerSecretStore.layer, ManagedPolicy.layerTest())),
+          ),
+        ),
+      );
+      assert.equal(reloaded.statusLineEnabled, expected);
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
   it.effect("migrates saved token delivery to paragraph buffering without resetting settings", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
@@ -2401,6 +2439,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
       organization: "Example Corp",
       settings: {
         defaultRuntimeMode: { value: "approval-required", locked: false },
+        statusLineEnabled: { value: false, locked: false },
         enableAgentDeviceAccess: { value: false, locked: true },
       },
     };
@@ -2412,15 +2451,24 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
         const fs = yield* FileSystem.FileSystem;
 
         assert.equal((yield* service.getSettings).defaultRuntimeMode, "approval-required");
+        assert.isFalse((yield* service.getSettings).statusLineEnabled);
 
         // The built-in default differs from the policy's, so choosing it must persist.
-        yield* service.updateSettings({ defaultRuntimeMode: "full-access" });
+        yield* service.updateSettings({
+          defaultRuntimeMode: "full-access",
+          statusLineEnabled: true,
+        });
         assert.equal((yield* service.getSettings).defaultRuntimeMode, "full-access");
         assert.include(yield* fs.readFileString(config.settingsPath), '"full-access"');
+        assert.isTrue((yield* service.getSettings).statusLineEnabled);
 
         // Choosing the policy's value leaves nothing in the file to outlive the policy.
-        yield* service.updateSettings({ defaultRuntimeMode: "approval-required" });
+        yield* service.updateSettings({
+          defaultRuntimeMode: "approval-required",
+          statusLineEnabled: false,
+        });
         assert.notInclude(yield* fs.readFileString(config.settingsPath), "defaultRuntimeMode");
+        assert.notInclude(yield* fs.readFileString(config.settingsPath), "statusLineEnabled");
       }).pipe(Effect.provide(layerServerSettings(policy))),
     );
 
@@ -2431,11 +2479,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(
           config.settingsPath,
-          JSON.stringify({ defaultRuntimeMode: "approval-required" }),
+          JSON.stringify({ defaultRuntimeMode: "approval-required", statusLineEnabled: false }),
         );
 
         yield* service.updateSettings({ defaultAutoPull: true });
         assert.include(yield* fs.readFileString(config.settingsPath), '"approval-required"');
+        assert.isFalse(JSON.parse(yield* fs.readFileString(config.settingsPath)).statusLineEnabled);
       }).pipe(Effect.provide(layerServerSettings(policy))),
     );
 
