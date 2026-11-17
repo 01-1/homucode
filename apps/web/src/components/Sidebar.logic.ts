@@ -9,7 +9,10 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
+import {
+  threadPullRequestSearchTerms,
+  threadSearchPullRequests,
+} from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import {
   isAtomCommandInterrupted,
@@ -32,6 +35,7 @@ import {
 } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
+import * as Schema from "effect/Schema";
 import {
   effectiveSnoozed,
   hasUnseenRunFailure,
@@ -40,6 +44,7 @@ import {
 import {
   getThreadSortTimestamp,
   planPinnedReorder,
+  resolveThreadActivityTimestamp,
   sortThreads,
   toSortableTimestamp,
   type ThreadSortInput,
@@ -1244,6 +1249,212 @@ export function searchSidebarThreads<
     return thread && !listed.has(thread) ? [thread] : [];
   });
   return { titleMatches, contentMatches };
+}
+
+export const SidebarSearchSort = Schema.Literals([
+  "recent",
+  "relevance",
+  "opened",
+  "newest",
+  "oldest",
+  "stale",
+  "title",
+  "project",
+]);
+export type SidebarSearchSort = typeof SidebarSearchSort.Type;
+
+export const SIDEBAR_SEARCH_SORT_OPTIONS: ReadonlyArray<{
+  readonly value: SidebarSearchSort;
+  readonly label: string;
+}> = [
+  { value: "recent", label: "Recent activity" },
+  { value: "relevance", label: "Best match" },
+  { value: "opened", label: "Recently opened" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "stale", label: "Least recent activity" },
+  { value: "title", label: "Title (A–Z)" },
+  { value: "project", label: "Project" },
+];
+
+export type SidebarSearchStatus = "working" | "needs-you" | "failed" | "unread";
+export type SidebarSearchShelf = "pinned" | "active" | "snoozed" | "settled";
+export type SidebarSearchUpdated = "any" | "day" | "week" | "month" | "older";
+export type SidebarSearchFeature = "pull-request" | "worktree";
+
+export interface SidebarSearchFilters {
+  readonly statuses: ReadonlyArray<SidebarSearchStatus>;
+  readonly shelves: ReadonlyArray<SidebarSearchShelf>;
+  readonly providers: ReadonlyArray<string>;
+  readonly environments: ReadonlyArray<EnvironmentId>;
+  readonly updated: SidebarSearchUpdated;
+  readonly features: ReadonlyArray<SidebarSearchFeature>;
+  readonly titlesOnly: boolean;
+}
+
+export const NO_SIDEBAR_SEARCH_FILTERS: SidebarSearchFilters = {
+  statuses: [],
+  shelves: [],
+  providers: [],
+  environments: [],
+  updated: "any",
+  features: [],
+  titlesOnly: false,
+};
+
+/** Whether the filters narrow the thread list; matching titles only narrows a query alone. */
+export function sidebarSearchFiltersNarrowList(filters: SidebarSearchFilters): boolean {
+  return (
+    filters.statuses.length > 0 ||
+    filters.shelves.length > 0 ||
+    filters.providers.length > 0 ||
+    filters.environments.length > 0 ||
+    filters.features.length > 0 ||
+    filters.updated !== "any"
+  );
+}
+
+export function countSidebarSearchFilters(filters: SidebarSearchFilters): number {
+  return (
+    filters.statuses.length +
+    filters.shelves.length +
+    filters.providers.length +
+    filters.environments.length +
+    filters.features.length +
+    (filters.updated === "any" ? 0 : 1) +
+    (filters.titlesOnly ? 1 : 0)
+  );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const UPDATED_WINDOW_MS = { day: DAY_MS, week: 7 * DAY_MS, month: 30 * DAY_MS } as const;
+
+function threadActivityMs(
+  thread: Pick<EnvironmentThreadShell, "latestUserMessageAt" | "latestRun" | "updatedAt">,
+): number {
+  return toSortableTimestamp(resolveThreadActivityTimestamp(thread) ?? undefined) ?? 0;
+}
+
+function matchesSidebarSearchStatus(
+  thread: EnvironmentThreadShell,
+  lastVisitedAt: string | undefined,
+  status: SidebarSearchStatus,
+): boolean {
+  if (status === "unread") return hasUnseenCompletion({ ...thread, lastVisitedAt });
+  const rowStatus = resolveSidebarRowStatus({ ...thread, lastVisitedAt });
+  switch (status) {
+    case "working":
+      return rowStatus === "working" || rowStatus === "preparing" || rowStatus === "waiting";
+    case "needs-you":
+      return rowStatus === "approval" || rowStatus === "input" || rowStatus === "request";
+    case "failed":
+      return rowStatus === "failed" || rowStatus === "limited";
+  }
+}
+
+function matchesSidebarSearchFeature(
+  thread: EnvironmentThreadShell,
+  feature: SidebarSearchFeature,
+): boolean {
+  switch (feature) {
+    case "pull-request":
+      return threadSearchPullRequests(thread).length > 0;
+    case "worktree":
+      return thread.worktreePath !== null;
+  }
+}
+
+/**
+ * Threads the search filters keep. Choices within one filter widen it (any status picked);
+ * separate filters narrow each other, and every feature picked must hold.
+ */
+export function filterSidebarSearchThreads<T extends EnvironmentThreadShell>(
+  threads: readonly T[],
+  filters: SidebarSearchFilters,
+  context: {
+    readonly now: number;
+    readonly sectionOf: (thread: T) => SidebarSection | undefined;
+    readonly lastVisitedAtOf: (thread: T) => string | undefined;
+  },
+): T[] {
+  if (!sidebarSearchFiltersNarrowList(filters)) return [...threads];
+  return threads.filter((thread) => {
+    if (filters.shelves.length > 0) {
+      const section = context.sectionOf(thread);
+      // The Working shelf holds active threads while they run.
+      const shelf = section === "working" ? "active" : section;
+      if (shelf === undefined || !filters.shelves.includes(shelf)) return false;
+    }
+    if (filters.statuses.length > 0) {
+      const lastVisitedAt = context.lastVisitedAtOf(thread);
+      if (
+        !filters.statuses.some((status) =>
+          matchesSidebarSearchStatus(thread, lastVisitedAt, status),
+        )
+      ) {
+        return false;
+      }
+    }
+    if (filters.providers.length > 0 && !filters.providers.includes(thread.providerInstanceId)) {
+      return false;
+    }
+    if (filters.environments.length > 0 && !filters.environments.includes(thread.environmentId)) {
+      return false;
+    }
+    if (filters.updated !== "any") {
+      const age = context.now - threadActivityMs(thread);
+      if (
+        filters.updated === "older"
+          ? age <= UPDATED_WINDOW_MS.month
+          : age > UPDATED_WINDOW_MS[filters.updated]
+      ) {
+        return false;
+      }
+    }
+    return filters.features.every((feature) => matchesSidebarSearchFeature(thread, feature));
+  });
+}
+
+const titleCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** Orders search results; "relevance" keeps the order they were ranked in. */
+export function sortSidebarSearchResults<T extends EnvironmentThreadShell>(
+  threads: readonly T[],
+  sort: SidebarSearchSort,
+  projectNameOf: (thread: T) => string,
+): readonly T[] {
+  if (sort === "relevance" || threads.length < 2) return threads;
+  const keyed = threads.map((thread) => ({
+    thread,
+    activity: threadActivityMs(thread),
+    created: toSortableTimestamp(thread.createdAt) ?? 0,
+  }));
+  type Keyed = (typeof keyed)[number];
+  const byActivity = (left: Keyed, right: Keyed) => right.activity - left.activity;
+  const compare: (left: Keyed, right: Keyed) => number = (() => {
+    switch (sort) {
+      case "recent":
+        return byActivity;
+      case "stale":
+        return (left, right) => left.activity - right.activity;
+      case "opened":
+        return (left, right) =>
+          (right.thread.opens?.openedAt ?? 0) - (left.thread.opens?.openedAt ?? 0) ||
+          byActivity(left, right);
+      case "newest":
+        return (left, right) => right.created - left.created || byActivity(left, right);
+      case "oldest":
+        return (left, right) => left.created - right.created || byActivity(left, right);
+      case "title":
+        return (left, right) =>
+          titleCollator.compare(left.thread.title, right.thread.title) || byActivity(left, right);
+      case "project":
+        return (left, right) =>
+          titleCollator.compare(projectNameOf(left.thread), projectNameOf(right.thread)) ||
+          byActivity(left, right);
+    }
+  })();
+  return keyed.toSorted(compare).map(({ thread }) => thread);
 }
 
 export function pullRequestMatchesSearchQuery(

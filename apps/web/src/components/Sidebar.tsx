@@ -239,9 +239,16 @@ import {
   resolveSidebarDropVerb,
   resolveSidebarThreadSection,
   resolveSidebarReorderableThreadKeys,
+  filterSidebarSearchThreads,
+  NO_SIDEBAR_SEARCH_FILTERS,
+  resolveThreadLastVisitedAt,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
+  SidebarSearchSort,
+  sidebarSearchFiltersNarrowList,
+  sortSidebarSearchResults,
+  type SidebarSearchFilters,
   sidebarListItemId,
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
@@ -296,6 +303,7 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
+import { SidebarSearchFilterMenu, SidebarSearchSortMenu } from "./sidebar/SidebarSearchControls";
 import { TooltipProvider } from "./ui/tooltip";
 import {
   composerDraftHasUserContent,
@@ -372,10 +380,12 @@ const sidebarProviderEntriesAtom = Atom.make((get) => {
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
+const NO_SEARCH_MATCHES = { titleMatches: EMPTY_THREADS, contentMatches: EMPTY_THREADS };
 
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
+const SEARCH_SORT_KEY = "t3code:sidebar:search-sort";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
@@ -1134,6 +1144,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
+  const [searchFilters, setSearchFilters] =
+    useState<SidebarSearchFilters>(NO_SIDEBAR_SEARCH_FILTERS);
+  const [searchSort, setSearchSort] = useLocalStorage(SEARCH_SORT_KEY, "recent", SidebarSearchSort);
+  // Only status filters read visits; subscribing always would re-render the sidebar on each one.
+  const localLastVisitedAtById = useUiStateStore((store) =>
+    searchFilters.statuses.length > 0 ? store.threadLastVisitedAtById : null,
+  );
   const connectedEnvironmentIds = useConnectedEnvironmentIds();
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
@@ -1242,7 +1259,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const isSearchingThreads = threadSearchQuery.trim().length > 0;
+  const hasThreadSearchQuery = threadSearchQuery.trim().length > 0;
+  const isSearchingThreads = hasThreadSearchQuery || sidebarSearchFiltersNarrowList(searchFilters);
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1309,13 +1327,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const scopedProjectGroups = revealWidensScope ? [] : chosenProjectGroups;
   const scopedProjectRefs = scopedProjectGroups.flatMap((project) => project.memberProjectRefs);
   const scopedProjectKeys = revealWidensScope ? null : chosenScopeProjectKeys;
-  const threadSearch = useThreadSearch(
-    connectedEnvironmentIds,
-    threadSearchQuery,
-    scopedProjectGroups.length === 0
+  const threadSearch = useThreadSearch(connectedEnvironmentIds, threadSearchQuery, {
+    ...(scopedProjectGroups.length === 0
       ? {}
-      : { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) },
-  );
+      : { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) }),
+    ...(searchFilters.titlesOnly ? { titlesOnly: true } : {}),
+  });
   const routeDraftIdForRows = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
     let count = 0;
@@ -1475,6 +1492,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
   });
 
+  const searchCandidates =
+    isSearchingThreads && sidebarSearchFiltersNarrowList(searchFilters)
+      ? filterSidebarSearchThreads(searchableThreads, searchFilters, {
+          // oxlint-disable-next-line react/purity -- Age filters sample the clock when the search inputs change; the compiler recomputes it only then.
+          now: Date.now(),
+          sectionOf: (thread) => sectionByThreadKey.get(threadShellKey(thread)),
+          lastVisitedAtOf: (thread) =>
+            resolveThreadLastVisitedAt(
+              thread.lastVisitedAt,
+              localLastVisitedAtById?.[threadShellKey(thread)],
+            ),
+        })
+      : searchableThreads;
   // Ranked across environments as the palette ranks them, so one
   // environment's list does not sit above another's better matches; rows
   // already shown keep their places while slower environments answer.
@@ -1482,7 +1512,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     threadSearch.matches.length === 0
       ? null
       : new Map(
-          searchableThreads.map((thread) => [
+          searchCandidates.map((thread) => [
             threadSearchMatchKey({ environmentId: thread.environmentId, threadId: thread.id }),
             thread,
           ]),
@@ -1513,8 +1543,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     Number.POSITIVE_INFINITY,
   );
   if (messageOrder !== shownMessageOrder) setShownMessageOrder(messageOrder);
-  const { titleMatches: threadTitleResults, contentMatches: threadContentResults } =
-    searchSidebarThreads(searchableThreads, threadSearchQuery, new Set(messageOrder.keys));
+  const { titleMatches, contentMatches } = !isSearchingThreads
+    ? NO_SEARCH_MATCHES
+    : hasThreadSearchQuery
+      ? searchSidebarThreads(searchCandidates, threadSearchQuery, new Set(messageOrder.keys))
+      : { titleMatches: searchCandidates, contentMatches: EMPTY_THREADS };
+  // Best match needs a query to rank by; filters alone list by recent activity.
+  const resultSort = searchSort === "relevance" && !hasThreadSearchQuery ? "recent" : searchSort;
+  const projectNameOf = (thread: EnvironmentThreadShell) =>
+    projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? "";
+  // Title matches stay above message matches, so rows that arrive late from the
+  // server's message search never jump above the rows already shown.
+  const threadTitleResults = sortSidebarSearchResults(titleMatches, resultSort, projectNameOf);
+  const threadContentResults = sortSidebarSearchResults(contentMatches, resultSort, projectNameOf);
   const threadSearchResults = [...threadTitleResults, ...threadContentResults];
   // Only rows listed for their messages show one, and open find on it.
   const threadSearchMatchByKey = new Map(
@@ -1612,6 +1653,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
 
   const clearThreadSearch = () => {
     setThreadSearchQuery("");
+    setSearchFilters(NO_SIDEBAR_SEARCH_FILTERS);
     setSearchHighlightKey(null);
   };
   const selectThreadSearchResult = (thread: EnvironmentThreadShell) => {
@@ -3699,6 +3741,57 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
+              searchControls={
+                <>
+                  <SidebarSearchFilterMenu
+                    filters={searchFilters}
+                    onFiltersChange={(filters) => {
+                      setSearchFilters(filters);
+                      setSearchHighlightKey(null);
+                    }}
+                    projects={lookupProjectScopeItems.flatMap((item) => {
+                      const project = projectGroupByScopeKey.get(item.value);
+                      return project ? [{ value: item.value, label: item.label, project }] : [];
+                    })}
+                    selectedProjectKeys={projectScopeKeys}
+                    onToggleProject={toggleProjectScopeKey}
+                    onClearProjects={() => setProjectScopeKeys([])}
+                    threadChoices={() => {
+                      const providers = new Map<string, string>();
+                      const environments = new Map<string, string>();
+                      for (const thread of searchableThreads) {
+                        if (!providers.has(thread.providerInstanceId)) {
+                          providers.set(
+                            thread.providerInstanceId,
+                            providerEntriesByEnvironment
+                              .get(thread.environmentId)
+                              ?.get(thread.providerInstanceId)?.displayName ??
+                              thread.providerInstanceId,
+                          );
+                        }
+                        if (!environments.has(thread.environmentId)) {
+                          environments.set(
+                            thread.environmentId,
+                            environmentLabelById.get(thread.environmentId) ?? thread.environmentId,
+                          );
+                        }
+                      }
+                      const choices = (labels: Map<string, string>) =>
+                        [...labels]
+                          .map(([value, label]) => ({ value, label }))
+                          .toSorted((left, right) => left.label.localeCompare(right.label));
+                      return { providers: choices(providers), environments: choices(environments) };
+                    }}
+                  />
+                  <SidebarSearchSortMenu
+                    sort={searchSort}
+                    onSortChange={(sort) => {
+                      setSearchSort(sort);
+                      setSearchHighlightKey(null);
+                    }}
+                  />
+                </>
+              }
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -4011,7 +4104,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 role="status"
                 className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
               >
-                {threadSearch.isPending ? "Searching thread messages…" : "No threads found"}
+                {threadSearch.isPending
+                  ? "Searching thread messages…"
+                  : hasThreadSearchQuery
+                    ? "No threads found"
+                    : "No threads match these filters"}
               </p>
             )
           ) : null}

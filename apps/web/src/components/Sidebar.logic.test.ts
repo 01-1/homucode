@@ -23,6 +23,11 @@ import {
   resolveWindowTitleThreadStatus,
   resolveWorkingStartedAt,
   searchSidebarThreads,
+  filterSidebarSearchThreads,
+  NO_SIDEBAR_SEARCH_FILTERS,
+  sortSidebarSearchResults,
+  type SidebarSearchFilters,
+  type SidebarSearchSort,
   shouldRecedeSidebarThread,
   sortInboxThreadsByReturn,
   resolveSidebarDropTarget,
@@ -460,6 +465,95 @@ describe("searchSidebarThreads", () => {
         contentMatches: [threads[1]],
       },
     );
+  });
+});
+
+describe("sidebar search filters and sort", () => {
+  const now = Date.parse("2026-10-23T00:00:00.000Z");
+  const daysAgo = (days: number) => new Date(now - days * 86_400_000).toISOString();
+  const shell = (id: string, overrides: Partial<Thread> = {}): Thread => ({
+    ...makeThreadFixture({ environmentId: localEnvironmentId, id: ThreadId.make(id), title: id }),
+    latestRun: null,
+    runtime: null,
+    ...overrides,
+  });
+
+  it("widens within a filter and narrows across filters", () => {
+    const threads = [
+      shell("pinned", { latestUserMessageAt: daysAgo(0.5), hasPendingApprovals: true }),
+      shell("working", {
+        latestUserMessageAt: daysAgo(2),
+        runtime: {
+          status: "running",
+          activeRunId: RunId.make("run-working"),
+          providerInstanceId: ProviderInstanceId.make("claude"),
+          providerName: null,
+          lastError: null,
+          updatedAt: daysAgo(2),
+        },
+        providerInstanceId: ProviderInstanceId.make("claude"),
+      }),
+      shell("settled-old", {
+        latestUserMessageAt: daysAgo(40),
+        latestRun: makeLatestRun({ startedAt: daysAgo(40), completedAt: daysAgo(40) }),
+        worktreePath: "/worktrees/settled-old",
+      }),
+      shell("snoozed", { latestUserMessageAt: daysAgo(3) }),
+    ];
+    const sections: Record<string, SidebarSection> = {
+      pinned: "pinned",
+      // The Working shelf lists active threads while they run.
+      working: "working",
+      "settled-old": "settled",
+      snoozed: "snoozed",
+    };
+    const filter = (filters: Partial<SidebarSearchFilters>) =>
+      filterSidebarSearchThreads(
+        threads,
+        { ...NO_SIDEBAR_SEARCH_FILTERS, ...filters },
+        {
+          now,
+          sectionOf: (thread) => sections[thread.id],
+          lastVisitedAtOf: () => daysAgo(41),
+        },
+      ).map((thread) => thread.id);
+
+    expect(filter({ shelves: ["pinned", "active"] })).toEqual(["pinned", "working"]);
+    expect(filter({ shelves: ["active", "snoozed"], updated: "day" })).toEqual([]);
+    expect(filter({ updated: "week" })).toEqual(["pinned", "working", "snoozed"]);
+    expect(filter({ updated: "older" })).toEqual(["settled-old"]);
+    expect(filter({ statuses: ["working", "needs-you"] })).toEqual(["pinned", "working"]);
+    expect(filter({ statuses: ["unread"] })).toEqual(["settled-old"]);
+    expect(filter({ providers: [ProviderInstanceId.make("claude")] })).toEqual(["working"]);
+    expect(filter({ features: ["worktree"], shelves: ["settled"] })).toEqual(["settled-old"]);
+    expect(filter({ features: ["worktree", "pull-request"] })).toEqual([]);
+  });
+
+  it("orders by recent activity, keeping ranked order only for best match", () => {
+    const ranked = [
+      shell("b", {
+        title: "alpha",
+        createdAt: daysAgo(5),
+        latestUserMessageAt: daysAgo(3),
+        opens: { openedAt: now - 1_000, score: 1, picks: [] },
+      }),
+      shell("c", { title: "Gamma 10", createdAt: daysAgo(20), latestUserMessageAt: daysAgo(2) }),
+      shell("a", { title: "Beta", createdAt: daysAgo(10), latestUserMessageAt: daysAgo(1) }),
+    ];
+    const projectNames: Record<string, string> = { a: "Zed", b: "Alpha", c: "alpha" };
+    const sort = (order: SidebarSearchSort) =>
+      sortSidebarSearchResults(ranked, order, (thread) => projectNames[thread.id]!).map(
+        (thread) => thread.id,
+      );
+
+    expect(sort("relevance")).toEqual(["b", "c", "a"]);
+    expect(sort("recent")).toEqual(["a", "c", "b"]);
+    expect(sort("stale")).toEqual(["b", "c", "a"]);
+    expect(sort("opened")).toEqual(["b", "a", "c"]);
+    expect(sort("newest")).toEqual(["b", "a", "c"]);
+    expect(sort("oldest")).toEqual(["c", "a", "b"]);
+    expect(sort("title")).toEqual(["b", "a", "c"]);
+    expect(sort("project")).toEqual(["c", "b", "a"]);
   });
 });
 
