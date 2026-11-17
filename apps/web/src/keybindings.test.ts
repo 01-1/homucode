@@ -547,22 +547,25 @@ describe("cross-command precedence", () => {
 });
 
 describe("resolveChatShortcutCommand", () => {
-  it("runs the active environment's script shortcut instead of the primary environment's", () => {
-    const primary = compile([{ shortcut: modShortcut("r"), command: "script.setup.run" }]);
-    const active = compile([{ shortcut: modShortcut("t"), command: "script.setup.run" }]);
+  it.each(["script.setup.run", "bash:npm test"] as const)(
+    "runs the active environment's %s shortcut instead of the primary environment's",
+    (command) => {
+      const primary = compile([{ shortcut: modShortcut("r"), command }]);
+      const active = compile([{ shortcut: modShortcut("t"), command }]);
 
-    assert.strictEqual(
-      resolveChatShortcutCommand(event({ key: "t", ctrlKey: true }), primary, active, {
-        platform: "Linux",
-      }),
-      "script.setup.run",
-    );
-    assert.isNull(
-      resolveChatShortcutCommand(event({ key: "r", ctrlKey: true }), primary, active, {
-        platform: "Linux",
-      }),
-    );
-  });
+      assert.strictEqual(
+        resolveChatShortcutCommand(event({ key: "t", ctrlKey: true }), primary, active, {
+          platform: "Linux",
+        }),
+        command,
+      );
+      assert.isNull(
+        resolveChatShortcutCommand(event({ key: "r", ctrlKey: true }), primary, active, {
+          platform: "Linux",
+        }),
+      );
+    },
+  );
 
   it("does not run primary scripts before the active environment's bindings arrive", () => {
     const primary = compile([{ shortcut: modShortcut("r"), command: "script.setup.run" }]);

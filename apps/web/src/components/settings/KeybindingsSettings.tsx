@@ -39,6 +39,12 @@ import {
 import { isElectron } from "../../env";
 import { useOpenInPreferredEditor } from "../../editorPreferences";
 import { formatShortcutLabel } from "../../keybindings";
+import {
+  commandForCustomScript,
+  customScriptFromCommand,
+  isCustomScriptLanguageAvailable,
+  type CustomScriptLanguage,
+} from "../../projectScripts";
 import { cn } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -702,6 +708,8 @@ type KeybindingRowDraftState = {
   whenDraft: KeybindingWhenNode | undefined;
   isRecording: boolean;
   isWhenDraftValid: boolean;
+  scriptDraft: string;
+  scriptLanguage: CustomScriptLanguage | null;
 };
 
 function createKeybindingRowDraft(row: KeybindingRow): KeybindingRowDraftState {
@@ -710,6 +718,8 @@ function createKeybindingRowDraft(row: KeybindingRow): KeybindingRowDraftState {
     whenDraft: row.binding.whenAst,
     isRecording: false,
     isWhenDraftValid: true,
+    scriptDraft: customScriptFromCommand(row.command)?.source ?? "",
+    scriptLanguage: customScriptFromCommand(row.command)?.language ?? null,
   };
 }
 
@@ -739,9 +749,16 @@ function useKeybindingRowEditor({
 }) {
   const [draft, setDraft] = useReducer(keybindingRowDraftReducer, row, createKeybindingRowDraft);
   const pillRef = useRef<HTMLButtonElement>(null);
-  const { keyDraft, whenDraft, isRecording, isWhenDraftValid } = draft;
+  const { keyDraft, whenDraft, isRecording, isWhenDraftValid, scriptDraft, scriptLanguage } = draft;
   const whenDraftExpression = whenAstToExpression(whenDraft);
-  const isDirty = keyDraft !== row.key || whenDraftExpression !== row.when;
+  const savedScript = customScriptFromCommand(row.command);
+  const commandDraft =
+    savedScript === null || scriptLanguage === null
+      ? row.command
+      : commandForCustomScript({ language: scriptLanguage, source: scriptDraft });
+  const isDirty =
+    keyDraft !== row.key || whenDraftExpression !== row.when || commandDraft !== row.command;
+  const canSave = commandDraft !== null && keyDraft.trim().length > 0 && isWhenDraftValid;
   const conflictLabels = keybindingConflictLabels(allRows, {
     rowId: row.id,
     key: keyDraft,
@@ -749,8 +766,9 @@ function useKeybindingRowEditor({
   });
 
   const save = () => {
+    if (!commandDraft) return;
     onSave({
-      command: row.command,
+      command: commandDraft,
       key: keyDraft,
       when: whenDraftExpression.trim().length > 0 ? whenDraftExpression : undefined,
       replace: rowKeybindingTarget(row),
@@ -781,9 +799,12 @@ function useKeybindingRowEditor({
     keyDraft,
     whenDraft,
     isRecording,
-    isWhenDraftValid,
+    scriptDraft,
+    scriptLanguage,
+    savedScript,
     whenDraftExpression,
     isDirty,
+    canSave,
     conflictLabels,
     setDraft,
     save,
@@ -819,26 +840,14 @@ function KeybindingKeyControl({
   isSaving: boolean;
   pillClassName?: string | undefined;
 }) {
-  const {
-    keyDraft,
-    isRecording,
-    isDirty,
-    isWhenDraftValid,
-    setDraft,
-    save,
-    captureKeybinding,
-    pillRef,
-  } = editor;
+  const { keyDraft, isRecording, isDirty, canSave, setDraft, save, captureKeybinding, pillRef } =
+    editor;
   const showPill = !isRecording && keyDraft === row.key && row.key.length > 0 && !isDirty;
 
   return (
     <>
       {isDirty ? (
-        <Button
-          size="sm"
-          disabled={isSaving || keyDraft.trim().length === 0 || !isWhenDraftValid}
-          onClick={save}
-        >
+        <Button size="sm" disabled={isSaving || !canSave} onClick={save}>
           {isSaving ? "Saving" : "Save"}
         </Button>
       ) : null}
@@ -981,7 +990,9 @@ function KeybindingRowTitle({ row }: { row: KeybindingRow }) {
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="flex items-center gap-2" />}>
-        {commandLabel(row.command)}
+        {customScriptFromCommand(row.command) === null
+          ? commandLabel(row.command)
+          : "Custom script"}
         <KeybindingSourceBadge source={row.source} />
       </TooltipTrigger>
       <TooltipPopup side="top">{row.command}</TooltipPopup>
@@ -1026,6 +1037,91 @@ function KeybindingHoverRowMenu(props: {
   );
 }
 
+const CUSTOM_SCRIPT_LANGUAGES = [
+  { language: "bash", label: "Bash", tooltip: "Run as a Bash command in the thread's terminal" },
+  {
+    language: "ts",
+    label: "TS",
+    tooltip: "TypeScript app scripts are not available in this build yet",
+  },
+] as const satisfies ReadonlyArray<{
+  language: CustomScriptLanguage;
+  label: string;
+  tooltip: string;
+}>;
+
+function CustomScriptLanguageButtons({
+  value,
+  onChange,
+}: {
+  value: CustomScriptLanguage | null;
+  /** Null means the pressed button was released, which a new row reads as "use a command". */
+  onChange: (language: CustomScriptLanguage | null) => void;
+}) {
+  return CUSTOM_SCRIPT_LANGUAGES.map(({ language, label, tooltip }) => {
+    const available = isCustomScriptLanguageAvailable(language);
+    return (
+      <Tooltip key={language}>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <Toggle
+            pressed={value === language}
+            disabled={!available}
+            onPressedChange={(pressed) => onChange(pressed ? language : null)}
+            aria-label={`${label} script`}
+            variant="outline"
+            size="sm"
+          >
+            {label}
+          </Toggle>
+        </TooltipTrigger>
+        <TooltipPopup side="top">{tooltip}</TooltipPopup>
+      </Tooltip>
+    );
+  });
+}
+
+function CustomScriptInput({
+  value,
+  label,
+  autoFocus = false,
+  className,
+  onChange,
+  onSubmit,
+  onRevert,
+}: {
+  value: string;
+  label: string;
+  autoFocus?: boolean;
+  className?: string | undefined;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onRevert?: () => void;
+}) {
+  return (
+    <Input
+      autoFocus={autoFocus}
+      aria-label={label}
+      value={value}
+      placeholder="Shell command"
+      size="sm"
+      font="mono"
+      className={className}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          onSubmit();
+        } else if (event.key === "Escape" && onRevert) {
+          // An unhandled Escape closes the settings page.
+          event.preventDefault();
+          event.stopPropagation();
+          onRevert();
+        }
+      }}
+    />
+  );
+}
+
 function KeybindingSettingsRow(props: KeybindingRowProps) {
   const { row, isSaving, anchorId, allRows, variables, onSave, onReset, onRemove } = props;
   const editor = useKeybindingRowEditor({ row, allRows, onSave });
@@ -1045,6 +1141,31 @@ function KeybindingSettingsRow(props: KeybindingRowProps) {
             onReset={onReset}
             onRemove={onRemove}
           />
+          {editor.savedScript === null ? null : (
+            <CustomScriptLanguageButtons
+              value={editor.scriptLanguage}
+              onChange={(scriptLanguage) => {
+                if (scriptLanguage) editor.setDraft({ scriptLanguage });
+              }}
+            />
+          )}
+          {editor.savedScript === null ? null : (
+            <CustomScriptInput
+              value={editor.scriptDraft}
+              label={`Shell command for ${commandLabel(row.command)}`}
+              className="w-56"
+              onChange={(scriptDraft) => editor.setDraft({ scriptDraft })}
+              onSubmit={() => {
+                if (editor.isDirty && editor.canSave && !isSaving) editor.save();
+              }}
+              onRevert={() =>
+                editor.setDraft({
+                  scriptDraft: editor.savedScript?.source ?? "",
+                  scriptLanguage: editor.savedScript?.language ?? null,
+                })
+              }
+            />
+          )}
           <KeybindingKeyControl
             row={row}
             editor={editor}
@@ -1070,21 +1191,26 @@ function useNewKeybindingDraft({
     whenDraft: undefined,
     isRecording: false,
     isWhenDraftValid: true,
+    scriptDraft: "",
+    scriptLanguage: null,
   });
-  const { keyDraft, whenDraft, isRecording, isWhenDraftValid } = draft;
+  const { keyDraft, whenDraft, isRecording, isWhenDraftValid, scriptDraft, scriptLanguage } = draft;
+  const command = scriptLanguage
+    ? commandForCustomScript({ language: scriptLanguage, source: scriptDraft })
+    : commandDraft || null;
   const whenDraftExpression = whenAstToExpression(whenDraft);
   const conflictLabels = keybindingConflictLabels(allRows, {
     rowId: "new",
     key: keyDraft,
     when: whenDraftExpression,
   });
-  const commandLabelText = commandDraft ? commandLabel(commandDraft) : "new keybinding";
-  const canSave = Boolean(commandDraft) && keyDraft.trim().length > 0 && isWhenDraftValid;
+  const commandLabelText = command ? commandLabel(command) : "new keybinding";
+  const canSave = command !== null && keyDraft.trim().length > 0 && isWhenDraftValid;
 
   const save = () => {
-    if (!commandDraft) return;
+    if (!command) return;
     onSave({
-      command: commandDraft,
+      command,
       key: keyDraft,
       ...(whenDraftExpression.trim().length > 0 ? { when: whenDraftExpression } : {}),
     });
@@ -1110,6 +1236,8 @@ function useNewKeybindingDraft({
   return {
     commandDraft,
     setCommandDraft,
+    scriptLanguage,
+    scriptDraft,
     keyDraft,
     whenDraft,
     whenDraftExpression,
@@ -1281,11 +1409,28 @@ function NewKeybindingSettingsRow(props: NewKeybindingProps) {
       }
       control={
         <div className="flex flex-wrap items-center gap-2">
-          <NewKeybindingCommandSelect
-            draft={draft}
-            commandOptions={commandOptions}
-            className="w-56"
+          <CustomScriptLanguageButtons
+            value={draft.scriptLanguage}
+            onChange={(scriptLanguage) => draft.setDraft({ scriptLanguage })}
           />
+          {draft.scriptLanguage ? (
+            <CustomScriptInput
+              autoFocus
+              value={draft.scriptDraft}
+              label="Shell command for new keybinding"
+              className="w-56"
+              onChange={(scriptDraft) => draft.setDraft({ scriptDraft })}
+              onSubmit={() => {
+                if (draft.canSave && !isSaving) draft.save();
+              }}
+            />
+          ) : (
+            <NewKeybindingCommandSelect
+              draft={draft}
+              commandOptions={commandOptions}
+              className="w-56"
+            />
+          )}
           <KeybindingConflictWarning labels={draft.conflictLabels} />
           <NewKeybindingKeyInput draft={draft} className="w-44" />
           <Button size="sm" disabled={isSaving || !draft.canSave} onClick={draft.save}>

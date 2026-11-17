@@ -1,11 +1,14 @@
 import {
   MAX_SCRIPT_ID_LENGTH,
   SCRIPT_RUN_COMMAND_PATTERN,
+  BASH_SCRIPT_COMMAND_PATTERN,
+  BASH_SCRIPT_COMMAND_PREFIX,
   type KeybindingCommand,
   type ProjectScript,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
+const isBashScriptCommand = Schema.is(BASH_SCRIPT_COMMAND_PATTERN);
 
 export interface ProjectScriptInput {
   readonly name: ProjectScript["name"];
@@ -79,6 +82,36 @@ export function projectScriptIdFromCommand(command: string): string | null {
   }
   const [prefix, , suffix] = SCRIPT_RUN_COMMAND_PATTERN.parts;
   return trimmed.slice(prefix.literal.length, -suffix.literal.length);
+}
+
+export type CustomScriptLanguage = "bash" | "ts";
+
+export interface CustomScript {
+  readonly language: CustomScriptLanguage;
+  readonly source: string;
+}
+
+/** TS bindings wait for app scripts, which will add a `ts:` command and run it in the app window. */
+export function isCustomScriptLanguageAvailable(language: CustomScriptLanguage): boolean {
+  return language === "bash";
+}
+
+/** Null when the source is invalid or its language cannot be bound yet. */
+export function commandForCustomScript(script: CustomScript): KeybindingCommand | null {
+  if (script.language !== "bash") return null;
+  const command = `${BASH_SCRIPT_COMMAND_PREFIX}${script.source.trim()}`;
+  return isBashScriptCommand(command) ? command : null;
+}
+
+export function customScriptFromCommand(command: string): CustomScript | null {
+  return isBashScriptCommand(command)
+    ? { language: "bash", source: command.slice(BASH_SCRIPT_COMMAND_PREFIX.length).trim() }
+    : null;
+}
+
+/** Commands that run in the active thread's terminal, so they resolve from that thread's machine. */
+export function isThreadScriptCommand(command: string): boolean {
+  return projectScriptIdFromCommand(command) !== null || isBashScriptCommand(command);
 }
 
 export function nextProjectScriptId(name: string, existingIds: Iterable<string>): string {
