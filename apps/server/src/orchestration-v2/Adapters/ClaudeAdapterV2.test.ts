@@ -2038,22 +2038,13 @@ describe("ClaudeAdapterV2 resume compaction", () => {
             Effect.map((event) => ({ type: "approval", event }) as const),
           ),
         );
-        assert.equal(safety.type, askRule ? "approval" : "decision");
+        assert.equal(safety.type, "decision");
         if (safety.type === "decision") {
           assert.equal(safety.result?.behavior, "deny");
           if (safety.result?.behavior === "deny") {
             assert.include(safety.result.message, reason);
             assert.notInclude(safety.result.message, "\u001b[");
           }
-        } else if (
-          Option.isSome(safety.event) &&
-          safety.event.value.type === "runtime_request.updated"
-        ) {
-          yield* runtime.respondToRuntimeRequest({
-            requestId: safety.event.value.runtimeRequest.id,
-            decision: "decline",
-          });
-          assert.equal((yield* Fiber.join(safetyDecision))?.behavior, "deny");
         }
         yield* Fiber.interrupt(safetyRequest);
       }
@@ -4908,7 +4899,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ),
     );
 
-    it.effect("asks before restricted Full access tools and follows policy across turns", () =>
+    it.effect("denies restricted Full access tools and follows policy across turns", () =>
       Effect.gen(function* () {
         const resolveSettings = vi
           .mocked(ClaudeSdk.resolveSettings)
@@ -4979,39 +4970,42 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         assert.equal(notices().length, 0);
         assert.equal(resolveSettings.mock.calls.length, 0);
 
+        const assertDeniedWithoutRequest = Effect.fnUntraced(function* (
+          toolUseID: string,
+          decisionReason?: string,
+        ) {
+          const decision = yield* Effect.promise(() =>
+            harness.getOpenedOptions()!.canUseTool!(
+              "Bash",
+              { command: "git status" },
+              {
+                signal: new AbortController().signal,
+                toolUseID,
+                requestId: `request-${toolUseID}`,
+                ...(decisionReason === undefined ? {} : { decisionReason }),
+              },
+            ),
+          ).pipe(Effect.forkScoped);
+          const first = yield* Effect.raceFirst(
+            Queue.take(harness.runtimeRequestReceipts).pipe(
+              Effect.as({ type: "request" } as const),
+            ),
+            Fiber.join(decision).pipe(
+              Effect.map((result) => ({ type: "decision", result }) as const),
+            ),
+          );
+          assert.equal(first.type, "decision", `${toolUseID} must not prompt in Full access`);
+          if (first.type === "decision") {
+            assert.equal(first.result?.behavior, "deny");
+            if (first.result?.behavior === "deny") {
+              assert.include(first.result.message, "HomuCode automatically refused");
+            }
+          }
+        });
+
         yield* start("/restricted");
         const openedOptions = harness.getOpenedOptions()!;
-        const decision = yield* Effect.promise(() =>
-          openedOptions.canUseTool!(
-            "Bash",
-            { command: "git status" },
-            {
-              signal: new AbortController().signal,
-              toolUseID: "policy-command",
-              requestId: "request-policy-command",
-            },
-          ),
-        ).pipe(Effect.forkScoped);
-        const first = yield* Effect.raceFirst(
-          Queue.take(harness.runtimeRequestReceipts).pipe(
-            Effect.map((event) => ({ type: "request", event }) as const),
-          ),
-          Fiber.join(decision).pipe(
-            Effect.map((result) => ({ type: "decision", result }) as const),
-          ),
-        );
-        assert.equal(
-          first.type,
-          "request",
-          "Full access must not auto-allow a policy-restricted command",
-        );
-        if (first.type !== "request") return;
-        assert.equal(first.event.runtimeRequest.kind, "command");
-        yield* harness.runtime.respondToRuntimeRequest({
-          requestId: first.event.runtimeRequest.id,
-          decision: "decline",
-        });
-        assert.equal((yield* Fiber.join(decision))?.behavior, "deny");
+        yield* assertDeniedWithoutRequest("policy-command");
         assert.equal(openedOptions.permissionMode, "auto");
         assert.isUndefined(openedOptions.allowDangerouslySkipPermissions);
 
@@ -5042,8 +5036,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         yield* start("/unrestricted");
         assert.equal(harness.getOpenedOptions()?.permissionMode, "bypassPermissions");
         assert.equal(harness.getOpenedOptions()?.allowDangerouslySkipPermissions, true);
-        // Forwarded asks (including ask rules and settings fallback) still need a decision
-        // before queued init/status frames arrive.
+        // Handle forwarded requests before queued init/status frames arrive.
         for (const { phase, frame } of [
           {
             phase: "init",
@@ -5067,65 +5060,13 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             }),
           },
         ]) {
-          const forwardedDecision = yield* Effect.promise(() =>
-            harness.getOpenedOptions()!.canUseTool!(
-              "Bash",
-              { command: "git status" },
-              {
-                signal: new AbortController().signal,
-                toolUseID: `forwarded-before-${phase}`,
-                requestId: `request-forwarded-before-${phase}`,
-              },
-            ),
-          ).pipe(Effect.forkScoped);
-          const forwardedFirst = yield* Effect.raceFirst(
-            Queue.take(harness.runtimeRequestReceipts).pipe(
-              Effect.map((event) => ({ type: "request", event }) as const),
-            ),
-            Fiber.join(forwardedDecision).pipe(
-              Effect.map((result) => ({ type: "decision", result }) as const),
-            ),
-          );
-          assert.equal(
-            forwardedFirst.type,
-            "request",
-            `CLI-forwarded Bash must ask before the queued ${phase} frame reaches the adapter`,
-          );
-          if (forwardedFirst.type !== "request") return;
-          assert.equal(forwardedFirst.event.runtimeRequest.kind, "command");
-          yield* harness.runtime.respondToRuntimeRequest({
-            requestId: forwardedFirst.event.runtimeRequest.id,
-            decision: "decline",
-          });
-          assert.equal((yield* Fiber.join(forwardedDecision))?.behavior, "deny");
+          yield* assertDeniedWithoutRequest(`forwarded-before-${phase}`);
           yield* harness.offerAndWait(frame);
         }
-        const fallbackDecision = yield* Effect.promise(() =>
-          harness.getOpenedOptions()!.canUseTool!(
-            "Bash",
-            { command: "echo checked" },
-            {
-              signal: new AbortController().signal,
-              toolUseID: "safety-check-after-downgrade",
-              requestId: "request-safety-check-after-downgrade",
-              decisionReason:
-                "Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed",
-            },
-          ),
-        ).pipe(Effect.forkScoped);
-        const fallbackFirst = yield* Effect.raceFirst(
-          Queue.take(harness.runtimeRequestReceipts).pipe(
-            Effect.map((event) => ({ type: "request", event }) as const),
-          ),
-          Fiber.join(fallbackDecision).pipe(Effect.map(() => ({ type: "decision" }) as const)),
+        yield* assertDeniedWithoutRequest(
+          "safety-check-after-downgrade",
+          "Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed",
         );
-        assert.equal(fallbackFirst.type, "request");
-        if (fallbackFirst.type !== "request") return;
-        yield* harness.runtime.respondToRuntimeRequest({
-          requestId: fallbackFirst.event.runtimeRequest.id,
-          decision: "decline",
-        });
-        assert.equal((yield* Fiber.join(fallbackDecision))?.behavior, "deny");
         yield* finish;
         const unrestrictedOptions = harness.getOpenedOptions();
         yield* start("/unrestricted");
@@ -5158,33 +5099,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           assert.strictEqual(harness.getOpenedOptions(), unrestrictedOptions);
           assert.deepEqual(harness.permissionModeChanges, ["auto", "bypassPermissions", "default"]);
           assert.equal(harness.offeredMessages.length, ordinal);
-          const restoredDecision = yield* Effect.promise(() =>
-            harness.getOpenedOptions()!.canUseTool!(
-              "Bash",
-              { command: "git status" },
-              {
-                signal: new AbortController().signal,
-                toolUseID: `forwarded-after-plan-${phase}`,
-                requestId: `request-after-plan-${phase}`,
-              },
-            ),
-          ).pipe(Effect.forkScoped);
-          const restoredFirst = yield* Effect.raceFirst(
-            Queue.take(harness.runtimeRequestReceipts).pipe(
-              Effect.map((event) => ({ type: "request", event }) as const),
-            ),
-            Fiber.join(restoredDecision).pipe(
-              Effect.map((result) => ({ type: "decision", result }) as const),
-            ),
-          );
-          assert.equal(restoredFirst.type, "request");
-          if (restoredFirst.type !== "request") return;
-          assert.equal(restoredFirst.event.runtimeRequest.kind, "command");
-          yield* harness.runtime.respondToRuntimeRequest({
-            requestId: restoredFirst.event.runtimeRequest.id,
-            decision: "decline",
-          });
-          assert.equal((yield* Fiber.join(restoredDecision))?.behavior, "deny");
+          yield* assertDeniedWithoutRequest(`forwarded-after-plan-${phase}`);
           yield* finish;
           assert.equal(harness.terminalEvents().at(-1)?.status, "completed");
         }
@@ -5467,7 +5382,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
   describe("Plan-mode tool approval", () => {
     const openPlanTurn = Effect.fn("openPlanTurn")(function* (
-      runtimeMode: "auto" | "full-access",
+      runtimeMode: "approval-required" | "auto" | "full-access",
       approvalPolicy?: "never",
     ) {
       const harness = yield* makeWakeHarness;
@@ -5533,7 +5448,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         behavior: "allow",
       },
       {
-        runtimeMode: "full-access",
+        runtimeMode: "approval-required",
         toolName: "Bash",
         toolInput: { command: "echo after > target.txt" },
         kind: "command",
@@ -5571,33 +5486,38 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         ),
     );
 
-    it.effect("denies Plan writes without asking when approvals are never allowed", () =>
-      Effect.gen(function* () {
-        const turn = yield* openPlanTurn("full-access", "never");
-        const permission = yield* requestWrite(turn, "Bash", {
-          command: "echo after > target.txt",
-        });
-        assert.equal(permission.first.type, "decision", "Never raised an approval request");
-        if (permission.first.type !== "decision") return;
-        assert.equal(permission.first.result?.behavior, "deny");
-      }).pipe(
-        Effect.scoped,
-        Effect.provide(
-          Layer.mergeAll(
-            IdAllocator.layer,
-            McpProviderSessions.layer,
-            NodeServices.layer,
-            NodeCrypto.layer,
+    it.effect.each([
+      { runtimeMode: "full-access", approvalPolicy: undefined },
+      { runtimeMode: "auto", approvalPolicy: "never" },
+    ] as const)(
+      "denies Plan writes without asking in $runtimeMode with $approvalPolicy",
+      ({ runtimeMode, approvalPolicy }) =>
+        Effect.gen(function* () {
+          const turn = yield* openPlanTurn(runtimeMode, approvalPolicy);
+          const permission = yield* requestWrite(turn, "Bash", {
+            command: "echo after > target.txt",
+          });
+          assert.equal(permission.first.type, "decision", "Never raised an approval request");
+          if (permission.first.type !== "decision") return;
+          assert.equal(permission.first.result?.behavior, "deny");
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Layer.mergeAll(
+              IdAllocator.layer,
+              McpProviderSessions.layer,
+              NodeServices.layer,
+              NodeCrypto.layer,
+            ),
           ),
         ),
-      ),
     );
 
     it.effect(
       "returns approval feedback to the requesting tool without sending a parent prompt",
       () =>
         Effect.gen(function* () {
-          const turn = yield* openPlanTurn("full-access");
+          const turn = yield* openPlanTurn("approval-required");
           const parentPermission = yield* requestWrite(
             turn,
             "Bash",
@@ -6168,6 +6088,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           attemptId: RunAttemptId.make("mcp-presentation"),
           text: "Check the weather",
           attachments: [],
+          runtimePolicy: { ...CLAUDE_TEST_RUNTIME_POLICY, runtimeMode: "approval-required" },
         }),
       );
       const toolName = "mcp__weather__get_weather";
@@ -7235,6 +7156,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
     const startElicitationTurn = Effect.fnUntraced(function* (
       options?: Parameters<typeof makeWakeHarnessWithOptions>[0],
+      runtimeMode: "approval-required" | "full-access" = "approval-required",
     ) {
       const harness = yield* makeWakeHarnessWithOptions(options);
       yield* harness.runtime.startTurn(
@@ -7245,6 +7167,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           attemptId: RunAttemptId.make("attempt-claude-elicitation"),
           text: "Deploy web.",
           attachments: [],
+          runtimePolicy: { ...CLAUDE_TEST_RUNTIME_POLICY, runtimeMode },
         }),
       );
       const onElicitation = harness.getOpenedOptions()?.onElicitation;
@@ -7265,6 +7188,18 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       });
       return { harness, elicit, awaitCard, runtimeRequests };
     });
+
+    it.effect("cancels an MCP approval in Full access without opening a card", () =>
+      Effect.gen(function* () {
+        const { harness, elicit } = yield* startElicitationTurn(undefined, "full-access");
+        const answer = yield* elicit(approvalOnly);
+        const result = yield* Effect.raceFirst(
+          Fiber.join(answer),
+          Queue.take(harness.runtimeRequestReceipts).pipe(Effect.as(undefined)),
+        );
+        assert.deepEqual(result, { action: "cancel" });
+      }).pipe(Effect.scoped, Effect.provide(testLayer)),
+    );
 
     it.effect("shows an approval-only form and accepts only after Approve", () =>
       Effect.gen(function* () {

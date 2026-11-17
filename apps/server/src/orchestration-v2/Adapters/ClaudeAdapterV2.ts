@@ -3457,8 +3457,7 @@ function claudeBypassAvailability(
 }
 
 function requiresClaudeApproval(context: ActiveClaudeTurnContext): boolean {
-  // CLI-forwarded requests need a person's decision even under bypass (ask rules,
-  // safety checks, or settings fallback). Do not wait for queued init/status updates.
+  // Claude can forward requests from bypass mode before its init/status updates arrive.
   const policy = context.queryPolicy;
   return policy.installPermissionCallback || policy.permissionMode === "bypassPermissions";
 }
@@ -12146,19 +12145,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             } satisfies PermissionResult;
           }
 
+          const { interactionMode, approvalPolicy, runtimeMode } = context.input.runtimePolicy;
           if (
-            context.input.runtimePolicy.interactionMode === "plan" &&
-            context.input.runtimePolicy.approvalPolicy === "never"
+            interactionMode === "plan" &&
+            (approvalPolicy === "never" || runtimeMode === "full-access")
           ) {
             return {
               behavior: "deny",
               message:
-                "This tool requires approval in Plan mode, but approvals are disabled for this thread.",
+                "HomuCode automatically refused this tool because it requires approval in Plan mode and approvals are disabled for this thread.",
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
 
-          if (!requiresClaudeApproval(context)) {
+          if (runtimeMode !== "full-access" && !requiresClaudeApproval(context)) {
             return {
               behavior: "allow",
               updatedInput: toolInput,
@@ -12183,6 +12183,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return {
               behavior: "deny",
               message: `Claude Code's removal safety check denied this command; the user did not reject it. The command did not run. Do not bypass the check by splitting the removal, putting it in a script, or using another tool or shell. If the warning below supplies a safe rewrite, use it and let the same check evaluate it. Otherwise continue the rest of the task without the removal and tell the user what you needed to delete and why. Warning: ${safetyReason}`,
+              toolUseID: callbackOptions.toolUseID,
+            } satisfies PermissionResult;
+          }
+
+          if (runtimeMode === "full-access") {
+            return {
+              behavior: "deny",
+              message: safetyReason
+                ? `HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals. Reason: ${safetyReason}`
+                : "HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals.",
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
@@ -12293,6 +12303,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const grantKey = `${request.serverName}\u0000${request.message}`;
           if ((yield* Ref.get(mcpElicitationSessionGrants)).has(grantKey)) {
             return acceptance;
+          }
+          if (context.input.runtimePolicy.runtimeMode === "full-access") {
+            return { action: "cancel" } satisfies ElicitationResult;
           }
           // The CLI waits on this answer, so a turn held for its prompt echo
           // must show its output now, as canUseTool does.

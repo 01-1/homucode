@@ -1631,6 +1631,104 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       };
     });
 
+  it.effect("reports an automatic Full access refusal without opening an approval", () =>
+    Effect.gen(function* () {
+      const nativeThreadId = "full-access-command-thread";
+      const nativeTurnId = "full-access-command-turn";
+      const prompt = "Clean up the temporary evidence.";
+      const refusal =
+        "HomuCode automatically refused a command approval because Full access turns do not prompt for approvals.";
+      const pending = yield* Queue.unbounded<OrchestrationV2RuntimeRequest>();
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario: "full-access-command-confirmation",
+          entries: [
+            ...codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt }),
+            {
+              type: "emit_inbound",
+              frame: {
+                id: 10,
+                method: "item/commandExecution/requestApproval",
+                params: {
+                  kind: "command",
+                  threadId: nativeThreadId,
+                  turnId: nativeTurnId,
+                  itemId: "cleanup",
+                  startedAtMs: 1,
+                  command: "/bin/bash -lc 'rm -f /tmp/evidence.txt'",
+                  availableDecisions: ["accept", "cancel"],
+                },
+              },
+            },
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 4,
+                method: "thread/inject_items",
+                params: {
+                  threadId: nativeThreadId,
+                  items: [
+                    {
+                      type: "message",
+                      role: "developer",
+                      content: [{ type: "input_text", text: refusal }],
+                    },
+                  ],
+                },
+              },
+            },
+            { type: "emit_inbound", frame: { id: 4, result: {} } },
+            {
+              type: "expect_outbound",
+              frame: { id: 10, error: { code: -32000, message: refusal } },
+            },
+            {
+              type: "emit_inbound",
+              frame: {
+                method: "turn/completed",
+                params: {
+                  threadId: nativeThreadId,
+                  turn: makeCodexReplayTurn({ id: nativeTurnId, status: "completed" }),
+                },
+              },
+            },
+          ],
+        }),
+        (event) =>
+          event.type === "runtime_request.updated" && event.runtimeRequest.status === "pending"
+            ? Queue.offer(pending, event.runtimeRequest)
+            : Effect.void,
+      );
+      yield* harness.runtime.startTurn(
+        makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("full-access-command-attempt"),
+          text: prompt,
+        }),
+      );
+      const request = yield* Effect.raceFirst(
+        harness.firstTerminal.pipe(Effect.as(undefined)),
+        Queue.take(pending),
+      );
+      assert.isUndefined(request, "Full access must not open a command approval");
+      assert.deepEqual(
+        harness.terminalEvents().map((event) => event.status),
+        ["completed"],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
   it.effect.each([
     { runtimeMode: "full-access", turnIdKind: "present" },
     { runtimeMode: "auto-accept-edits", turnIdKind: "null" },
@@ -12114,22 +12212,31 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const harness = yield* makeCodexReplayHarness(
           makeCodexReplayTranscript({
             scenario,
-            entries: [...codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt }), ...entries],
+            entries: [
+              ...codexReplayPreamble({
+                nativeThreadId,
+                nativeTurnId,
+                prompt,
+                turnPolicy: { approvalPolicy: "untrusted", sandboxPolicy: { type: "readOnly" } },
+              }),
+              ...entries,
+            ],
           }),
           (event) =>
             event.type === "runtime_request.updated" && event.runtimeRequest.status === "pending"
               ? Queue.offer(pending, event.runtimeRequest)
               : Effect.void,
         );
-        yield* harness.runtime.startTurn(
-          makeCodexTestTurnInput({
+        yield* harness.runtime.startTurn({
+          ...makeCodexTestTurnInput({
             threadId: harness.threadId,
             providerThread: harness.providerThread,
             now: yield* DateTime.now,
             attemptId: RunAttemptId.make(`${scenario}-attempt`),
             text: prompt,
           }),
-        );
+          runtimePolicy: { ...CODEX_TEST_RUNTIME_POLICY, runtimeMode: "approval-required" },
+        });
         return {
           harness,
           answerNext: Queue.take(pending).pipe(
