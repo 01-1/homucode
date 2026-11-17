@@ -87,6 +87,7 @@ const CodexRoutingConfig = Schema.Struct({
   ),
 });
 const decodeCodexRoutingConfig = Schema.decodeUnknownOption(CodexRoutingConfig);
+const encodeConfigString = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 
 const CodexCyberAccessConfig = Schema.Struct({
   daybreak: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
@@ -797,7 +798,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
         const { client: catalogClient } = yield* withCodexAppServerClient({
           ...input,
           configOverrides: [
-            `model_providers.${providerId}.model_catalog_url=${JSON.stringify(catalogUrl)}`,
+            `model_providers.${providerId}.model_catalog_url=${encodeConfigString(catalogUrl)}`,
           ],
         });
         return yield* requestAllCodexModels(catalogClient);

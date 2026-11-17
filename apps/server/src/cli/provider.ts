@@ -5,12 +5,14 @@ import {
   WS_METHODS,
   WsServerRefreshProvidersRpc,
 } from "@t3tools/contracts";
+import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as References from "effect/References";
+import * as Schema from "effect/Schema";
 import { Command, Flag, GlobalFlag } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 import { RpcClient, RpcGroup, RpcSerialization } from "effect/rpc";
@@ -20,6 +22,8 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { readLiveServerRuntimeState } from "../serverRuntimeState.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
+
+const encodeJson = Schema.encodeSync(fromJsonStringPretty(Schema.Unknown));
 
 const refreshCommand = Command.make("refresh", {
   ...projectLocationFlags,
@@ -96,7 +100,7 @@ const refreshCommand = Command.make("refresh", {
       }
       yield* Console.log(
         flags.json
-          ? JSON.stringify({ providers }, null, 2)
+          ? encodeJson({ providers })
           : providers
               .map(
                 (provider) =>
