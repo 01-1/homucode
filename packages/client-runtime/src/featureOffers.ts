@@ -11,15 +11,15 @@ type OfferSetting =
   | "backgroundGitEnabled"
   | "buildToolsSettingsVisible"
   | "connectDeviceLongSessions"
+  | "claudeHoldBackgroundCommands"
   | "statusLineEnabled";
-type OfferedSetting = OfferSetting | "claudeHoldBackgroundCommands";
 
 export interface FeatureOffer {
   readonly id: string;
   readonly title: string;
   readonly description: string;
   readonly page: 1 | 2;
-  readonly setting?: OfferedSetting;
+  readonly setting?: OfferSetting;
   readonly enabledValue?: boolean;
   readonly platform?: "mobile";
 }
@@ -170,9 +170,7 @@ export function unseenFeatureOffers(
   return FEATURE_OFFERS.filter(
     (offer) =>
       !(offer.platform === "mobile" ? localSeen : seen).has(offer.id) &&
-      (!offer.platform || offer.platform === platform) &&
-      (offer.setting !== "claudeHoldBackgroundCommands" ||
-        "claudeHoldBackgroundCommands" in settings),
+      (!offer.platform || offer.platform === platform),
   );
 }
 
@@ -206,12 +204,7 @@ export function selectedFeatureOffers(
   return new Set([
     ...enabledFeatureOffers(settings),
     ...FEATURE_OFFERS.filter(
-      (offer) =>
-        offer.setting &&
-        (offer.setting === "claudeHoldBackgroundCommands"
-          ? "claudeHoldBackgroundCommands" in settings &&
-            settings.claudeHoldBackgroundCommands === true
-          : settings[offer.setting] === (offer.enabledValue ?? true)),
+      (offer) => offer.setting && settings[offer.setting] === (offer.enabledValue ?? true),
     ).map((offer) => offer.id),
     ...(settings.workAssistanceTarget ? ["work-assistance"] : []),
     ...(local.settingsSyncEnabled ? ["settings-sync"] : []),
@@ -224,7 +217,7 @@ export function featureOfferSettingsPatch(
   offered: ReadonlyArray<FeatureOffer>,
   selected: ReadonlySet<string>,
 ) {
-  const booleanPatch: Partial<Record<OfferedSetting, boolean>> = {};
+  const booleanPatch: Partial<Record<OfferSetting, boolean>> = {};
   for (const offer of offered) {
     if (offer.setting)
       booleanPatch[offer.setting] = selected.has(offer.id)

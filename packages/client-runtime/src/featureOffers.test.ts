@@ -14,7 +14,7 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
   expect(declined).toEqual({ featureOffersSeen: ["previous-feature", "duet", "autoreview"] });
   expect(unseenFeatureOffers({ ...settings, ...declined }).map((offer) => offer.id)).toEqual(
     FEATURE_OFFERS.slice(2)
-      .filter((offer) => !offer.platform && offer.id !== "claude-hold-background-commands")
+      .filter((offer) => !offer.platform)
       .map((offer) => offer.id),
   );
   expect(featureOfferSettingsPatch(settings, offered, new Set(["duet"]))).toMatchObject({
@@ -44,13 +44,11 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
   });
   expect(
     unseenFeatureOffers(settings).some((offer) => offer.id === "claude-hold-background-commands"),
-  ).toBe(false);
-  const claudeSupported = { ...settings, claudeHoldBackgroundCommands: false };
-  expect(
-    unseenFeatureOffers(claudeSupported).some(
-      (offer) => offer.id === "claude-hold-background-commands",
-    ),
   ).toBe(true);
+  const claude = FEATURE_OFFERS.filter((offer) => offer.id === "claude-hold-background-commands");
+  expect(
+    featureOfferSettingsPatch(settings, claude, new Set(["claude-hold-background-commands"])),
+  ).toMatchObject({ claudeHoldBackgroundCommands: true });
 });
 
 it.each([
