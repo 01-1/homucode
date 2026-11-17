@@ -2,7 +2,11 @@ import { StackActions, useNavigation, type StaticScreenProps } from "@react-navi
 import { useAtomValue } from "@effect/atom-react";
 import { LegendList } from "@legendapp/list/react-native";
 import type { MenuAction } from "@react-native-menu/menu";
-import { madohomuIconColor, isMadoHomuThreadPinned } from "@t3tools/client-runtime/madohomu";
+import {
+  MADOHOMU_SCRATCH_LABEL,
+  madohomuIconColor,
+  isMadoHomuThreadPinned,
+} from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   AuthOrchestrationOperateScope,
@@ -149,7 +153,11 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     );
 
   const madohomuMenu = (row: Extract<MadoHomuListRow, { type: "thread" }>): MenuAction[] => {
-    const pinned = isMadoHomuThreadPinned(settings.madohomuThreads[row.row.item.thread.id]);
+    const entry = settings.madohomuThreads[row.row.item.thread.id];
+    const pinned = isMadoHomuThreadPinned(entry);
+    const filedIn = settings.madohomuSections.some((section) => section.id === entry?.section)
+      ? entry?.section
+      : null;
     const disabled = { disabled: !canEdit };
     const manual = row.kind === "pinned" || row.kind === "custom";
     return [
@@ -157,7 +165,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       pinned
         ? {
             id: "extra:scratch",
-            title: "Move to Scratch",
+            title: `Move to ${MADOHOMU_SCRATCH_LABEL}`,
             image: "pin.slash",
             attributes: disabled,
           }
@@ -170,13 +178,13 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           {
             id: "extra:section:",
             title: "Pinned",
-            state: pinned && manual && row.kind === "pinned" ? "on" : "off",
+            state: pinned && filedIn === null ? "on" : "off",
             attributes: disabled,
           },
           ...settings.madohomuSections.map((section): MenuAction => ({
             id: `extra:section:${section.id}`,
             title: section.name,
-            state: row.sectionId === section.id ? "on" : "off",
+            state: pinned && filedIn === section.id ? "on" : "off",
             attributes: disabled,
           })),
           { id: "extra:new-section", title: "New section…", image: "plus", attributes: disabled },

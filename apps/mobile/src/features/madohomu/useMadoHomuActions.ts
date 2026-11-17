@@ -81,7 +81,6 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
   const entryOf = (threadId: ThreadId) =>
     settings.madohomuThreads[threadId] ?? { icon: null, prompt: "" };
 
-  /** Pins a thread (optionally into a custom section), or moves it to Scratch. */
   const setThreadPlace = (threadId: ThreadId, place: { readonly section: string | null } | null) =>
     save({
       madohomuThreads: {
@@ -104,7 +103,6 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
       ),
     });
 
-  /** Deletes a custom section; its threads return to Pinned. */
   const deleteSection = (id: string) =>
     save({
       madohomuSections: settings.madohomuSections.filter((section) => section.id !== id),

@@ -615,7 +615,9 @@ function ThreadRouteContent(
           <ThreadFileNavigatorPane
             cwd={selectedThreadCwd}
             environmentId={selectedThread.environmentId}
-            projectName={selectedThreadProject?.title ?? "Files"}
+            projectName={
+              (params.madohomu === true ? null : selectedThreadProject?.title) ?? "Files"
+            }
             selectedPath={null}
             onSelectFile={(path) =>
               closeInspectorSheet
