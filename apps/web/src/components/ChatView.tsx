@@ -2754,6 +2754,9 @@ export default function ChatView(props: ChatViewProps) {
       openThreadFind(activeThreadKey);
     }
   });
+  const openThreadFindFromPanelStable = useStableCallback(() => {
+    if (activeThreadRef) openThreadFindStable(activeThreadRef);
+  });
 
   useChatShortcuts({
     enabled: activeThreadId !== null && !backgroundThread,
@@ -3992,6 +3995,7 @@ export default function ChatView(props: ChatViewProps) {
                   {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
+                  {...(threadFindEnabled ? { onFindInThread: openThreadFindFromPanelStable } : {})}
                   onRunProjectScript={runProjectScriptStable}
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
