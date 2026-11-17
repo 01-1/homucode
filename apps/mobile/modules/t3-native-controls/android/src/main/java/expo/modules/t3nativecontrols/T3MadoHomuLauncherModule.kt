@@ -13,6 +13,15 @@ class T3MadoHomuLauncherModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("T3MadoHomuLauncher")
 
+    Events("onForegroundSurfaceChange")
+
+    // Both tasks share one React host, so each activity's resume makes it the current activity.
+    OnActivityEntersForeground {
+      sendEvent("onForegroundSurfaceChange", mapOf("surface" to foregroundSurface()))
+    }
+
+    Function("foregroundSurface") { foregroundSurface() }
+
     Function("setEnabled") { enabled: Boolean ->
       val context = appContext.reactContext ?: return@Function false
       val packageManager = context.packageManager
@@ -38,4 +47,7 @@ class T3MadoHomuLauncherModule : Module() {
       true
     }
   }
+
+  private fun foregroundSurface(): String =
+    if (appContext.currentActivity?.javaClass?.simpleName == "MadoHomuActivity") "madohomu" else "main"
 }

@@ -8,13 +8,14 @@ const loading = (environmentId: string) => ({ environmentId, madohomuEnabled: un
 
 describe("madohomuLauncherWanted", () => {
   it("shows the icon as soon as any environment has MadoHomu on", () => {
-    expect(madohomuLauncherWanted([loading("a"), on("b")])).toBe(true);
+    expect(madohomuLauncherWanted([loading("a"), on("b")], false)).toBe(true);
   });
 
   it("hides it only once every environment's settings say off", () => {
-    expect(madohomuLauncherWanted([off("a"), off("b")])).toBe(false);
-    expect(madohomuLauncherWanted([off("a"), loading("b")])).toBeUndefined();
-    expect(madohomuLauncherWanted([])).toBeUndefined();
+    expect(madohomuLauncherWanted([off("a"), off("b")], true)).toBe(false);
+    expect(madohomuLauncherWanted([off("a"), loading("b")], true)).toBeUndefined();
+    expect(madohomuLauncherWanted([], false)).toBeUndefined();
+    expect(madohomuLauncherWanted([], true)).toBe(false);
   });
 });
 

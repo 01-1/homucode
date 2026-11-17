@@ -71,7 +71,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       <AppBar
         title="MadoHomu"
         subtitle={actions.project?.title}
-        // Opened from the MadoHomu launcher icon there is nothing behind it: leave the app.
         onBack={() => (navigation.canGoBack() ? navigation.goBack() : BackHandler.exitApp())}
         actions={[
           {

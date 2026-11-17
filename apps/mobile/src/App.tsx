@@ -4,7 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -101,17 +101,15 @@ import {
 } from "./features/layout/workspace/workspace-selection-store";
 import { workspaceDetailLinkAction } from "./features/layout/workspace/workspace-detail-selection";
 import { NativeLayoutMetricsProvider } from "./native/native-layout-metrics";
-import {
-  attachRootNavigation,
-  flushRootNavigationQueue,
-  linkToRootPath,
-  rootNavigationRef,
-} from "./lib/rootNavigation";
+import { flushRootNavigationQueue, linkToRootPath, rootNavigationRef } from "./lib/rootNavigation";
 import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
 import { installClientSettingsSync } from "./features/settings/settingsSync";
 import {
+  attachMadoHomuNavigation,
+  attachMainNavigation,
+  MadoHomuBackRouting,
   MadoHomuLauncherSync,
   useMadoHomuEnvironmentStates,
 } from "./features/madohomu/madohomuLauncher";
@@ -274,7 +272,6 @@ function SplashScreenCoordinator() {
   return null;
 }
 
-/** Set by the Android MadoHomu launcher activity, a second React root in its own task. */
 interface AppProps {
   readonly launchSurface?: string;
 }
@@ -292,26 +289,25 @@ export default function App({ launchSurface }: AppProps) {
   );
 }
 
-// The MadoHomu task shows only MadoHomu: no deep links (the main root handles those) and no
-// workspace or link bookkeeping, which belongs to the main task's navigation state.
-function handleMadoHomuNavigationStateChange(): void {
-  settleLaunchSplashHomeRows();
-}
-
+// Android's MadoHomu launcher task: deep links and workspace bookkeeping stay with the main root.
 function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
-  const environmentId = madohomuLauncherEnvironmentId(useMadoHomuEnvironmentStates());
+  const environmentId = madohomuLauncherEnvironmentId(useMadoHomuEnvironmentStates().environments);
   if (!environmentId) return null;
+  // Back routing mounts after the navigator so its Back listener runs first.
   return (
-    <Navigation
-      ref={attachRootNavigation}
-      initialState={{ routes: [{ name: "MadoHomu", params: { environmentId } }] }}
-      onReady={() => {
-        settleLaunchSplashHomeRows();
-        flushRootNavigationQueue();
-      }}
-      theme={theme}
-      onStateChange={handleMadoHomuNavigationStateChange}
-    />
+    <Fragment key={environmentId}>
+      <Navigation
+        ref={attachMadoHomuNavigation}
+        initialState={{ routes: [{ name: "MadoHomu", params: { environmentId } }] }}
+        onReady={() => {
+          settleLaunchSplashHomeRows();
+          flushRootNavigationQueue();
+        }}
+        theme={theme}
+        onStateChange={settleLaunchSplashHomeRows}
+      />
+      <MadoHomuBackRouting />
+    </Fragment>
   );
 }
 
@@ -330,12 +326,11 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
   return (
     <>
       <SplashScreenCoordinator />
-      {/* App-wide coordinators run once, in the main root; the MadoHomu root shares their state. */}
+      <MadoHomuLauncherSync />
       {madohomu ? null : (
         <>
           <SubscriptionUsageCoordinator />
           <ConnectDeviceApprovalCoordinator />
-          <MadoHomuLauncherSync />
         </>
       )}
       <GestureHandlerRootView className="flex-1">
@@ -349,7 +344,7 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
                   <MadoHomuNavigation theme={navigationTheme} />
                 ) : (
                   <Navigation
-                    ref={attachRootNavigation}
+                    ref={attachMainNavigation}
                     linking={appLinking}
                     onReady={handleNavigationReady}
                     theme={navigationTheme}

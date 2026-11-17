@@ -24,15 +24,20 @@ export function attachRootNavigation(
   return () => {
     const index = attachedContainers.lastIndexOf(navigation!);
     if (index !== -1) attachedContainers.splice(index, 1);
-    // The MadoHomu launcher activity is a second root that outlives or dies before the main one;
-    // when the owner goes, hand the ref back to the root still mounted.
     if (rootNavigationRef.current === navigation) {
       rootNavigationRef.current = attachedContainers.at(-1) ?? null;
     }
   };
 }
 
+// Android's MadoHomu launcher task mounts a second root; the ref follows the foreground one.
 const attachedContainers: Array<NavigationContainerRef<ReactNavigation.RootParamList>> = [];
+
+export function focusRootNavigation(
+  navigation: NavigationContainerRef<ReactNavigation.RootParamList>,
+): void {
+  if (attachedContainers.includes(navigation)) rootNavigationRef.current = navigation;
+}
 
 const pendingUntilReady: Array<() => void> = [];
 

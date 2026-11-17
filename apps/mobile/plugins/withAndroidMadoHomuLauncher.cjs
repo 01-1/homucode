@@ -98,7 +98,7 @@ function withMadoHomuManifest(config) {
 module.exports = function withAndroidMadoHomuLauncher(config) {
   config = withMadoHomuManifest(config);
   config = withAndroidColors(config, (nextConfig) => {
-    nextConfig.modResults = AndroidConfig.Resources.assignColorValue(nextConfig.modResults, {
+    nextConfig.modResults = AndroidConfig.Colors.assignColorValue(nextConfig.modResults, {
       name: ICON_BACKGROUND_COLOR,
       value: "#E5679B",
     });
@@ -123,7 +123,10 @@ module.exports = function withAndroidMadoHomuLauncher(config) {
     if (nextConfig.modResults.language !== "kt") {
       throw new Error("withAndroidMadoHomuLauncher: MainActivity must be Kotlin.");
     }
-    const target = NodePath.join(NodePath.dirname(nextConfig.modResults.path), `${ACTIVITY_CLASS}.kt`);
+    const target = NodePath.join(
+      NodePath.dirname(nextConfig.modResults.path),
+      `${ACTIVITY_CLASS}.kt`,
+    );
     NodeFS.writeFileSync(target, madoHomuActivitySource(nextConfig.modResults.contents));
     return nextConfig;
   });

@@ -65,6 +65,7 @@ async function prebuildAndroid() {
   const activityDir = NodePath.join(sourceRoot, "java/com/t3tools/t3code");
   NodeFS.mkdirSync(activityDir, { recursive: true });
   NodeFS.mkdirSync(NodePath.join(sourceRoot, "res/values"), { recursive: true });
+  NodeFS.writeFileSync(NodePath.join(sourceRoot, "res/values/colors.xml"), "<resources/>");
   NodeFS.writeFileSync(NodePath.join(sourceRoot, "AndroidManifest.xml"), MANIFEST);
   NodeFS.writeFileSync(NodePath.join(activityDir, "MainActivity.kt"), MAIN_ACTIVITY);
 
@@ -128,10 +129,14 @@ describe("withAndroidMadoHomuLauncher", () => {
   it("derives the icon from the app's adaptive icon layers", async () => {
     const { adaptiveIcon, legacyIcon, colors } = await prebuildAndroid();
 
-    expect(adaptiveIcon).toContain('<background android:drawable="@color/madohomu_icon_background"/>');
+    expect(adaptiveIcon).toContain(
+      '<background android:drawable="@color/madohomu_icon_background"/>',
+    );
     expect(adaptiveIcon).toContain("@mipmap/ic_launcher_foreground");
     expect(adaptiveIcon).toContain("@mipmap/ic_launcher_monochrome");
-    expect(legacyIcon).toContain('<item name="ic_madohomu" type="mipmap">@mipmap/ic_launcher</item>');
+    expect(legacyIcon).toContain(
+      '<item name="ic_madohomu" type="mipmap">@mipmap/ic_launcher</item>',
+    );
     expect(colors).toContain('name="madohomu_icon_background"');
   });
 });
