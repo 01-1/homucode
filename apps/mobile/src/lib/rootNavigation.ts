@@ -78,3 +78,15 @@ export function linkToRootPath(href: string, toAction: (href: string) => Navigat
     });
   });
 }
+
+/** False for a screen in the backgrounded task while Android's MadoHomu task has a second root. */
+export function isInForegroundRoot(navigation: {
+  getParent(): unknown;
+  getState(): { key: string };
+}): boolean {
+  let top = navigation;
+  while (top.getParent()) top = top.getParent() as typeof navigation;
+  return (
+    !rootNavigationRef.isReady() || top.getState().key === rootNavigationRef.getRootState().key
+  );
+}
