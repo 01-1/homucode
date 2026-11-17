@@ -69,15 +69,19 @@ subscription and 5 minutes with an API key, Bedrock, or Vertex. See [commands an
 composer commands.
 
 **Compact idle threads** in **Settings > Providers > Advanced** controls this for threads
-over 200,000 tokens. Each Claude provider's settings can override it:
+over 200,000 tokens. Each Claude provider's settings can override it; a provider set to
+**Before the cache expires** falls back or not as this default does:
 
 - **When you return** shows the **Compact** chip described above. This is the default.
-- **Before the cache expires (beta)** tries to compact an idle thread shortly before its
-  prompt cache expires, while the history is still cached.
+- **Before cache expires, or on return (beta)** tries to compact an idle thread
+  shortly before its prompt cache expires, while the history is still cached.
   The compaction appears in the thread as a `/compact` turn sent by T3 Code.
   If the window is missed, such as when you enable this mode after the cache has
   expired or the server restarts before compaction runs, it falls back to
   **When you return**. Switch the chip to **Keep** to keep the full history for that message.
+- **Only before cache expires (beta)** compacts the same way, but never falls back: a
+  thread that missed its window skips Claude's resume prompt and sends your message with the
+  full history.
 - **Never** skips idle compaction and Claude's resume prompt. **Auto-compact after**
   still applies, and you can still compact by hand.
 

@@ -132,7 +132,7 @@ import {
   type ProviderThreadId,
   type RunId,
   type ThreadId,
-  resolveIdleCompaction,
+  compactsOnReturn,
   isDelegatedAppThread,
 } from "@t3tools/contracts";
 
@@ -12379,15 +12379,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               if (request.dialogKind !== "resume_return") {
                 return { behavior: "cancelled" as const };
               }
-              const idleCompaction = Option.isSome(serverSettings)
+              const compactOnReturn = Option.isSome(serverSettings)
                 ? yield* serverSettings.value.getSettings.pipe(
-                    Effect.map((settings) =>
-                      resolveIdleCompaction(settings, adapterOptions.instanceId),
-                    ),
-                    Effect.orElseSucceed(() => adapterOptions.settings.idleCompaction),
+                    Effect.map((settings) => compactsOnReturn(settings, adapterOptions.instanceId)),
+                    Effect.orElseSucceed(() => adapterOptions.settings.idleCompaction !== "off"),
                   )
-                : adapterOptions.settings.idleCompaction;
-              if (idleCompaction === "off") {
+                : adapterOptions.settings.idleCompaction !== "off";
+              if (!compactOnReturn) {
                 return { behavior: "completed" as const, result: "continue" as const };
               }
               const ageMinutes =

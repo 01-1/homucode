@@ -8,7 +8,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import {
   type DesktopUpdateChannel,
-  IDLE_COMPACTION_MODES,
   globalIdleCompaction,
   managedUpdatesDenial,
   managedUpdatesMessage,
@@ -63,7 +62,11 @@ import {
 } from "./useScopedSettings";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
-import { scopedIdleCompaction } from "./scopedSettings";
+import {
+  IDLE_COMPACTION_CHOICES,
+  idleCompactionChoice,
+  scopedIdleCompaction,
+} from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
@@ -1898,47 +1901,50 @@ function ScopedCompactIdleThreadsRow() {
   return (
     <SettingsRow
       serverScoped
-      settingKeys={["idleCompaction", "compactIdleThreads"]}
+      settingKeys={["idleCompaction", "compactIdleThreads", "idleCompactionFallback"]}
       mixed={idleCompaction.mixed}
       {...searchableSetting("compact-idle-threads")}
-      description="When to compact an idle Claude thread over 200,000 tokens: after you return, just before its prompt cache expires, or never. Each Claude provider can override this."
+      description="When to compact an idle Claude thread over 200,000 tokens. A thread that misses its window before the cache expires is compacted when you return, unless you pick Only before cache expires."
       resetAction={
-        globalIdleCompaction(settings) !== globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) ? (
+        idleCompactionChoice(settings) !== idleCompactionChoice(DEFAULT_UNIFIED_SETTINGS) ? (
           <SettingResetButton
             label="compact idle threads"
             onClick={() =>
-              updateSettings({ idleCompaction: globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) })
+              updateSettings({
+                idleCompaction: globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS),
+                idleCompactionFallback: DEFAULT_UNIFIED_SETTINGS.idleCompactionFallback,
+              })
             }
           />
         ) : null
       }
       control={
         <Select
-          value={idleCompaction.mixed ? null : globalIdleCompaction(settings)}
+          value={idleCompaction.mixed ? null : idleCompactionChoice(settings)}
           onValueChange={(value) => {
-            const mode = IDLE_COMPACTION_MODES.find((candidate) => candidate.value === value);
-            if (mode) updateSettings({ idleCompaction: mode.value });
+            const choice = IDLE_COMPACTION_CHOICES.find((candidate) => candidate.value === value);
+            if (choice) updateSettings(choice.patch);
           }}
         >
-          <SelectTrigger size="sm" className="w-full sm:w-56" aria-label="Compact idle threads">
+          <SelectTrigger size="sm" className="w-full sm:w-80" aria-label="Compact idle threads">
             <SelectValue>
               {(value: string | null) =>
                 value === null
                   ? "Mixed"
-                  : IDLE_COMPACTION_MODES.find((mode) => mode.value === value)?.label
+                  : IDLE_COMPACTION_CHOICES.find((choice) => choice.value === value)?.label
               }
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            {IDLE_COMPACTION_MODES.map((mode) => (
+            {IDLE_COMPACTION_CHOICES.map((choice) => (
               <SelectItem
                 hideIndicator
-                key={mode.value}
-                value={mode.value}
+                key={choice.value}
+                value={choice.value}
                 // A server from before modes has only the on/off switch, so it cannot store "Never".
-                disabled={mode.value === "off" && !idleCompaction.neverAvailable}
+                disabled={choice.value === "off" && !idleCompaction.neverAvailable}
               >
-                {mode.label}
+                {choice.label}
               </SelectItem>
             ))}
           </SelectPopup>

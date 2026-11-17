@@ -1,5 +1,5 @@
 import {
-  resolveIdleCompaction,
+  compactsOnReturn,
   type ModelSelection,
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2ProviderTurnTokenUsage,
@@ -267,7 +267,7 @@ export function compactBeforeSendTokens(input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly settings: Pick<
     ServerSettings,
-    "providerInstances" | "compactIdleThreads" | "idleCompaction"
+    "providerInstances" | "compactIdleThreads" | "idleCompaction" | "idleCompactionFallback"
   >;
   readonly text: string;
   readonly threadIdle: boolean;
@@ -279,7 +279,7 @@ export function compactBeforeSendTokens(input: {
     provider === undefined ||
     !input.threadIdle ||
     COMPACT_COMMAND_PATTERN.test(input.text) ||
-    resolveIdleCompaction(input.settings, provider.instanceId) === "off" ||
+    !compactsOnReturn(input.settings, provider.instanceId) ||
     !provider.slashCommands.some((command) => command.name === "compact") ||
     resolvePendingHandoff(projection, input.selection, input.providers) !== null ||
     projection.runtimeRequests.some((request) => request.status === "pending") ||
