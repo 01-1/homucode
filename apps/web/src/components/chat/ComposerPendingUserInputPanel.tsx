@@ -1,6 +1,6 @@
 import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 import { markdownProseDirection, textDirection } from "~/textDirection";
-import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
+import { memo, use, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { type PendingUserInput } from "../../session-logic";
@@ -13,6 +13,9 @@ import { cn } from "~/lib/utils";
 import { isInSideChatPane } from "~/lib/sideChatPane";
 import { ComposerBanner } from "./ComposerBanner";
 import ChatMarkdown from "../ChatMarkdown";
+
+// A pointer click this soon after a question appears was most likely aimed at what was there before.
+const APPEARANCE_CLICK_GUARD_MS = 500;
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -126,6 +129,16 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     if (disabled || activeQuestion?.id === undefined) clearAutoAdvance();
     return clearAutoAdvance;
   }, [activeQuestion?.id, disabled]);
+
+  const activeQuestionId = activeQuestion?.id;
+  const questionShownRef = useRef<{ questionId: string | undefined; at: number }>({
+    questionId: undefined,
+    at: 0,
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records when each question is painted so a click already on its way is not taken as an answer
+  useLayoutEffect(() => {
+    questionShownRef.current = { questionId: activeQuestionId, at: performance.now() };
+  }, [activeQuestionId]);
 
   const handleOptionSelection = (questionId: string, optionValue: string) => {
     if (disabled || isResponding) return;
@@ -320,7 +333,15 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                       type="button"
                       aria-pressed={isSelected}
                       disabled={disabled || isResponding}
-                      onClick={() => {
+                      onClick={(event) => {
+                        // detail is 0 for keyboard activation, which is never a stray click.
+                        if (
+                          event.detail > 0 &&
+                          performance.now() - questionShownRef.current.at <
+                            APPEARANCE_CLICK_GUARD_MS
+                        ) {
+                          return;
+                        }
                         handleOptionSelection(activeQuestion.id, optionValue);
                       }}
                       className={className}
