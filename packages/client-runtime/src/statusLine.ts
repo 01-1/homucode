@@ -351,35 +351,141 @@ function sliceSegments(
   return sliced;
 }
 
-/** Splits a line around its `[HH:MM:SS]` clock, so the clock can sit at the right edge. */
-export function splitStatusLineClock(line: ReadonlyArray<AnsiSegment>): {
-  readonly before: ReadonlyArray<AnsiSegment>;
-  readonly clock: ReadonlyArray<AnsiSegment>;
-  readonly after: ReadonlyArray<AnsiSegment>;
-} | null {
-  const text = line.map((segment) => segment.text).join("");
-  const match = CLOCK_PATTERN.exec(text);
-  if (match === null) return null;
-  const end = match.index + match[0].length;
-  return {
-    before: sliceSegments(line, 0, match.index),
-    clock: sliceSegments(line, match.index, end),
-    after: sliceSegments(line, end, text.length),
-  };
+export interface StatusLineItem {
+  readonly kind: "directory" | "clock" | "text";
+  /** The item's text, ending with the separator that follows it in the line (`,` or ` |`). */
+  readonly segments: ReadonlyArray<AnsiSegment>;
 }
 
-const DIRECTORY_PATTERN = /^[~/]\S*/;
+const ITEM_SEPARATOR_PATTERN = /,\s+|\s+\|\s+/g;
+const DIRECTORY_PATTERN = /^[~/]\S*(?=\s|$)/;
 
-/** Splits off a leading `~/…` or `/…` path, so a client can shorten it on its own. */
-export function splitStatusLineDirectory(line: ReadonlyArray<AnsiSegment>): {
-  readonly directory: ReadonlyArray<AnsiSegment>;
-  readonly rest: ReadonlyArray<AnsiSegment>;
-} | null {
+// Where a muted label such as `cache ` starts a new value in the middle of an item.
+function mutedLabelStarts(line: ReadonlyArray<AnsiSegment>, text: string): ReadonlyArray<number> {
+  const starts: number[] = [];
+  let offset = 0;
+  for (const segment of line) {
+    const indent = /^\s*(?=[a-z])/i.exec(segment.text)?.[0].length;
+    const spaced = indent !== undefined && (indent > 0 || /\s$/.test(text.slice(0, offset)));
+    if (spaced && segment.color !== null && statusLineColorRole(segment.color) === "muted") {
+      starts.push(offset + indent);
+    }
+    offset += segment.text.length;
+  }
+  return starts;
+}
+
+/**
+ * Splits a line into the items a client lays out one by one: a leading `~/…` or `/…` directory,
+ * the `[HH:MM:SS]` clock, and the text between `, ` and ` | ` separators, split again where a
+ * muted label starts a new value. The text on either side of the clock is joined by the line's
+ * own comma, when it has one.
+ */
+export function splitStatusLineItems(
+  line: ReadonlyArray<AnsiSegment>,
+): ReadonlyArray<StatusLineItem> {
   const text = line.map((segment) => segment.text).join("");
-  const match = DIRECTORY_PATTERN.exec(text);
-  if (match === null) return null;
-  return {
-    directory: sliceSegments(line, 0, match[0].length),
-    rest: sliceSegments(line, match[0].length, text.length),
+  const separators = [...text.matchAll(ITEM_SEPARATOR_PATTERN)];
+  const firstComma = separators.find((match) => match[0].startsWith(","));
+  const comma = firstComma ? sliceSegments(line, firstComma.index, firstComma.index + 1) : [];
+  const labelStarts = mutedLabelStarts(line, text);
+  const items: StatusLineItem[] = [];
+  const push = (
+    kind: StatusLineItem["kind"],
+    start: number,
+    end: number,
+    separator: ReadonlyArray<AnsiSegment> = [],
+  ) => {
+    const from = end - text.slice(start, end).trimStart().length;
+    const to = from + text.slice(from, end).trimEnd().length;
+    if (from < to) items.push({ kind, segments: [...sliceSegments(line, from, to), ...separator] });
   };
+  const pushValues = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+    let from = start;
+    for (const cut of labelStarts) {
+      if (cut <= from || cut >= end || text.slice(from, cut).trim() === "") continue;
+      push("text", from, cut);
+      from = cut;
+    }
+    push("text", from, end, separator);
+  };
+  // One stretch between separators: its directory if it opens the line, then the values around
+  // its clock.
+  const pushStretch = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+    let from = start;
+    const directory = start === 0 ? DIRECTORY_PATTERN.exec(text.slice(0, end)) : null;
+    if (directory !== null) {
+      // A script that styles its path apart from what follows keeps a path with spaces whole.
+      const first = line.length > 1 ? (line[0]?.text.trimEnd() ?? "") : "";
+      const styled = CLOCK_PATTERN.test(first) ? 0 : first.length;
+      from = Math.min(end, Math.max(styled, directory[0].length));
+      push("directory", 0, from);
+    }
+    const clock = CLOCK_PATTERN.exec(text.slice(from, end));
+    if (clock === null) {
+      pushValues(from, end, separator);
+      return;
+    }
+    const clockStart = from + clock.index;
+    const clockEnd = clockStart + clock[0].length;
+    const hasAfter = text.slice(clockEnd, end).trim() !== "";
+    pushValues(from, clockStart, hasAfter ? comma : separator);
+    push("clock", clockStart, clockEnd);
+    pushValues(clockEnd, end, separator);
+  };
+  let cursor = 0;
+  for (const match of separators) {
+    const shown = match[0].trimEnd().length;
+    pushStretch(cursor, match.index, sliceSegments(line, match.index, match.index + shown));
+    cursor = match.index + match[0].length;
+  }
+  pushStretch(cursor, text.length, []);
+  return items;
+}
+
+// The 01-1/statusline script's labels. `v` runs into its number, so its expansion brings the space.
+const STATUS_LINE_LABELS: Readonly<Record<string, string>> = {
+  conx: "context",
+  ctx: "context",
+  up: "uptime",
+  in: "input",
+  out: "output",
+  api: "API time",
+  "5h": "5h limit",
+  "7d": "7d limit",
+  v: "version ",
+};
+
+/** The segment's text with its abbreviated label written out, or null when it is not such a label. */
+export function expandStatusLineLabel(segment: AnsiSegment): string | null {
+  if (segment.color === null || statusLineColorRole(segment.color) !== "muted") return null;
+  // A label can share its segment with the punctuation before it, as in `), 5h `.
+  const [, before, label, after] = /^([^a-z0-9]*)(\S+)(\s*)$/i.exec(segment.text) ?? [];
+  const expanded = label === undefined ? undefined : STATUS_LINE_LABELS[label];
+  return expanded === undefined ? null : `${before}${expanded}${after}`;
+}
+
+// The widest form each kind of value usually takes; a shorter value is given this much room. A
+// count keeps one width from `6` through `999` to `101.3k`.
+const RESERVED_VALUES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^\d+(?:\.\d+)?%$/, "100%"],
+  [/^(?:\d+[dhms]){1,2}$/, "00h00m"],
+  [/^\d+(?:\.\d+[kM])?$/, "000.0k"],
+  [/^\d+[kM]$/, "000k"],
+  [/^[+-]\d+$/, "+00"],
+];
+
+/**
+ * The segment's text with each changing value (a percentage, duration, or count) at its usual
+ * widest, so a client can hold that much room and the line stays put when the value changes.
+ */
+export function reserveStatusLineText(segment: AnsiSegment): string {
+  if (segment.color !== null && statusLineColorRole(segment.color) === "muted") return segment.text;
+  return segment.text
+    .split(/([\s/(),]+)/)
+    .map((token) => {
+      const reserved = RESERVED_VALUES.find(([pattern]) => pattern.test(token))?.[1];
+      return reserved === undefined || reserved.length < token.length ? token : reserved;
+    })
+    .join("");
 }
