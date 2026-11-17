@@ -2,6 +2,8 @@
 
 Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pingdotgg/t3code). The [README](./README.md#changes-compared-to-t3-code) has a short summary.
 
+- **Provider model refresh from the CLI.** `t3 provider refresh [--provider <instanceId>]` refetches status and models through the running server. Codex custom API providers discover their endpoint's model catalog during regular health checks and explicit refreshes, so new models appear in pickers and delegation without editing Codex configuration.
+
 ## Server speed
 
 - **Longer T3 Connect passes (off by default).** HomuCode can keep T3 Connect devices signed in for 30 days instead of one hour, avoiding a cloud round trip on most launches. Turn on **Stay signed in for 30 days** beside device approval in Settings → Sharing & access. Removing a device from the T3 Connect account no longer cuts off its existing pass within the hour; revoke it from **T3 Connect devices** on the host instead. Direct pairing keeps its existing lifetime.

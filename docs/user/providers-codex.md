@@ -28,6 +28,11 @@ T3 Code can use your installed Codex and its existing login. Run `codex login`
 on the environment's machine to sign in. [Provider setup](./install.md#providers)
 covers installation and custom configuration.
 
+Custom API endpoints that serve a Codex model catalog at `/models` are checked
+during provider health refreshes, so newly available models appear automatically.
+Run `t3 provider refresh --provider codex` on the server's machine to check now.
+An explicit Codex `model_catalog_url` or `model_catalog_json` takes precedence.
+
 Running `codex login` does not change a managed ChatGPT connection. In
 **Settings > Providers**, add a Codex instance, choose **Configure manually**,
 and complete the wizard. Then select that instance from the thread's model
