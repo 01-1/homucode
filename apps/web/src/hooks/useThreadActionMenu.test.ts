@@ -207,3 +207,40 @@ describe("thread menu permissions", () => {
     expect(onFind).toHaveBeenCalledExactlyOnceWith(target);
   });
 });
+
+describe("thread menu extras", () => {
+  it("lists a list's own items first and routes a nested choice to them", async () => {
+    state.show.mockResolvedValue("extra:child" as ThreadActionMenuId);
+    const onSelect = vi.fn((id: string) => recordEffect(id));
+    createMenu().openMenu(position, {
+      threadRef: target,
+      extras: {
+        items: [
+          { id: "extra:edit", label: "Edit" },
+          { id: "extra:menu", label: "Move", children: [{ id: "extra:child", label: "Child" }] },
+        ],
+        onSelect,
+      },
+    });
+    await state.completed.promise;
+    const items = state.show.mock.calls[0]![0];
+    expect(items.slice(0, 2).map((item) => item.id)).toEqual(["extra:edit", "extra:menu"]);
+    expect(items[2]?.separatorBefore).toBe(true);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("extra:child");
+  });
+
+  it("acts on the row's thread rather than the hook's", async () => {
+    state.granted.add("secondary");
+    state.show.mockResolvedValue("rename");
+    const row = { environmentId: target.environmentId, threadId: ThreadId.make("row") };
+    const onStartRename = vi.fn(() => recordEffect("rename"));
+    useThreadActionMenu({
+      threadRef: null,
+      projectCwd: null,
+      onStartRename,
+      canShareWithGuest: false,
+    }).openMenu(position, { threadRef: row });
+    await state.completed.promise;
+    expect(onStartRename).toHaveBeenCalledExactlyOnceWith(row);
+  });
+});

@@ -30,13 +30,13 @@ export function MadoHomuIcon({ icon, color }: { icon: string | null; color: stri
   const choice = ICONS.find((item) => item.id === (icon ?? DEFAULT_MADOHOMU_ICON));
   return (
     <span
-      className="inline-flex size-5 shrink-0 items-center justify-center"
-      style={{ color, backgroundColor: `${color}22` }}
+      className="inline-flex size-4 shrink-0 items-center justify-center text-sm leading-none"
+      style={{ color }}
     >
       {choice ? (
-        <choice.component className="size-4" aria-label={choice.label} />
+        <choice.component className="size-4" aria-hidden />
       ) : (
-        <span>{icon}</span>
+        <span aria-hidden>{icon}</span>
       )}
     </span>
   );
@@ -63,7 +63,7 @@ export function MadoHomuIconPicker({
             type="button"
             aria-label={item.label}
             aria-pressed={(icon || DEFAULT_MADOHOMU_ICON) === item.id}
-            className="rounded-md border p-2 hover:bg-muted aria-pressed:bg-muted"
+            className="rounded-md p-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-muted"
             onClick={() => onIconChange(item.id)}
           >
             <item.component className="size-5" style={{ color }} />
