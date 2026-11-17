@@ -15,8 +15,13 @@ import {
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { themeCssLoadsRemoteFiles } from "@t3tools/shared/themeCss";
 import {
+  BUILT_IN_THEMES,
   MOBILE_DEFAULT_THEME_ID,
   MOBILE_THEME_IDS,
+  T3_CODE_DARK_THEME_COLORS,
+  T3_CODE_LIGHT_THEME_COLORS,
+  T3_CODE_WEB_PAINTED_COLORS,
+  type ThemeDefinition,
   UNPUBLISHABLE_THEME_IDS,
 } from "@t3tools/shared/themePalettes";
 import * as Cause from "effect/Cause";
@@ -107,10 +112,12 @@ export class EnvironmentThemeService extends Context.Service<
   {
     readonly current: Effect.Effect<ReadonlyArray<EnvironmentTheme>>;
 
-    /** The default theme id and the published themes, plus the one named `themeId`. */
+    /** The default theme id and the published themes, plus the built-in or published `themeId`. */
     readonly read: (themeId?: string) => Effect.Effect<
       {
         readonly current: string;
+        /** Says what `current` means when the environment has never set a theme. */
+        readonly note?: string;
         /** Where theme files and their background images live. */
         readonly themesDir: string;
         readonly themes: ReadonlyArray<EnvironmentTheme>;
@@ -138,6 +145,32 @@ export class EnvironmentThemeService extends Context.Service<
     readonly streamChanges: Stream.Stream<ReadonlyArray<EnvironmentTheme>>;
   }
 >()("t3/environmentTheme/EnvironmentThemeService") {}
+
+const STOCK_THEME: ThemeDefinition = {
+  id: MOBILE_DEFAULT_THEME_ID,
+  label: "T3 Code",
+  appearance: "light",
+  // Themes restyle web and desktop only, so copy the stock theme as web paints it.
+  colors: { ...T3_CODE_LIGHT_THEME_COLORS, ...T3_CODE_WEB_PAINTED_COLORS.light },
+  variants: { dark: { ...T3_CODE_DARK_THEME_COLORS, ...T3_CODE_WEB_PAINTED_COLORS.dark } },
+};
+
+/** A built-in theme as a theme file, so an agent can publish a changed copy of it. */
+const builtInThemeFile = (themeId: string): EnvironmentTheme | undefined => {
+  const theme = [STOCK_THEME, ...BUILT_IN_THEMES].find((candidate) => candidate.id === themeId);
+  if (theme === undefined) return undefined;
+  return {
+    id: theme.id,
+    name: theme.label,
+    appearance: theme.appearance,
+    colors: theme.colors,
+    ...(theme.variants === undefined ? {} : { variants: theme.variants }),
+    ...(theme.css === undefined ? {} : { css: theme.css }),
+  };
+};
+
+const NO_THEME_SET_NOTE =
+  "No theme is set on this server, so each device shows its own choice: the stock `t3-code` theme unless the user picked another on that device.";
 
 /** True when anything, a dangling symlink included, is at the path. */
 const pathIsTaken = (filePath: string): boolean => {
@@ -450,18 +483,24 @@ const make = Effect.gen(function* () {
     "EnvironmentThemeService.read",
   )(function* (themeId) {
     const { themes } = yield* refresh;
-    const { defaultTheme } = yield* settings.getSettings;
-    const themesDir = environmentThemesDir;
-    if (themeId === undefined) return { current: defaultTheme, themesDir, themes };
-    const theme = themes.find((candidate) => candidate.id === themeId);
+    const { defaultTheme, defaultThemeSetAt } = yield* settings.getSettings;
+    // An empty default with a set time is the stock theme; with none, no theme was ever set.
+    const state = {
+      current: defaultTheme || MOBILE_DEFAULT_THEME_ID,
+      ...(defaultTheme === "" && defaultThemeSetAt === "" ? { note: NO_THEME_SET_NOTE } : {}),
+      themesDir: environmentThemesDir,
+      themes,
+    };
+    if (themeId === undefined) return state;
+    const theme = themes.find((candidate) => candidate.id === themeId) ?? builtInThemeFile(themeId);
     if (theme === undefined) {
       return yield* new EnvironmentThemeRefusedError({
         themeId,
-        problem: "is not a published theme.",
-        known: themes.map(({ id }) => id),
+        problem: "is not a built-in or published theme.",
+        known: [...MOBILE_THEME_IDS, ...themes.map(({ id }) => id)],
       });
     }
-    return { current: defaultTheme, themesDir, themes, theme };
+    return { ...state, theme };
   });
 
   return {

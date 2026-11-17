@@ -75,6 +75,7 @@ export const THEME_GUIDE = [
   "Themes restyle T3 Code on web and desktop. Mobile does not use them.",
   "",
   "Colors: `canvas` and `accent` (hex) derive a full palette. `colors` overrides single roles, and `variants.light` or `variants.dark` does that for the other appearance. Prefer colors over CSS.",
+  "A published theme replaces the current one: roles it leaves out come from a generic palette, not from the current theme, and the current theme's CSS is not kept. To change part of the current theme, read its file with `themeId` set to `current`, change only what the user asked for, and publish the whole file.",
   `Roles: ${THEME_COLOR_ROLES.join(", ")}.`,
   "",
   "CSS: `css` applies after the app's styles. Use `.dark` or `:root:not(.dark)` for one appearance.",
@@ -89,5 +90,5 @@ export const THEME_GUIDE = [
   ...THEME_CSS_HOOKS.map((hook) => `- ${hook.selector}: ${hook.styles}`),
   "",
   "You cannot see the result. Make small changes, then ask the user how it looks.",
-  "To undo, set `t3-code`, the stock T3 Code theme, or another built-in theme. An empty `current` means the stock theme or no environment theme.",
+  "To undo, set the theme that was `current` before, or `t3-code`, the stock T3 Code theme.",
 ].join("\n");

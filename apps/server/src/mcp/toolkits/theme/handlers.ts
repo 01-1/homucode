@@ -16,6 +16,7 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
       const themes = yield* EnvironmentTheme.EnvironmentThemeService;
       const {
         current,
+        note,
         themesDir,
         themes: published,
         theme,
@@ -30,6 +31,7 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
       );
       return {
         current,
+        ...(note === undefined ? {} : { note }),
         builtIn: MOBILE_THEME_IDS,
         published: published.map(({ id, name, css, background }) => ({
           id,

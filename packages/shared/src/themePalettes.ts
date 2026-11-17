@@ -235,6 +235,12 @@ export const T3_CODE_DARK_THEME_COLORS: ThemeColors = {
   terminalScrollbarHover: "#363636",
 };
 
+/** Where web's index.css paints the stock theme differently from the shared palette mobile uses. */
+export const T3_CODE_WEB_PAINTED_COLORS: Readonly<Record<ThemeAppearance, Partial<ThemeColors>>> = {
+  light: { messageSurface: "#ebebed" },
+  dark: { canvas: "#000000", messageSurface: "#1e1e1e" },
+};
+
 export const T3_CHAT_THEME: ThemeDefinition = {
   id: "t3-chat",
   label: "T3 Chat",

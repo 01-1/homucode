@@ -30,11 +30,14 @@ const ThemeReadTool = Tool.make("t3_theme_read", {
     "Read T3 Code's own themes and the guide to restyle it: color roles and CSS selectors. Call before `t3_theme_set`.",
   parameters: Schema.Struct({
     themeId: Schema.optionalKey(
-      EnvironmentThemeId.annotate({ description: "Also return this published theme's file." }),
+      EnvironmentThemeId.annotate({
+        description: "Also return this built-in or published theme's file.",
+      }),
     ),
   }),
   success: Schema.Struct({
     current: DefaultThemePreference,
+    note: Schema.optionalKey(Schema.String),
     builtIn: Schema.Array(Schema.String),
     published: Schema.Array(
       Schema.Struct({

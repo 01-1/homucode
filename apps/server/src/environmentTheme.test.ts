@@ -19,6 +19,7 @@ import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { GROVE_THEME } from "@t3tools/shared/themePalettes";
 
 const encodeThemeFile = Schema.encodeSync(Schema.fromJsonString(EnvironmentThemeFile));
 /** Writes non-ASCII characters as `\uXXXX` escapes, as encoders such as Python's json.dumps do. */
@@ -75,6 +76,7 @@ const withEnvironmentThemes = <A, E>(
           Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
           Layer.provideMerge(
             Layer.mock(ServerSettingsService)({
+              getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
               updateSettings: (patch) =>
                 patch.defaultTheme === REFUSED_THEME_ID
                   ? Effect.fail(
@@ -303,6 +305,23 @@ it.layer(NodeServices.layer)("environment theme", (it) => {
       selected,
     );
   });
+
+  it.effect("reads the stock theme when none is set, and returns built-in theme files", () =>
+    withEnvironmentThemes(
+      {},
+      Effect.gen(function* () {
+        const themes = yield* EnvironmentTheme.EnvironmentThemeService;
+        const unset = yield* themes.read();
+        assert.equal(unset.current, "t3-code");
+        assert.include(unset.note, "No theme is set");
+        const stock = (yield* themes.read("t3-code")).theme;
+        assert.equal(stock?.colors?.messageSurface, "#ebebed");
+        assert.equal(stock?.variants?.dark?.canvas, "#000000");
+        assert.equal(stock?.variants?.dark?.messageSurface, "#1e1e1e");
+        assert.deepEqual((yield* themes.read("grove")).theme?.colors, GROVE_THEME.colors);
+      }),
+    ),
+  );
 
   it.effect("switches back to the stock theme after selecting another", () => {
     const selected: Array<{ readonly theme?: string; readonly appearance?: string }> = [];
