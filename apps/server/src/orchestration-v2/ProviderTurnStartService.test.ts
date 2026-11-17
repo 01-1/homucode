@@ -1399,7 +1399,7 @@ effectIt.effect(
       const harness = makeLocalCommandHarness({ text: "Continue", failReadsAfterRunning: true });
       const memory = {
         ...AgentMemory.defaultValue(),
-        settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+        settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true }),
         acquire: ({ onWaiting }: Parameters<(typeof AgentMemory)["Service"]["acquire"]>[0]) =>
           onWaiting.pipe(
             Effect.andThen(Deferred.succeed(waiting, undefined)),
@@ -1434,7 +1434,7 @@ effectIt.effect("cancels memory admission before provider startup", () =>
     const startup = yield* harness.start.pipe(
       Effect.provideService(AgentMemory, {
         ...AgentMemory.defaultValue(),
-        settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+        settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true }),
         acquire: ({ onWaiting }) =>
           onWaiting.pipe(
             Effect.andThen(Deferred.succeed(waiting, undefined)),
@@ -1490,7 +1490,7 @@ effectIt.effect(
         const startup = yield* harness.start.pipe(
           Effect.provideService(AgentMemory, {
             ...AgentMemory.defaultValue(),
-            settings: Effect.succeed(DEFAULT_AGENT_MEMORY_SETTINGS),
+            settings: Effect.succeed({ ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true }),
           }),
           Effect.forkChild,
         );

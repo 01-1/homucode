@@ -372,10 +372,11 @@ describe("AgentScope service", () => {
     ),
   );
 
-  it.effect("caps agent memory and yields CPU, disk, and tasks to the server", () =>
+  it.effect("leaves agent memory and tasks uncapped by default and yields CPU and disk", () =>
     withFakeSystemd(({ scope, calls }) =>
       Effect.gen(function* () {
-        yield* scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
+        const agent = yield* scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
+        expect(agent.args.some((arg) => arg.startsWith("--property=MemoryMax="))).toBe(false);
         const setProperties = calls.filter(([, verb]) => verb === "set-property");
         expect(setProperties).toEqual([
           [
@@ -383,8 +384,8 @@ describe("AgentScope service", () => {
             "set-property",
             "--runtime",
             "app-t3code-agents.slice",
-            expect.stringMatching(/^MemoryHigh=\d+$/),
-            expect.stringMatching(/^MemoryMax=\d+$/),
+            "MemoryHigh=infinity",
+            "MemoryMax=infinity",
           ],
           [
             "--user",
@@ -393,10 +394,29 @@ describe("AgentScope service", () => {
             "app-t3code.slice",
             "CPUWeight=10",
             "IOWeight=10",
-            "TasksMax=25%",
+            "TasksMax=infinity",
           ],
         ]);
       }),
+      { memorySettings: DEFAULT_AGENT_MEMORY_SETTINGS },
+    ),
+  );
+
+  it.effect("caps the agents slice when the memory guard is on", () =>
+    withFakeSystemd(
+      ({ scope, calls }) =>
+        Effect.gen(function* () {
+          yield* scope.wrap({ command: "agent", args: [], name: "t", threadId: "a" });
+          expect(calls.find(([, verb]) => verb === "set-property")).toEqual([
+            "--user",
+            "set-property",
+            "--runtime",
+            "app-t3code-agents.slice",
+            expect.stringMatching(/^MemoryHigh=\d+$/),
+            expect.stringMatching(/^MemoryMax=\d+$/),
+          ]);
+        }),
+      { memorySettings: { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true } },
     ),
   );
 
@@ -420,6 +440,7 @@ describe("AgentScope service", () => {
           yield* updateLimits;
           expect(calls).toHaveLength(count);
         }),
+        { memorySettings: { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true } },
       );
     },
   );
@@ -455,6 +476,7 @@ describe("AgentScope service", () => {
           grown,
         ]);
       }),
+      { memorySettings: { ...DEFAULT_AGENT_MEMORY_SETTINGS, enabled: true } },
     );
   });
 

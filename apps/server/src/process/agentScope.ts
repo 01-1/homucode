@@ -26,9 +26,8 @@ import { AGENT_SLICE, agentMemoryLimits } from "./agentMemory.ts";
 // Owns every agent slice and competes with the server's unit or scope under app.slice.
 const AGENTS_PARENT_SLICE = "app-t3code.slice";
 // Low weights yield CPU and disk to the server under contention, where the user manager
-// has those controllers: current systemd delegates cpu, rarely io. TasksMax keeps agents
-// below logind's 33% per-user task limit, leaving forks for the server.
-const AGENTS_PARENT_PROPERTIES = ["CPUWeight=10", "IOWeight=10", "TasksMax=25%"];
+// has those controllers: current systemd delegates cpu, rarely io. Agents get no task cap.
+const AGENTS_PARENT_PROPERTIES = ["CPUWeight=10", "IOWeight=10", "TasksMax=infinity"];
 
 export function ownedAgentSlice(stateDir: string): string {
   const hash = NodeCrypto.createHash("sha256").update(stateDir).digest("hex").slice(0, 12);
@@ -198,13 +197,13 @@ export const make = Effect.gen(function* () {
       const applyMemoryLimits = memoryLimitsLock.withPermits(1)(
         Effect.gen(function* () {
           const total = NodeOS.totalmem();
-          const limits = agentMemoryLimits(yield* memory.settings, total);
-          const key = `${total}:${limits.groupHigh}:${limits.groupMax}`;
+          const settings = yield* memory.settings;
+          const limits = agentMemoryLimits(settings, total);
+          const high = settings.enabled ? String(limits.groupHigh) : "infinity";
+          const max = settings.enabled ? String(limits.groupMax) : "infinity";
+          const key = `${total}:${high}:${max}`;
           if (key === appliedKey) return;
-          const applied = yield* setProperties(AGENT_SLICE, [
-            `MemoryHigh=${limits.groupHigh}`,
-            `MemoryMax=${limits.groupMax}`,
-          ]);
+          const applied = yield* setProperties(AGENT_SLICE, [`MemoryHigh=${high}`, `MemoryMax=${max}`]);
           if (!applied) return;
           if (appliedTotal !== undefined) {
             yield* Effect.logInfo("Agent memory limits follow a memory change", {

@@ -85,7 +85,7 @@ const withGovernor = <A, E>(
     }),
   ).pipe(
     Effect.provide(
-      ServerSettings.layerTest({ agentMemory: { groupMaxBytes: 3 * GiB } }).pipe(
+      ServerSettings.layerTest({ agentMemory: { enabled: true, groupMaxBytes: 3 * GiB } }).pipe(
         Layer.provideMerge(NodeServices.layer),
       ),
     ),
