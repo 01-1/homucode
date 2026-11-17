@@ -144,10 +144,9 @@ export const layer = Layer.effectDiscard(
           ),
         );
     }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("idle provider update check failed", { cause }),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logWarning("idle provider update check failed", { cause }),
       ),
     );
 
