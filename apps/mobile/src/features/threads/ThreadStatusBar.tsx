@@ -23,7 +23,7 @@ import type { MobileThemeVariables } from "../../lib/mobileTheme";
 const REFRESH_MS = 30_000;
 const DEBOUNCE_MS = 300;
 
-// Scripts pick terminal colors; each takes the theme color with the same meaning.
+// Scripts pick terminal colors; each text color takes the theme color with the same meaning.
 function roleColors(
   theme: MobileThemeVariables,
   dark: boolean,

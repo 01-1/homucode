@@ -78,7 +78,7 @@ describe("splitStatusLineClock", () => {
     expect(splitStatusLineClock(line)).toEqual({
       before: [
         { text: "up ", color: "#808080", ...plain },
-        { text: "1h02m", color: "#d7afff", ...plain },
+        { text: "1h02m ", color: "#d7afff", ...plain },
       ],
       clock: [
         { text: "[", color: "#d7afff", ...plain },

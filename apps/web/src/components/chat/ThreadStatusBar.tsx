@@ -132,14 +132,13 @@ function Segments(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
 
 type StatusLinePart = "lead" | "after" | "clock";
 
-// An inline span keeps its content width even while its clipping parent is narrower.
+// fitRow sums these spans' widths; an inline span keeps its content width while its parent clips it.
 function MeasuredSegments(props: {
   readonly line: ReadonlyArray<AnsiSegment>;
   readonly part: StatusLinePart;
-  readonly className?: string;
 }) {
   return (
-    <span data-status-line-part={props.part} className={props.className}>
+    <span data-status-line-part={props.part}>
       <Segments line={props.line} />
     </span>
   );
@@ -209,8 +208,12 @@ function StatusLineRow(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
           <div className="min-w-0 flex-1 overflow-hidden text-ellipsis group-data-[clock=hidden]/status-line:hidden">
             <MeasuredSegments line={split.after} part="after" />
           </div>
-          <div className="shrink-0 group-data-[clock=hidden]/status-line:hidden">
-            <MeasuredSegments line={split.clock} part="clock" className="pl-2" />
+          {/* Not clipped, so its own width (with the gap) is what fitRow measures. */}
+          <div
+            data-status-line-part="clock"
+            className="shrink-0 pl-2 group-data-[clock=hidden]/status-line:hidden"
+          >
+            <Segments line={split.clock} />
           </div>
         </>
       )}
@@ -220,6 +223,7 @@ function StatusLineRow(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
 
 /** Runs the environment's status line command for a thread, the way Claude Code draws its status line. */
 export function ThreadStatusLineRunner(props: {
+  readonly statusLineKey: string;
   readonly environmentId: EnvironmentId;
   readonly createdAt: string | null;
   readonly source: Omit<StatusLineInputSource, "nowMs">;
@@ -237,7 +241,7 @@ export function ThreadStatusLineRunner(props: {
   const inputKey = JSON.stringify(
     buildStatusLineInput({ ...props.source, nowMs: Date.parse(`${nowMinute}:00Z`) }),
   );
-  const resultAtom = statusLineResultAtom(statusLineKey(environmentId, props.source.threadId));
+  const resultAtom = statusLineResultAtom(props.statusLineKey);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- runs the server's status line command
   useEffect(() => {
@@ -289,7 +293,6 @@ function StatusLineHover(props: {
       {props.children}
       {expanded ? (
         <div
-          data-status-line-expanded="true"
           className={cn(
             "absolute inset-x-0 z-50 flex flex-col gap-0.5 rounded-md border bg-popover px-2 py-1.5 text-popover-foreground text-xs shadow-lg",
             // Below the top bar, with a bridge over the gap so the pointer can reach it.
@@ -313,50 +316,38 @@ function StatusLineHover(props: {
 /** The status line under the composer, across the chat's full width. */
 export function ThreadStatusBar(props: { readonly statusLineKey: string }) {
   const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
-  if (result === null) return null;
-  if (result.lines.length === 0) {
-    if (result.error === null) return null;
-    return (
-      <div
-        data-chat-status-line="error"
-        className="pointer-events-auto -ms-(--chat-lane-inset-start,0px) -me-(--chat-lane-inset-end,0px) min-w-0 truncate px-1 pt-1.5 text-muted-foreground text-xs"
-      >
-        Status line failed: {result.error}
-      </div>
-    );
-  }
+  if (result === null || (result.lines.length === 0 && result.error === null)) return null;
+  const failed = result.lines.length === 0;
   return (
     <div
-      data-chat-status-line="true"
+      data-chat-status-line={failed ? "error" : "true"}
       // Spans the whole chat column, including the side the details panel insets the composer from.
       className="relative -ms-(--chat-lane-inset-start,0px) -me-(--chat-lane-inset-end,0px) min-w-0 px-1 pt-1.5 text-foreground text-xs"
     >
-      <StatusLineHover lines={result.lines} anchor="over">
-        {result.lines.map((line, lineIndex) => (
-          // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
-          <StatusLineRow key={lineIndex} line={line} />
-        ))}
-      </StatusLineHover>
+      {failed ? (
+        <div className="pointer-events-auto truncate text-muted-foreground">
+          Status line failed: {result.error}
+        </div>
+      ) : (
+        <StatusLineHover lines={result.lines} anchor="over">
+          {result.lines.map((line, lineIndex) => (
+            // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
+            <StatusLineRow key={lineIndex} line={line} />
+          ))}
+        </StatusLineHover>
+      )}
     </div>
   );
 }
-
-const LINE_SEPARATOR: AnsiSegment = {
-  text: "  ",
-  color: null,
-  background: null,
-  bold: false,
-  dim: false,
-  italic: false,
-  underline: false,
-};
 
 /** The status line in the thread's top bar, its lines joined into one. */
 export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }) {
   const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
   const line =
-    result?.lines.flatMap((segments, index) =>
-      index === 0 ? segments : [LINE_SEPARATOR, ...segments],
+    result?.lines.flatMap(([first, ...rest], index) =>
+      first === undefined
+        ? []
+        : [index === 0 ? first : { ...first, text: `  ${first.text}` }, ...rest],
     ) ?? [];
   if (result === null || line.length === 0) return null;
   // Not positioned itself, so the hover panel spans the whole top bar and opens below it.
@@ -371,8 +362,4 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
       </StatusLineHover>
     </div>
   );
-}
-
-export function statusLineKey(environmentId: EnvironmentId, threadId: string): string {
-  return `${environmentId}:${threadId}`;
 }

@@ -384,7 +384,7 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
-import { ThreadStatusBar, ThreadStatusLineRunner, statusLineKey } from "./chat/ThreadStatusBar";
+import { ThreadStatusBar, ThreadStatusLineRunner } from "./chat/ThreadStatusBar";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useTimelineFollow } from "./chat/useTimelineFollow";
@@ -1652,10 +1652,12 @@ export default function ChatView(props: ChatViewProps) {
     panelAnimationsActive,
     panelAnimationDurationMs,
   );
-  const threadStatusLineKey =
-    serverThread !== null && !embedded && !isDraftHeroState
-      ? statusLineKey(serverThread.environmentId, serverThread.id)
-      : null;
+  const statusLineThread =
+    serverThread !== null && !embedded && !isDraftHeroState ? serverThread : null;
+  const statusLineKey =
+    statusLineThread === null
+      ? null
+      : scopedThreadKey(scopeThreadRef(statusLineThread.environmentId, statusLineThread.id));
   const turnDiffSummaries = useThreadCheckpointSummaries(routeThreadDetailRef);
   const availableRevertTurnCounts = deriveAvailableRevertTurnCounts(serverProjection);
   // A paged history window cannot identify the first loaded run as the thread start.
@@ -3412,7 +3414,7 @@ export default function ChatView(props: ChatViewProps) {
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
-              statusLineKey={threadStatusLineKey}
+              statusLineKey={statusLineKey}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
@@ -3898,23 +3900,24 @@ export default function ChatView(props: ChatViewProps) {
                     </div>
                   </div>
                 </div>
-                {threadStatusLineKey !== null && serverThread !== null ? (
-                  <ThreadStatusLineRunner
-                    environmentId={serverThread.environmentId}
-                    createdAt={serverThread.createdAt}
-                    source={{
-                      threadId: serverThread.id,
-                      cwd: gitCwd,
-                      modelSelection: serverThread.modelSelection,
-                      providers: providerStatuses,
-                      usageLimitSources:
-                        serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
-                      contextWindow: activeContextWindow,
-                    }}
-                  />
-                ) : null}
-                {threadStatusLineKey !== null ? (
-                  <ThreadStatusBar statusLineKey={threadStatusLineKey} />
+                {statusLineThread !== null && statusLineKey !== null ? (
+                  <>
+                    <ThreadStatusLineRunner
+                      statusLineKey={statusLineKey}
+                      environmentId={statusLineThread.environmentId}
+                      createdAt={statusLineThread.createdAt}
+                      source={{
+                        threadId: statusLineThread.id,
+                        cwd: gitCwd,
+                        modelSelection: statusLineThread.modelSelection,
+                        providers: providerStatuses,
+                        usageLimitSources:
+                          serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                        contextWindow: activeContextWindow,
+                      }}
+                    />
+                    <ThreadStatusBar statusLineKey={statusLineKey} />
+                  </>
                 ) : null}
                 <div
                   aria-hidden

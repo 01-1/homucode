@@ -362,7 +362,7 @@ export function splitStatusLineClock(line: ReadonlyArray<AnsiSegment>): {
   if (match === null) return null;
   const end = match.index + match[0].length;
   return {
-    before: sliceSegments(line, 0, text.slice(0, match.index).trimEnd().length),
+    before: sliceSegments(line, 0, match.index),
     clock: sliceSegments(line, match.index, end),
     after: sliceSegments(line, end, text.length),
   };
