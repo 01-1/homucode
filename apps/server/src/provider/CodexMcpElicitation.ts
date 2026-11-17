@@ -1,4 +1,5 @@
 import type { ProviderApprovalDecision, ProviderApprovalOption } from "@t3tools/contracts";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as EffectCodexSchema from "effect-codex-app-server/schema";
 
@@ -175,6 +176,34 @@ export function describeMcpElicitation(
       { decision: "accept", label: "Approve" },
     ],
   };
+}
+
+export function isCodexAppAccessElicitation(
+  payload: EffectCodexSchema.McpServerElicitationRequestParams,
+): boolean {
+  if (
+    payload.mode !== "form" ||
+    !["browser", "browser-use", "computer-use", "codex_apps"].includes(payload.serverName)
+  ) {
+    return false;
+  }
+  if (
+    (Predicate.hasProperty(payload._meta, "codex_requires_user_input") &&
+      payload._meta.codex_requires_user_input !== false) ||
+    (Predicate.hasProperty(payload._meta, "codex_approval_kind") &&
+      payload._meta.codex_approval_kind !== "browser_auth")
+  ) {
+    return false;
+  }
+  const form = mcpElicitationFormFields(payload);
+  const properties = form?.properties;
+  return (
+    properties?.approval !== undefined &&
+    Object.keys(properties).length === 1 &&
+    (form?.required ?? []).every((field) => field === "approval") &&
+    mcpElicitationFieldOptions(properties.approval).some((option) => option.value === "once") &&
+    /^Allow ChatGPT to use [^?\r\n]+\?$/.test(payload.message)
+  );
 }
 
 export function toMcpElicitationResponse(

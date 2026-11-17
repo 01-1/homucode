@@ -118,6 +118,7 @@ import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { buildCodexAdditionalContext } from "../../provider/CodexDeveloperInstructions.ts";
 import {
   describeMcpElicitation,
+  isCodexAppAccessElicitation,
   toMcpElicitationResponse,
 } from "../../provider/CodexMcpElicitation.ts";
 import {
@@ -774,7 +775,7 @@ function codexRuntimeModeTurnDefaults(runtimeMode: RuntimeMode): {
       };
     case "full-access":
       return {
-        // `never` also rejects browser and app access prompts before the client sees them.
+        // Granular policy lets the adapter answer browser and app access requests.
         approvalPolicy: {
           granular: {
             mcp_elicitations: true,
@@ -5964,14 +5965,50 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }).pipe(Effect.orDie, turnTerminalizationPermit.withPermits(1)),
         );
 
+        const reportFullAccessRefusal = Effect.fn("CodexAdapterV2.reportFullAccessRefusal")(
+          function* (threadId: string, action: string) {
+            const message = `HomuCode automatically refused ${action} because Full access turns do not prompt for approvals.`;
+            // Codex translates "decline" into a user rejection. Send the reason as
+            // developer context because Codex drops JSON-RPC error text from the tool result.
+            yield* client
+              .request("thread/inject_items", {
+                threadId,
+                items: [
+                  {
+                    type: "message",
+                    role: "developer",
+                    content: [{ type: "input_text", text: message }],
+                  },
+                ],
+              })
+              .pipe(Effect.timeoutOption("2 seconds"), Effect.ignore);
+            return message;
+          },
+        );
+
+        const refuseFullAccessApproval = Effect.fn("CodexAdapterV2.refuseFullAccessApproval")(
+          function* (threadId: string, action: string) {
+            const message = yield* reportFullAccessRefusal(threadId, action);
+            return yield* new CodexErrors.CodexAppServerRequestError({
+              code: -32000,
+              errorMessage: message,
+            });
+          },
+        );
+
         yield* client.handleServerRequest("item/commandExecution/requestApproval", (payload) =>
           Effect.gen(function* () {
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
-              return yield* toProtocolError(
-                `No active Codex turn context for approval turn ${payload.turnId}.`,
-                payload,
+              return yield* Effect.die(
+                toProtocolError(
+                  `No active Codex turn context for approval turn ${payload.turnId}.`,
+                  payload,
+                ),
               );
+            }
+            if (context.input.runtimePolicy.runtimeMode === "full-access") {
+              return yield* refuseFullAccessApproval(payload.threadId, "a command approval");
             }
             const allowance = sessionAllowance(payload.threadId, context);
             if (allowance.has("command")) {
@@ -5989,7 +6026,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               ...((payload.reason ?? payload.command) === undefined
                 ? {}
                 : { prompt: payload.reason ?? payload.command }),
-            });
+            }).pipe(Effect.orDie);
             const decision = yield* Deferred.make<ProviderApprovalDecision, never>();
             yield* Ref.update(pendingRuntimeRequests, (current) => {
               const updated = new Map(current);
@@ -6032,17 +6069,22 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             return {
               decision: resolved === "acceptAlways" ? "acceptForSession" : resolved,
             } satisfies CodexSchema.CommandExecutionRequestApprovalResponse;
-          }).pipe(Effect.orDie),
+          }),
         );
 
         yield* client.handleServerRequest("item/fileChange/requestApproval", (payload) =>
           Effect.gen(function* () {
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
-              return yield* toProtocolError(
-                `No active Codex turn context for file change approval turn ${payload.turnId}.`,
-                payload,
+              return yield* Effect.die(
+                toProtocolError(
+                  `No active Codex turn context for file change approval turn ${payload.turnId}.`,
+                  payload,
+                ),
               );
+            }
+            if (context.input.runtimePolicy.runtimeMode === "full-access") {
+              return yield* refuseFullAccessApproval(payload.threadId, "a file change approval");
             }
             const allowance = sessionAllowance(payload.threadId, context);
             if (allowance.has("file-change")) {
@@ -6061,7 +6103,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   ...payload,
                   fileChanges: context.fileChangeKindsByItem.get(payload.itemId) ?? {},
                 }) ?? null,
-            });
+            }).pipe(Effect.orDie);
             const decision = yield* Deferred.make<ProviderApprovalDecision, never>();
             yield* Ref.update(pendingRuntimeRequests, (current) => {
               const updated = new Map(current);
@@ -6104,19 +6146,27 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             return {
               decision: resolved === "acceptAlways" ? "acceptForSession" : resolved,
             } satisfies CodexSchema.FileChangeRequestApprovalResponse;
-          }).pipe(Effect.orDie),
+          }),
         );
 
         yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
           Effect.gen(function* () {
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
-              return yield* toProtocolError(
-                `No active Codex turn context for permissions approval turn ${payload.turnId}.`,
-                payload,
+              return yield* Effect.die(
+                toProtocolError(
+                  `No active Codex turn context for permissions approval turn ${payload.turnId}.`,
+                  payload,
+                ),
               );
             }
 
+            if (context.input.runtimePolicy.runtimeMode === "full-access") {
+              return yield* refuseFullAccessApproval(
+                payload.threadId,
+                "a request for additional permissions",
+              );
+            }
             const requestKind = providerRequestKindFromPermissions(payload.permissions);
             const artifacts = yield* buildApprovalRequestArtifacts({
               context,
@@ -6124,7 +6174,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               nativeRequestId: payload.itemId,
               requestKind,
               ...(payload.reason === undefined ? {} : { prompt: payload.reason }),
-            });
+            }).pipe(Effect.orDie);
             const decision = yield* Deferred.make<ProviderApprovalDecision, never>();
             yield* Ref.update(pendingRuntimeRequests, (current) => {
               const updated = new Map(current);
@@ -6165,21 +6215,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               decision: resolved,
               permissions: payload.permissions,
             });
-          }).pipe(Effect.orDie),
+          }),
         );
 
         yield* client.handleServerRequest("mcpServer/elicitation/request", (payload) =>
           Effect.gen(function* () {
-            const acceptance = toMcpElicitationResponse(payload, "accept");
-            if (acceptance.action !== "accept") {
-              yield* Effect.logWarning("Cancelled an unsupported MCP elicitation.", {
-                serverName: payload.serverName,
-                mode: payload.mode,
-              });
-              return {
-                action: "cancel",
-              } satisfies CodexSchema.McpServerElicitationRequestResponse;
-            }
             const context =
               payload.turnId === undefined || payload.turnId === null
                 ? yield* awaitRegisteredTurn(findActiveTurnByNativeThreadId(payload.threadId))
@@ -6195,9 +6235,29 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             }
 
             if (context.input.runtimePolicy.runtimeMode === "full-access") {
-              return acceptance;
+              if (isCodexAppAccessElicitation(payload)) {
+                return {
+                  action: "accept",
+                  content: { approval: "once" },
+                } satisfies CodexSchema.McpServerElicitationRequestResponse;
+              }
+              yield* reportFullAccessRefusal(payload.threadId, "an MCP approval request");
+              return {
+                action: "cancel",
+                _meta: { codex_approval_cancellation_reason: "non_interactive" },
+              } satisfies CodexSchema.McpServerElicitationRequestResponse;
             }
 
+            const acceptance = toMcpElicitationResponse(payload, "accept");
+            if (acceptance.action !== "accept") {
+              yield* Effect.logWarning("Cancelled an unsupported MCP elicitation.", {
+                serverName: payload.serverName,
+                mode: payload.mode,
+              });
+              return {
+                action: "cancel",
+              } satisfies CodexSchema.McpServerElicitationRequestResponse;
+            }
             const nativeRequestId =
               payload.mode === "url"
                 ? payload.elicitationId
@@ -6260,6 +6320,15 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 `No active Codex turn context for exec approval thread ${payload.conversationId}.`,
                 payload,
               );
+            }
+            if (context.input.runtimePolicy.runtimeMode === "full-access") {
+              return {
+                decision: {
+                  denied: {
+                    rejection: "HomuCode automatically refused command approval in Full access.",
+                  },
+                },
+              } satisfies CodexSchema.ExecCommandApprovalResponse;
             }
             const allowance = sessionAllowance(payload.conversationId, context);
             if (allowance.has("command")) {
@@ -6329,6 +6398,16 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 `No active Codex turn context for apply patch approval thread ${payload.conversationId}.`,
                 payload,
               );
+            }
+            if (context.input.runtimePolicy.runtimeMode === "full-access") {
+              return {
+                decision: {
+                  denied: {
+                    rejection:
+                      "HomuCode automatically refused file change approval in Full access.",
+                  },
+                },
+              } satisfies CodexSchema.ApplyPatchApprovalResponse;
             }
             const allowance = sessionAllowance(payload.conversationId, context);
             if (allowance.has("file-change")) {

@@ -2158,6 +2158,8 @@ export function makeClaudeQueryOptions(input: {
   readonly canUseTool?: CanUseTool;
   readonly onUserDialog?: ClaudeQueryOptions["onUserDialog"];
   readonly onElicitation?: ClaudeQueryOptions["onElicitation"];
+  readonly onPermissionRequest?: HookCallback;
+  readonly onMcpToolResult?: HookCallback;
   readonly onStop?: HookCallback;
   readonly supportedDialogKinds?: ClaudeQueryOptions["supportedDialogKinds"];
   readonly allowDangerouslySkipPermissions?: boolean;
@@ -2313,13 +2315,25 @@ export function makeClaudeQueryOptions(input: {
         ...launchAppendSystemPrompt,
       ].join("\n\n"),
     },
-    ...(deviceInstructions || input.onStop !== undefined
+    ...(deviceInstructions ||
+    input.onStop !== undefined ||
+    input.onPermissionRequest !== undefined ||
+    input.onMcpToolResult !== undefined
       ? {
           hooks: {
             ...(deviceInstructions
               ? { SubagentStart: [{ hooks: [subagentDeviceInstructions] }] }
               : {}),
             ...(input.onStop === undefined ? {} : { Stop: [{ hooks: [input.onStop] }] }),
+            ...(input.onPermissionRequest === undefined
+              ? {}
+              : { PermissionRequest: [{ hooks: [input.onPermissionRequest] }] }),
+            ...(input.onMcpToolResult === undefined
+              ? {}
+              : {
+                  PostToolUse: [{ matcher: "mcp__.*", hooks: [input.onMcpToolResult] }],
+                  PostToolUseFailure: [{ matcher: "mcp__.*", hooks: [input.onMcpToolResult] }],
+                }),
           },
         }
       : {}),
@@ -3457,11 +3471,15 @@ function claudeBypassAvailability(
 }
 
 function requiresClaudeApproval(context: ActiveClaudeTurnContext): boolean {
-  // CLI-forwarded requests need a person's decision even under bypass (ask rules,
-  // safety checks, or settings fallback). Do not wait for queued init/status updates.
+  // Claude can forward requests from bypass mode before its init/status updates arrive.
   const policy = context.queryPolicy;
   return policy.installPermissionCallback || policy.permissionMode === "bypassPermissions";
 }
+
+const CLAUDE_FULL_ACCESS_REFUSAL =
+  "HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals.";
+const CLAUDE_FULL_ACCESS_MCP_REFUSAL =
+  "HomuCode automatically cancelled an approval request from this MCP server because Full access turns do not prompt for approvals.";
 
 function claudeRuntimeQueryPolicyKey(policy: ClaudeRuntimeQueryPolicy): string {
   return JSON.stringify({
@@ -12146,19 +12164,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             } satisfies PermissionResult;
           }
 
+          const { interactionMode, approvalPolicy, runtimeMode } = context.input.runtimePolicy;
           if (
-            context.input.runtimePolicy.interactionMode === "plan" &&
-            context.input.runtimePolicy.approvalPolicy === "never"
+            interactionMode === "plan" &&
+            (approvalPolicy === "never" || runtimeMode === "full-access")
           ) {
             return {
               behavior: "deny",
               message:
-                "This tool requires approval in Plan mode, but approvals are disabled for this thread.",
+                "HomuCode automatically refused this tool because it requires approval in Plan mode and approvals are disabled for this thread.",
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
 
-          if (!requiresClaudeApproval(context)) {
+          if (runtimeMode !== "full-access" && !requiresClaudeApproval(context)) {
             return {
               behavior: "allow",
               updatedInput: toolInput,
@@ -12183,6 +12202,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return {
               behavior: "deny",
               message: `Claude Code's removal safety check denied this command; the user did not reject it. The command did not run. Do not bypass the check by splitting the removal, putting it in a script, or using another tool or shell. If the warning below supplies a safe rewrite, use it and let the same check evaluate it. Otherwise continue the rest of the task without the removal and tell the user what you needed to delete and why. Warning: ${safetyReason}`,
+              toolUseID: callbackOptions.toolUseID,
+            } satisfies PermissionResult;
+          }
+
+          if (runtimeMode === "full-access") {
+            return {
+              behavior: "deny",
+              message: safetyReason
+                ? `${CLAUDE_FULL_ACCESS_REFUSAL} Reason: ${safetyReason}`
+                : CLAUDE_FULL_ACCESS_REFUSAL,
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
@@ -12268,6 +12297,57 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         const canUseTool: CanUseTool = (toolName, toolInput, callbackOptions) =>
           runPromise(canUseToolEffect(toolName, toolInput, callbackOptions));
 
+        const onPermissionRequest: HookCallback = (request) =>
+          runPromise(
+            Effect.gen(function* () {
+              const context = yield* Ref.get(activeTurn);
+              if (
+                context?.input.runtimePolicy.runtimeMode !== "full-access" ||
+                request.hook_event_name !== "PermissionRequest" ||
+                request.tool_name === "AskUserQuestion" ||
+                request.tool_name === "ExitPlanMode"
+              ) {
+                return {};
+              }
+              return {
+                hookSpecificOutput: {
+                  hookEventName: "PermissionRequest",
+                  decision: { behavior: "deny", message: CLAUDE_FULL_ACCESS_REFUSAL },
+                },
+              } as const;
+            }),
+          );
+
+        const cancelledMcpElicitations = new WeakMap<
+          ActiveClaudeTurnContext,
+          Map<string, number>
+        >();
+        const onMcpToolResult: HookCallback = (request) =>
+          runPromise(
+            Effect.gen(function* () {
+              if (
+                (request.hook_event_name !== "PostToolUse" &&
+                  request.hook_event_name !== "PostToolUseFailure") ||
+                request.mcp_server === undefined
+              ) {
+                return {};
+              }
+              const context = yield* Ref.get(activeTurn);
+              const pending = context === null ? undefined : cancelledMcpElicitations.get(context);
+              const server = request.mcp_server.name;
+              const count = pending?.get(server);
+              if (pending === undefined || count === undefined) return {};
+              if (count === 1) pending.delete(server);
+              else pending.set(server, count - 1);
+              return {
+                hookSpecificOutput: {
+                  hookEventName: request.hook_event_name,
+                  additionalContext: CLAUDE_FULL_ACCESS_MCP_REFUSAL,
+                },
+              };
+            }),
+          );
+
         const onElicitationEffect = Effect.fn("ClaudeAdapterV2.onElicitation")(function* (
           request: ElicitationRequest,
           callbackOptions: Parameters<NonNullable<ClaudeQueryOptions["onElicitation"]>>[1],
@@ -12276,6 +12356,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return { action: "cancel" } satisfies ElicitationResult;
           const acceptance = claudeMcpElicitationAcceptance(request);
           const context = yield* Ref.get(activeTurn);
+          const grantKey = `${request.serverName}\u0000${request.message}`;
+          if (
+            context !== null &&
+            acceptance !== undefined &&
+            (yield* Ref.get(mcpElicitationSessionGrants)).has(grantKey)
+          ) {
+            return acceptance;
+          }
+          if (context?.input.runtimePolicy.runtimeMode === "full-access") {
+            const pending = cancelledMcpElicitations.get(context) ?? new Map<string, number>();
+            pending.set(request.serverName, (pending.get(request.serverName) ?? 0) + 1);
+            cancelledMcpElicitations.set(context, pending);
+            return { action: "cancel" } satisfies ElicitationResult;
+          }
           if (acceptance === undefined || context === null) {
             yield* Effect.logWarning(
               "Cancelled an MCP elicitation the approval card cannot answer.",
@@ -12289,10 +12383,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             // "decline" for an explicit no; "cancel" tells the server the
             // request was dismissed and may be asked another way.
             return { action: "cancel" } satisfies ElicitationResult;
-          }
-          const grantKey = `${request.serverName}\u0000${request.message}`;
-          if ((yield* Ref.get(mcpElicitationSessionGrants)).has(grantKey)) {
-            return acceptance;
           }
           // The CLI waits on this answer, so a turn held for its prompt echo
           // must show its output now, as canUseTool does.
@@ -12746,6 +12836,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             canUseTool,
             onUserDialog,
             onElicitation,
+            onPermissionRequest,
+            onMcpToolResult,
             onStop,
             supportedDialogKinds: ["resume_return"],
             ...(appendSystemPromptFileText === undefined ? {} : { appendSystemPromptFileText }),
