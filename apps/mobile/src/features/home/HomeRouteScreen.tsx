@@ -71,7 +71,11 @@ function ReadyHomeRouteScreen() {
     Platform.OS === "android"
       ? primarySidebarSearchQuery
       : (workspace?.state.tabs.threads.query ?? localSearchQuery);
-  const codeThreads = useMadoHomuCodeThreads(threads, searchQuery);
+  const codeThreads = useMadoHomuCodeThreads(
+    threads,
+    searchQuery,
+    nativePrimaryColumn?.selectedThreadKey ?? null,
+  );
   const setSearchQuery = (query: string) => {
     if (Platform.OS === "android") setPrimarySidebarSearchQuery(query);
     else if (workspace) workspace.dispatch({ type: "query", query, tab: "threads" });
