@@ -7218,7 +7218,14 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     it.effect("cancels an MCP approval in Full access without opening a card", () =>
       Effect.gen(function* () {
         const { harness, elicit } = yield* startElicitationTurn(undefined, "full-access");
-        const answer = yield* elicit(approvalOnly);
+        const answer = yield* elicit({
+          ...approvalOnly,
+          requestedSchema: {
+            type: "object",
+            properties: { confirm: { type: "boolean" } },
+            required: ["confirm"],
+          },
+        });
         const result = yield* Effect.raceFirst(
           Fiber.join(answer),
           Queue.take(harness.runtimeRequestReceipts).pipe(Effect.as(undefined)),
@@ -7251,6 +7258,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
               "HomuCode automatically cancelled an approval request from this MCP server because Full access turns do not prompt for approvals.",
           },
         });
+        assert.deepEqual(yield* giveContext("deploys"), {});
       }).pipe(Effect.scoped, Effect.provide(testLayer)),
     );
 

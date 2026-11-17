@@ -12318,7 +12318,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             }),
           );
 
-        const cancelledMcpElicitationServers = new WeakMap<ActiveClaudeTurnContext, Set<string>>();
+        const cancelledMcpElicitations = new WeakMap<
+          ActiveClaudeTurnContext,
+          Map<string, number>
+        >();
         const onMcpToolResult: HookCallback = (request) =>
           runPromise(
             Effect.gen(function* () {
@@ -12330,12 +12333,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 return {};
               }
               const context = yield* Ref.get(activeTurn);
-              if (
-                context === null ||
-                !cancelledMcpElicitationServers.get(context)?.has(request.mcp_server.name)
-              ) {
-                return {};
-              }
+              const pending = context === null ? undefined : cancelledMcpElicitations.get(context);
+              const server = request.mcp_server.name;
+              const count = pending?.get(server);
+              if (pending === undefined || count === undefined) return {};
+              if (count === 1) pending.delete(server);
+              else pending.set(server, count - 1);
               return {
                 hookSpecificOutput: {
                   hookEventName: request.hook_event_name,
@@ -12353,6 +12356,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return { action: "cancel" } satisfies ElicitationResult;
           const acceptance = claudeMcpElicitationAcceptance(request);
           const context = yield* Ref.get(activeTurn);
+          const grantKey = `${request.serverName}\u0000${request.message}`;
+          if (
+            context !== null &&
+            acceptance !== undefined &&
+            (yield* Ref.get(mcpElicitationSessionGrants)).has(grantKey)
+          ) {
+            return acceptance;
+          }
+          if (context?.input.runtimePolicy.runtimeMode === "full-access") {
+            const pending = cancelledMcpElicitations.get(context) ?? new Map<string, number>();
+            pending.set(request.serverName, (pending.get(request.serverName) ?? 0) + 1);
+            cancelledMcpElicitations.set(context, pending);
+            return { action: "cancel" } satisfies ElicitationResult;
+          }
           if (acceptance === undefined || context === null) {
             yield* Effect.logWarning(
               "Cancelled an MCP elicitation the approval card cannot answer.",
@@ -12365,16 +12382,6 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             // No card was shown, so the user made no choice. MCP reserves
             // "decline" for an explicit no; "cancel" tells the server the
             // request was dismissed and may be asked another way.
-            return { action: "cancel" } satisfies ElicitationResult;
-          }
-          const grantKey = `${request.serverName}\u0000${request.message}`;
-          if ((yield* Ref.get(mcpElicitationSessionGrants)).has(grantKey)) {
-            return acceptance;
-          }
-          if (context.input.runtimePolicy.runtimeMode === "full-access") {
-            const servers = cancelledMcpElicitationServers.get(context) ?? new Set<string>();
-            servers.add(request.serverName);
-            cancelledMcpElicitationServers.set(context, servers);
             return { action: "cancel" } satisfies ElicitationResult;
           }
           // The CLI waits on this answer, so a turn held for its prompt echo

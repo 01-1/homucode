@@ -6220,7 +6220,6 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
 
         yield* client.handleServerRequest("mcpServer/elicitation/request", (payload) =>
           Effect.gen(function* () {
-            const acceptance = toMcpElicitationResponse(payload, "accept");
             const context =
               payload.turnId === undefined || payload.turnId === null
                 ? yield* awaitRegisteredTurn(findActiveTurnByNativeThreadId(payload.threadId))
@@ -6236,8 +6235,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             }
 
             if (context.input.runtimePolicy.runtimeMode === "full-access") {
-              if (acceptance.action === "accept" && isCodexAppAccessElicitation(payload)) {
-                return acceptance;
+              if (isCodexAppAccessElicitation(payload)) {
+                return {
+                  action: "accept",
+                  content: { approval: "once" },
+                } satisfies CodexSchema.McpServerElicitationRequestResponse;
               }
               yield* reportFullAccessRefusal(payload.threadId, "an MCP approval request");
               return {
@@ -6246,6 +6248,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               } satisfies CodexSchema.McpServerElicitationRequestResponse;
             }
 
+            const acceptance = toMcpElicitationResponse(payload, "accept");
             if (acceptance.action !== "accept") {
               yield* Effect.logWarning("Cancelled an unsupported MCP elicitation.", {
                 serverName: payload.serverName,

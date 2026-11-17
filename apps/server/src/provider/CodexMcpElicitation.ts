@@ -1,4 +1,5 @@
 import type { ProviderApprovalDecision, ProviderApprovalOption } from "@t3tools/contracts";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as EffectCodexSchema from "effect-codex-app-server/schema";
 
@@ -9,8 +10,6 @@ const McpElicitationMetadata = Schema.Struct({
   appName: Schema.optionalKey(NullableMcpElicitationString),
   connector_name: Schema.optionalKey(NullableMcpElicitationString),
   connectorName: Schema.optionalKey(NullableMcpElicitationString),
-  codex_approval_kind: Schema.optionalKey(Schema.String),
-  codex_requires_user_input: Schema.optionalKey(Schema.Boolean),
   allowPersistentApproval: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
   persist: Schema.optionalKey(
     Schema.NullOr(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
@@ -188,16 +187,20 @@ export function isCodexAppAccessElicitation(
   ) {
     return false;
   }
-  const metadata = isMcpElicitationMetadata(payload._meta) ? payload._meta : undefined;
   if (
-    metadata?.codex_requires_user_input ||
-    (metadata?.codex_approval_kind && metadata.codex_approval_kind !== "browser_auth")
+    (Predicate.hasProperty(payload._meta, "codex_requires_user_input") &&
+      payload._meta.codex_requires_user_input !== false) ||
+    (Predicate.hasProperty(payload._meta, "codex_approval_kind") &&
+      payload._meta.codex_approval_kind !== "browser_auth")
   ) {
     return false;
   }
-  const properties = mcpElicitationFormFields(payload)?.properties;
+  const form = mcpElicitationFormFields(payload);
+  const properties = form?.properties;
   return (
     properties?.approval !== undefined &&
+    Object.keys(properties).length === 1 &&
+    (form?.required ?? []).every((field) => field === "approval") &&
     mcpElicitationFieldOptions(properties.approval).some((option) => option.value === "once") &&
     /^Allow ChatGPT to use [^?\r\n]+\?$/.test(payload.message)
   );
