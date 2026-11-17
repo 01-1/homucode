@@ -116,6 +116,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
+- **On pbox, until the Boat routing for checks is merged (branch `homu/cloud-checks-on-boat`), do not run `vp run check:changed`, `vp run typecheck`, knip, lint, test suites or Gradle builds locally.** Several agents running them at once froze pbox on 2026-11-17. Wait for the routing to land, then run them; until then, at most one test file with one worker (`vp test run <file>`), or let CI check your PR.
 - Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, tests beside changes, and the cross-file checks those miss. CI still runs the full test suites.
 - While you iterate, run `vp test run <files>`. For big files, add `-t "<name>"`.
 - Use `vp run typecheck`; it caches per package. Each package runs `effect-tsgo tsrs --noEmit`, the Rust TypeScript 7 checker with Effect's diagnostics built in. There is no `typescript` package to run.
