@@ -145,7 +145,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       });
       if (result._tag === "Success") savePreferences(preferencesPatch);
     } catch {
-      setError("Could not save optional features. Try again.");
+      setError("Could not save HomuCode features. Try again.");
     }
     pending.current = false;
     setBusy(false);
@@ -163,7 +163,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
           ? "Work assistance"
           : pages[step]?.[0]?.page === 2
             ? "Extra features"
-            : "Optional features";
+            : "HomuCode features";
   const select = (id: string, checked: boolean) =>
     setSelected((current) => {
       const next = new Set(current ?? selected);

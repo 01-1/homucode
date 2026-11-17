@@ -172,7 +172,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       if (saved._tag === "Success" && apply && offers.some((offer) => offer.id === "settings-sync"))
         await updateClientSettings({ settingsSyncEnabled: selected.has("settings-sync") });
     } catch {
-      toastManager.add({ type: "error", title: "Could not save optional features" });
+      toastManager.add({ type: "error", title: "Could not save HomuCode features" });
     }
     setBusy(false);
   };
@@ -186,7 +186,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
           ? "Work assistance"
           : pages[step]?.[0]?.page === 2
             ? "Extra features"
-            : "Optional features";
+            : "HomuCode features";
   return (
     <Dialog
       open

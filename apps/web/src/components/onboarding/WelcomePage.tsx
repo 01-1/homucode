@@ -252,7 +252,7 @@ export function WelcomePage({
             },
           },
         });
-        if (saved._tag !== "Success") throw new Error("Could not save optional features.");
+        if (saved._tag !== "Success") throw new Error("Could not save HomuCode features.");
       }
       await updateClientSettings({ settingsSyncEnabled: selectedOffers.has("settings-sync") });
       await completeOnboarding();
@@ -382,7 +382,7 @@ export function WelcomePage({
                     projectImport={projectImport}
                     isImporting={isImporting}
                   />
-                  <WelcomeSection title="Optional features">
+                  <WelcomeSection title="HomuCode features">
                     <FeatureOfferChoices
                       selected={selectedOffers}
                       onChange={setSelectedOffers}
