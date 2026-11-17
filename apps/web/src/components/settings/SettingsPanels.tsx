@@ -2117,6 +2117,25 @@ export function ThreadsSettingsPanel() {
         />
       </SettingsSection>
 
+      <SettingsSection id="claude-background-commands" title="Claude background commands">
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("claude-hold-background-commands")}
+          settingKeys={["claudeHoldBackgroundCommands"]}
+          description="Keep Claude threads in Working until new background commands finish or the agent releases them. Applies without restarting. Claude monitors always keep threads working."
+          control={
+            <ScopedSwitch
+              settingKeys={["claudeHoldBackgroundCommands"]}
+              checked={settings.claudeHoldBackgroundCommands}
+              onCheckedChange={(checked) =>
+                updateSettings({ claudeHoldBackgroundCommands: Boolean(checked) })
+              }
+              aria-label="Keep Claude threads working while background commands run"
+            />
+          }
+        />
+      </SettingsSection>
+
       <SettingsSection id="autoreview" title="Autoreviewers">
         <SettingsRow
           serverScoped

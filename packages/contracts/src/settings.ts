@@ -1579,6 +1579,9 @@ export const ServerSettings = Schema.Struct({
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Prefer native same-provider subagents; otherwise route every subagent through T3. */
   preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  claudeHoldBackgroundCommands: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   /** Duet: a focused Chat + Tasks view locked to one project. */
   duetDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   duetEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -2061,6 +2064,7 @@ export const ServerSettingsPatch = Schema.Struct({
   autoreviewEnabled: Schema.optionalKey(Schema.Boolean),
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
+  claudeHoldBackgroundCommands: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   duetDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),
   duetEnabled: Schema.optionalKey(Schema.Boolean),

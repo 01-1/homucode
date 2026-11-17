@@ -849,6 +849,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["enter return command ctrl multiline prompt new line composer"],
   },
   {
+    id: "claude-hold-background-commands",
+    title: "Keep Claude threads working while background commands run",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["claude background bash commands working waiting hold tasks"],
+  },
+  {
     id: "prefer-native-subagents",
     title: "Prefer native subagents",
     to: "/settings/chat",

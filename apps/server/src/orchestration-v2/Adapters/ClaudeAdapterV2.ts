@@ -5497,6 +5497,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
   const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+  const holdBackgroundCommands = Option.isSome(serverSettings)
+    ? serverSettings.value.getSettings.pipe(
+        Effect.map((settings) => settings.claudeHoldBackgroundCommands),
+        Effect.orElseSucceed(() => false),
+      )
+    : Effect.succeed(false);
   const { attachmentsDir, fileSystem, path, random, idAllocator, queryRunner } = adapterOptions;
   const loadModelCatalog = (
     adapterOptions.modelCatalog ?? Effect.succeed(BUNDLED_CLAUDE_MODEL_CATALOG)
@@ -6650,12 +6656,15 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>,
           ) {
+            const holdCommands = yield* holdBackgroundCommands;
             const startedCommandIds = yield* Ref.modify(
               pendingBackgroundTasksByNativeThread,
               (current) => {
                 const previousRoster = current.get(nativeThreadId);
                 const startedCommandIds = tasks.flatMap((task) =>
-                  task.kind === "command" && previousRoster?.has(task.taskId) !== true
+                  holdCommands &&
+                  task.kind === "command" &&
+                  previousRoster?.has(task.taskId) !== true
                     ? [task.taskId]
                     : [],
                 );
@@ -6709,14 +6718,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             task: OrchestrationV2PendingBackgroundTask,
           ) {
-            // Claude wakes the agent when a background command or Monitor ends, so both hold
-            // Working from the start; the agent releases one it leaves running.
+            const holdCommands = task.kind === "command" && (yield* holdBackgroundCommands);
             const startedHeldTask = yield* Ref.modify(
               pendingBackgroundTasksByNativeThread,
               (current) => {
                 const roster = new Map(rosterForNativeThread(current, nativeThreadId));
                 const startedHeldTask =
-                  (task.kind === "monitor" || task.kind === "command") &&
+                  (task.kind === "monitor" || holdCommands) &&
                   roster.get(task.taskId)?.kind !== task.kind;
                 roster.set(task.taskId, task);
                 return [startedHeldTask, new Map(current).set(nativeThreadId, roster)] as const;
