@@ -30,7 +30,15 @@ let foregroundSurface: Surface = launcherModule?.foregroundSurface() ?? "main";
 launcherModule?.addListener("onForegroundSurfaceChange", ({ surface }) => {
   foregroundSurface = surface;
   focusRootNavigation(containers.get(surface) ?? null);
+  reRegisterBackRouting();
 });
+
+// Deferred past the commit's effects, where navigators and screens add their Back listeners.
+function reRegisterBackRouting() {
+  setTimeout(() => {
+    for (const listener of attachListeners) listener();
+  }, 0);
+}
 
 function attachSurfaceNavigation(surface: Surface) {
   return (navigation: RootNavigation | null) => {
@@ -39,10 +47,7 @@ function attachSurfaceNavigation(surface: Surface) {
     containers.set(surface, navigation);
     foregroundSurface = launcherModule?.foregroundSurface() ?? foregroundSurface;
     focusRootNavigation(containers.get(foregroundSurface) ?? null);
-    // After this commit's effects, where the navigator adds its own Back listener.
-    setTimeout(() => {
-      for (const listener of attachListeners) listener();
-    }, 0);
+    reRegisterBackRouting();
     return () => {
       if (containers.get(surface) === navigation) containers.delete(surface);
       detach();
