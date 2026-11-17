@@ -10,6 +10,7 @@ import { resolveShortcutCommand } from "../../keybindings";
 import {
   buildKeybindingRows,
   buildWhenVariableOptions,
+  filterKeybindingCommandOptions,
   keybindingConflictLabels,
   keybindingFromKeyboardEvent,
   parseWhenExpressionDraft,
@@ -19,6 +20,18 @@ import {
 } from "./KeybindingsSettings.logic";
 
 describe("KeybindingsSettings.logic", () => {
+  it("filters command options by label or id, ignoring spaces and punctuation", () => {
+    const options = ["chat.new", "chat.newLocal", "terminal.toggle"] as const;
+    expect(filterKeybindingCommandOptions(options, "newlocal")).toEqual(["chat.newLocal"]);
+    expect(filterKeybindingCommandOptions(options, "chat.new")).toEqual([
+      "chat.new",
+      "chat.newLocal",
+    ]);
+    expect(filterKeybindingCommandOptions(options, "Terminal: Tog")).toEqual(["terminal.toggle"]);
+    expect(filterKeybindingCommandOptions(options, "  ")).toEqual(options);
+    expect(filterKeybindingCommandOptions(options, "zzz")).toEqual([]);
+  });
+
   it("keeps sibling row identities when a saved binding moves to the end", () => {
     const bindings = compileResolvedKeybindingsConfig([
       { command: "chat.new", key: "mod+n" },
