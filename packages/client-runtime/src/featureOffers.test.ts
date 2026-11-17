@@ -14,11 +14,7 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
   expect(declined).toEqual({ featureOffersSeen: ["previous-feature", "duet", "autoreview"] });
   expect(unseenFeatureOffers({ ...settings, ...declined }).map((offer) => offer.id)).toEqual(
     FEATURE_OFFERS.slice(2)
-      .filter(
-        (offer) =>
-          !offer.platform &&
-          !["connect-long-sessions", "claude-hold-background-commands"].includes(offer.id),
-      )
+      .filter((offer) => !offer.platform && offer.id !== "claude-hold-background-commands")
       .map((offer) => offer.id),
   );
   expect(featureOfferSettingsPatch(settings, offered, new Set(["duet"]))).toMatchObject({
@@ -38,12 +34,14 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
     settings.featureOffersSeen,
   );
   expect(unseenFeatureOffers(settings).some((offer) => offer.id === "connect-long-sessions")).toBe(
-    false,
-  );
-  const supported = { ...settings, connectDeviceLongSessions: false };
-  expect(unseenFeatureOffers(supported).some((offer) => offer.id === "connect-long-sessions")).toBe(
     true,
   );
+  const connect = FEATURE_OFFERS.filter((offer) => offer.id === "connect-long-sessions");
+  expect(
+    featureOfferSettingsPatch(settings, connect, new Set(["connect-long-sessions"])),
+  ).toMatchObject({
+    connectDeviceLongSessions: true,
+  });
   expect(
     unseenFeatureOffers(settings).some((offer) => offer.id === "claude-hold-background-commands"),
   ).toBe(false);

@@ -190,6 +190,11 @@ describe("command permissions", () => {
       scopes: [AuthAccessWriteScope],
     },
     {
+      label: "long Connect session",
+      input: { patch: { connectDeviceLongSessions: true } },
+      scopes: [AuthAccessWriteScope],
+    },
+    {
       label: "mixed provider and settings",
       input: {
         patch: { bareStopWaitEnabled: true },

@@ -125,6 +125,11 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   const settings = useEnvironmentSettings(environmentId);
   const available = useAtomValue(serverEnvironment.settingsValueAtom(environmentId)) !== null;
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const canSetLongSessions = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const localSettings = useClientSettings();
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null);
@@ -136,7 +141,9 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   const workTarget =
     chosenWorkTarget === undefined ? settings.workAssistanceTarget : chosenWorkTarget;
   const [busy, setBusy] = useState(false);
-  const offers = unseenFeatureOffers(settings);
+  const offers = unseenFeatureOffers(settings).filter(
+    (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
+  );
   const pages = featureOfferPages(offers);
   const includes = (id: string) => offers.some((offer) => offer.id === id) && selected.has(id);
   const followups = [

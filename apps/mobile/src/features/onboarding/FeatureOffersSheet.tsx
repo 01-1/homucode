@@ -16,6 +16,7 @@ import {
 } from "@t3tools/client-runtime/feature-offers";
 import {
   AuthSettingsWriteScope,
+  AuthAccessWriteScope,
   type EnvironmentId,
   type ServerSettings,
 } from "@t3tools/contracts";
@@ -38,14 +39,22 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : null;
   const { environments } = useEnvironments();
   const writable = useEnvironmentsWithScope(environments, AuthSettingsWriteScope);
+  const accessWritable = useEnvironmentsWithScope(environments, AuthAccessWriteScope);
   const environment = environments.find(
     (candidate) =>
       writable.has(candidate.environmentId) &&
       candidate.connection.phase === "connected" &&
       candidate.serverConfig !== null &&
       preferences !== null &&
-      unseenFeatureOffers(candidate.serverConfig.settings, "mobile", preferences.featureOffersSeen)
-        .length > 0,
+      unseenFeatureOffers(
+        candidate.serverConfig.settings,
+        "mobile",
+        preferences.featureOffersSeen,
+      ).filter(
+        (offer) =>
+          offer.setting !== "connectDeviceLongSessions" ||
+          accessWritable.has(candidate.environmentId),
+      ).length > 0,
   );
   return active && environment ? (
     <EnvironmentFeatureOffers
@@ -58,6 +67,11 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
 function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const config = useEnvironmentServerConfig(environmentId);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const canSetLongSessions = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
@@ -76,7 +90,9 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const workTarget =
     chosenTarget === undefined ? (settings?.workAssistanceTarget ?? null) : chosenTarget;
   const offers = settings
-    ? unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen)
+    ? unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
+        (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
+      )
     : [];
   const pages = featureOfferPages(offers);
   const enabled = settings ? enabledFeatureOffers(settings) : new Set<string>();

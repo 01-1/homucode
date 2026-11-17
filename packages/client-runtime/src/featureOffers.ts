@@ -10,12 +10,9 @@ type OfferSetting =
   | "threadTitleIdPrefix"
   | "backgroundGitEnabled"
   | "buildToolsSettingsVisible"
+  | "connectDeviceLongSessions"
   | "statusLineEnabled";
-type ForwardOfferSetting = "connectDeviceLongSessions" | "claudeHoldBackgroundCommands";
-type OfferedSetting = OfferSetting | ForwardOfferSetting;
-
-const isForwardOfferSetting = (key: OfferedSetting): key is ForwardOfferSetting =>
-  key === "connectDeviceLongSessions" || key === "claudeHoldBackgroundCommands";
+type OfferedSetting = OfferSetting | "claudeHoldBackgroundCommands";
 
 export interface FeatureOffer {
   readonly id: string;
@@ -151,7 +148,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     setting: "connectDeviceLongSessions",
     title: "Stay signed in for 30 days",
     description:
-      "T3 Connect devices reconnect without a cloud round trip. Revoke a device in Settings → Connections to cut it off.",
+      "T3 Connect devices reconnect without a cloud round trip. Revoke a device in Settings → Sharing & access to cut it off.",
   },
   {
     id: "claude-hold-background-commands",
@@ -174,7 +171,8 @@ export function unseenFeatureOffers(
     (offer) =>
       !(offer.platform === "mobile" ? localSeen : seen).has(offer.id) &&
       (!offer.platform || offer.platform === platform) &&
-      (!offer.setting || !isForwardOfferSetting(offer.setting) || offer.setting in settings),
+      (offer.setting !== "claudeHoldBackgroundCommands" ||
+        "claudeHoldBackgroundCommands" in settings),
   );
 }
 
@@ -210,10 +208,9 @@ export function selectedFeatureOffers(
     ...FEATURE_OFFERS.filter(
       (offer) =>
         offer.setting &&
-        (isForwardOfferSetting(offer.setting)
-          ? (settings as ServerSettings & Partial<Record<ForwardOfferSetting, boolean>>)[
-              offer.setting
-            ] === true
+        (offer.setting === "claudeHoldBackgroundCommands"
+          ? "claudeHoldBackgroundCommands" in settings &&
+            settings.claudeHoldBackgroundCommands === true
           : settings[offer.setting] === (offer.enabledValue ?? true)),
     ).map((offer) => offer.id),
     ...(settings.workAssistanceTarget ? ["work-assistance"] : []),

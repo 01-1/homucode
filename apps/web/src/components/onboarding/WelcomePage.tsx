@@ -186,7 +186,14 @@ export function WelcomePage({
   >();
   const workTarget =
     chosenWorkTarget === undefined ? offerSettings.workAssistanceTarget : chosenWorkTarget;
-  const offered = unseenFeatureOffers({ ...offerSettings, featureOffersSeen: [] });
+  const canSetLongSessions = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
+  const offered = unseenFeatureOffers({ ...offerSettings, featureOffersSeen: [] }).filter(
+    (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
+  );
   const canSaveOffers = useAtomValue(
     serverEnvironment.updateSettings.permissionAtom(environmentId),
   );
