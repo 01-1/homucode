@@ -38,6 +38,9 @@ import {
 const CONTINUE_PROMPT =
   "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.";
 
+const REASK_NOTE =
+  "The restart also closed the approval, question or secret request you were waiting on. It was never answered, and the action it asked about did not run. Make the same request again.";
+
 const MAX_CONTINUATION_CHAIN = 3;
 const CONTINUATION_LOOP_WINDOW_MS = 5 * 60 * 1_000;
 
@@ -49,6 +52,7 @@ export function restartContinuationBlocked(
   source: OrchestrationV2Run,
   now: DateTime.Utc,
   settled: boolean,
+  reaskRequests = false,
 ): boolean {
   const { thread } = projection;
   if (
@@ -65,6 +69,18 @@ export function restartContinuationBlocked(
     (turn.status === "completed" || turn.status === "failed" || turn.status === "interrupted")
   )
     return true;
+  return !reaskRequests && restartCutRequest(projection, source);
+}
+
+/** An approval, question or secret request the run was waiting on when the server went down. */
+function restartCutRequest(
+  projection: Pick<
+    ProjectionRuntimeRecoveryState,
+    "runtimeRequests" | "providerTurns" | "turnItems"
+  >,
+  source: OrchestrationV2Run,
+): boolean {
+  const turn = latestProviderTurnForAttempt(projection.providerTurns, source.activeAttemptId);
   const waitingRequest = projection.runtimeRequests.some(
     (request) =>
       request.kind !== "dynamic_tool_call" &&
@@ -174,6 +190,7 @@ export function restartContinuationRun(
     | "turnItems"
   >,
   now: DateTime.Utc,
+  reaskRequests = false,
 ): OrchestrationV2Run | undefined {
   const run = projection.runs.reduce<OrchestrationV2Run | undefined>(
     (latest, candidate) =>
@@ -189,7 +206,7 @@ export function restartContinuationRun(
     run.status === "starting" && run.restartContinuationOfRunId !== undefined;
   const settled = run.status === "completed" || run.status === "waiting";
   if (run.status !== "running" && !preparedContinuation && !settled) return;
-  if (restartContinuationBlocked(projection, run, now, settled)) return;
+  if (restartContinuationBlocked(projection, run, now, settled, reaskRequests)) return;
   const liveTurnRequired = !preparedContinuation && !settled;
   if (projection.thread.providerInstanceId !== run.providerInstanceId) return;
   const providerThread = projection.providerThreads.find(
@@ -255,6 +272,7 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
     )
       return;
     if (projection.messages.some((message) => message.id === messageId)) return;
+    const reaskRequests = enabled.reaskPendingRequestsAfterRestart;
     const source = projection.runs.find((run) => run.id === input.sourceRunId);
     if (
       !source ||
@@ -267,6 +285,7 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
         source,
         yield* DateTime.now,
         isRestartNoteSource(source, projection.providerTurns),
+        reaskRequests,
       )
     )
       return;
@@ -318,12 +337,16 @@ export const continueRestartedRun = Effect.fn("RestartContinuation.continueResta
     );
     const noteText =
       note.work.length === 0 ? undefined : restartCancelledBackgroundWorkNote(note.work);
+    const continuePrompt =
+      reaskRequests && restartCutRequest(projection, source)
+        ? `${CONTINUE_PROMPT}\n\n${REASK_NOTE}`
+        : CONTINUE_PROMPT;
     const text =
       noteText === undefined
-        ? CONTINUE_PROMPT
+        ? continuePrompt
         : note.settled
           ? noteText
-          : `${noteText}\n\n${CONTINUE_PROMPT}`;
+          : `${noteText}\n\n${continuePrompt}`;
     yield* threads
       .dispatch({
         type: "message.dispatch",

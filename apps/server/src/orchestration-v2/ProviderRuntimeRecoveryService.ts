@@ -276,6 +276,7 @@ export const make = Effect.gen(function* () {
       stored: ProjectionStore.ProjectionRuntimeRecoveryState,
       trigger: "startup" | "shutdown",
       continueAfterRestart: boolean,
+      reaskRequests: boolean,
       stoppedThisPass: ReadonlyMap<string, RecoverySession> = new Map(),
     ) {
       const now = yield* DateTime.now;
@@ -464,7 +465,7 @@ export const make = Effect.gen(function* () {
       const resends: Array<EffectOutbox.PendingOrchestrationEffectV2> = [];
       for (const run of unattendedRuns) {
         if (
-          restartContinuationBlocked(projection, run, now, false) ||
+          restartContinuationBlocked(projection, run, now, false, reaskRequests) ||
           (yield* restartStopRequested(projections.getThreadRecords, projection.thread, run).pipe(
             Effect.mapError(
               (cause) =>
@@ -1007,6 +1008,7 @@ export const make = Effect.gen(function* () {
           ? restartContinuationRun(
               { ...projection, providerSessions: sessionsLiveAtStart(projection, stoppedThisPass) },
               now,
+              reaskRequests,
             )
           : undefined;
       let processLossCount = 1;
@@ -1146,7 +1148,13 @@ export const make = Effect.gen(function* () {
             continueAfterRestart !== null &&
             resolveProjectSettings(continueAfterRestart, projection.thread.projectId).settings
               .continueThreadsAfterServerUpdate;
-          const result = yield* reconcileProjection(projection, trigger, enabled, stoppedThisPass);
+          const result = yield* reconcileProjection(
+            projection,
+            trigger,
+            enabled,
+            continueAfterRestart?.reaskPendingRequestsAfterRestart ?? false,
+            stoppedThisPass,
+          );
           for (const session of projection.providerSessions) {
             if (session.status !== "stopped" && session.status !== "error") {
               stoppedThisPass.set(session.id, session);
@@ -1241,6 +1249,7 @@ export const make = Effect.gen(function* () {
           const run = restartContinuationRun(
             yield* rewindUnacceptedRuns(projection),
             yield* DateTime.now,
+            enabled.reaskPendingRequestsAfterRestart,
           );
           if (!run) return;
           const commandId = CommandId.make(`command:restart-prepare:${run.id}`);

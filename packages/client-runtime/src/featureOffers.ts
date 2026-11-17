@@ -4,6 +4,7 @@ type OfferSetting =
   | "preferNativeSubagents"
   | "bareStopWaitEnabled"
   | "claudeSteersSurviveStop"
+  | "reaskPendingRequestsAfterRestart"
   | "applyModelChangeNow"
   | "messageSentFromEnabled"
   | "threadTitleIncludeProjectName"
@@ -83,6 +84,14 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     description:
       "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, T3 sends it again for you.",
     setting: "claudeSteersSurviveStop",
+  },
+  {
+    id: "reask-after-restart",
+    page: 2,
+    title: "Ask again after a restart",
+    description:
+      "When T3 Code restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
+    setting: "reaskPendingRequestsAfterRestart",
   },
   {
     id: "apply-model-change-now",
