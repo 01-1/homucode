@@ -6,6 +6,7 @@ import type { ComposerSubmissionIntent } from "../../composer-logic";
 import {
   composerDraftHasUserContent,
   DraftId,
+  type ComposerThreadDraftState,
   type ComposerThreadTarget,
   useComposerDraftStore,
 } from "../../composerDraftStore";
@@ -33,6 +34,30 @@ interface AdvanceState {
   readonly held: boolean;
   readonly stashed: boolean;
   readonly composer: boolean;
+}
+
+// Reads the module map, so it must recompute whenever the held draft changes; a hook-level read
+// would be memoized on the route key alone.
+function heldMessageFor(routeThreadKey: string, draft: ComposerThreadDraftState): ChatMessage {
+  const meta = heldSendMetaByRouteKey.get(routeThreadKey);
+  const createdAt = meta?.createdAt ?? new Date().toISOString();
+  const attachments = [...draft.images, ...draft.files];
+  return {
+    id: meta?.messageId ?? MessageId.make(`held-send:${routeThreadKey}`),
+    role: "user",
+    text: draft.prompt,
+    ...(attachments.length > 0 ? { attachments: optimisticMessageAttachments(attachments) } : {}),
+    runId: null,
+    createdAt,
+    updatedAt: createdAt,
+    streaming: false,
+    waitingForPreviousSend: true,
+    ...(meta?.dispatchMode === "queue"
+      ? { inputIntent: "queued_turn" as const }
+      : meta?.dispatchMode === "steer"
+        ? { inputIntent: "steer" as const }
+        : {}),
+  };
 }
 
 export type HeldSendFn = (
@@ -67,33 +92,8 @@ export function useHeldSend(input: {
   const heldHasContent = composerDraftHasUserContent(heldDraft);
   const replayRef = useRef<HeldSendMeta | null>(null);
 
-  const meta = heldSendMetaByRouteKey.get(routeThreadKey);
-  const heldMessage: ChatMessage | null =
-    heldHasContent && heldDraft
-      ? {
-          id: meta?.messageId ?? MessageId.make(`held-send:${routeThreadKey}`),
-          role: "user",
-          text: heldDraft.prompt,
-          ...(heldDraft.images.length + heldDraft.files.length > 0
-            ? {
-                attachments: optimisticMessageAttachments([
-                  ...heldDraft.images,
-                  ...heldDraft.files,
-                ]),
-              }
-            : {}),
-          runId: null,
-          createdAt: meta?.createdAt ?? new Date(0).toISOString(),
-          updatedAt: meta?.createdAt ?? new Date(0).toISOString(),
-          streaming: false,
-          waitingForPreviousSend: true,
-          ...(meta?.dispatchMode === "queue"
-            ? { inputIntent: "queued_turn" as const }
-            : meta?.dispatchMode === "steer"
-              ? { inputIntent: "steer" as const }
-              : {}),
-        }
-      : null;
+  const heldMessage =
+    heldHasContent && heldDraft ? heldMessageFor(routeThreadKey, heldDraft) : null;
 
   /** Takes the composer's draft to send later; false when it cannot wait here. */
   const hold = (
@@ -104,15 +104,19 @@ export function useHeldSend(input: {
     const store = useComposerDraftStore.getState();
     if (composerDraftHasUserContent(store.getComposerDraft(heldTarget))) return false;
     if (!composerDraftHasUserContent(store.getComposerDraft(composerDraftTarget))) return false;
-    store.moveComposerContent(composerDraftTarget, heldTarget);
-    if (!composerDraftHasUserContent(store.getComposerDraft(heldTarget))) return false;
     const now = new Date().toISOString();
+    // Set first: moving the draft renders the held message, which reads this.
     heldSendMetaByRouteKey.set(routeThreadKey, {
       dispatchMode,
       submissionIntent,
       messageId: MessageId.make(`held-send:${routeThreadKey}:${now}`),
       createdAt: now,
     });
+    store.moveComposerContent(composerDraftTarget, heldTarget);
+    if (!composerDraftHasUserContent(store.getComposerDraft(heldTarget))) {
+      heldSendMetaByRouteKey.delete(routeThreadKey);
+      return false;
+    }
     syncComposer("");
     return true;
   };
