@@ -607,6 +607,7 @@ it("decodes setup behavior defaults without opting into optional features", () =
     messageSentFromEnabled: true,
     stopThreadSubagents: false,
     backgroundGitEnabled: true,
+    autoUpdateWhenIdle: true,
     buildToolsSettingsVisible: false,
     cloudBuildEnabled: false,
     loadBuildEnabled: false,
