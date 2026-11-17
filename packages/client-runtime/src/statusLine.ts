@@ -360,11 +360,26 @@ export interface StatusLineItem {
 const ITEM_SEPARATOR_PATTERN = /,\s+|\s+\|\s+/g;
 const DIRECTORY_PATTERN = /^[~/]\S*(?=\s|$)/;
 
+// Where a muted label such as `cache ` starts a new value in the middle of an item.
+function mutedLabelStarts(line: ReadonlyArray<AnsiSegment>, text: string): ReadonlyArray<number> {
+  const starts: number[] = [];
+  let offset = 0;
+  for (const segment of line) {
+    const indent = /^\s*(?=[a-z])/i.exec(segment.text)?.[0].length;
+    const spaced = indent !== undefined && (indent > 0 || /\s$/.test(text.slice(0, offset)));
+    if (spaced && segment.color !== null && statusLineColorRole(segment.color) === "muted") {
+      starts.push(offset + indent);
+    }
+    offset += segment.text.length;
+  }
+  return starts;
+}
+
 /**
  * Splits a line into the items a client lays out one by one: a leading `~/…` or `/…` directory,
  * the `[HH:MM:SS]` clock, and the text between `, ` and ` | ` separators, split again where a
  * muted label starts a new value. The text on either side of the clock is joined by the line's
- * own comma.
+ * own comma, when it has one.
  */
 export function splitStatusLineItems(
   line: ReadonlyArray<AnsiSegment>,
@@ -373,6 +388,7 @@ export function splitStatusLineItems(
   const separators = [...text.matchAll(ITEM_SEPARATOR_PATTERN)];
   const firstComma = separators.find((match) => match[0].startsWith(","));
   const comma = firstComma ? sliceSegments(line, firstComma.index, firstComma.index + 1) : [];
+  const labelStarts = mutedLabelStarts(line, text);
   const items: StatusLineItem[] = [];
   const push = (
     kind: StatusLineItem["kind"],
@@ -384,51 +400,45 @@ export function splitStatusLineItems(
     const to = from + text.slice(from, end).trimEnd().length;
     if (from < to) items.push({ kind, segments: [...sliceSegments(line, from, to), ...separator] });
   };
-  const labelStarts: number[] = [];
-  let offset = 0;
-  for (const segment of line) {
-    const indent = /^\s*(?=[a-z])/i.exec(segment.text)?.[0].length;
-    const spaced = indent !== undefined && (indent > 0 || /\s$/.test(text.slice(0, offset)));
-    if (spaced && segment.color !== null && statusLineColorRole(segment.color) === "muted") {
-      labelStarts.push(offset + indent);
-    }
-    offset += segment.text.length;
-  }
-  const pushText = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+  const pushValues = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+    let from = start;
     for (const cut of labelStarts) {
-      if (cut <= start || cut >= end || text.slice(start, cut).trim() === "") continue;
-      push("text", start, cut);
-      start = cut;
+      if (cut <= from || cut >= end || text.slice(from, cut).trim() === "") continue;
+      push("text", from, cut);
+      from = cut;
     }
-    push("text", start, end, separator);
+    push("text", from, end, separator);
   };
-  const pushRange = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+  // One stretch between separators: its directory if it opens the line, then the values around
+  // its clock.
+  const pushStretch = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
+    let from = start;
     const directory = start === 0 ? DIRECTORY_PATTERN.exec(text.slice(0, end)) : null;
     if (directory !== null) {
       // A script that styles its path apart from what follows keeps a path with spaces whole.
       const styled = line.length > 1 ? (line[0]?.text.trimEnd().length ?? 0) : 0;
-      start = Math.min(end, Math.max(styled, directory[0].length));
-      push("directory", 0, start);
+      from = Math.min(end, Math.max(styled, directory[0].length));
+      push("directory", 0, from);
     }
-    const clock = CLOCK_PATTERN.exec(text.slice(start, end));
+    const clock = CLOCK_PATTERN.exec(text.slice(from, end));
     if (clock === null) {
-      pushText(start, end, separator);
+      pushValues(from, end, separator);
       return;
     }
-    const clockStart = start + clock.index;
+    const clockStart = from + clock.index;
     const clockEnd = clockStart + clock[0].length;
     const hasAfter = text.slice(clockEnd, end).trim() !== "";
-    pushText(start, clockStart, hasAfter ? comma : separator);
+    pushValues(from, clockStart, hasAfter ? comma : separator);
     push("clock", clockStart, clockEnd);
-    pushText(clockEnd, end, separator);
+    pushValues(clockEnd, end, separator);
   };
   let cursor = 0;
   for (const match of separators) {
     const shown = match[0].trimEnd().length;
-    pushRange(cursor, match.index, sliceSegments(line, match.index, match.index + shown));
+    pushStretch(cursor, match.index, sliceSegments(line, match.index, match.index + shown));
     cursor = match.index + match[0].length;
   }
-  pushRange(cursor, text.length, []);
+  pushStretch(cursor, text.length, []);
   return items;
 }
 
@@ -440,7 +450,6 @@ const STATUS_LINE_LABELS: Readonly<Record<string, string>> = {
   in: "input",
   out: "output",
   api: "API time",
-  cache: "cache hit",
   "5h": "5h limit",
   "7d": "7d limit",
   v: "version ",

@@ -188,6 +188,7 @@ function keepBodyFont(element: HTMLElement | null | undefined) {
 // their bars. Past that the directory shortens to its floor and the tail is cut, and the clock
 // stays only while everything before it in the line still fits. DOM attributes, so no re-render.
 function fitRow(row: HTMLElement) {
+  // The row's effect runs before its parent's, so the font is set here, ahead of measuring.
   keepBodyFont(row.parentElement);
   row.dataset.clock = "shown";
   // A pixel short of the edge, so rounding never clips the last item.
@@ -201,7 +202,9 @@ function fitRow(row: HTMLElement) {
     row.style.setProperty("--status-line-directory-floor", `${directoryFloor}px`);
     if (directory + itemsWidth(row, ["before-clock", "after-clock", "clock"]) <= space) return;
   }
-  if (directoryFloor + itemsWidth(row, ["before-clock", "clock"]) > space) {
+  // The cut tail ends in an ellipsis, which needs up to 1em beside the items before the clock.
+  const ellipsis = Number.parseFloat(getComputedStyle(row).fontSize);
+  if (directoryFloor + itemsWidth(row, ["before-clock", "clock"]) + ellipsis > space) {
     row.dataset.clock = "hidden";
   }
 }
@@ -215,7 +218,7 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures each new line to fit it
   useLayoutEffect(() => {
     if (rowRef.current !== null) fitRow(rowRef.current);
-  }, [props.lines]);
+  });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures when the row's width changes
   useEffect(() => {
     const row = rowRef.current;
@@ -224,8 +227,8 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
   }, []);
   const items = props.lines.flatMap(splitStatusLineItems);
   const directory = items[0]?.kind === "directory" ? items[0] : null;
-  const clockIndex = items.findIndex((item) => item.kind === "clock");
-  const clock = items[clockIndex];
+  const clock = items.find((item) => item.kind === "clock");
+  const clockIndex = clock === undefined ? -1 : items.indexOf(clock);
   return (
     <div
       ref={rowRef}
