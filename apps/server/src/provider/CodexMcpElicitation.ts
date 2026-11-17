@@ -9,6 +9,8 @@ const McpElicitationMetadata = Schema.Struct({
   appName: Schema.optionalKey(NullableMcpElicitationString),
   connector_name: Schema.optionalKey(NullableMcpElicitationString),
   connectorName: Schema.optionalKey(NullableMcpElicitationString),
+  codex_approval_kind: Schema.optionalKey(Schema.String),
+  codex_requires_user_input: Schema.optionalKey(Schema.Boolean),
   allowPersistentApproval: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
   persist: Schema.optionalKey(
     Schema.NullOr(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
@@ -175,6 +177,30 @@ export function describeMcpElicitation(
       { decision: "accept", label: "Approve" },
     ],
   };
+}
+
+export function isCodexAppAccessElicitation(
+  payload: EffectCodexSchema.McpServerElicitationRequestParams,
+): boolean {
+  if (
+    payload.mode !== "form" ||
+    !["browser", "browser-use", "computer-use", "codex_apps"].includes(payload.serverName)
+  ) {
+    return false;
+  }
+  const metadata = isMcpElicitationMetadata(payload._meta) ? payload._meta : undefined;
+  if (
+    metadata?.codex_requires_user_input ||
+    (metadata?.codex_approval_kind && metadata.codex_approval_kind !== "browser_auth")
+  ) {
+    return false;
+  }
+  const properties = mcpElicitationFormFields(payload)?.properties;
+  return (
+    properties?.approval !== undefined &&
+    mcpElicitationFieldOptions(properties.approval).some((option) => option.value === "once") &&
+    /^Allow ChatGPT to use [^?\r\n]+\?$/.test(payload.message)
+  );
 }
 
 export function toMcpElicitationResponse(

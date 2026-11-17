@@ -118,6 +118,7 @@ import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { buildCodexAdditionalContext } from "../../provider/CodexDeveloperInstructions.ts";
 import {
   describeMcpElicitation,
+  isCodexAppAccessElicitation,
   toMcpElicitationResponse,
 } from "../../provider/CodexMcpElicitation.ts";
 import {
@@ -5964,7 +5965,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }).pipe(Effect.orDie, turnTerminalizationPermit.withPermits(1)),
         );
 
-        const refuseFullAccessApproval = Effect.fn("CodexAdapterV2.refuseFullAccessApproval")(
+        const reportFullAccessRefusal = Effect.fn("CodexAdapterV2.reportFullAccessRefusal")(
           function* (threadId: string, action: string) {
             const message = `HomuCode automatically refused ${action} because Full access turns do not prompt for approvals.`;
             // Codex translates "decline" into a user rejection. Send the reason as
@@ -5981,6 +5982,13 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 ],
               })
               .pipe(Effect.timeoutOption("2 seconds"), Effect.ignore);
+            return message;
+          },
+        );
+
+        const refuseFullAccessApproval = Effect.fn("CodexAdapterV2.refuseFullAccessApproval")(
+          function* (threadId: string, action: string) {
+            const message = yield* reportFullAccessRefusal(threadId, action);
             return yield* new CodexErrors.CodexAppServerRequestError({
               code: -32000,
               errorMessage: message,
@@ -6213,15 +6221,6 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         yield* client.handleServerRequest("mcpServer/elicitation/request", (payload) =>
           Effect.gen(function* () {
             const acceptance = toMcpElicitationResponse(payload, "accept");
-            if (acceptance.action !== "accept") {
-              yield* Effect.logWarning("Cancelled an unsupported MCP elicitation.", {
-                serverName: payload.serverName,
-                mode: payload.mode,
-              });
-              return {
-                action: "cancel",
-              } satisfies CodexSchema.McpServerElicitationRequestResponse;
-            }
             const context =
               payload.turnId === undefined || payload.turnId === null
                 ? yield* awaitRegisteredTurn(findActiveTurnByNativeThreadId(payload.threadId))
@@ -6237,9 +6236,25 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             }
 
             if (context.input.runtimePolicy.runtimeMode === "full-access") {
-              return acceptance;
+              if (acceptance.action === "accept" && isCodexAppAccessElicitation(payload)) {
+                return acceptance;
+              }
+              yield* reportFullAccessRefusal(payload.threadId, "an MCP approval request");
+              return {
+                action: "cancel",
+                _meta: { codex_approval_cancellation_reason: "non_interactive" },
+              } satisfies CodexSchema.McpServerElicitationRequestResponse;
             }
 
+            if (acceptance.action !== "accept") {
+              yield* Effect.logWarning("Cancelled an unsupported MCP elicitation.", {
+                serverName: payload.serverName,
+                mode: payload.mode,
+              });
+              return {
+                action: "cancel",
+              } satisfies CodexSchema.McpServerElicitationRequestResponse;
+            }
             const nativeRequestId =
               payload.mode === "url"
                 ? payload.elicitationId

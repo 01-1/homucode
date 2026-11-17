@@ -2158,6 +2158,8 @@ export function makeClaudeQueryOptions(input: {
   readonly canUseTool?: CanUseTool;
   readonly onUserDialog?: ClaudeQueryOptions["onUserDialog"];
   readonly onElicitation?: ClaudeQueryOptions["onElicitation"];
+  readonly onPermissionRequest?: HookCallback;
+  readonly onMcpToolResult?: HookCallback;
   readonly onStop?: HookCallback;
   readonly supportedDialogKinds?: ClaudeQueryOptions["supportedDialogKinds"];
   readonly allowDangerouslySkipPermissions?: boolean;
@@ -2313,13 +2315,25 @@ export function makeClaudeQueryOptions(input: {
         ...launchAppendSystemPrompt,
       ].join("\n\n"),
     },
-    ...(deviceInstructions || input.onStop !== undefined
+    ...(deviceInstructions ||
+    input.onStop !== undefined ||
+    input.onPermissionRequest !== undefined ||
+    input.onMcpToolResult !== undefined
       ? {
           hooks: {
             ...(deviceInstructions
               ? { SubagentStart: [{ hooks: [subagentDeviceInstructions] }] }
               : {}),
             ...(input.onStop === undefined ? {} : { Stop: [{ hooks: [input.onStop] }] }),
+            ...(input.onPermissionRequest === undefined
+              ? {}
+              : { PermissionRequest: [{ hooks: [input.onPermissionRequest] }] }),
+            ...(input.onMcpToolResult === undefined
+              ? {}
+              : {
+                  PostToolUse: [{ matcher: "mcp__.*", hooks: [input.onMcpToolResult] }],
+                  PostToolUseFailure: [{ matcher: "mcp__.*", hooks: [input.onMcpToolResult] }],
+                }),
           },
         }
       : {}),
@@ -3461,6 +3475,11 @@ function requiresClaudeApproval(context: ActiveClaudeTurnContext): boolean {
   const policy = context.queryPolicy;
   return policy.installPermissionCallback || policy.permissionMode === "bypassPermissions";
 }
+
+const CLAUDE_FULL_ACCESS_REFUSAL =
+  "HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals.";
+const CLAUDE_FULL_ACCESS_MCP_REFUSAL =
+  "HomuCode automatically cancelled an approval request from this MCP server because Full access turns do not prompt for approvals.";
 
 function claudeRuntimeQueryPolicyKey(policy: ClaudeRuntimeQueryPolicy): string {
   return JSON.stringify({
@@ -12191,8 +12210,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return {
               behavior: "deny",
               message: safetyReason
-                ? `HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals. Reason: ${safetyReason}`
-                : "HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals.",
+                ? `${CLAUDE_FULL_ACCESS_REFUSAL} Reason: ${safetyReason}`
+                : CLAUDE_FULL_ACCESS_REFUSAL,
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
@@ -12278,6 +12297,54 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         const canUseTool: CanUseTool = (toolName, toolInput, callbackOptions) =>
           runPromise(canUseToolEffect(toolName, toolInput, callbackOptions));
 
+        const onPermissionRequest: HookCallback = (request) =>
+          runPromise(
+            Effect.gen(function* () {
+              const context = yield* Ref.get(activeTurn);
+              if (
+                context?.input.runtimePolicy.runtimeMode !== "full-access" ||
+                request.hook_event_name !== "PermissionRequest" ||
+                request.tool_name === "AskUserQuestion" ||
+                request.tool_name === "ExitPlanMode"
+              ) {
+                return {};
+              }
+              return {
+                hookSpecificOutput: {
+                  hookEventName: "PermissionRequest",
+                  decision: { behavior: "deny", message: CLAUDE_FULL_ACCESS_REFUSAL },
+                },
+              } as const;
+            }),
+          );
+
+        const cancelledMcpElicitationServers = new WeakMap<ActiveClaudeTurnContext, Set<string>>();
+        const onMcpToolResult: HookCallback = (request) =>
+          runPromise(
+            Effect.gen(function* () {
+              if (
+                (request.hook_event_name !== "PostToolUse" &&
+                  request.hook_event_name !== "PostToolUseFailure") ||
+                request.mcp_server === undefined
+              ) {
+                return {};
+              }
+              const context = yield* Ref.get(activeTurn);
+              if (
+                context === null ||
+                !cancelledMcpElicitationServers.get(context)?.has(request.mcp_server.name)
+              ) {
+                return {};
+              }
+              return {
+                hookSpecificOutput: {
+                  hookEventName: request.hook_event_name,
+                  additionalContext: CLAUDE_FULL_ACCESS_MCP_REFUSAL,
+                },
+              };
+            }),
+          );
+
         const onElicitationEffect = Effect.fn("ClaudeAdapterV2.onElicitation")(function* (
           request: ElicitationRequest,
           callbackOptions: Parameters<NonNullable<ClaudeQueryOptions["onElicitation"]>>[1],
@@ -12305,6 +12372,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             return acceptance;
           }
           if (context.input.runtimePolicy.runtimeMode === "full-access") {
+            const servers = cancelledMcpElicitationServers.get(context) ?? new Set<string>();
+            servers.add(request.serverName);
+            cancelledMcpElicitationServers.set(context, servers);
             return { action: "cancel" } satisfies ElicitationResult;
           }
           // The CLI waits on this answer, so a turn held for its prompt echo
@@ -12759,6 +12829,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             canUseTool,
             onUserDialog,
             onElicitation,
+            onPermissionRequest,
+            onMcpToolResult,
             onStop,
             supportedDialogKinds: ["resume_return"],
             ...(appendSystemPromptFileText === undefined ? {} : { appendSystemPromptFileText }),

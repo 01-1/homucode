@@ -5005,6 +5005,32 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
         yield* start("/restricted");
         const openedOptions = harness.getOpenedOptions()!;
+        const hook = openedOptions.hooks?.PermissionRequest?.[0]?.hooks[0];
+        assert.isFunction(hook);
+        const hookResult = yield* Effect.promise(() =>
+          hook!(
+            {
+              hook_event_name: "PermissionRequest",
+              session_id: WAKE_NATIVE_SESSION,
+              transcript_path: "/tmp/claude.jsonl",
+              cwd: "/restricted",
+              tool_name: "Bash",
+              tool_input: { command: "git status" },
+            },
+            "policy-command",
+            { signal: new AbortController().signal },
+          ),
+        );
+        assert.deepInclude(hookResult, {
+          hookSpecificOutput: {
+            hookEventName: "PermissionRequest",
+            decision: {
+              behavior: "deny",
+              message:
+                "HomuCode automatically refused this tool because Claude Code requires approval and Full access turns do not prompt for approvals.",
+            },
+          },
+        });
         yield* assertDeniedWithoutRequest("policy-command");
         assert.equal(openedOptions.permissionMode, "auto");
         assert.isUndefined(openedOptions.allowDangerouslySkipPermissions);
@@ -7198,6 +7224,33 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           Queue.take(harness.runtimeRequestReceipts).pipe(Effect.as(undefined)),
         );
         assert.deepEqual(result, { action: "cancel" });
+        const input = {
+          hook_event_name: "PostToolUseFailure" as const,
+          session_id: WAKE_NATIVE_SESSION,
+          transcript_path: "/tmp/claude.jsonl",
+          cwd: "/workspace",
+          tool_name: "mcp__deploys__deploy",
+          tool_input: {},
+          tool_use_id: "deploy-tool",
+          error: "Approval cancelled.",
+          mcp_server: { name: "deploys", source: "project" },
+        };
+        const hook = harness.getOpenedOptions()?.hooks?.PostToolUseFailure?.[0]?.hooks[0];
+        assert.isFunction(hook);
+        const giveContext = (name: string) =>
+          Effect.promise(() =>
+            hook!({ ...input, mcp_server: { ...input.mcp_server, name } }, input.tool_use_id, {
+              signal: new AbortController().signal,
+            }),
+          );
+        assert.deepEqual(yield* giveContext("other"), {});
+        assert.deepEqual(yield* giveContext("deploys"), {
+          hookSpecificOutput: {
+            hookEventName: "PostToolUseFailure",
+            additionalContext:
+              "HomuCode automatically cancelled an approval request from this MCP server because Full access turns do not prompt for approvals.",
+          },
+        });
       }).pipe(Effect.scoped, Effect.provide(testLayer)),
     );
 

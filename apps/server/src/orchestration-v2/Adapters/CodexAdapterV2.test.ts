@@ -1730,11 +1730,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
   );
 
   it.effect.each([
-    { runtimeMode: "full-access", turnIdKind: "present" },
-    { runtimeMode: "auto-accept-edits", turnIdKind: "null" },
+    { runtimeMode: "full-access", turnIdKind: "present", customServer: false },
+    { runtimeMode: "full-access", turnIdKind: "present", customServer: true },
+    { runtimeMode: "auto-accept-edits", turnIdKind: "null", customServer: false },
   ] as const)(
-    "handles MCP access approvals in $runtimeMode with a $turnIdKind turn id",
-    ({ runtimeMode, turnIdKind }) =>
+    "handles MCP access approvals in $runtimeMode with a $turnIdKind turn id and custom server $customServer",
+    ({ runtimeMode, turnIdKind, customServer }) =>
       Effect.gen(function* () {
         const nativeThreadId = "mcp-approval-thread";
         const nativeTurnId = "mcp-approval-turn";
@@ -1765,20 +1766,59 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   params: {
                     threadId: nativeThreadId,
                     turnId: turnIdKind === "null" ? null : nativeTurnId,
-                    serverName: "browser",
+                    serverName: customServer ? "deployment" : "browser",
                     mode: "form",
-                    message: "Allow ChatGPT to use Google Chrome?",
-                    requestedSchema: {
-                      type: "object",
-                      properties: { approval: { type: "string", enum: ["once", "always"] } },
-                      required: ["approval"],
-                    },
+                    message: customServer
+                      ? "Deploy to production?"
+                      : "Allow ChatGPT to use Google Chrome?",
+                    requestedSchema: customServer
+                      ? { type: "object", properties: {} }
+                      : {
+                          type: "object",
+                          properties: { approval: { type: "string", enum: ["once", "always"] } },
+                          required: ["approval"],
+                        },
                   },
                 },
               },
+              ...(customServer
+                ? [
+                    {
+                      type: "expect_outbound" as const,
+                      frame: {
+                        id: 4,
+                        method: "thread/inject_items",
+                        params: {
+                          threadId: nativeThreadId,
+                          items: [
+                            {
+                              type: "message",
+                              role: "developer",
+                              content: [
+                                {
+                                  type: "input_text",
+                                  text: "HomuCode automatically refused an MCP approval request because Full access turns do not prompt for approvals.",
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    { type: "emit_inbound" as const, frame: { id: 4, result: {} } },
+                  ]
+                : []),
               {
                 type: "expect_outbound",
-                frame: { id: 0, result: { action: "accept", content: { approval: "once" } } },
+                frame: {
+                  id: 0,
+                  result: customServer
+                    ? {
+                        action: "cancel",
+                        _meta: { codex_approval_cancellation_reason: "non_interactive" },
+                      }
+                    : { action: "accept", content: { approval: "once" } },
+                },
               },
               {
                 type: "emit_inbound",
