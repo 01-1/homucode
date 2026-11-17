@@ -6,7 +6,7 @@ import {
 } from "../../state/preferences";
 import {
   MobileBuildTools,
-  MobileDeviceNames,
+  MobileThisDeviceName,
   MobileWorkAssistancePicker,
 } from "../settings/SetupBehaviorSettings";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
@@ -232,7 +232,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             onChange={setWorkTarget}
           />
         ) : followup === "device-name" ? (
-          <MobileDeviceNames environmentId={environmentId} currentOnly />
+          <MobileThisDeviceName />
         ) : (
           <MobileBuildTools environmentId={environmentId} />
         )}

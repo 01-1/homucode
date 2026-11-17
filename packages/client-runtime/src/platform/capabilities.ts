@@ -57,8 +57,13 @@ export class ClientPresentation extends Context.Service<
   ClientPresentation,
   {
     readonly metadata: AuthClientPresentationMetadata;
+    /** The user's name for this device, read on each connect so a rename reaches the next socket. */
+    readonly deviceName?: Effect.Effect<string | undefined>;
   }
 >()("@t3tools/client-runtime/platform/capabilities/ClientPresentation") {}
+
+export const readClientDeviceName = (presentation: ClientPresentation["Service"]) =>
+  presentation.deviceName ?? Effect.succeed(undefined);
 
 export class PrimaryEnvironmentAuth extends Context.Service<
   PrimaryEnvironmentAuth,

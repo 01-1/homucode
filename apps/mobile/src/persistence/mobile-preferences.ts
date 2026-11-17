@@ -167,6 +167,8 @@ export interface Preferences {
   readonly settingsSyncEnabled?: boolean;
   readonly fasterPhoneLaunch?: boolean;
   readonly featureOffersSeen?: ReadonlyArray<string>;
+  /** This phone's name, sent to every server it connects to. */
+  readonly deviceName?: string;
   /** Per server, the synced copy this phone last agreed with. */
   readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
   /** The synced theme last applied and the phone themes it became. */
@@ -262,6 +264,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     settingsSyncEnabled?: boolean;
     fasterPhoneLaunch?: boolean;
     featureOffersSeen?: ReadonlyArray<string>;
+    deviceName?: string;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
   } = {};
@@ -421,6 +424,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.featureOffersSeen = parsed.featureOffersSeen.filter(
       (id): id is string => typeof id === "string",
     );
+  if (typeof parsed.deviceName === "string" && parsed.deviceName.trim() !== "")
+    preferences.deviceName = parsed.deviceName.trim().slice(0, 40);
   if (typeof parsed.settingsSyncEnabled === "boolean") {
     preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
   }

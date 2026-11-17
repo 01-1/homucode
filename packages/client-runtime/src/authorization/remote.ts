@@ -67,6 +67,7 @@ export const appendClientConnectionParams = (
   clientMetadata: AuthClientPresentationMetadata | undefined,
   connectionMethod?: ClientConnectionMethod,
   owners?: ClientOwnerParams,
+  deviceName?: string,
 ): void => {
   if (clientMetadata?.surface) {
     url.searchParams.set("clientSurface", clientMetadata.surface);
@@ -110,6 +111,9 @@ export const appendClientConnectionParams = (
   }
   if (owners?.device) {
     url.searchParams.set("clientDevice", owners.device);
+  }
+  if (deviceName) {
+    url.searchParams.set("clientDeviceName", deviceName);
   }
 };
 
@@ -281,6 +285,7 @@ export const resolveRemoteWebSocketConnectionUrl = Effect.fn(
   readonly httpBaseUrl: string;
   readonly bearerToken: string;
   readonly clientMetadata?: AuthClientPresentationMetadata;
+  readonly deviceName?: string;
   readonly connectionMethod?: ClientConnectionMethod;
   readonly timeoutMs?: number;
 }) {
@@ -298,6 +303,7 @@ export const resolveRemoteWebSocketConnectionUrl = Effect.fn(
     input.clientMetadata,
     input.connectionMethod,
     yield* readClientOwnerParams,
+    input.deviceName,
   );
   return url.toString();
 });
@@ -319,6 +325,7 @@ export const resolveRemoteDpopWebSocketConnectionUrl = Effect.fn(
     readonly accessToken: string;
   }) => Effect.Effect<string, E>;
   readonly clientMetadata?: AuthClientPresentationMetadata;
+  readonly deviceName?: string;
   readonly connectionMethod?: ClientConnectionMethod;
   readonly timeoutMs?: number;
 }) {
@@ -354,6 +361,7 @@ export const resolveRemoteDpopWebSocketConnectionUrl = Effect.fn(
     input.clientMetadata,
     input.connectionMethod,
     yield* readClientOwnerParams,
+    input.deviceName,
   );
   return url.toString();
 });

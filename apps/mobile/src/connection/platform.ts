@@ -23,6 +23,7 @@ import { AppState } from "react-native";
 
 import { authClientMetadata } from "../lib/authClientMetadata";
 import * as Runtime from "../lib/runtime";
+import * as MobilePreferences from "../persistence/mobile-preferences";
 import * as MobileStorage from "../persistence/mobile-storage";
 import { appAtomRegistry } from "../state/atom-registry";
 import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
@@ -151,6 +152,7 @@ const layerWakeups = Wakeups.layer({
 const layerCapabilities = Layer.effectContext(
   Effect.gen(function* () {
     const storage = yield* MobileStorage.MobileStorage;
+    const preferences = yield* MobilePreferences.MobilePreferencesStore;
     return Context.make(
       ClientCapabilities.CloudSession,
       ClientCapabilities.CloudSession.of({
@@ -214,6 +216,10 @@ const layerCapabilities = Layer.effectContext(
         ClientCapabilities.ClientPresentation,
         ClientCapabilities.ClientPresentation.of({
           metadata: authClientMetadata(Constants.expoConfig?.version),
+          deviceName: preferences.load.pipe(
+            Effect.map((loaded) => loaded.deviceName),
+            Effect.orElseSucceed(() => undefined),
+          ),
         }),
       ),
       Context.add(

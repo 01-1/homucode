@@ -156,7 +156,7 @@ export function DeviceNamesSettings({
       {query.error ? (
         <p className="text-muted-foreground">
           {
-            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update. You can name devices later in Settings."
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
           }
         </p>
       ) : null}
