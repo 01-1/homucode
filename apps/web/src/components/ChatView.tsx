@@ -2835,7 +2835,11 @@ export default function ChatView(props: ChatViewProps) {
           icon: "play",
           runOnWorktreeCreate: false,
         } as const;
-        return () => void runProjectScriptStable(script, { rememberAsLastInvoked: false });
+        return () =>
+          void runProjectScriptStable(script, {
+            rememberAsLastInvoked: false,
+            preferNewTerminal: true,
+          });
       }
       const scriptId = projectScriptIdFromCommand(command);
       if (!scriptId) return undefined;
