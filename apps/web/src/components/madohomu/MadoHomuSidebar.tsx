@@ -320,7 +320,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     [sections[index], sections[target]] = [sections[target]!, sections[index]!];
     void saveSections(sections);
   };
-  const deleteSection = (id: string) =>
+  // Stable so a delete confirmed later builds its patch from the settings current then.
+  const deleteSection = useStableCallback((id: string) =>
     actions.save({
       madohomuSections: settings.madohomuSections.filter((s) => s.id !== id),
       madohomuThreads: Object.fromEntries(
@@ -328,7 +329,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           .filter(([, entry]) => entry.section === id)
           .map(([threadId, entry]) => [threadId, { ...entry, section: null }]),
       ),
-    });
+    }),
+  );
   const openSectionMenu = async (section: MadoHomuSection, position: { x: number; y: number }) => {
     const api = readLocalApi();
     if (!api) return;
