@@ -92,6 +92,7 @@ import { ThemedSwitch } from "../../components/ui/ThemedSwitch";
 import { uuidv4 } from "../../lib/uuid";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { suggestAppAccessForRemote } from "./suggestAppAccess";
+import { takeAddProjectCompletion } from "./addProjectCompletion";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import {
   useRemoteConnectionStatus,
@@ -734,6 +735,11 @@ function useOpenNewTaskDraft() {
       activeRoute.params !== originRoute.params
     )
       return;
+    const completion = takeAddProjectCompletion();
+    if (completion) {
+      completion({ environmentId: params.environmentId, projectId: params.projectId });
+      return;
+    }
     selectDetail({ name: "Thread", params: { draft: params } });
   };
 }

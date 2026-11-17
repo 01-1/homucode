@@ -51,6 +51,7 @@ import {
   type DesktopWslState,
   type EnvironmentId,
   type FilesystemBrowseResult,
+  type ScopedProjectRef,
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
@@ -593,8 +594,21 @@ function OpenCommandPaletteDialog(props: {
       : null;
   };
 
+  // Read once per palette session, like the rest of the open intent.
+  const [{ onProjectAdded, addProjectOnlyEnvironmentId }] = useState(() => {
+    const intent = props.openIntent?.kind === "add-project" ? props.openIntent : null;
+    return {
+      onProjectAdded: intent?.onProjectAdded ?? null,
+      addProjectOnlyEnvironmentId: intent?.environmentId ?? null,
+    };
+  });
   const addProjectEnvironmentOptions = (() => {
     const options = environments
+      .filter(
+        (environment) =>
+          addProjectOnlyEnvironmentId === null ||
+          environment.environmentId === addProjectOnlyEnvironmentId,
+      )
       .filter((environment) => canCreateProjectInEnvironment(environment.connection.phase))
       .map((environment): AddProjectEnvironmentOption => {
         const isPrimary = environment.entry.target._tag === "PrimaryConnectionTarget";
@@ -1237,7 +1251,7 @@ function OpenCommandPaletteDialog(props: {
   };
   const addProjectEntry = resolveAddProjectEntry(
     addProjectEnvironmentOptions,
-    defaultAddProjectEnvironmentId,
+    addProjectOnlyEnvironmentId ?? defaultAddProjectEnvironmentId,
   );
 
   const openAddProjectFlow = () => {
@@ -1885,6 +1899,14 @@ function OpenCommandPaletteDialog(props: {
     now: searchNow,
   });
 
+  const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
+    if (onProjectAdded) {
+      onProjectAdded(projectRef);
+      return;
+    }
+    await handleNewThread(projectRef);
+  };
+
   const handleAddProjectForEnvironment = async (input: {
     readonly environmentId: EnvironmentId;
     readonly rawCwd: string;
@@ -1948,7 +1970,9 @@ function OpenCommandPaletteDialog(props: {
         existing.id,
         clientSettings.sidebarThreadSortOrder,
       );
-      if (latestThread && latestThread.settledOverride !== "settled") {
+      if (onProjectAdded) {
+        onProjectAdded(scopeProjectRef(existing.environmentId, existing.id));
+      } else if (latestThread && latestThread.settledOverride !== "settled") {
         await navigate({
           to: "/$environmentId/$threadId",
           params: buildThreadRouteParams(
@@ -2011,7 +2035,7 @@ function OpenCommandPaletteDialog(props: {
     }
 
     const navigationResult = await settlePromise(() =>
-      handleNewThread(scopeProjectRef(input.environmentId, projectId)),
+      openAddedProject(scopeProjectRef(input.environmentId, projectId)),
     );
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
@@ -2066,6 +2090,7 @@ function OpenCommandPaletteDialog(props: {
         environmentId: newProjectFlow.environmentId,
         name: newProjectName,
         publishTo: newProjectPublishes ? newProjectPublishTarget : null,
+        openProject: openAddedProject,
       }),
     );
     newProjectSubmittingRef.current = false;
@@ -2272,7 +2297,7 @@ function OpenCommandPaletteDialog(props: {
       startResult.value.projectId,
     );
     await waitForProject(projectRef, 3_000).catch(() => null);
-    const navigationResult = await settlePromise(() => handleNewThread(projectRef));
+    const navigationResult = await settlePromise(() => openAddedProject(projectRef));
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
       toastManager.add(

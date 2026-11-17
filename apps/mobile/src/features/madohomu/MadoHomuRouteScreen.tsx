@@ -98,7 +98,9 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           contentInsetAdjustmentBehavior="automatic"
           contentContainerClassName="gap-4 p-5"
         >
-          <Text className="text-base text-foreground">Choose the project MadoHomu focuses on.</Text>
+          <Text className="text-base text-foreground">
+            Make a new project for MadoHomu to focus on, or choose one you already have.
+          </Text>
           <MadoHomuProjectPicker
             environmentId={environmentId}
             projectId={actions.settings.madohomuProjectId}

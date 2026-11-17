@@ -4,7 +4,7 @@ import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
 import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
-import { MadoHomuProjectPicker } from "../madohomu/MadoHomuPage";
+import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";

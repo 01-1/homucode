@@ -1,5 +1,6 @@
 import type { EnvironmentId, PullRequestLinkedThreadsResult } from "@t3tools/contracts";
 
+import type { CommandPaletteProjectAdded } from "./components/CommandPalette.logic";
 import { dispatchCommandPalette, isCommandPaletteMounted } from "./commandPaletteStore";
 
 export interface CommandPaletteLinkedThreads {
@@ -11,6 +12,10 @@ export interface CommandPaletteOpenDetail {
   readonly open?: "add-project" | "new-thread-in";
   readonly query?: string;
   readonly linkedThreads?: CommandPaletteLinkedThreads;
+  /** With `open: "add-project"`: called with the added project instead of opening a thread in it. */
+  readonly onProjectAdded?: CommandPaletteProjectAdded;
+  /** With `open: "add-project"`: the only environment the project may be added to. */
+  readonly environmentId?: EnvironmentId;
 }
 
 export function openCommandPalette(detail: CommandPaletteOpenDetail = {}): void {
@@ -20,7 +25,11 @@ export function openCommandPalette(detail: CommandPaletteOpenDetail = {}): void 
   if (detail.open === "new-thread-in") {
     dispatchCommandPalette({ _tag: "OpenNewThreadIn" });
   } else if (detail.open === "add-project") {
-    dispatchCommandPalette({ _tag: "OpenAddProject" });
+    dispatchCommandPalette({
+      _tag: "OpenAddProject",
+      ...(detail.environmentId ? { environmentId: detail.environmentId } : {}),
+      ...(detail.onProjectAdded ? { onProjectAdded: detail.onProjectAdded } : {}),
+    });
   } else if (detail.query !== undefined) {
     dispatchCommandPalette({
       _tag: "OpenSearch",

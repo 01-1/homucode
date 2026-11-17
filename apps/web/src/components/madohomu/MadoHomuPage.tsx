@@ -12,7 +12,6 @@ import {
 import {
   AuthOrchestrationOperateScope,
   MADOHOMU_THREAD_PROMPT_MAX_LENGTH,
-  ProjectId,
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -21,7 +20,7 @@ import { CombineIcon, SquareArrowOutUpRightIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useProjects, useVisibleThreadShells } from "../../state/entities";
+import { useVisibleThreadShells } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -45,40 +44,13 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { useMadoHomuActions } from "./useMadoHomuActions";
+import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
 
 function useMadoHomuEnvironmentId() {
   const search = useSearch({ from: "/_chat/madohomu" });
   const primary = usePrimaryEnvironmentId();
   const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   return search.environmentId ?? destination ?? primary;
-}
-
-export function MadoHomuProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
-  const actions = useMadoHomuActions(environmentId);
-  const projects = useProjects().filter(
-    (p) => p.environmentId === environmentId && p.archivedAt === null,
-  );
-  return (
-    <label className="grid gap-2 text-sm">
-      Project
-      <select
-        aria-label="MadoHomu project"
-        className="rounded-md border bg-background p-2"
-        disabled={!actions.canWrite}
-        value={actions.settings.madohomuProjectId ?? ""}
-        onChange={(event) =>
-          void actions.changeProject(event.target.value ? ProjectId.make(event.target.value) : null)
-        }
-      >
-        <option value="">Choose a project</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.title}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
 }
 
 export function MadoHomuPage() {
@@ -155,11 +127,7 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
     return (
       <SidebarInset>
         <MadoHomuTitlebar />
-        <div className="mx-auto w-full max-w-md space-y-4 p-6">
-          <h1 className="text-xl font-semibold">MadoHomu</h1>
-          <p>Choose the project MadoHomu focuses on.</p>
-          <MadoHomuProjectPicker environmentId={environmentId} />
-        </div>
+        <MadoHomuNoProject environmentId={environmentId} />
       </SidebarInset>
     );
   if (!selected)
