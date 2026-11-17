@@ -19,7 +19,7 @@ const threads = [
 
 const settings: Pick<
   ServerSettings,
-  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
 > = {
   madohomuThreads: {
     [a]: { icon: null, prompt: "", pinned: true },
@@ -31,6 +31,7 @@ const settings: Pick<
     { id: "empty", name: "Empty" },
   ],
   madohomuThreadOrder: [b, a, c],
+  madohomuWorkingPlacement: "section",
 };
 
 const summary = (rows: ReturnType<typeof buildMadoHomuListRows>) =>

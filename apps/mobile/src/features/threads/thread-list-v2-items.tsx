@@ -219,8 +219,9 @@ export function ThreadListV2Section(props: {
   const content = (
     <>
       <Text
+        numberOfLines={1}
         className={cn(
-          "text-xs font-t3-medium",
+          "shrink text-xs font-t3-medium",
           sidebarPane
             ? "text-drawer-foreground-muted"
             : snoozed
