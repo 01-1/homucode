@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import { Atom } from "effect/reactivity";
 
 import * as MobileDatabase from "../persistence/mobile-database";
+import { clearLaunchSnapshot } from "../lib/launchSnapshot";
 import { projectFaviconDatabaseCache } from "../lib/projectFaviconDatabaseCache";
 import * as Runtime from "../lib/runtime";
 
@@ -72,11 +73,12 @@ export const clientCacheSummaryAtom = clientCacheRuntime
 
 export const clearClientCacheAtom = clientCacheRuntime
   .fn((scope: ClientCacheClearScope, get) =>
-    Effect.promise(() =>
-      scope.type === "all"
+    Effect.promise(() => {
+      clearLaunchSnapshot();
+      return scope.type === "all"
         ? projectFaviconDatabaseCache.clearAll()
-        : projectFaviconDatabaseCache.clearEnvironment(scope.environmentId),
-    ).pipe(
+        : projectFaviconDatabaseCache.clearEnvironment(scope.environmentId);
+    }).pipe(
       Effect.andThen(MobileDatabase.MobileDatabase),
       Effect.flatMap((database) =>
         scope.type === "all"

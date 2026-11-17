@@ -24,7 +24,7 @@ import {
   type EnvironmentId,
   type ServerSettings,
 } from "@t3tools/contracts";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -36,6 +36,7 @@ import { useEnvironmentServerConfig } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentsWithScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { coverHomeForLaunchSnapshot } from "../home/home-launch-snapshot";
 import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 
 export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
@@ -149,6 +150,9 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     pending.current = false;
     setBusy(false);
   };
+  const offered = settings !== undefined && canWrite && offers.length > 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the Android launch picture, taken outside React, that this sheet is drawn over Home
+  useEffect(() => (offered ? coverHomeForLaunchSnapshot() : undefined), [offered]);
   if (!settings || !canWrite || offers.length === 0) return null;
   const title =
     followup === "building-t3"

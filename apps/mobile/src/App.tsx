@@ -86,6 +86,10 @@ import {
   useLaunchSplashHomeRowsPending,
 } from "./features/home/home-launch-splash";
 import {
+  handOverLaunchSnapshot,
+  installLaunchSnapshotCapture,
+} from "./features/home/launchSnapshotRuntime";
+import {
   restoreSettingsLinkState,
   settingsLinkAction,
 } from "./features/settings/settings-navigation";
@@ -216,6 +220,7 @@ const appServiceDisposers = [
   installAppUpdateChecks(),
   installShowcaseCapture(rootPathnameFromState),
   installClientSettingsSync(() => linkToAppPath("/sync-conflicts")),
+  installLaunchSnapshotCapture(),
 ];
 disposeOnFoundationReplace(typeof module === "undefined" ? undefined : module.hot, () => {
   for (const dispose of appServiceDisposers) dispose();
@@ -255,6 +260,7 @@ function SplashScreenCoordinator() {
     hidden.current = true;
     settleLaunchSplashHomeRows();
     void SplashScreen.hide();
+    handOverLaunchSnapshot();
   }, [isReady, shellCachesRead, homeRowsPending, waitEnded]);
 
   return null;

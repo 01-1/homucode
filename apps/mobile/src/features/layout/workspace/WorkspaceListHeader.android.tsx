@@ -4,6 +4,7 @@ import { BackHandler, Keyboard } from "react-native";
 
 import { AppBar } from "../../../components/ui/AppBar";
 import { useWorkspaceConnectionState } from "../../../state/workspace";
+import { coverHomeForLaunchSnapshot } from "../../home/home-launch-snapshot";
 import { useHardwareKeyboardCommand } from "../../keyboard/hardwareKeyboardCommands";
 import { WorkspaceBrandTitle } from "./WorkspaceBrandTitle";
 import { useWorkspaceTabs } from "./WorkspaceTabsContext";
@@ -55,6 +56,9 @@ export function WorkspaceListHeader(props: WorkspaceListHeaderProps) {
     });
     return () => subscription.remove();
   }, [closeSearch, searching, listFocused, navigation, isTabActive]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the launch picture, taken outside React, that the search field is drawn in place of the title
+  useEffect(() => (searching ? coverHomeForLaunchSnapshot() : undefined), [searching]);
 
   return (
     <AppBar

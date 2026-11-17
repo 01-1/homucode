@@ -31,6 +31,11 @@ function getSnapshot() {
   return snapshot;
 }
 
+/** Whether an in-window overlay, such as a menu, is drawn over the screen. */
+export function overlayPortalOpen(): boolean {
+  return entries.size > 0;
+}
+
 export function OverlayPortal(props: { readonly children: ReactNode }) {
   const [key] = useState(allocateKey);
 
