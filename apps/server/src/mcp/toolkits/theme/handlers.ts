@@ -10,15 +10,24 @@ import * as McpToolAccess from "../../McpToolAccess.ts";
 import { unavailable } from "../../threadAccess.ts";
 import { ThemeToolkit } from "./tools.ts";
 
+/** `t3_theme_read`'s answer for what the theme service read. */
+export const themeReadResult = ({
+  current,
+  themes,
+  theme,
+}: EnvironmentTheme.EnvironmentThemeRead) => ({
+  current,
+  builtIn: BUILT_IN_THEME_IDS,
+  published: themes.map(({ id, name, css }) => ({ id, name, hasCss: Boolean(css) })),
+  ...(theme === undefined ? {} : { theme: Struct.omit(theme, ["id"]) }),
+  guide: THEME_GUIDE,
+});
+
 export const layer = McpToolAccess.toLayer(ThemeToolkit, {
   t3_theme_read: McpToolAccess.reads(({ themeId }) =>
     Effect.gen(function* () {
       const themes = yield* EnvironmentTheme.EnvironmentThemeService;
-      const {
-        current,
-        themes: published,
-        theme,
-      } = yield* themes.read(themeId).pipe(
+      const read = yield* themes.read(themeId).pipe(
         Effect.catchTags({
           EnvironmentThemeRefusedError: (error) =>
             Effect.fail(
@@ -27,13 +36,7 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
           ServerSettingsError: () => Effect.fail(unavailable()),
         }),
       );
-      return {
-        current,
-        builtIn: BUILT_IN_THEME_IDS,
-        published: published.map(({ id, name, css }) => ({ id, name, hasCss: Boolean(css) })),
-        ...(theme === undefined ? {} : { theme: Struct.omit(theme, ["id"]) }),
-        guide: THEME_GUIDE,
-      };
+      return themeReadResult(read);
     }),
   ),
   t3_theme_set: McpToolAccess.writesEnvironment(

@@ -92,20 +92,21 @@ export class EnvironmentThemeNotSelectedError extends Schema.TaggedError<Environ
   }
 }
 
+export interface EnvironmentThemeRead {
+  readonly current: string;
+  readonly themes: ReadonlyArray<EnvironmentTheme>;
+  readonly theme?: EnvironmentTheme;
+}
+
 export class EnvironmentThemeService extends Context.Service<
   EnvironmentThemeService,
   {
     readonly current: Effect.Effect<ReadonlyArray<EnvironmentTheme>>;
 
     /** The default theme id and the published themes, plus the one named `themeId`. */
-    readonly read: (themeId?: string) => Effect.Effect<
-      {
-        readonly current: string;
-        readonly themes: ReadonlyArray<EnvironmentTheme>;
-        readonly theme?: EnvironmentTheme;
-      },
-      EnvironmentThemeRefusedError | ServerSettingsError
-    >;
+    readonly read: (
+      themeId?: string,
+    ) => Effect.Effect<EnvironmentThemeRead, EnvironmentThemeRefusedError | ServerSettingsError>;
 
     /**
      * Makes `themeId` the environment theme and `appearance` its mode, so connected clients
@@ -236,6 +237,26 @@ export const readPublishedThemes = Effect.fn(function* (themesDir: string) {
   }
   return themes;
 });
+
+/** What `EnvironmentThemeService.read` answers for this setting and these published themes. */
+export const readEnvironmentThemes = (
+  defaultTheme: string,
+  themes: ReadonlyArray<EnvironmentTheme>,
+  themeId?: string,
+): Effect.Effect<EnvironmentThemeRead, EnvironmentThemeRefusedError> => {
+  if (themeId === undefined) return Effect.succeed({ current: defaultTheme, themes });
+  const theme = themes.find((candidate) => candidate.id === themeId);
+  if (theme === undefined) {
+    return Effect.fail(
+      new EnvironmentThemeRefusedError({
+        themeId,
+        problem: "is not a published theme.",
+        known: themes.map(({ id }) => id),
+      }),
+    );
+  }
+  return Effect.succeed({ current: defaultTheme, themes, theme });
+};
 
 const make = Effect.gen(function* () {
   const { environmentThemesDir } = yield* ServerConfig.ServerConfig;
@@ -406,16 +427,7 @@ const make = Effect.gen(function* () {
   )(function* (themeId) {
     const { themes } = yield* refresh;
     const { defaultTheme } = yield* settings.getSettings;
-    if (themeId === undefined) return { current: defaultTheme, themes };
-    const theme = themes.find((candidate) => candidate.id === themeId);
-    if (theme === undefined) {
-      return yield* new EnvironmentThemeRefusedError({
-        themeId,
-        problem: "is not a published theme.",
-        known: themes.map(({ id }) => id),
-      });
-    }
-    return { current: defaultTheme, themes, theme };
+    return yield* readEnvironmentThemes(defaultTheme, themes, themeId);
   });
 
   return {
