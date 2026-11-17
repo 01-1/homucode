@@ -32,6 +32,7 @@ import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationServic
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { continueRestartedRun } from "./RestartContinuation.ts";
+import { applyModelSelectionNow } from "./ApplyModelChangeNow.ts";
 
 const isProviderTurnControlError = Schema.is(ProviderTurnControlService.ProviderTurnControlError);
 
@@ -222,6 +223,29 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
+          case "run.apply-model-selection-now":
+            return applyModelSelectionNow({
+              effectId: effect.id,
+              threadId: effect.threadId,
+              runId: effect.request.runId,
+              providerSessionId: effect.request.providerSessionId,
+              providerThreadId: effect.request.providerThreadId,
+              modelSelection: effect.request.modelSelection,
+            }).pipe(
+              Effect.provideService(
+                ProviderTurnControlService.ProviderTurnControlServiceV2,
+                providerTurnControl,
+              ),
+              Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
           case "provider-session.apply-thread-title":
             return providerTurnControl
               .applyThreadTitle({ threadId: effect.threadId, title: effect.request.title })

@@ -593,6 +593,152 @@ it.live.each(["pooled", "exclusive"] as const)(
     }),
 );
 
+it.live.each(["in place", "as the next turn", "off"] as const)(
+  "applyModelChangeNow restarts a running turn on a new effort (%s)",
+  (mode) =>
+    Effect.gen(function* () {
+      const applyModelChangeNow = mode !== "off";
+      const name = `apply-model-change-now-${mode.replaceAll(" ", "-")}`;
+      const cwd = yield* checkpointWorkspace(name);
+      const threadId = ThreadId.make(`thread:${name}`);
+      const state = yield* Ref.make<RestartAdapterState>({
+        activeTurn: null,
+        opened: [],
+        started: [],
+        closedSessionCount: 0,
+        failedReplacementOpen: false,
+      });
+      const turns: Array<{ selection: ModelSelection; text: string }> = [];
+      // Claude stops the turn and starts the restart as the next run.
+      const base = makeRestartAdapter(
+        state,
+        mode === "as the next turn"
+          ? {
+              ...pooledCapabilities,
+              turns: { ...pooledCapabilities.turns, supportsSteeringByInterruptRestart: false },
+            }
+          : pooledCapabilities,
+      );
+      const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
+        ...base,
+        openSession: (input) =>
+          base.openSession(input).pipe(
+            Effect.map((session) => ({
+              ...session,
+              startTurn: (turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
+                Effect.sync(() =>
+                  turns.push({ selection: turn.modelSelection, text: turn.message.text }),
+                ).pipe(Effect.andThen(session.startTurn(turn))),
+            })),
+          ),
+      };
+      const high = { ...initialSelection, options: [{ id: "reasoningEffort", value: "high" }] };
+      const low = { ...initialSelection, options: [{ id: "reasoningEffort", value: "low" }] };
+
+      const projection = yield* Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+        const turnRunning = () =>
+          orchestrator.streamDomainEvents.pipe(
+            Stream.filter(
+              (event) =>
+                event.type === "provider-turn.updated" && event.payload.status === "running",
+            ),
+            Stream.take(1),
+            Stream.runDrain,
+            Effect.forkScoped({ startImmediately: true }),
+          );
+        const firstRunning = yield* turnRunning();
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${name}:create`),
+          threadId,
+          projectId: ProjectId.make(`project:${name}`),
+          title: name,
+          modelSelection: high,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: cwd,
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`${name}:first`),
+          threadId,
+          messageId: MessageId.make(`${name}:first`),
+          text: "first",
+          attachments: [],
+          modelSelection: high,
+          dispatchMode: { type: "start_immediately" },
+        });
+        yield* worker.drain();
+        yield* Fiber.join(firstRunning);
+        const restartedRunning = yield* turnRunning();
+        yield* orchestrator.dispatch({
+          type: "thread.model-selection.set",
+          commandId: CommandId.make(`${name}:effort`),
+          threadId,
+          modelSelection: low,
+        });
+        yield* worker.drain();
+        if (applyModelChangeNow) yield* Fiber.join(restartedRunning);
+        yield* worker.drain();
+        return yield* orchestrator.getThreadProjection(threadId);
+      }).pipe(
+        Effect.provide(
+          ProviderReplayHarness.layerWithRegistry(
+            { name },
+            ProviderAdapterRegistry.layerSingle(adapter),
+            { serverSettings: { applyModelChangeNow } },
+          ),
+        ),
+      );
+
+      assert.equal(projection.thread.modelSelection.options?.[0]?.value, "low");
+      if (!applyModelChangeNow) {
+        assert.deepEqual(
+          turns.map((turn) => turn.selection),
+          [high],
+        );
+        assert.lengthOf(projection.attempts, 1);
+        return;
+      }
+      if (mode === "in place") {
+        // The run carries on, so a delegating parent sees no stop.
+        assert.deepEqual(
+          projection.runs.map((run) => run.status),
+          ["running"],
+        );
+        assert.deepEqual(
+          projection.attempts.map((attempt) => attempt.status),
+          ["superseded", "running"],
+        );
+      } else {
+        assert.deepEqual(
+          projection.runs.map((run) => [run.status, run.modelSelection.options?.[0]?.value]),
+          [
+            ["interrupted", "high"],
+            ["running", "low"],
+          ],
+        );
+      }
+      assert.deepEqual(
+        turns.map((turn) => turn.selection),
+        [high, low],
+      );
+      assert.include(turns[1]?.text, "Continue the task you were working on.");
+      const notice = projection.messages.find((message) => message.notification !== undefined);
+      assert.equal(
+        notice?.notification?.summary,
+        "Restarted on restart-model-a (reasoningEffort low)",
+      );
+    }),
+);
+
 it.live("Stop during a restart interrupts the turn the restart could not stop", () =>
   Effect.gen(function* () {
     const cwd = yield* checkpointWorkspace("selection-restart-stop");

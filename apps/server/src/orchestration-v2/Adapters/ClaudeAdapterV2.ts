@@ -14016,24 +14016,27 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               live.stopping ||
               live.nativeThreadId !== providerThread.nativeThreadRef?.nativeId
             ) {
-              return;
+              return false;
             }
             const selection = compileClaudeModelSelection(
               modelSelection,
               yield* routedCatalogFor(live),
             );
+            if (live.selection.queryIdentity === selection.queryIdentity) return true;
             // A model change still waits for the next turn, which checks it against the turn's permission mode.
             if (
-              live.selection.queryIdentity === selection.queryIdentity ||
               live.selection.apiModelId !== selection.apiModelId ||
               !canApplyClaudeSelectionLive(live.selection, selection)
             ) {
-              return;
+              return false;
             }
             // A failed update clears the live identity, so the next turn applies the selection again.
-            yield* applySelectionLive(live, selection).pipe(
+            return yield* applySelectionLive(live, selection).pipe(
+              Effect.as(true),
               Effect.catch((cause) =>
-                Effect.logWarning("orchestration-v2.claude-live-selection-failed", { cause }),
+                Effect.logWarning("orchestration-v2.claude-live-selection-failed", { cause }).pipe(
+                  Effect.as(false),
+                ),
               ),
             );
           }),

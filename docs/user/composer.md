@@ -95,7 +95,11 @@ Steer when the running agent supports it.
 In **Settings → Threads → Extra features**, you can opt into **Stop or wait jumps
 the queue**. A message containing only “stop” or “wait” then interrupts the current
 turn and goes ahead of queued messages. **Claude steers survive Stop** re-sends a
-message Claude held behind a running tool when you press Stop. Both options start off.
+message Claude held behind a running tool when you press Stop. **Apply model and effort
+changes now** makes a model or effort change on a working thread restart its turn on the
+new setting, and the agent carries on without a new message; otherwise the change waits for
+the next turn. Codex loses most of its prompt cache when effort changes. All three options
+start off.
 
 ## Queue messages offline on mobile
 
