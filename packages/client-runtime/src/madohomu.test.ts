@@ -181,9 +181,42 @@ describe("MadoHomu sections", () => {
     ).toEqual([
       ["Pinned", ["new", "gone", "b", "a"]],
       ["Work", ["filed"]],
+      ["Working", []],
       ["Scratch", ["outside", "unpinned"]],
       ["Snoozed", ["later"]],
       ["Settled", ["done"]],
+    ]);
+  });
+
+  it("shows a working Scratch thread where the setting says, and never moves a pinned one", () => {
+    const threads = [
+      shell("a", "2026-11-10"),
+      shell("outside", "2026-11-14"),
+      shell("busy", "2026-11-01"),
+    ] as never;
+    const placed = (madohomuWorkingPlacement: "section" | "top" | "none") =>
+      groupMadoHomuThreads(
+        threads,
+        { ...settings, madohomuWorkingPlacement },
+        {
+          now: "2026-11-17T00:00:00.000Z",
+          isWorking: (thread: { id: string }) => thread.id === "busy" || thread.id === "a",
+        },
+      )
+        .filter((group) => group.threads.length > 0)
+        .map((group) => [group.title, group.threads.map((thread: { id: string }) => thread.id)]);
+    expect(placed("section")).toEqual([
+      ["Pinned", ["a"]],
+      ["Working", ["busy"]],
+      ["Scratch", ["outside"]],
+    ]);
+    expect(placed("top")).toEqual([
+      ["Pinned", ["a"]],
+      ["Scratch", ["busy", "outside"]],
+    ]);
+    expect(placed("none")).toEqual([
+      ["Pinned", ["a"]],
+      ["Scratch", ["outside", "busy"]],
     ]);
   });
 

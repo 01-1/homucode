@@ -1429,6 +1429,9 @@ export type MadoHomuSection = typeof MadoHomuSection.Type;
 /** Which of the MadoHomu project's threads the T3 Code thread list also shows. */
 export const MadoHomuCodeVisibility = Schema.Literals(["hidden", "scratch", "all"]);
 export type MadoHomuCodeVisibility = typeof MadoHomuCodeVisibility.Type;
+/** Where a Scratch thread shows while it is working: its own section, the top of Scratch, or in place. */
+export const MadoHomuWorkingPlacement = Schema.Literals(["section", "top", "none"]);
+export type MadoHomuWorkingPlacement = typeof MadoHomuWorkingPlacement.Type;
 export const MadoHomuThreadSettings = Schema.Struct({
   pinned: Schema.optionalKey(Schema.Boolean),
   /** The custom section a pinned thread is filed under; absent or unknown means Pinned. */
@@ -1650,6 +1653,9 @@ export const ServerSettings = Schema.Struct({
   madohomuThreadOrder: Schema.Array(ThreadId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   madohomuCodeVisibility: MadoHomuCodeVisibility.pipe(
     Schema.withDecodingDefault(Effect.succeed("hidden" as const)),
+  ),
+  madohomuWorkingPlacement: MadoHomuWorkingPlacement.pipe(
+    Schema.withDecodingDefault(Effect.succeed("section" as const)),
   ),
   /** The scheduled task that sends the morning brief into a MadoHomu thread. */
   madohomuMorningBriefTaskId: Schema.NullOr(ScheduledTaskId).pipe(
@@ -2153,6 +2159,7 @@ export const ServerSettingsPatch = Schema.Struct({
   madohomuSections: Schema.optionalKey(Schema.Array(MadoHomuSection)),
   madohomuThreadOrder: Schema.optionalKey(Schema.Array(ThreadId)),
   madohomuCodeVisibility: Schema.optionalKey(MadoHomuCodeVisibility),
+  madohomuWorkingPlacement: Schema.optionalKey(MadoHomuWorkingPlacement),
   madohomuMorningBriefTaskId: Schema.optionalKey(Schema.NullOr(ScheduledTaskId)),
   featureOffersSeen: Schema.optionalKey(Schema.Array(Schema.String)),
   backgroundActivity: Schema.optionalKey(

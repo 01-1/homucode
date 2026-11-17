@@ -27,7 +27,7 @@ export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined
 /** The section for threads that are not pinned: made outside MadoHomu, or unpinned by the user. */
 export const MADOHOMU_SCRATCH_LABEL = "Scratch";
 
-export type MadoHomuGroupKind = "pinned" | "custom" | "scratch" | "snoozed" | "settled";
+export type MadoHomuGroupKind = "pinned" | "custom" | "working" | "scratch" | "snoozed" | "settled";
 export interface MadoHomuGroup<T> {
   readonly kind: MadoHomuGroupKind;
   /** The section id for a custom section, otherwise the kind. */
@@ -38,10 +38,14 @@ export interface MadoHomuGroup<T> {
 
 type MadoHomuGroupSettings = Pick<
   ServerSettings,
-  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
 >;
 
-/** The one grouping web and mobile both render: Pinned, custom sections, Scratch, Snoozed, Settled. */
+/**
+ * The one grouping web and mobile both render: Pinned, custom sections, Working, Scratch, Snoozed,
+ * Settled. `isWorking` is each client's own test for a thread that is busy and does not need the
+ * user; only Scratch threads move for it, so pinned threads never leave their place.
+ */
 export function groupMadoHomuThreads<
   T extends Pick<
     EnvironmentThreadShell,
@@ -51,8 +55,10 @@ export function groupMadoHomuThreads<
 >(
   threads: ReadonlyArray<T>,
   settings: MadoHomuGroupSettings,
-  options: { readonly now: string },
+  options: { readonly now: string; readonly isWorking?: (thread: T) => boolean },
 ): MadoHomuGroup<T>[] {
+  const working = (thread: T) =>
+    settings.madohomuWorkingPlacement !== "none" && options.isWorking?.(thread) === true;
   const groups: MadoHomuGroup<T>[] = [
     { kind: "pinned", id: "pinned", title: "Pinned", threads: [] },
     ...settings.madohomuSections.map((section) => ({
@@ -61,6 +67,7 @@ export function groupMadoHomuThreads<
       title: section.name,
       threads: [] as T[],
     })),
+    { kind: "working", id: "working", title: "Working", threads: [] },
     { kind: "scratch", id: "scratch", title: MADOHOMU_SCRATCH_LABEL, threads: [] },
     { kind: "snoozed", id: "snoozed", title: "Snoozed", threads: [] },
     { kind: "settled", id: "settled", title: "Settled", threads: [] },
@@ -71,7 +78,10 @@ export function groupMadoHomuThreads<
     const entry = settings.madohomuThreads[thread.id];
     if (effectiveSnoozed(thread, options)) group("snoozed").threads.push(thread);
     else if (isShelvedSettled(thread)) group("settled").threads.push(thread);
-    else if (!isMadoHomuThreadPinned(entry)) group("scratch").threads.push(thread);
+    else if (!isMadoHomuThreadPinned(entry))
+      group(
+        settings.madohomuWorkingPlacement === "section" && working(thread) ? "working" : "scratch",
+      ).threads.push(thread);
     else {
       const custom = entry?.section ? byId.get(entry.section) : undefined;
       (custom?.kind === "custom" ? custom : group("pinned")).threads.push(thread);
@@ -86,7 +96,8 @@ export function groupMadoHomuThreads<
         (manual
           ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
             b.createdAt.localeCompare(a.createdAt)
-          : b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
+          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+            b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
     );
   }
   return groups;
