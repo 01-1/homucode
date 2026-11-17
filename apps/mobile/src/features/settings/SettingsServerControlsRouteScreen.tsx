@@ -1,4 +1,3 @@
-import { MobileExtraSettings } from "./SetupBehaviorSettings";
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
@@ -314,24 +313,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
             ) : null}
             {props.page === "threads" ? (
               <>
-                {!projectSelected
-                  ? selectedTargets.map((target) => (
-                      <MobileExtraSettings
-                        key={target.environmentId}
-                        environmentId={target.environmentId}
-                      />
-                    ))
-                  : null}
-                <SettingsSection title="Status line">
-                  <SettingsSwitchRow
-                    icon="terminal"
-                    label="Status line"
-                    subtitle="Show a line under the composer with the model, context, and usage limits, like Claude Code's status line. Set its command in Settings on desktop or web."
-                    value={uniform("statusLineEnabled")}
-                    disabled={disabledFor("statusLineEnabled")}
-                    onValueChange={(value) => write({ statusLineEnabled: value })}
-                  />
-                </SettingsSection>
                 <SettingsSection
                   title="Default workspace"
                   footer={managed("defaultThreadEnvMode")}

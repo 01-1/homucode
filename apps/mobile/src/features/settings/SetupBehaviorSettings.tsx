@@ -2,7 +2,12 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { TextInput, View } from "react-native";
-import type { BuildToolsRequest, EnvironmentId, ServerSettings } from "@t3tools/contracts";
+import {
+  isManagedSettingPath,
+  type BuildToolsRequest,
+  type EnvironmentId,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
@@ -166,8 +171,15 @@ export function MobileBuildVisibility({
   );
 }
 
-export function MobileExtraSettings({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const settings = useEnvironmentServerConfig(environmentId)?.settings;
+export function MobileExtraSettings({
+  environmentId,
+  label,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+}) {
+  const config = useEnvironmentServerConfig(environmentId);
+  const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const query = useEnvironmentQuery(
@@ -175,14 +187,33 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
   );
   if (!settings) return null;
   return (
-    <SettingsSection title="Extra features">
+    <SettingsSection title={`Extra features · ${label}`}>
+      <SettingsSwitchRow
+        icon="terminal"
+        label="Status line"
+        subtitle="Show the model, context, and usage limits under the composer. Set its command on desktop or web."
+        value={settings.statusLineEnabled}
+        disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, "statusLineEnabled")}
+        onValueChange={(statusLineEnabled) =>
+          void update({ environmentId, input: { patch: { statusLineEnabled } } })
+        }
+      />
+      <SettingsSwitchRow
+        icon="checkmark.circle"
+        label="Autoreviewers (not recommended)"
+        subtitle="Lets agents attach reviewer subagents. Findings can lag behind the thread. Turning this off pauses attached reviewers."
+        value={settings.autoreviewEnabled}
+        disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, "autoreviewEnabled")}
+        onValueChange={(autoreviewEnabled) =>
+          void update({ environmentId, input: { patch: { autoreviewEnabled } } })
+        }
+      />
       {FEATURE_OFFERS.filter(
         (offer) =>
           offer.page === 2 && offer.setting && offer.setting !== "buildToolsSettingsVisible",
       ).map((offer) => {
         const key = offer.setting!;
-        if (key === "connectDeviceLongSessions" || key === "claudeHoldBackgroundCommands")
-          return null;
+        if (key === "connectDeviceLongSessions") return null;
         return (
           <SettingsSwitchRow
             key={offer.id}
@@ -195,7 +226,7 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
             }
             subtitle={offer.description}
             value={settings[key] === (offer.enabledValue ?? true)}
-            disabled={!canWrite}
+            disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, key)}
             onValueChange={(checked) =>
               void update({
                 environmentId,

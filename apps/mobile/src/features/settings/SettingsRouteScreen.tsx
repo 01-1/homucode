@@ -272,7 +272,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
     {
       rows: [
         page("SettingsOrganization", "gearshape", gt("General")),
-        serverPage("SettingsMadoHomu", "bubble.left.and.bubble.right", gt("MadoHomu")),
+        page("SettingsHomuCode", "slider.horizontal.3", gt("HomuCode")),
         page("SettingsAppearance", "paintbrush", gt("Appearance")),
         page("SettingsLanguage", "globe", gt("Language"), {
           value: SUPPORTED_LOCALES.includes(language)
@@ -292,11 +292,6 @@ function useSettingsIndexSections(): SettingsListSection[] {
       rows: [
         serverPage("SettingsProviderAccounts", "person.crop.circle", gt("Providers")),
         serverPage("SettingsThreads", "text.bubble", gt("Threads")),
-        ...(selectedTargets.some(
-          (target) => target.serverConfig?.settings.buildToolsSettingsVisible,
-        )
-          ? [serverPage("SettingsBuildingT3", "hammer", gt("Building T3"))]
-          : []),
         page("SettingsScheduledTasks", "clock", gt("Scheduled tasks")),
       ],
     },

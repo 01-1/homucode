@@ -87,6 +87,12 @@ describe("searchSettings", () => {
     });
   });
 
+  it("finds moved settings on the HomuCode page", () => {
+    for (const query of ["HomuCode", "Quick model", "Device names", "App scripts", "Building T3"]) {
+      expect(searchSettings(query)[0]?.to).toBe("/settings/homucode");
+    }
+  });
+
   it("matches normalized title substrings", () => {
     expect(searchSettings("  WORD   WRAP  ", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
@@ -385,6 +391,10 @@ describe("movedSettingsPath", () => {
     expect(movedSettingsPath("/settings/storage", "")).toBe("/settings/maintenance");
     expect(movedSettingsPath("/settings/integrations", "devices")).toBe("/settings/devices");
     expect(movedSettingsPath("/settings/beta", "")).toBe("/settings/labs");
+    expect(movedSettingsPath("/settings/building-t3", "")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/chat", "status-line")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/general", "madohomu-enabled")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/threads", "thread-title-instructions")).toBeNull();
   });
 
   it("leaves current pages alone", () => {

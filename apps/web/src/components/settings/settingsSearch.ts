@@ -18,7 +18,7 @@ import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
   | "/settings/projects"
-  | "/settings/building-t3"
+  | "/settings/homucode"
   | "/settings/general"
   | "/settings/diagnostics"
   | "/settings/voice"
@@ -96,7 +96,7 @@ export interface SettingsSearchAvailability {
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": msg("Diagnostics"),
   "/settings/projects": msg("Projects"),
-  "/settings/building-t3": msg("Building T3"),
+  "/settings/homucode": msg("HomuCode"),
   "/settings/general": msg("General"),
   "/settings/appearance": msg("Appearance"),
   "/settings/chat": msg("Chat"),
@@ -131,6 +131,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     headingHidden: true,
     paths: [
       "/settings/general",
+      "/settings/homucode",
       "/settings/appearance",
       "/settings/chat",
       "/settings/diffs",
@@ -151,12 +152,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: msg("Code"),
-    paths: [
-      "/settings/projects",
-      "/settings/source-control",
-      "/settings/worktrees",
-      "/settings/building-t3",
-    ],
+    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
   },
   {
     heading: msg("Connections"),
@@ -236,6 +232,11 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
 
 export const SETTINGS_SEARCH_ITEMS = [
   {
+    id: "homucode",
+    title: "HomuCode",
+    to: "/settings/homucode",
+  },
+  {
     id: "storage-worktree-keep-when",
     targetId: "storage-worktrees",
     title: "Keep worktrees with local changes",
@@ -308,7 +309,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "quick-model",
     title: "Quick model",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["quick fast model /q one question cheap"],
     environmentOnly: true,
@@ -445,28 +446,28 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "madohomu-enabled",
     title: "Enable MadoHomu",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["focused chat tasks opt in"],
     environmentOnly: true,
   },
   {
     id: "madohomu-project",
     title: "MadoHomu project",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["project picker"],
     environmentOnly: true,
   },
   {
     id: "madohomu-morning-brief",
     title: "Morning brief",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["MadoHomu daily time approval schedule"],
     environmentOnly: true,
   },
   {
     id: "madohomu-desktop-app",
     title: "MadoHomu desktop app",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["MadoHomu launcher separate window"],
     environmentOnly: true,
     desktopOnly: true,
@@ -506,7 +507,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "autoreviewers",
     title: "Autoreviewers (not recommended)",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     searchTerms: ["autoreview reviewer subagent code review watch thread findings lgtm"],
   },
   {
@@ -518,7 +519,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "thread-folder-style",
     title: "Folder style",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["thread folders cards tabs tab groups helium color line sidebar look"],
   },
   {
@@ -598,20 +599,20 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "app-scripts",
     title: "App scripts",
-    to: "/settings/labs",
+    to: "/settings/homucode",
     searchTerms: ["typescript user scripts automation macro keybinding run code window api"],
   },
   {
     id: "app-scripts-terminal",
     title: "Run app scripts from the terminal",
-    to: "/settings/labs",
+    to: "/settings/homucode",
     desktopOnly: true,
     searchTerms: ["t3 app run cli terminal command script automation"],
   },
   {
     id: "app-scripts-agents",
     title: "Let agents run app scripts",
-    to: "/settings/labs",
+    to: "/settings/homucode",
     desktopOnly: true,
     searchTerms: ["agent shell t3 app run allow scripts security"],
   },
@@ -820,14 +821,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "status-line",
     title: "Status line",
-    to: "/settings/chat",
+    to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["statusline claude code footer context usage limits model effort"],
   },
   {
     id: "status-line-command",
     title: "Status line command",
-    to: "/settings/chat",
+    to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["statusline script shell jq bash claude code"],
   },
@@ -840,13 +841,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "user-message-markdown",
     title: "Format sent messages as Markdown",
-    to: "/settings/chat",
+    to: "/settings/homucode",
     searchTerms: ["user message markdown plain text raw formatting render bullet list prompt"],
   },
   {
     id: "user-message-plus-bullets",
     title: "Lines starting with + become bullets",
-    to: "/settings/chat",
+    to: "/settings/homucode",
     searchTerms: ["plus + bullet list item sent message markdown literal"],
   },
   {
@@ -858,14 +859,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "claude-hold-background-commands",
     title: "Keep Claude threads working while background commands run",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     scope: "environment",
     searchTerms: ["claude background bash commands working waiting hold tasks"],
   },
   {
     id: "prefer-native-subagents",
     title: "Prefer native subagents",
-    to: "/settings/chat",
+    to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["agent orchestration delegate_task native Agent spawn_agent same provider"],
   },
@@ -926,7 +927,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "local-default-branch",
     title: "Start on default branch",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["new local threads checkout switch main default branch project folder"],
   },
@@ -964,9 +965,89 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["ask before thread second click inline action"],
   },
   {
+    id: "show-building-t3",
+    title: "Show Building T3 settings",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["cloud build Android APK AppImage Boat"],
+  },
+  {
+    id: "agent-memory",
+    title: "Agent memory controls",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["Linux memory limits throttling reservations cgroups"],
+  },
+  {
+    id: "work-assistance",
+    title: "Work assistance",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["project assistance"],
+  },
+  {
+    id: "device-names",
+    title: "Device names",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["rename my devices"],
+  },
+  {
+    id: "bare-stop-wait",
+    title: "Bare stop and wait",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["stop wait immediate"],
+  },
+  {
+    id: "claude-steer-recovery",
+    title: "Claude steers survive Stop",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["resume held steer"],
+  },
+  {
+    id: "apply-model-change-now",
+    title: "Apply model and effort changes now",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["restart running turn instantly"],
+  },
+  {
+    id: "sent-from",
+    title: "Message attribution",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["sent from device"],
+  },
+  {
+    id: "thread-only-stop",
+    title: "Stop stops only this thread",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["stop subagents"],
+  },
+  {
+    id: "background-git",
+    title: "Background Git",
+    to: "/settings/homucode",
+    scope: "environment",
+    environmentOnly: true,
+    searchTerms: ["git status automatic worktrees checkpoints"],
+  },
+  {
     id: "settings-sync",
     title: "Settings sync",
-    to: "/settings/general",
+    to: "/settings/homucode",
     searchTerms: ["sync devices synced conflict merge share preferences"],
   },
   {
@@ -999,14 +1080,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "thread-title-project-name",
     title: "Project name in title prompt",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["generated thread titles project name context titler"],
   },
   {
     id: "thread-title-id-prefix",
     title: "Thread title IDs",
-    to: "/settings/threads",
+    to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["generated thread titles id prefix initials short code collision counter"],
   },
@@ -1033,7 +1114,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "staged-build",
     title: "Staged build",
-    to: "/settings/about",
+    to: "/settings/homucode",
     searchTerms: ["appimage rollback undo revert previous build launcher next start"],
     desktopOnly: true,
   },
@@ -1504,7 +1585,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "scratch-environment",
     title: "Threads without a project",
-    to: "/settings/connections",
+    to: "/settings/homucode",
     searchTerms: ["no project scratch default machine environment device start new thread"],
   },
   {
@@ -1545,7 +1626,7 @@ const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id,
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
   "/settings/projects": "project",
-  "/settings/building-t3": "environment",
+  "/settings/homucode": null,
   "/settings/general": null,
   "/settings/voice": null,
   "/settings/appearance": null,
@@ -1573,6 +1654,7 @@ const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
   "/settings/integrations": "/settings/browser",
   "/settings/storage": "/settings/maintenance",
   "/settings/beta": "/settings/labs",
+  "/settings/building-t3": "/settings/homucode",
 };
 const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
   "/settings/general",
@@ -1581,8 +1663,18 @@ const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
   "/settings/connections",
   ...Object.keys(RENAMED_SETTINGS_PATHS),
 ]);
+const HOMUCODE_PREVIOUS_PATHS = new Set([
+  "/settings/about",
+  "/settings/chat",
+  "/settings/labs",
+  "/settings/threads",
+  "/settings/projects",
+]);
 // Section anchors that moved but are not search results themselves.
 const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
+  subagents: "/settings/homucode",
+  autoreview: "/settings/homucode",
+  "claude-background-commands": "/settings/homucode",
   "authorized-clients": "/settings/access",
   "text-generation": "/settings/threads",
   about: "/settings/about",
@@ -1590,14 +1682,15 @@ const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
 
 /** Where an old settings link now lives. Its anchor finds the page its row moved to. */
 export function movedSettingsPath(pathname: string, hash: string): SettingsPath | null {
-  if (!SPLIT_SETTINGS_PATHS.has(pathname)) return null;
+  const split = SPLIT_SETTINGS_PATHS.has(pathname);
+  if (!split && !HOMUCODE_PREVIOUS_PATHS.has(pathname)) return null;
   const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
   const anchored = hash
     ? (items.find((item) => item.id === hash) ?? items.find((item) => item.targetId === hash))
     : undefined;
   const to =
     anchored?.to ?? MOVED_SECTION_ANCHORS[hash] ?? RENAMED_SETTINGS_PATHS[pathname] ?? null;
-  return to === pathname ? null : to;
+  return to === pathname || (!split && to !== "/settings/homucode") ? null : to;
 }
 
 export function getSettingsSearchTargetScope(targetId: string) {

@@ -230,7 +230,7 @@ update queued for the next suitable moment.
 
 ## Build a development version
 
-Enable **Show Building T3 settings** in **Settings → General**, then open **Building T3**.
+Enable **Show Building T3 settings** in **Settings → HomuCode**. On mobile, open **Building T3** there.
 Choose the server's T3 Code checkout, boat CLI, machine type and output folder. Enable cloud
 builds or Android APK builds, choose a committed ref (default `origin/main`), and confirm the
 build. The boat CLI must be installed and signed in on that server. Status reports the result
@@ -244,4 +244,4 @@ On AppImage installs, enable loading builds, choose a staged AppImage and its SH
 and confirm loading. T3 restarts and automatically rolls back if it fails to return. Set the
 AppImage folder to control which folder the loader launches from. The running and next builds
 are shown there; Undo excludes the newest build from the next launch, and Redo restores it.
-While Building T3 is hidden, Undo remains in **Settings → About**.
+On desktop, Undo is available in **Settings → HomuCode** while Building T3 is hidden.

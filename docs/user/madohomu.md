@@ -1,8 +1,8 @@
 # MadoHomu
 
-Enable MadoHomu in Settings → General → MadoHomu, then choose the project it focuses on. If you have several connected environments, select the environment in Settings first. Open MadoHomu from the sidebar or the “Open MadoHomu” command palette action.
+Enable MadoHomu in Settings → HomuCode → MadoHomu, then choose the project it focuses on. If you have several connected environments, select the environment in Settings first. Open MadoHomu from the sidebar or the “Open MadoHomu” command palette action.
 
-On mobile, use Settings → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list, or on Android wide layouts such as an unfolded phone, from MadoHomu in the navigation rail. Chat and Tasks open your normal mobile chat and composer; use Back to return to MadoHomu.
+On mobile, use Settings → HomuCode → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list, or on Android wide layouts such as an unfolded phone, from MadoHomu in the navigation rail. Chat and Tasks open your normal mobile chat and composer; use Back to return to MadoHomu.
 
 Chat uses your normal threads and composer. New MadoHomu threads start pinned in MadoHomu on all your devices. This is independent of sidebar pins. Unpinned threads and other threads in the project are labelled Temporary. Edit a thread to change its title, icon, icon color, short prompt, or pin state. Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn. Tasks puts threads awaiting approval or input first, followed by running work and recent threads.
 
