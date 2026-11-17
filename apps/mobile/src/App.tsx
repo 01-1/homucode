@@ -4,7 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -101,16 +101,22 @@ import {
 } from "./features/layout/workspace/workspace-selection-store";
 import { workspaceDetailLinkAction } from "./features/layout/workspace/workspace-detail-selection";
 import { NativeLayoutMetricsProvider } from "./native/native-layout-metrics";
-import {
-  attachRootNavigation,
-  flushRootNavigationQueue,
-  linkToRootPath,
-  rootNavigationRef,
-} from "./lib/rootNavigation";
+import { flushRootNavigationQueue, linkToRootPath, rootNavigationRef } from "./lib/rootNavigation";
 import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
 import { installClientSettingsSync } from "./features/settings/settingsSync";
+import {
+  attachMadoHomuNavigation,
+  attachMainNavigation,
+  MadoHomuBackRouting,
+  MadoHomuLauncherSync,
+  useMadoHomuEnvironmentStates,
+} from "./features/madohomu/madohomuLauncher";
+import {
+  MADOHOMU_LAUNCH_SURFACE,
+  madohomuLauncherEnvironmentId,
+} from "./features/madohomu/madohomuLauncherState";
 
 import "../global.css";
 
@@ -266,19 +272,46 @@ function SplashScreenCoordinator() {
   return null;
 }
 
-export default function App() {
+interface AppProps {
+  readonly launchSurface?: string;
+}
+
+export default function App({ launchSurface }: AppProps) {
+  const madohomu = launchSurface === MADOHOMU_LAUNCH_SURFACE;
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AppContent />
+          <AppContent madohomu={madohomu} />
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>
   );
 }
 
-function AppContent() {
+// Android's MadoHomu launcher task: deep links and workspace bookkeeping stay with the main root.
+function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
+  const environmentId = madohomuLauncherEnvironmentId(useMadoHomuEnvironmentStates().environments);
+  if (!environmentId) return null;
+  // Back routing mounts after the navigator so its Back listener runs first.
+  return (
+    <Fragment key={environmentId}>
+      <Navigation
+        ref={attachMadoHomuNavigation}
+        initialState={{ routes: [{ name: "MadoHomu", params: { environmentId } }] }}
+        onReady={() => {
+          settleLaunchSplashHomeRows();
+          flushRootNavigationQueue();
+        }}
+        theme={theme}
+        onStateChange={settleLaunchSplashHomeRows}
+      />
+      <MadoHomuBackRouting />
+    </Fragment>
+  );
+}
+
+function AppContent({ madohomu }: { readonly madohomu: boolean }) {
   const { themeAppearance } = useAppearancePreferences();
   const navigationTheme = useMobileNavigationTheme();
 
@@ -293,8 +326,13 @@ function AppContent() {
   return (
     <>
       <SplashScreenCoordinator />
-      <SubscriptionUsageCoordinator />
-      <ConnectDeviceApprovalCoordinator />
+      <MadoHomuLauncherSync />
+      {madohomu ? null : (
+        <>
+          <SubscriptionUsageCoordinator />
+          <ConnectDeviceApprovalCoordinator />
+        </>
+      )}
       <GestureHandlerRootView className="flex-1">
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
@@ -302,13 +340,17 @@ function AppContent() {
             {/* native-stack needs the theme's dark flag to select dark native headers. */}
             <GlobalVoiceInputControl>
               <NativeLayoutMetricsProvider>
-                <Navigation
-                  ref={attachRootNavigation}
-                  linking={appLinking}
-                  onReady={handleNavigationReady}
-                  theme={navigationTheme}
-                  onStateChange={handleNavigationStateChange}
-                />
+                {madohomu ? (
+                  <MadoHomuNavigation theme={navigationTheme} />
+                ) : (
+                  <Navigation
+                    ref={attachMainNavigation}
+                    linking={appLinking}
+                    onReady={handleNavigationReady}
+                    theme={navigationTheme}
+                    onStateChange={handleNavigationStateChange}
+                  />
+                )}
                 <Dialog.Host />
                 <ThreadArrangementHost />
                 <ProjectChipIconRasterizer />

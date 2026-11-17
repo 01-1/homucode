@@ -15,7 +15,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { useRef, useState } from "react";
-import { View } from "react-native";
+import { BackHandler, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -352,7 +352,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     <View className="flex-1 bg-screen">
       <AppBar
         title="MadoHomu"
-        onBack={() => navigation.goBack()}
+        onBack={() => (navigation.canGoBack() ? navigation.goBack() : BackHandler.exitApp())}
         actions={[
           ...(settings.madohomuEnabled && actions.project && canEdit
             ? [

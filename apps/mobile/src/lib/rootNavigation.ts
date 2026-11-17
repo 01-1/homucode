@@ -19,10 +19,27 @@ export const rootNavigationRef = createNavigationContainerRef<ReactNavigation.Ro
 export function attachRootNavigation(
   navigation: NavigationContainerRef<ReactNavigation.RootParamList> | null,
 ): () => void {
+  if (navigation) attachedContainers.push(navigation);
   rootNavigationRef.current = navigation;
   return () => {
-    if (rootNavigationRef.current === navigation) rootNavigationRef.current = null;
+    const index = attachedContainers.lastIndexOf(navigation!);
+    if (index !== -1) attachedContainers.splice(index, 1);
+    if (rootNavigationRef.current === navigation) {
+      rootNavigationRef.current = attachedContainers.at(-1) ?? null;
+    }
   };
+}
+
+// Android's MadoHomu launcher task mounts a second root; the ref follows the foreground one.
+const attachedContainers: Array<NavigationContainerRef<ReactNavigation.RootParamList>> = [];
+
+export function focusRootNavigation(
+  navigation: NavigationContainerRef<ReactNavigation.RootParamList> | null,
+): void {
+  if (navigation === null || attachedContainers.includes(navigation)) {
+    rootNavigationRef.current = navigation;
+    flushRootNavigationQueue();
+  }
 }
 
 const pendingUntilReady: Array<() => void> = [];
@@ -38,6 +55,7 @@ export function whenRootNavigationReady(navigate: () => void): void {
 
 /** Wired to the container's `onReady`. */
 export function flushRootNavigationQueue(): void {
+  if (!rootNavigationRef.isReady()) return;
   for (const navigate of pendingUntilReady.splice(0)) {
     try {
       navigate();
@@ -59,4 +77,16 @@ export function linkToRootPath(href: string, toAction: (href: string) => Navigat
       ...toAction(href),
     });
   });
+}
+
+/** False for a screen in the backgrounded task while Android's MadoHomu task has a second root. */
+export function isInForegroundRoot(navigation: {
+  getParent(): unknown;
+  getState(): { key: string };
+}): boolean {
+  let top = navigation;
+  while (top.getParent()) top = top.getParent() as typeof navigation;
+  return (
+    !rootNavigationRef.isReady() || top.getState().key === rootNavigationRef.getRootState().key
+  );
 }
