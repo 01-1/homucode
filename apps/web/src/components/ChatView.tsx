@@ -3350,7 +3350,8 @@ export default function ChatView(props: ChatViewProps) {
       }}
       files={{
         projectId: activeProject?.id,
-        projectName: activeProject?.title ?? null,
+        // A focused view (MadoHomu) shows no project name, so the root crumb reads "Files".
+        projectName: activeProject ? (focusedHeader ? "Files" : activeProject.title) : null,
         workspaceRoot: activeWorkspaceRoot,
         availableEditors,
         pendingSurfaceIds: pendingFileSurfaceIds,

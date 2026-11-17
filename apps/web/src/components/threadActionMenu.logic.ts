@@ -535,3 +535,30 @@ export function buildMoveEnvironmentOptions<E extends string>(input: {
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
+
+/** A caller's own items: `top` above the thread actions, `afterRename` directly below "Rename thread". */
+export interface ThreadActionMenuAdditions {
+  readonly items: ReadonlyArray<ContextMenuItem>;
+  readonly afterRename?: ReadonlyArray<ContextMenuItem> | undefined;
+  /** New labels for the thread actions' own top-level items, by id. */
+  readonly labels?: Readonly<Partial<Record<string, string>>> | undefined;
+}
+
+export function arrangeThreadActionMenu(
+  items: ReadonlyArray<ContextMenuItem>,
+  additions: ThreadActionMenuAdditions | undefined,
+): ReadonlyArray<ContextMenuItem> {
+  if (!additions) return items;
+  const labels = additions.labels ?? {};
+  const afterRename = additions.afterRename ?? [];
+  const arranged = items.flatMap((item) => {
+    const label = labels[item.id];
+    const shown = label === undefined ? item : { ...item, label };
+    return item.id === "rename" ? [shown, ...afterRename] : [shown];
+  });
+  if (additions.items.length === 0) return arranged;
+  return [
+    ...additions.items,
+    ...arranged.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item)),
+  ];
+}

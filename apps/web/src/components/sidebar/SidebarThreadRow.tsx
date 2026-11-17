@@ -995,7 +995,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
-      "[&:not(:hover):not(:focus-within)_*]:text-secondary-label",
+      // Themes may tint secondary-label with the accent; MadoHomu's own-icon rows stay neutral.
+      (props.leadingIcon === undefined
+        ? "[&:not(:hover):not(:focus-within)_*]:text-secondary-label"
+        : "[&:not(:hover):not(:focus-within)_*]:text-foreground/55"),
     props.isActive
       ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
       : isSelected || props.sweepAction !== null

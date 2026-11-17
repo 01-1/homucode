@@ -71,7 +71,8 @@ const POINTER_SENSOR_OPTIONS = { distance: 6, onAttach: () => {}, onFinish: () =
 const DND_MODIFIERS = [restrictToVerticalAxis, restrictToFirstScrollableAncestor];
 const SECTION_DROP_PREFIX = "madohomu-section:";
 const MENU_EDIT = "madohomu:edit";
-const MENU_PIN = "madohomu:pin";
+const MENU_MOVE = "madohomu:move";
+const MENU_NEW_SECTION = "madohomu:new-section";
 const MENU_SCRATCH = "madohomu:scratch";
 const MENU_SECTION_PREFIX = "madohomu:section:";
 const readOpensPullRequestsInRightPanel = () => false;
@@ -184,39 +185,50 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const section = pinned
       ? (settings.madohomuSections.find((s) => s.id === entry?.section)?.id ?? null)
       : undefined;
-    const items: ContextMenuItem[] = [
-      { id: MENU_EDIT, label: "Edit…", icon: "pencil", disabled: !canEdit },
-      pinned
-        ? {
-            id: MENU_SCRATCH,
-            label: `Move to ${MADOHOMU_SCRATCH_LABEL}`,
-            icon: "pin-off",
-            disabled: !canEdit,
-          }
-        : { id: MENU_PIN, label: "Move to Pinned", icon: "pin", disabled: !canEdit },
-      {
-        id: `${MENU_SECTION_PREFIX}menu`,
-        label: "Move to section",
-        icon: "folder",
-        disabled: !canEdit,
-        children: [
-          { id: MENU_SECTION_PREFIX, label: "Pinned", checked: section === null },
-          ...settings.madohomuSections.map((s) => ({
-            id: `${MENU_SECTION_PREFIX}${s.id}`,
-            label: s.name,
-            checked: section === s.id,
-          })),
-        ],
-      },
-    ];
+    const moveTo: ContextMenuItem = {
+      id: MENU_MOVE,
+      label: "Move to",
+      icon: "folder",
+      disabled: !canEdit,
+      children: [
+        { id: MENU_SECTION_PREFIX, label: "Pinned", checked: section === null },
+        ...settings.madohomuSections.map((s) => ({
+          id: `${MENU_SECTION_PREFIX}${s.id}`,
+          label: s.name,
+          checked: section === s.id,
+        })),
+        { id: MENU_SCRATCH, label: MADOHOMU_SCRATCH_LABEL, checked: !pinned },
+        { id: MENU_NEW_SECTION, label: "New section…", separatorBefore: true },
+      ],
+    };
     return {
-      items,
+      items: [moveTo],
+      afterRename: [{ id: MENU_EDIT, label: "Edit…", icon: "pencil", disabled: !canEdit }],
+      labels: {
+        pin: "Pin in T3 Code",
+        unpin: "Unpin in T3 Code",
+        folder: "Move to T3 Code folder",
+      },
       onSelect: (id) => {
         if (id === MENU_EDIT) setEditing(threadId);
-        else if (id === MENU_PIN) void fileThread(threadId, null, null);
-        else if (id === MENU_SCRATCH) void actions.patchThread(threadId, { pinned: false });
-        else if (id.startsWith(MENU_SECTION_PREFIX) && id !== `${MENU_SECTION_PREFIX}menu`) {
-          void fileThread(threadId, id.slice(MENU_SECTION_PREFIX.length) || null, null);
+        else if (id === MENU_SCRATCH) {
+          if (pinned) void actions.patchThread(threadId, { pinned: false });
+        } else if (id === MENU_NEW_SECTION) {
+          const created = { id: randomUUID(), name: "New section" };
+          void actions
+            .save({
+              madohomuSections: [...settings.madohomuSections, created],
+              madohomuThreadOrder: reorderMadoHomuThreads(savedOrder(), threadId, null),
+              madohomuThreads: {
+                [threadId]: actions.threadEntry(threadId, { pinned: true, section: created.id }),
+              },
+            })
+            .then((saved) => {
+              if (saved) setRenamingSection(created.id);
+            });
+        } else if (id.startsWith(MENU_SECTION_PREFIX)) {
+          const target = id.slice(MENU_SECTION_PREFIX.length) || null;
+          if (!pinned || target !== section) void fileThread(threadId, target, null);
         }
       },
     };

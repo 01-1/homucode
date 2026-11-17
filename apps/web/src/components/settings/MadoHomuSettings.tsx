@@ -18,6 +18,12 @@ const CODE_VISIBILITY_LABELS = {
   all: "All",
 } as const satisfies Record<ServerSettings["madohomuCodeVisibility"], string>;
 
+const WORKING_PLACEMENT_LABELS = {
+  section: "Working section",
+  top: `Top of ${MADOHOMU_SCRATCH_LABEL}`,
+  none: "Leave in place",
+} as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
+
 export function MadoHomuSettings() {
   const { target, targets, scope } = useSettingsScope();
   if (scope.kind === "project" || scope.kind === "checkout") return null;
@@ -111,6 +117,37 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
                   ).map((value) => (
                     <SelectItem key={value} value={value}>
                       {CODE_VISIBILITY_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+          <SettingsRow
+            {...searchableSetting("madohomu-working-placement")}
+            description={`Where a ${MADOHOMU_SCRATCH_LABEL} thread shows in MadoHomu while it is working. Pinned threads keep their place.`}
+            control={
+              <Select
+                value={actions.settings.madohomuWorkingPlacement}
+                disabled={!actions.canWrite || busy}
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  void run(() => actions.save({ madohomuWorkingPlacement: value }));
+                }}
+              >
+                <SelectTrigger aria-label="Working threads" className="w-36" size="sm">
+                  <SelectValue>
+                    {WORKING_PLACEMENT_LABELS[actions.settings.madohomuWorkingPlacement]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {(
+                    Object.keys(WORKING_PLACEMENT_LABELS) as Array<
+                      keyof typeof WORKING_PLACEMENT_LABELS
+                    >
+                  ).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {WORKING_PLACEMENT_LABELS[value]}
                     </SelectItem>
                   ))}
                 </SelectPopup>
