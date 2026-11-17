@@ -1,6 +1,14 @@
 import type { ThreadId } from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Platform, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, {
@@ -237,6 +245,7 @@ export function MadoHomuReorderList(props: {
       const content = measure(contentRef);
       if (!view || !content) return;
       const offset = view.pageY - content.pageY;
+      if (Number.isNaN(startOffset.get())) startOffset.set(offset);
       scrolled.set(offset - startOffset.get());
       const center =
         content.pageY + source.get() + rowHeight / 2 + translation.get() + scrolled.get();
@@ -307,8 +316,10 @@ export function MadoHomuReorderList(props: {
     if (!moved) reset();
   };
   const handlers = useRef({ began, finished });
-  // oxlint-disable-next-line react/refs -- gestures are built once per layout; they call the latest handlers when they fire
-  handlers.current = { began, finished };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the committed handlers to a ref; the gestures, built once per layout, call them when a native gesture event fires
+  useLayoutEffect(() => {
+    handlers.current = { began, finished };
+  });
   const [js] = useState(() => ({
     began: (key: string) => handlers.current.began(key),
     finished: (...args: Parameters<typeof finished>) => handlers.current.finished(...args),
@@ -319,7 +330,6 @@ export function MadoHomuReorderList(props: {
     reset();
   }, [version]);
 
-  /* oxlint-disable react/refs -- the gesture callbacks measure the scroll view when a native gesture event fires, never while rendering */
   const gestures = useMemo(() => {
     const result = new Map<string, ReturnType<typeof Gesture.Pan>>();
     for (const item of items) {
@@ -337,8 +347,6 @@ export function MadoHomuReorderList(props: {
           .shouldCancelWhenOutside(false)
           .onStart(() => {
             if (active.get()) return;
-            const view = measure(scrollRef);
-            const content = measure(contentRef);
             active.set(true);
             dragVersion.set(version);
             source.set(offset);
@@ -346,7 +354,8 @@ export function MadoHomuReorderList(props: {
             slot.set(-1);
             translation.set(0);
             scrolled.set(0);
-            startOffset.set(view && content ? view.pageY - content.pageY : 0);
+            // The first frame of the drag records where the list was scrolled to.
+            startOffset.set(Number.NaN);
             retarget();
             runOnJS(js.began)(key);
           })
@@ -384,10 +393,7 @@ export function MadoHomuReorderList(props: {
     translation,
     scrolled,
     startOffset,
-    scrollRef,
-    contentRef,
   ]);
-  /* oxlint-enable react/refs */
 
   const scroll = (
     <Reanimated.ScrollView
