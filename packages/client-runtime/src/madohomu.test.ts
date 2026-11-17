@@ -13,6 +13,9 @@ import {
   madohomuMorningBriefInput,
   madohomuRuntimeMode,
   madohomuTaskLabel,
+  groupMadoHomuThreads,
+  isMadoHomuThreadShownInCode,
+  reorderMadoHomuThreads,
   findMadoHomuMorningBriefThread,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
@@ -171,4 +174,92 @@ it("chooses an enabled remote MadoHomu destination with a disabled primary or no
   expect(
     selectMadoHomuEnvironment(local.environmentId, [{ ...local, madohomuEnabled: true }, remote]),
   ).toBe(remote.environmentId);
+});
+
+describe("MadoHomu sections", () => {
+  const shell = (id: string, updatedAt: string, extra: object = {}) => ({
+    id: ThreadId.make(id),
+    projectId: ProjectId.make("p"),
+    updatedAt,
+    settledOverride: null,
+    runtime: null,
+    snoozedUntil: null,
+    snoozedAt: null,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    ...extra,
+  });
+  const entry = (extra: object = {}) => ({ icon: null, prompt: "", ...extra });
+  const settings = {
+    ...DEFAULT_SERVER_SETTINGS,
+    madohomuEnabled: true,
+    madohomuProjectId: ProjectId.make("p"),
+    madohomuSections: [{ id: "work", name: "Work" }],
+    madohomuThreadOrder: [ThreadId.make("b"), ThreadId.make("a")],
+    madohomuThreads: {
+      [ThreadId.make("a")]: entry(),
+      [ThreadId.make("b")]: entry(),
+      [ThreadId.make("new")]: entry(),
+      [ThreadId.make("filed")]: entry({ section: "work" }),
+      [ThreadId.make("gone")]: entry({ section: "deleted-section" }),
+      [ThreadId.make("unpinned")]: entry({ pinned: false }),
+      [ThreadId.make("done")]: entry(),
+      [ThreadId.make("later")]: entry(),
+    },
+  };
+
+  it("groups threads into Pinned, custom sections, Scratch, Snoozed and Settled", () => {
+    const groups = groupMadoHomuThreads(
+      [
+        shell("a", "2026-11-10"),
+        shell("b", "2026-11-11"),
+        shell("new", "2026-11-12"),
+        shell("gone", "2026-11-13"),
+        shell("filed", "2026-11-12"),
+        shell("unpinned", "2026-11-12"),
+        shell("outside", "2026-11-14"),
+        shell("done", "2026-11-12", { settledOverride: "settled" }),
+        shell("later", "2026-11-12", { snoozedUntil: "2026-12-01T00:00:00.000Z" }),
+      ] as never,
+      settings,
+      { now: "2026-11-17T00:00:00.000Z" },
+    );
+    expect(
+      groups.map((group) => [group.title, group.threads.map((thread: { id: string }) => thread.id)]),
+    ).toEqual([
+      ["Pinned", ["gone", "new", "b", "a"]],
+      ["Work", ["filed"]],
+      ["Scratch", ["outside", "unpinned"]],
+      ["Snoozed", ["later"]],
+      ["Settled", ["done"]],
+    ]);
+  });
+
+  it("moves a thread before another, or to the end", () => {
+    const [a, b, c] = ["a", "b", "c"].map((id) => ThreadId.make(id)) as [
+      ThreadId,
+      ThreadId,
+      ThreadId,
+    ];
+    expect(reorderMadoHomuThreads([a, b, c], c, a)).toEqual([c, a, b]);
+    expect(reorderMadoHomuThreads([a, b, c], a, null)).toEqual([b, c, a]);
+  });
+
+  it("hides the MadoHomu project from T3 Code unless the setting shows it", () => {
+    const shown = (visibility: "hidden" | "scratch" | "all", id: string, projectId = "p") =>
+      isMadoHomuThreadShownInCode(
+        { ...settings, madohomuCodeVisibility: visibility },
+        { id: ThreadId.make(id), projectId: ProjectId.make(projectId) },
+      );
+    expect([shown("hidden", "a"), shown("hidden", "outside")]).toEqual([false, false]);
+    expect([shown("scratch", "a"), shown("scratch", "outside")]).toEqual([false, true]);
+    expect(shown("all", "a")).toBe(true);
+    expect(shown("hidden", "a", "other-project")).toBe(true);
+    expect(
+      isMadoHomuThreadShownInCode(
+        { ...settings, madohomuEnabled: false },
+        { id: ThreadId.make("a"), projectId: ProjectId.make("p") },
+      ),
+    ).toBe(true);
+  });
 });

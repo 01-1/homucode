@@ -1419,8 +1419,20 @@ export type SyncedClientSettings = typeof SyncedClientSettings.Type;
 
 export const MADOHOMU_THREAD_PROMPT_MAX_LENGTH = 500;
 export const DEFAULT_MADOHOMU_ICON = "lucide:message-circle";
+export const MADOHOMU_SECTION_NAME_MAX_LENGTH = 60;
+/** A user-made MadoHomu section. Pinned threads can be filed under one. */
+export const MadoHomuSection = Schema.Struct({
+  id: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(MADOHOMU_SECTION_NAME_MAX_LENGTH)),
+});
+export type MadoHomuSection = typeof MadoHomuSection.Type;
+/** Which of the MadoHomu project's threads the T3 Code thread list also shows. */
+export const MadoHomuCodeVisibility = Schema.Literals(["hidden", "scratch", "all"]);
+export type MadoHomuCodeVisibility = typeof MadoHomuCodeVisibility.Type;
 export const MadoHomuThreadSettings = Schema.Struct({
   pinned: Schema.optionalKey(Schema.Boolean),
+  /** The custom section a pinned thread is filed under; absent or unknown means Pinned. */
+  section: Schema.optionalKey(Schema.NullOr(MadoHomuSection.fields.id)),
   color: Schema.optionalKey(
     Schema.NullOr(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
   ),
@@ -1620,7 +1632,7 @@ export const ServerSettings = Schema.Struct({
   claudeHoldBackgroundCommands: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
-  /** MadoHomu: a focused Chat + Tasks view locked to one project. */
+  /** MadoHomu: a focused view locked to one project. */
   madohomuDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   madohomuEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   madohomuProjectId: Schema.NullOr(ProjectId).pipe(
@@ -1629,6 +1641,17 @@ export const ServerSettings = Schema.Struct({
   /** Per-thread MadoHomu look and brief. The agent sees the icon, thread title and prompt each turn. */
   madohomuThreads: Schema.Record(ThreadId, MadoHomuThreadSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /** Custom sections, in display order, between Pinned and Scratch. */
+  madohomuSections: Schema.Array(MadoHomuSection).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  /** Manual order of pinned threads. Pinned threads not listed here come first, newest first. */
+  madohomuThreadOrder: Schema.Array(ThreadId).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  madohomuCodeVisibility: MadoHomuCodeVisibility.pipe(
+    Schema.withDecodingDefault(Effect.succeed("hidden" as const)),
   ),
   /** The scheduled task that sends the morning brief into a MadoHomu thread. */
   madohomuMorningBriefTaskId: Schema.NullOr(ScheduledTaskId).pipe(
@@ -2129,6 +2152,9 @@ export const ServerSettingsPatch = Schema.Struct({
   madohomuEnabled: Schema.optionalKey(Schema.Boolean),
   madohomuProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
   madohomuThreads: Schema.optionalKey(Schema.Record(ThreadId, MadoHomuThreadSettings)),
+  madohomuSections: Schema.optionalKey(Schema.Array(MadoHomuSection)),
+  madohomuThreadOrder: Schema.optionalKey(Schema.Array(ThreadId)),
+  madohomuCodeVisibility: Schema.optionalKey(MadoHomuCodeVisibility),
   madohomuMorningBriefTaskId: Schema.optionalKey(Schema.NullOr(ScheduledTaskId)),
   featureOffersSeen: Schema.optionalKey(Schema.Array(Schema.String)),
   backgroundActivity: Schema.optionalKey(

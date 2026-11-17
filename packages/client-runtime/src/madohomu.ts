@@ -14,6 +14,7 @@ import {
   type LegacyProjectSettingsFields,
 } from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
+import { effectiveSnoozed, isShelvedSettled, type ThreadSnoozeShell } from "./state/threadSettled.ts";
 
 export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined): boolean {
   return entry !== undefined && entry.pinned !== false;
@@ -28,6 +29,94 @@ export function orderMadoHomuThreads<T extends Pick<EnvironmentThreadShell, "id"
       Number(isMadoHomuThreadPinned(entries[b.id])) -
         Number(isMadoHomuThreadPinned(entries[a.id])) || b.updatedAt.localeCompare(a.updatedAt),
   );
+}
+
+/** The section for threads that are not pinned: made outside MadoHomu, or unpinned by the user. */
+export const MADOHOMU_SCRATCH_LABEL = "Scratch";
+
+export type MadoHomuGroupKind = "pinned" | "custom" | "scratch" | "snoozed" | "settled";
+export interface MadoHomuGroup<T> {
+  readonly kind: MadoHomuGroupKind;
+  /** The section id for a custom section, otherwise the kind. */
+  readonly id: string;
+  readonly title: string;
+  readonly threads: T[];
+}
+
+type MadoHomuGroupSettings = Pick<
+  ServerSettings,
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+>;
+
+/** The one grouping web and mobile both render: Pinned, custom sections, Scratch, Snoozed, Settled. */
+export function groupMadoHomuThreads<
+  T extends Pick<EnvironmentThreadShell, "id" | "updatedAt" | "settledOverride" | "runtime"> &
+    ThreadSnoozeShell,
+>(
+  threads: ReadonlyArray<T>,
+  settings: MadoHomuGroupSettings,
+  options: { readonly now: string },
+): MadoHomuGroup<T>[] {
+  const groups: MadoHomuGroup<T>[] = [
+    { kind: "pinned", id: "pinned", title: "Pinned", threads: [] },
+    ...settings.madohomuSections.map((section) => ({
+      kind: "custom" as const,
+      id: section.id,
+      title: section.name,
+      threads: [] as T[],
+    })),
+    { kind: "scratch", id: "scratch", title: MADOHOMU_SCRATCH_LABEL, threads: [] },
+    { kind: "snoozed", id: "snoozed", title: "Snoozed", threads: [] },
+    { kind: "settled", id: "settled", title: "Settled", threads: [] },
+  ];
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const group = (id: string) => byId.get(id)!;
+  for (const thread of threads) {
+    const entry = settings.madohomuThreads[thread.id];
+    if (effectiveSnoozed(thread, options)) group("snoozed").threads.push(thread);
+    else if (isShelvedSettled(thread)) group("settled").threads.push(thread);
+    else if (!isMadoHomuThreadPinned(entry)) group("scratch").threads.push(thread);
+    else {
+      const custom = entry?.section ? byId.get(entry.section) : undefined;
+      (custom?.kind === "custom" ? custom : group("pinned")).threads.push(thread);
+    }
+  }
+  const position = new Map(settings.madohomuThreadOrder.map((id, index) => [id, index]));
+  for (const { kind, threads: members } of groups) {
+    const manual = kind === "pinned" || kind === "custom";
+    members.sort(
+      (a, b) =>
+        (manual ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) : 0) ||
+        b.updatedAt.localeCompare(a.updatedAt) ||
+        a.id.localeCompare(b.id),
+    );
+  }
+  return groups;
+}
+
+/** The new `madohomuThreadOrder` after dropping `moved` before `before` (null drops it last). */
+export function reorderMadoHomuThreads(
+  visibleOrder: ReadonlyArray<ThreadId>,
+  moved: ThreadId,
+  before: ThreadId | null,
+): ThreadId[] {
+  const rest = visibleOrder.filter((id) => id !== moved);
+  const index = before === null ? -1 : rest.indexOf(before);
+  return index < 0 ? [...rest, moved] : [...rest.slice(0, index), moved, ...rest.slice(index)];
+}
+
+/** Whether the T3 Code thread list shows a thread of the MadoHomu project. */
+export function isMadoHomuThreadShownInCode(
+  settings: Pick<
+    ServerSettings,
+    "madohomuEnabled" | "madohomuProjectId" | "madohomuThreads" | "madohomuCodeVisibility"
+  >,
+  thread: Pick<EnvironmentThreadShell, "id" | "projectId">,
+): boolean {
+  if (!settings.madohomuEnabled || thread.projectId !== settings.madohomuProjectId) return true;
+  if (settings.madohomuCodeVisibility === "all") return true;
+  if (settings.madohomuCodeVisibility === "hidden") return false;
+  return !isMadoHomuThreadPinned(settings.madohomuThreads[thread.id]);
 }
 
 export const MADOHOMU_ICON_COLORS = [
