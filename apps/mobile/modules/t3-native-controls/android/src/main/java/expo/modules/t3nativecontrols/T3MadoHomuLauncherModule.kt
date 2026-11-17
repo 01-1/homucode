@@ -48,6 +48,8 @@ class T3MadoHomuLauncherModule : Module() {
     }
   }
 
-  private fun foregroundSurface(): String =
-    if (appContext.currentActivity?.javaClass?.simpleName == "MadoHomuActivity") "madohomu" else "main"
+  private fun foregroundSurface(): String {
+    val activity = appContext.currentActivity?.javaClass?.simpleName
+    return if (activity == "MadoHomuActivity") "madohomu" else "main"
+  }
 }
