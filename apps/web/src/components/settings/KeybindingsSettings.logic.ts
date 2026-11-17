@@ -368,6 +368,28 @@ export function buildKeybindingCommandOptions(
   return [...commands].toSorted((left, right) => compareCommands(left, right, commandLabel));
 }
 
+const compactSearchText = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Matches the label or the raw id; punctuation and spaces are ignored, so "newlocal" finds "Chat: New Local". */
+export function filterKeybindingCommandOptions(
+  options: ReadonlyArray<KeybindingCommandOption>,
+  query: string,
+): ReadonlyArray<KeybindingCommandOption> {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.length === 0) return options;
+  const compactQuery = compactSearchText(normalizedQuery);
+  return options.filter((command) => {
+    const label = commandLabel(command);
+    return (
+      command.toLowerCase().includes(normalizedQuery) ||
+      label.toLowerCase().includes(normalizedQuery) ||
+      (compactQuery.length > 0 &&
+        (compactSearchText(command).includes(compactQuery) ||
+          compactSearchText(label).includes(compactQuery)))
+    );
+  });
+}
+
 export function commandLabel(command: KeybindingCommand): string {
   if (command === "workspace.focusNext") return "Focus Next Workspace Area";
   if (command === "workspace.focusPrevious") return "Focus Previous Workspace Area";
