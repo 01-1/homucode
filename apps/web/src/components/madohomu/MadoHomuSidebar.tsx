@@ -153,7 +153,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
 
   const open = (threadId: ThreadId) => {
     if (isMobile) setOpenMobile(false);
-    void navigate({ to: "/madohomu", search: { environmentId, threadId, tab: "chat" } });
+    void navigate({ to: "/madohomu", search: { environmentId, threadId } });
   };
   const startRename = (threadRef: ScopedThreadRef) => {
     const thread = threads.find((t) => t.id === threadRef.threadId);

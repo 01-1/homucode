@@ -20,7 +20,7 @@ import { useMadoHomuActions } from "./useMadoHomuActions";
  * Opens T3 Code's own add-project flow (new folder, existing folder, clone) and makes
  * the project it ends on MadoHomu's project, instead of opening a thread in it.
  */
-export function useNewMadoHomuProject(environmentId: EnvironmentId) {
+function useNewMadoHomuProject(environmentId: EnvironmentId) {
   const { changeProject } = useMadoHomuActions(environmentId);
   return () =>
     openCommandPalette({
