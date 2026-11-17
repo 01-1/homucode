@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
@@ -37,22 +37,30 @@ export function AutoUpdateWhenIdle() {
   const version = autoUpdateVersion(useDesktopUpdateState());
   const enabled = useAtomValue(autoUpdateEnabledAtom);
   const working = useAtomValue(agentsWorkingAtom);
-  const ready = enabled && !working && version !== null && !attempted.has(version);
+  const idle = enabled && !working;
+  const idlePeriod = useRef({ cancelled: true });
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- an in-flight install must see work start, outside React.
+  useEffect(() => {
+    if (!idle) return;
+    const period = { cancelled: false };
+    idlePeriod.current = period;
+    return () => {
+      period.cancelled = true;
+    };
+  }, [idle]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the idle timer and desktop updater live outside React.
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!ready || !bridge) return;
-    // Work or the setting turning off cleans this up, so install runs only after unbroken idle time.
-    let cancelled = false;
+    if (!idle || version === null || attempted.has(version) || !bridge) return;
+    // Only work, opting out or unmounting cancel an install; the updater's own downloading state does not.
+    const period = idlePeriod.current;
     const timer = setTimeout(() => {
-      void runAutoUpdate({ bridge, attempted, isIdle: () => !cancelled }).catch(() => {});
+      void runAutoUpdate({ bridge, attempted, isIdle: () => !period.cancelled }).catch(() => {});
     }, AUTO_UPDATE_IDLE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [ready]);
+    return () => clearTimeout(timer);
+  }, [idle, version]);
 
   return null;
 }

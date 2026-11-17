@@ -89,7 +89,8 @@ export const layer = Layer.effectDiscard(
     const engine = yield* Orchestrator.OrchestratorV2;
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const runner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
-    const startedAt = yield* Clock.currentTimeMillis;
+    // The server's start counts as work, so a restart waits the full delay again.
+    let idleSince = yield* Clock.currentTimeMillis;
     const lastWorkingAt = new Map<ProviderDriverKind, number>();
     const attempted = new Set<string>();
     // Threads with events since the last check, so a turn shorter than the interval still counts.
@@ -108,11 +109,15 @@ export const layer = Layer.effectDiscard(
     const tick = Effect.gen(function* () {
       const seen = touched;
       touched = new Set();
-      if (!(yield* settings.getSettings).autoUpdateWhenIdle) return;
+      // Time spent switched off counts as work, so turning it on waits the full delay.
+      if (!(yield* settings.getSettings).autoUpdateWhenIdle) {
+        lastWorkingAt.clear();
+        idleSince = yield* Clock.currentTimeMillis;
+        return;
+      }
       const current = yield* providers.getProviders;
-      // Count the server's start as work, so a restart waits the full delay again.
       for (const provider of current) {
-        if (!lastWorkingAt.has(provider.driver)) lastWorkingAt.set(provider.driver, startedAt);
+        if (!lastWorkingAt.has(provider.driver)) lastWorkingAt.set(provider.driver, idleSince);
       }
       const ids = new Set(seen);
       for (const entry of yield* threads.listActiveShellIndex()) {
