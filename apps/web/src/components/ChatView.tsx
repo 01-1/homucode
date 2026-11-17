@@ -1656,7 +1656,7 @@ export default function ChatView(props: ChatViewProps) {
     serverThread !== null && !embedded && !isDraftHeroState ? serverThread : null;
   const statusLineKey =
     statusLineThread === null
-      ? null
+      ? undefined
       : scopedThreadKey(scopeThreadRef(statusLineThread.environmentId, statusLineThread.id));
   const turnDiffSummaries = useThreadCheckpointSummaries(routeThreadDetailRef);
   const availableRevertTurnCounts = deriveAvailableRevertTurnCounts(serverProjection);
@@ -3900,7 +3900,7 @@ export default function ChatView(props: ChatViewProps) {
                     </div>
                   </div>
                 </div>
-                {statusLineThread !== null && statusLineKey !== null ? (
+                {statusLineThread !== null && statusLineKey !== undefined ? (
                   <>
                     <ThreadStatusLineRunner
                       statusLineKey={statusLineKey}

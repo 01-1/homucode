@@ -57,7 +57,7 @@ interface ChatHeaderProps {
   parentThreadLink: { threadId: ThreadId; title: string } | null;
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
-  statusLineKey?: string | null | undefined;
+  statusLineKey?: string | undefined;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;

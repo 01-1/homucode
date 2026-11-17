@@ -53,13 +53,6 @@ const ROLE_COLORS: Record<StatusLineColorRole, string | null> = {
   accent: "var(--ring)",
 };
 
-function themedBackground(color: string): string {
-  const themeColor = ROLE_COLORS[statusLineColorRole(color)];
-  return themeColor === null
-    ? "var(--muted)"
-    : `color-mix(in srgb, ${themeColor} 18%, transparent)`;
-}
-
 function segmentStyle(segment: AnsiSegment): CSSProperties | undefined {
   const color = segment.color === null ? null : ROLE_COLORS[statusLineColorRole(segment.color)];
   if (
@@ -74,9 +67,7 @@ function segmentStyle(segment: AnsiSegment): CSSProperties | undefined {
   }
   return {
     ...(color === null ? {} : { color }),
-    ...(segment.background === null
-      ? {}
-      : { backgroundColor: themedBackground(segment.background) }),
+    ...(segment.background === null ? {} : { backgroundColor: "var(--muted)" }),
     ...(segment.bold ? { fontWeight: 600 } : {}),
     ...(segment.dim ? { opacity: 0.6 } : {}),
     ...(segment.italic ? { fontStyle: "italic" } : {}),
@@ -145,10 +136,9 @@ function MeasuredSegments(props: {
 }
 
 function partsWidth(row: HTMLElement, parts: ReadonlyArray<StatusLinePart>): number {
+  const selector = parts.map((part) => `[data-status-line-part="${part}"]`).join(",");
   let width = 0;
-  for (const part of row.querySelectorAll<HTMLElement>("[data-status-line-part]")) {
-    if (parts.includes(part.dataset.statusLinePart as StatusLinePart)) width += part.offsetWidth;
-  }
+  for (const part of row.querySelectorAll<HTMLElement>(selector)) width += part.offsetWidth;
   return width;
 }
 
