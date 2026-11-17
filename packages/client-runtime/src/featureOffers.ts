@@ -36,13 +36,6 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
       "A focused Chat and Tasks view for one project, with its own desktop app and an optional morning brief.",
   },
   {
-    id: "autoreview",
-    page: 1,
-    title: "Autoreviewers (not recommended)",
-    description:
-      "Let agents attach reviewer subagents that check a thread's work as it happens. Reviewers can lag behind and report stale findings.",
-  },
-  {
     id: "quick-model",
     page: 1,
     title: "Quick model",
@@ -155,13 +148,6 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     setting: "autoUpdateWhenIdle",
   },
   {
-    id: "work-assistance",
-    page: 2,
-    title: "Work assistance",
-    description:
-      "Enable work assistance for a project on one environment. Choose its destination next.",
-  },
-  {
     id: "building-t3",
     page: 2,
     title: "Set up building T3 Code",
@@ -215,11 +201,10 @@ export function featureOfferPages(
 }
 
 export function enabledFeatureOffers(
-  settings: Pick<ServerSettings, "madohomuEnabled" | "autoreviewEnabled" | "quickModelSelection">,
+  settings: Pick<ServerSettings, "madohomuEnabled" | "quickModelSelection">,
 ): ReadonlySet<string> {
   return new Set([
     ...(settings.madohomuEnabled ? ["madohomu"] : []),
-    ...(settings.autoreviewEnabled ? ["autoreview"] : []),
     ...(settings.quickModelSelection ? ["quick-model"] : []),
   ]);
 }
@@ -233,7 +218,6 @@ export function selectedFeatureOffers(
     ...FEATURE_OFFERS.filter(
       (offer) => offer.setting && settings[offer.setting] === (offer.enabledValue ?? true),
     ).map((offer) => offer.id),
-    ...(settings.workAssistanceTarget ? ["work-assistance"] : []),
     ...(local.settingsSyncEnabled ? ["settings-sync"] : []),
     ...(local.fasterPhoneLaunch ? ["faster-phone-launch"] : []),
   ]);
@@ -262,16 +246,10 @@ export function featureOfferSettingsPatch(
     ...(offered.some((offer) => offer.id === "madohomu") && selected.has("madohomu")
       ? { madohomuEnabled: true }
       : {}),
-    ...(offered.some((offer) => offer.id === "autoreview") && selected.has("autoreview")
-      ? { autoreviewEnabled: true }
-      : {}),
     ...(offered.some((offer) => offer.id === "quick-model") &&
     selected.has("quick-model") &&
     settings.defaultModelSelection
       ? { quickModelSelection: settings.defaultModelSelection }
-      : {}),
-    ...(offered.some((offer) => offer.id === "work-assistance") && !selected.has("work-assistance")
-      ? { workAssistanceTarget: null }
       : {}),
   };
 }

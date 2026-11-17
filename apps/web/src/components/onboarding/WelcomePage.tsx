@@ -6,9 +6,8 @@ import {
 import { useTheme } from "../../hooks/useTheme";
 import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
-import { WorkAssistancePicker, DeviceNamesSettings } from "../settings/BehaviorSettings";
+import { DeviceNamesSettings } from "../settings/BehaviorSettings";
 import { BuildToolsSetup } from "../settings/BuildToolsSettings";
-import { type ServerSettings } from "@t3tools/contracts";
 import { FeatureOfferChoices } from "./FeatureOffers";
 import {
   useEnvironmentSettings,
@@ -181,11 +180,6 @@ export function WelcomePage({
   const [chosenOffers, setSelectedOffers] = useState<ReadonlySet<string> | null>(null);
   const selectedOffers = chosenOffers ?? selectedFeatureOffers(offerSettings, localSettings);
   const [offerStep, setOfferStep] = useState(0);
-  const [chosenWorkTarget, setWorkTarget] = useState<
-    ServerSettings["workAssistanceTarget"] | undefined
-  >();
-  const workTarget =
-    chosenWorkTarget === undefined ? offerSettings.workAssistanceTarget : chosenWorkTarget;
   const canSetLongSessions = useAtomValue(
     serverEnvironment.updateSettings.permissionAtom(environmentId, {
       patch: { connectDeviceLongSessions: true },
@@ -199,7 +193,6 @@ export function WelcomePage({
   );
   const followups = [
     ...(canSaveOffers && selectedOffers.has("sent-from") ? ["device-name"] : []),
-    ...(canSaveOffers && selectedOffers.has("work-assistance") ? ["work-assistance"] : []),
     ...(canSaveOffers && selectedOffers.has("building-t3") ? ["building-t3"] : []),
   ];
   const followup = followups[offerStep - 2];
@@ -244,12 +237,7 @@ export function WelcomePage({
         const saved = await saveOffers({
           environmentId,
           input: {
-            patch: {
-              ...featureOfferSettingsPatch(offerSettings, offered, selectedOffers),
-              ...(selectedOffers.has("work-assistance")
-                ? { workAssistanceTarget: workTarget }
-                : {}),
-            },
+            patch: featureOfferSettingsPatch(offerSettings, offered, selectedOffers),
           },
         });
         if (saved._tag !== "Success") throw new Error("Could not save HomuCode features.");
@@ -329,16 +317,7 @@ export function WelcomePage({
   const newCount = selected.filter(projectImport.isNew).length;
   const start = () => {
     if (offerStep < finalOfferStep) {
-      const nextStep = offerStep + 1;
-      if (followups[nextStep - 2] === "work-assistance" && selected.length > 0) {
-        projectImport.setSelectedKeys(new Set(selected.map((candidate) => candidate.key)));
-        void projectImport
-          .runImport(selected, false)
-          .then((completed) => {
-            if (completed) setOfferStep(nextStep);
-          })
-          .catch(() => toastManager.add({ type: "error", title: "Could not import projects" }));
-      } else setOfferStep(nextStep);
+      setOfferStep(offerStep + 1);
       return;
     }
     keepChoicesRef.current = scans.some((scan) => scan.data === null);
@@ -423,9 +402,7 @@ export function WelcomePage({
                       ? "Extra features"
                       : followup === "device-name"
                         ? "Name this device"
-                        : followup === "work-assistance"
-                          ? "Work assistance"
-                          : "Building T3"
+                        : "Building T3"
                   }
                 >
                   {offerStep === 1 ? (
@@ -434,12 +411,6 @@ export function WelcomePage({
                       selected={selectedOffers}
                       onChange={setSelectedOffers}
                       disabled={!canSaveOffers || isImporting}
-                    />
-                  ) : followup === "work-assistance" ? (
-                    <WorkAssistancePicker
-                      environmentId={environmentId}
-                      value={workTarget}
-                      onChange={setWorkTarget}
                     />
                   ) : followup === "device-name" ? (
                     <DeviceNamesSettings environmentId={environmentId} currentOnly />
@@ -469,14 +440,7 @@ export function WelcomePage({
                 {agentReady ? null : (
                   <span className="text-xs text-muted-foreground">Set up one agent to start.</span>
                 )}
-                <Button
-                  disabled={
-                    isImporting ||
-                    !agentReady ||
-                    (followup === "work-assistance" && workTarget === null)
-                  }
-                  onClick={start}
-                >
+                <Button disabled={isImporting || !agentReady} onClick={start}>
                   {offerStep < finalOfferStep
                     ? "Next"
                     : isImporting
@@ -1685,7 +1649,7 @@ function useProjectImport({
       });
   };
 
-  const runImport = async (selection: typeof candidates, finish = true) => {
+  const runImport = async (selection: typeof candidates) => {
     if (isImporting) return false;
     const hasAccess = () =>
       selection.every((candidate) =>
@@ -1805,16 +1769,7 @@ function useProjectImport({
         importWarningRef.current = "Could not import thread history.";
       }
     }
-    if (finish) finishAfterImport();
-    else {
-      try {
-        await Promise.all([...importedProjects.values()].map((project) => waitForProject(project)));
-      } catch (error) {
-        setIsImporting(false);
-        throw error;
-      }
-      setIsImporting(false);
-    }
+    finishAfterImport();
     return true;
   };
 

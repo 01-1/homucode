@@ -4,11 +4,7 @@ import {
   updateMobilePreferencesAtom,
   mobileSettingsSyncEnabledAtom,
 } from "../../state/preferences";
-import {
-  MobileBuildTools,
-  MobileDeviceNames,
-  MobileWorkAssistancePicker,
-} from "../settings/SetupBehaviorSettings";
+import { MobileBuildTools, MobileDeviceNames } from "../settings/SetupBehaviorSettings";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
@@ -22,7 +18,6 @@ import {
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
   type EnvironmentId,
-  type ServerSettings,
 } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
@@ -84,9 +79,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const settingsSyncEnabled = useAtomValue(mobileSettingsSyncEnabledAtom);
   const [chosen, setSelected] = useState<ReadonlySet<string> | null>(null);
   const [step, setStep] = useState(0);
-  const [chosenTarget, setWorkTarget] = useState<
-    ServerSettings["workAssistanceTarget"] | undefined
-  >();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
@@ -96,8 +88,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     (settings
       ? selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled })
       : new Set<string>());
-  const workTarget =
-    chosenTarget === undefined ? (settings?.workAssistanceTarget ?? null) : chosenTarget;
   const offers = settings
     ? unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
         (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
@@ -108,7 +98,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const includes = (id: string) => offers.some((offer) => offer.id === id) && selected.has(id);
   const followups = [
     ...(includes("sent-from") ? ["device-name"] : []),
-    ...(includes("work-assistance") ? ["work-assistance"] : []),
     ...(includes("building-t3") ? ["building-t3"] : []),
   ];
   const followup = followups[step - pages.length];
@@ -118,12 +107,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     pending.current = true;
     setBusy(true);
     const patch = featureOfferSettingsPatch(settings, offers, selected);
-    const settingsPatch = apply
-      ? {
-          ...patch,
-          ...(includes("work-assistance") ? { workAssistanceTarget: workTarget } : {}),
-        }
-      : { featureOffersSeen: patch.featureOffersSeen };
+    const settingsPatch = apply ? patch : { featureOffersSeen: patch.featureOffersSeen };
     const preferencesPatch = {
       featureOffersSeen: [
         ...new Set([
@@ -159,11 +143,9 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       ? "Building T3"
       : followup === "device-name"
         ? "Name this device"
-        : followup === "work-assistance"
-          ? "Work assistance"
-          : pages[step]?.[0]?.page === 2
-            ? "Extra features"
-            : "HomuCode features";
+        : pages[step]?.[0]?.page === 2
+          ? "Extra features"
+          : "HomuCode features";
   const select = (id: string, checked: boolean) =>
     setSelected((current) => {
       const next = new Set(current ?? selected);
@@ -225,12 +207,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
               </View>
             );
           })
-        ) : followup === "work-assistance" ? (
-          <MobileWorkAssistancePicker
-            environmentId={environmentId}
-            value={workTarget}
-            onChange={setWorkTarget}
-          />
         ) : followup === "device-name" ? (
           <MobileDeviceNames environmentId={environmentId} currentOnly />
         ) : (
@@ -242,7 +218,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             tone="primary"
             fullWidth
             loading={busy}
-            disabled={followup === "work-assistance" && workTarget === null}
             onPress={() => {
               if (last) void save(true);
               else setStep(step + 1);

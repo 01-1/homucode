@@ -9,7 +9,7 @@ import {
   unseenFeatureOffers,
   type FeatureOffer,
 } from "@t3tools/client-runtime/feature-offers";
-import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
+import { type EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 import {
   useClientSettings,
@@ -19,7 +19,7 @@ import {
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { serverEnvironment, environmentServerConfigsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { WorkAssistancePicker, DeviceNamesSettings } from "../settings/BehaviorSettings";
+import { DeviceNamesSettings } from "../settings/BehaviorSettings";
 import { BuildToolsSetup } from "../settings/BuildToolsSettings";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { Button } from "../ui/button";
@@ -135,11 +135,6 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null);
   const selected = chosen ?? selectedFeatureOffers(settings, localSettings);
   const [step, setStep] = useState(0);
-  const [chosenWorkTarget, setWorkTarget] = useState<
-    ServerSettings["workAssistanceTarget"] | undefined
-  >();
-  const workTarget =
-    chosenWorkTarget === undefined ? settings.workAssistanceTarget : chosenWorkTarget;
   const [busy, setBusy] = useState(false);
   const offers = unseenFeatureOffers(settings).filter(
     (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
@@ -148,7 +143,6 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   const includes = (id: string) => offers.some((offer) => offer.id === id) && selected.has(id);
   const followups = [
     ...(includes("sent-from") ? ["device-name"] : []),
-    ...(includes("work-assistance") ? ["work-assistance"] : []),
     ...(includes("building-t3") ? ["building-t3"] : []),
   ];
   const followup = followups[step - pages.length];
@@ -161,12 +155,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       const saved = await update({
         environmentId,
         input: {
-          patch: apply
-            ? {
-                ...patch,
-                ...(includes("work-assistance") ? { workAssistanceTarget: workTarget } : {}),
-              }
-            : { featureOffersSeen: patch.featureOffersSeen },
+          patch: apply ? patch : { featureOffersSeen: patch.featureOffersSeen },
         },
       });
       if (saved._tag === "Success" && apply && offers.some((offer) => offer.id === "settings-sync"))
@@ -182,11 +171,9 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       ? "Building T3"
       : followup === "device-name"
         ? "Name this device"
-        : followup === "work-assistance"
-          ? "Work assistance"
-          : pages[step]?.[0]?.page === 2
-            ? "Extra features"
-            : "HomuCode features";
+        : pages[step]?.[0]?.page === 2
+          ? "Extra features"
+          : "HomuCode features";
   return (
     <Dialog
       open
@@ -207,12 +194,6 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
               enabled={enabledFeatureOffers(settings)}
               onChange={setChosen}
               disabled={busy}
-            />
-          ) : followup === "work-assistance" ? (
-            <WorkAssistancePicker
-              environmentId={environmentId}
-              value={workTarget}
-              onChange={setWorkTarget}
             />
           ) : followup === "device-name" ? (
             <DeviceNamesSettings environmentId={environmentId} currentOnly />
@@ -237,7 +218,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
             </Button>
           ) : null}
           <Button
-            disabled={busy || (followup === "work-assistance" && workTarget === null)}
+            disabled={busy}
             onClick={() => {
               if (last) void save(true);
               else setStep(step + 1);
