@@ -3,11 +3,7 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo";
 import { useEffect } from "react";
 import { BackHandler, Platform } from "react-native";
 
-import {
-  attachRootNavigation,
-  focusRootNavigation,
-  rootNavigationRef,
-} from "../../lib/rootNavigation";
+import { attachRootNavigation, focusRootNavigation } from "../../lib/rootNavigation";
 import { useEnvironments } from "../../state/environments";
 import { madohomuLauncherWanted, type EnvironmentMadoHomuState } from "./madohomuLauncherState";
 
@@ -27,10 +23,13 @@ const launcherModule =
     : null;
 
 const containers = new Map<Surface, RootNavigation>();
+const attachListeners = new Set<() => void>();
+let foregroundSurface: Surface = launcherModule?.foregroundSurface() ?? "main";
 
+// A foreground task without a mounted navigator clears the ref, so global navigation queues.
 launcherModule?.addListener("onForegroundSurfaceChange", ({ surface }) => {
-  const navigation = containers.get(surface);
-  if (navigation) focusRootNavigation(navigation);
+  foregroundSurface = surface;
+  focusRootNavigation(containers.get(surface) ?? null);
 });
 
 function attachSurfaceNavigation(surface: Surface) {
@@ -38,8 +37,9 @@ function attachSurfaceNavigation(surface: Surface) {
     const detach = attachRootNavigation(navigation);
     if (!navigation) return detach;
     containers.set(surface, navigation);
-    const foreground = containers.get(launcherModule?.foregroundSurface() ?? "main");
-    if (foreground) focusRootNavigation(foreground);
+    foregroundSurface = launcherModule?.foregroundSurface() ?? foregroundSurface;
+    focusRootNavigation(containers.get(foregroundSurface) ?? null);
+    for (const listener of attachListeners) listener();
     return () => {
       if (containers.get(surface) === navigation) containers.delete(surface);
       detach();
@@ -81,22 +81,33 @@ export function MadoHomuLauncherSync() {
   return null;
 }
 
+function routeHardwareBack(): boolean {
+  const navigation = containers.get(foregroundSurface);
+  const canGoBack = navigation?.isReady() === true && navigation.canGoBack();
+  // The main task keeps its own Back chain; only its root exit must not reach the MadoHomu stack.
+  if (foregroundSurface === "main" && canGoBack) return false;
+  if (canGoBack) navigation!.goBack();
+  else BackHandler.exitApp();
+  return true;
+}
+
 /**
- * Both roots' navigators listen to the one shared hardware Back event. Mounted after the
- * MadoHomu navigator, this runs first and sends Back only to the foreground task's navigator.
+ * Both roots' navigators share one hardware Back event, newest listener first. This re-registers
+ * after every navigator attaches so it runs before both and routes Back to the foreground task.
  */
 export function MadoHomuBackRouting() {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the native hardware Back event
   useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (rootNavigationRef.isReady() && rootNavigationRef.canGoBack()) {
-        rootNavigationRef.goBack();
-      } else {
-        BackHandler.exitApp();
-      }
-      return true;
-    });
-    return () => subscription.remove();
+    let subscription = BackHandler.addEventListener("hardwareBackPress", routeHardwareBack);
+    const reRegister = () => {
+      subscription.remove();
+      subscription = BackHandler.addEventListener("hardwareBackPress", routeHardwareBack);
+    };
+    attachListeners.add(reRegister);
+    return () => {
+      attachListeners.delete(reRegister);
+      subscription.remove();
+    };
   }, []);
   return null;
 }

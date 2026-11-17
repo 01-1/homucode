@@ -34,9 +34,11 @@ export function attachRootNavigation(
 const attachedContainers: Array<NavigationContainerRef<ReactNavigation.RootParamList>> = [];
 
 export function focusRootNavigation(
-  navigation: NavigationContainerRef<ReactNavigation.RootParamList>,
+  navigation: NavigationContainerRef<ReactNavigation.RootParamList> | null,
 ): void {
-  if (attachedContainers.includes(navigation)) rootNavigationRef.current = navigation;
+  if (navigation === null || attachedContainers.includes(navigation)) {
+    rootNavigationRef.current = navigation;
+  }
 }
 
 const pendingUntilReady: Array<() => void> = [];
