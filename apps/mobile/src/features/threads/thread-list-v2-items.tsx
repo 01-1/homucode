@@ -208,6 +208,7 @@ export function ThreadListV2Section(props: {
     readonly accessibilityLabel: string;
     readonly accessibilityHint: string;
   };
+  readonly accessory?: ReactNode;
 }) {
   const snoozed = props.tone === "snoozed";
   const sidebarPane = props.pane === "sidebar";
@@ -250,6 +251,7 @@ export function ThreadListV2Section(props: {
           style={{ transform: [{ rotate: props.disclosure.expanded ? "180deg" : "0deg" }] }}
         />
       ) : null}
+      {props.accessory}
     </>
   );
 
@@ -709,6 +711,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   /** Menu items a list adds; their ids start with `extra:` and go to `onExtraMenuAction`. */
   readonly extraMenuActions?: readonly MenuAction[];
   readonly onExtraMenuAction?: (thread: EnvironmentThreadShell, event: string) => void;
+  /** Titles for T3's own pin items, for lists that have a pin of their own. */
+  readonly pinMenuTitles?: { readonly pin: string; readonly unpin: string };
 }) {
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const titleTypography = useScaledTextRole("body");
@@ -912,11 +916,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       props.pinningSupported
         ? [
             thread.pinnedAt != null
-              ? { id: "unpin", title: "Unpin", image: "pin.slash" }
-              : { id: "pin", title: "Pin", image: "pin" },
+              ? { id: "unpin", title: props.pinMenuTitles?.unpin ?? "Unpin", image: "pin.slash" }
+              : { id: "pin", title: props.pinMenuTitles?.pin ?? "Pin", image: "pin" },
           ]
         : [],
-    [props.pinningSupported, thread.pinnedAt],
+    [props.pinningSupported, props.pinMenuTitles, thread.pinnedAt],
   );
   const autoSettleMenuItems = useMemo<MenuAction[]>(
     () =>
