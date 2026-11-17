@@ -1,4 +1,4 @@
-import { selectMadoHomuEnvironment } from "@t3tools/client-runtime/madohomu";
+import { madohomuRuntimeMode, selectMadoHomuEnvironment } from "@t3tools/client-runtime/madohomu";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { EnvironmentId, type ThreadId } from "@t3tools/contracts";
@@ -83,7 +83,7 @@ export async function createMadoHomuThread(
       projectId: project.id,
       title,
       modelSelection,
-      runtimeMode: "approval-required",
+      runtimeMode: madohomuRuntimeMode(config.settings, project),
       interactionMode: "default",
       branch: null,
       worktreePath: null,

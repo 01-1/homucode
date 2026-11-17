@@ -710,7 +710,7 @@ export const layer: Layer.Layer<
       const resolvedPolicy = yield* runtimePolicy
         .resolve({
           thread: isMorningBrief
-            ? { ...projection.thread, runtimeMode: "approval-required", interactionMode: "plan" }
+            ? { ...projection.thread, interactionMode: "plan" }
             : projection.thread,
           modelSelection: run.modelSelection,
         })

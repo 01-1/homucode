@@ -525,6 +525,7 @@ function makeLocalCommandHarness(input: {
       branch: input.worktreePath === undefined ? null : "feature/restore",
       worktreePath: input.worktreePath ?? null,
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      ...(input.madohomu ? { runtimeMode: "full-access" as const } : {}),
     } as OrchestrationV2ThreadProjection["thread"],
     runs: [
       ...(input.previousNativeSession
@@ -3212,7 +3213,7 @@ effectIt.effect(
       expect(delivered?.message.text).toContain("Icon: lucide:leaf");
       expect(delivered?.inlineContextLength).toBeGreaterThan(0);
       expect(harness.resolveRuntimePolicy.mock.calls[0]?.[0].thread).toMatchObject({
-        runtimeMode: "approval-required",
+        runtimeMode: "full-access",
         interactionMode: "plan",
       });
       expect(harness.projection().messages.map((message) => message.text)).toEqual(["Continue"]);
