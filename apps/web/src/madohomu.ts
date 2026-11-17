@@ -104,7 +104,7 @@ export async function startMadoHomuThread(router: AnyRouter) {
   if (!threadId) return false;
   await router.navigate({
     to: "/madohomu",
-    search: { environmentId: context.environmentId, threadId, tab: "chat" },
+    search: { environmentId: context.environmentId, threadId },
   });
   return true;
 }
