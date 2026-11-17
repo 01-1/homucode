@@ -407,7 +407,7 @@ function ProjectScriptEditorForm({
       <DialogHeader>
         <DialogTitle>{isEditing ? "Edit Action" : "Add Action"}</DialogTitle>
         <DialogDescription>
-          Actions are project-scoped commands you can run from the top bar or keybindings.
+          Actions are commands you can run in a project from the top bar or keybindings.
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
