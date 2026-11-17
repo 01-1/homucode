@@ -12,6 +12,7 @@ import {
 } from "@t3tools/client-runtime/status-line";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
+import { Atom } from "effect/reactivity";
 import {
   type CSSProperties,
   type ReactNode,
@@ -20,7 +21,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -38,27 +38,9 @@ type StatusLineResult = {
 };
 
 // One runner per thread feeds both the composer line and the top bar, so the command runs once.
-const results = new Map<string, StatusLineResult>();
-const listeners = new Set<() => void>();
-function publish(sessionKey: string, result: StatusLineResult | null) {
-  if (result === null) {
-    if (!results.delete(sessionKey)) return;
-  } else {
-    results.set(sessionKey, result);
-  }
-  for (const listener of listeners) listener();
-}
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}
-function useStatusLineResult(sessionKey: string): StatusLineResult | null {
-  return useSyncExternalStore(subscribe, () => results.get(sessionKey) ?? null);
-}
-
-export function threadStatusLineKey(environmentId: EnvironmentId, threadId: string): string {
-  return `${environmentId}:${threadId}`;
-}
+const statusLineResultAtom = Atom.family((_key: string) =>
+  Atom.make<StatusLineResult | null>(null),
+);
 
 // Scripts pick terminal colors; each takes the theme color with the same meaning.
 const ROLE_COLORS: Record<StatusLineColorRole, string | null> = {
@@ -72,16 +54,14 @@ const ROLE_COLORS: Record<StatusLineColorRole, string | null> = {
 };
 
 function themedBackground(color: string): string {
-  const role = ROLE_COLORS[statusLineColorRole(color)];
-  return role === null ? "var(--muted)" : `color-mix(in srgb, ${role} 18%, transparent)`;
-}
-
-function segmentColor(segment: AnsiSegment): string | null {
-  return segment.color === null ? null : ROLE_COLORS[statusLineColorRole(segment.color)];
+  const themeColor = ROLE_COLORS[statusLineColorRole(color)];
+  return themeColor === null
+    ? "var(--muted)"
+    : `color-mix(in srgb, ${themeColor} 18%, transparent)`;
 }
 
 function segmentStyle(segment: AnsiSegment): CSSProperties | undefined {
-  const color = segmentColor(segment);
+  const color = segment.color === null ? null : ROLE_COLORS[statusLineColorRole(segment.color)];
   if (
     color === null &&
     segment.background === null &&
@@ -107,20 +87,13 @@ function segmentStyle(segment: AnsiSegment): CSSProperties | undefined {
 const PERCENT_PATTERN = /(\d+(?:\.\d+)?)%/g;
 
 /** A percentage as a bar: its label sits beside the bar, or inside it when the line is short of room. */
-function PercentBar(props: { readonly value: string; readonly color: string | null }) {
-  const fill = props.color ?? "var(--foreground)";
+function PercentBar(props: { readonly value: string }) {
   return (
-    <span
-      className="relative inline-flex h-3 w-6 overflow-hidden rounded-xs align-[-2px] group-data-[bars=inside]/status-line:w-9"
-      style={{ backgroundColor: `color-mix(in srgb, ${fill} 15%, transparent)` }}
-    >
+    <span className="relative inline-flex h-3 w-6 overflow-hidden rounded-xs bg-current/15 align-[-2px] group-data-[bars=inside]/status-line:w-9">
       <span
         aria-hidden
-        className="absolute inset-y-0 left-0"
-        style={{
-          width: `${Math.min(100, Number(props.value))}%`,
-          backgroundColor: `color-mix(in srgb, ${fill} 40%, transparent)`,
-        }}
+        className="absolute inset-y-0 left-0 bg-current/40"
+        style={{ width: `${Math.min(100, Number(props.value))}%` }}
       />
       <span className="relative hidden w-full text-center leading-3 group-data-[bars=inside]/status-line:block">
         {props.value}%
@@ -129,7 +102,7 @@ function PercentBar(props: { readonly value: string; readonly color: string | nu
   );
 }
 
-function SegmentText(props: { readonly text: string; readonly color: string | null }) {
+function SegmentText(props: { readonly text: string }) {
   const parts = props.text.split(PERCENT_PATTERN);
   if (parts.length === 1) return props.text;
   return parts.map((part, index) =>
@@ -137,7 +110,7 @@ function SegmentText(props: { readonly text: string; readonly color: string | nu
       // oxlint-disable-next-line react/no-array-index-key -- parts have no identity beyond order
       <span key={index}>
         <span className="group-data-[bars=inside]/status-line:hidden">{part}% </span>
-        <PercentBar value={part} color={props.color} />
+        <PercentBar value={part} />
       </span>
     ) : (
       part
@@ -152,90 +125,92 @@ function Segments(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
       key={segmentIndex}
       style={segmentStyle(segment)}
     >
-      <SegmentText text={segment.text} color={segmentColor(segment)} />
+      <SegmentText text={segment.text} />
     </span>
   ));
 }
 
+type StatusLinePart = "lead" | "after" | "clock";
+
 // An inline span keeps its content width even while its clipping parent is narrower.
 function MeasuredSegments(props: {
   readonly line: ReadonlyArray<AnsiSegment>;
+  readonly part: StatusLinePart;
   readonly className?: string;
 }) {
   return (
-    <span data-status-line-part className={props.className}>
+    <span data-status-line-part={props.part} className={props.className}>
       <Segments line={props.line} />
     </span>
   );
 }
 
-// Labels sit beside bars only while the whole line fits; the flip is a DOM attribute, so no re-render.
-function fitBars(row: HTMLElement) {
-  row.dataset.bars = "outside";
-  let needed = 0;
+function partsWidth(row: HTMLElement, parts: ReadonlyArray<StatusLinePart>): number {
+  let width = 0;
   for (const part of row.querySelectorAll<HTMLElement>("[data-status-line-part]")) {
-    needed += part.offsetWidth;
+    if (parts.includes(part.dataset.statusLinePart as StatusLinePart)) width += part.offsetWidth;
   }
-  if (needed > row.clientWidth) row.dataset.bars = "inside";
+  return width;
 }
 
-/** The text before the clock: a leading directory shrinks with an ellipsis before anything else is cut. */
-function StatusLineLead(props: {
-  readonly line: ReadonlyArray<AnsiSegment>;
-  readonly className: string;
-}) {
+// Bar labels sit beside their bars only while the whole line fits. Past that the labels fold into
+// the bars, then the clock and the text after it hide together. DOM attributes, so no re-render.
+function fitRow(row: HTMLElement) {
+  row.dataset.bars = "outside";
+  row.dataset.clock = "shown";
+  if (partsWidth(row, ["lead", "after", "clock"]) <= row.clientWidth) return;
+  row.dataset.bars = "inside";
+  if (partsWidth(row, ["lead", "clock"]) > row.clientWidth) row.dataset.clock = "hidden";
+}
+
+/** The text before the clock. A leading directory is the part of it that shrinks, with an ellipsis. */
+function StatusLineLead(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
   const split = splitStatusLineDirectory(props.line);
   if (split === null) {
     return (
-      <div className={cn("overflow-hidden text-ellipsis", props.className)}>
-        <MeasuredSegments line={props.line} />
+      <div className="min-w-0 overflow-hidden text-ellipsis">
+        <MeasuredSegments line={props.line} part="lead" />
       </div>
     );
   }
   return (
-    <div className={cn("flex overflow-hidden", props.className)}>
-      <div className="min-w-0 overflow-hidden text-ellipsis">
-        <MeasuredSegments line={split.directory} />
+    <div className="flex min-w-0 overflow-hidden">
+      <div className="min-w-8 overflow-hidden text-ellipsis">
+        <MeasuredSegments line={split.directory} part="lead" />
       </div>
       <div className="shrink-0">
-        <MeasuredSegments line={split.rest} />
+        <MeasuredSegments line={split.rest} part="lead" />
       </div>
     </div>
   );
 }
 
-/**
- * One status line row. Text before the clock is never cut for it, the clock sits at the right edge
- * and drops out when it would not fit, and text after the clock is cut first.
- */
+/** One status line row: the text before the clock, then the text after it, then the clock at the right edge. */
 function StatusLineRow(props: { readonly line: ReadonlyArray<AnsiSegment> }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures after each new line to place bar labels
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures each new line to fit it
   useLayoutEffect(() => {
-    if (rowRef.current !== null) fitBars(rowRef.current);
+    if (rowRef.current !== null) fitRow(rowRef.current);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures when the row's width changes
   useEffect(() => {
     const row = rowRef.current;
     if (row === null) return;
-    return observeResize(row, () => fitBars(row));
+    return observeResize(row, () => fitRow(row));
   }, []);
   const split = splitStatusLineClock(props.line);
   return (
-    <div
-      ref={rowRef}
-      className="group/status-line flex h-[1lh] min-w-0 flex-wrap overflow-hidden whitespace-pre"
-    >
+    <div ref={rowRef} className="group/status-line flex min-w-0 overflow-hidden whitespace-pre">
       {split === null ? (
-        <StatusLineLead line={props.line} className="min-w-0 flex-1" />
+        <StatusLineLead line={props.line} />
       ) : (
         <>
-          <StatusLineLead line={split.before} className="max-w-full" />
-          <div className="min-w-0 flex-[1_1_0] overflow-hidden text-ellipsis">
-            <MeasuredSegments line={split.after} />
+          <StatusLineLead line={split.before} />
+          <div className="min-w-0 flex-1 overflow-hidden text-ellipsis group-data-[clock=hidden]/status-line:hidden">
+            <MeasuredSegments line={split.after} part="after" />
           </div>
-          <div className="shrink-0">
-            <MeasuredSegments line={split.clock} className="pl-2" />
+          <div className="shrink-0 group-data-[clock=hidden]/status-line:hidden">
+            <MeasuredSegments line={split.clock} part="clock" className="pl-2" />
           </div>
         </>
       )}
@@ -262,12 +237,12 @@ export function ThreadStatusLineRunner(props: {
   const inputKey = JSON.stringify(
     buildStatusLineInput({ ...props.source, nowMs: Date.parse(`${nowMinute}:00Z`) }),
   );
-  const sessionKey = threadStatusLineKey(environmentId, props.source.threadId);
+  const resultAtom = statusLineResultAtom(statusLineKey(environmentId, props.source.threadId));
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- runs the server's status line command
   useEffect(() => {
     if (!enabled) {
-      publish(sessionKey, null);
+      registry.set(resultAtom, null);
       return;
     }
     let cancelled = false;
@@ -281,7 +256,7 @@ export function ThreadStatusLineRunner(props: {
         { reportFailure: false },
       );
       if (cancelled || response._tag !== "Success") return;
-      publish(sessionKey, {
+      registry.set(resultAtom, {
         lines: parseAnsiLines(response.value.text),
         error: response.value.error ?? null,
       });
@@ -293,10 +268,7 @@ export function ThreadStatusLineRunner(props: {
       window.clearTimeout(debounce);
       window.clearInterval(interval);
     };
-  }, [enabled, inputKey, createdAt, environmentId, sessionKey, registry]);
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- drops the thread's line from the shared store
-  useEffect(() => () => publish(sessionKey, null), [sessionKey]);
+  }, [enabled, inputKey, createdAt, environmentId, resultAtom, registry]);
 
   return null;
 }
@@ -339,8 +311,8 @@ function StatusLineHover(props: {
 }
 
 /** The status line under the composer, across the chat's full width. */
-export function ThreadStatusBar(props: { readonly sessionKey: string }) {
-  const result = useStatusLineResult(props.sessionKey);
+export function ThreadStatusBar(props: { readonly statusLineKey: string }) {
+  const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
   if (result === null) return null;
   if (result.lines.length === 0) {
     if (result.error === null) return null;
@@ -369,28 +341,7 @@ export function ThreadStatusBar(props: { readonly sessionKey: string }) {
   );
 }
 
-/** The status line in the thread's top bar, its lines joined into one. */
-export function ThreadHeaderStatusLine(props: { readonly sessionKey: string }) {
-  const result = useStatusLineResult(props.sessionKey);
-  const line =
-    result?.lines.flatMap((segments, index) =>
-      index === 0 ? segments : [{ ...PLAIN_SEPARATOR }, ...segments],
-    ) ?? [];
-  if (result === null || line.length === 0) return null;
-  // Not positioned itself, so the hover panel spans the whole top bar and opens below it.
-  return (
-    <div
-      data-chat-header-status-line="true"
-      className="min-w-0 flex-1 text-muted-foreground text-xs"
-    >
-      <StatusLineHover lines={result.lines} anchor="below">
-        <StatusLineRow line={line} />
-      </StatusLineHover>
-    </div>
-  );
-}
-
-const PLAIN_SEPARATOR: AnsiSegment = {
+const LINE_SEPARATOR: AnsiSegment = {
   text: "  ",
   color: null,
   background: null,
@@ -399,3 +350,29 @@ const PLAIN_SEPARATOR: AnsiSegment = {
   italic: false,
   underline: false,
 };
+
+/** The status line in the thread's top bar, its lines joined into one. */
+export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }) {
+  const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
+  const line =
+    result?.lines.flatMap((segments, index) =>
+      index === 0 ? segments : [LINE_SEPARATOR, ...segments],
+    ) ?? [];
+  if (result === null || line.length === 0) return null;
+  // Not positioned itself, so the hover panel spans the whole top bar and opens below it.
+  // No-drag, or Electron's title bar drag region swallows the hover.
+  return (
+    <div
+      data-chat-header-status-line="true"
+      className="min-w-0 flex-1 text-muted-foreground text-xs [-webkit-app-region:no-drag]"
+    >
+      <StatusLineHover lines={result.lines} anchor="below">
+        <StatusLineRow line={line} />
+      </StatusLineHover>
+    </div>
+  );
+}
+
+export function statusLineKey(environmentId: EnvironmentId, threadId: string): string {
+  return `${environmentId}:${threadId}`;
+}

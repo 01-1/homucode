@@ -368,13 +368,15 @@ export function splitStatusLineClock(line: ReadonlyArray<AnsiSegment>): {
   };
 }
 
-/** Splits off a leading `~/…` or `/…` path, which gives up width first when a line runs short. */
+const DIRECTORY_PATTERN = /^[~/]\S*/;
+
+/** Splits off a leading `~/…` or `/…` path, so a client can shorten it on its own. */
 export function splitStatusLineDirectory(line: ReadonlyArray<AnsiSegment>): {
   readonly directory: ReadonlyArray<AnsiSegment>;
   readonly rest: ReadonlyArray<AnsiSegment>;
 } | null {
   const text = line.map((segment) => segment.text).join("");
-  const match = /^[~/]\S*/.exec(text);
+  const match = DIRECTORY_PATTERN.exec(text);
   if (match === null) return null;
   return {
     directory: sliceSegments(line, 0, match[0].length),

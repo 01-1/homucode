@@ -384,11 +384,7 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
-import {
-  ThreadStatusBar,
-  ThreadStatusLineRunner,
-  threadStatusLineKey,
-} from "./chat/ThreadStatusBar";
+import { ThreadStatusBar, ThreadStatusLineRunner, statusLineKey } from "./chat/ThreadStatusBar";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useTimelineFollow } from "./chat/useTimelineFollow";
@@ -1656,9 +1652,10 @@ export default function ChatView(props: ChatViewProps) {
     panelAnimationsActive,
     panelAnimationDurationMs,
   );
-  const showThreadStatusLine = serverThread !== null && !embedded && !isDraftHeroState;
-  const threadStatusLineSessionKey =
-    serverThread === null ? null : threadStatusLineKey(serverThread.environmentId, serverThread.id);
+  const threadStatusLineKey =
+    serverThread !== null && !embedded && !isDraftHeroState
+      ? statusLineKey(serverThread.environmentId, serverThread.id)
+      : null;
   const turnDiffSummaries = useThreadCheckpointSummaries(routeThreadDetailRef);
   const availableRevertTurnCounts = deriveAvailableRevertTurnCounts(serverProjection);
   // A paged history window cannot identify the first loaded run as the thread start.
@@ -3415,7 +3412,7 @@ export default function ChatView(props: ChatViewProps) {
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
-              statusLineKey={showThreadStatusLine ? threadStatusLineSessionKey : null}
+              statusLineKey={threadStatusLineKey}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
@@ -3901,7 +3898,7 @@ export default function ChatView(props: ChatViewProps) {
                     </div>
                   </div>
                 </div>
-                {showThreadStatusLine && serverThread !== null ? (
+                {threadStatusLineKey !== null && serverThread !== null ? (
                   <ThreadStatusLineRunner
                     environmentId={serverThread.environmentId}
                     createdAt={serverThread.createdAt}
@@ -3916,8 +3913,8 @@ export default function ChatView(props: ChatViewProps) {
                     }}
                   />
                 ) : null}
-                {showThreadStatusLine && threadStatusLineSessionKey !== null ? (
-                  <ThreadStatusBar sessionKey={threadStatusLineSessionKey} />
+                {threadStatusLineKey !== null ? (
+                  <ThreadStatusBar statusLineKey={threadStatusLineKey} />
                 ) : null}
                 <div
                   aria-hidden

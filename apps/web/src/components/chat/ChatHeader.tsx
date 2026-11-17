@@ -256,18 +256,15 @@ export const ChatHeader = memo(function ChatHeader({
     <div
       ref={breadcrumbContainerRef}
       className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+        "group/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
         rightPanelOpen ? "pr-10" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
       <WorkspaceBreadcrumb
         ariaLabel="Thread breadcrumb"
-        // With a status line beside it, the breadcrumb takes only its own width so the line starts after the title.
-        className={cn(
-          "overflow-clip [overflow-clip-margin:2px]",
-          statusLineKey ? "max-w-1/2 flex-none" : "flex-1",
-        )}
+        // While a status line shows beside it, the breadcrumb keeps only its own width so the line starts after the title.
+        className="flex-1 overflow-clip [overflow-clip-margin:2px] group-has-[[data-chat-header-status-line]]/chat-header:max-w-1/2 group-has-[[data-chat-header-status-line]]/chat-header:flex-none"
       >
         {activeProject ? (
           <>
@@ -414,7 +411,7 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      {statusLineKey ? <ThreadHeaderStatusLine sessionKey={statusLineKey} /> : null}
+      {statusLineKey ? <ThreadHeaderStatusLine statusLineKey={statusLineKey} /> : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

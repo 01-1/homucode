@@ -92,6 +92,12 @@ describe("splitStatusLineClock", () => {
     });
   });
 
+  it("leaves lines without a clock alone", () => {
+    expect(splitStatusLineClock([{ text: "no clock [1:2]", color: null, ...plain }])).toBeNull();
+  });
+});
+
+describe("splitStatusLineDirectory", () => {
   it("splits off a leading directory", () => {
     const [line = []] = parseAnsiLines("~/code/homucode \u001b[38;5;183mvi@pbox");
     expect(splitStatusLineDirectory(line)).toEqual({
@@ -102,10 +108,6 @@ describe("splitStatusLineClock", () => {
       ],
     });
     expect(splitStatusLineDirectory([{ text: "A6 medium", color: null, ...plain }])).toBeNull();
-  });
-
-  it("leaves lines without a clock alone", () => {
-    expect(splitStatusLineClock([{ text: "no clock [1:2]", color: null, ...plain }])).toBeNull();
   });
 });
 
