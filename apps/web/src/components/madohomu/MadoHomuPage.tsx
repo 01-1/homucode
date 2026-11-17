@@ -132,10 +132,7 @@ function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-sm text-muted-foreground">No threads yet.</p>
-      <Button
-        disabled={creating || !actions.modelSelection || !actions.canWrite}
-        onClick={create}
-      >
+      <Button disabled={creating || !actions.modelSelection || !actions.canWrite} onClick={create}>
         <SquarePenIcon aria-hidden />
         New thread
       </Button>
