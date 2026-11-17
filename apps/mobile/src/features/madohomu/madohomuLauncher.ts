@@ -46,6 +46,7 @@ function attachSurfaceNavigation(surface: Surface) {
     return () => {
       if (containers.get(surface) === navigation) containers.delete(surface);
       detach();
+      focusRootNavigation(containers.get(foregroundSurface) ?? null);
     };
   };
 }
@@ -87,8 +88,6 @@ export function MadoHomuLauncherSync() {
 function routeHardwareBack(): boolean {
   const navigation = containers.get(foregroundSurface);
   const canGoBack = navigation?.isReady() === true && navigation.canGoBack();
-  // The main task keeps its own Back chain; only its root exit must not reach the MadoHomu stack.
-  if (foregroundSurface === "main" && canGoBack) return false;
   if (canGoBack) navigation!.goBack();
   else BackHandler.exitApp();
   return true;

@@ -38,6 +38,7 @@ export function focusRootNavigation(
 ): void {
   if (navigation === null || attachedContainers.includes(navigation)) {
     rootNavigationRef.current = navigation;
+    flushRootNavigationQueue();
   }
 }
 
@@ -54,6 +55,7 @@ export function whenRootNavigationReady(navigate: () => void): void {
 
 /** Wired to the container's `onReady`. */
 export function flushRootNavigationQueue(): void {
+  if (!rootNavigationRef.isReady()) return;
   for (const navigate of pendingUntilReady.splice(0)) {
     try {
       navigate();
