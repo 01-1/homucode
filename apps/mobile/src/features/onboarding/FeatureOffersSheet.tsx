@@ -174,6 +174,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   return (
     <Sheet title={title} onClose={() => void save(false)} dismissDisabled={busy}>
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         contentContainerClassName="gap-4 p-5 pb-12"
       >

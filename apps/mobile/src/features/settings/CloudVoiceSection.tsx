@@ -511,6 +511,7 @@ function CloudChoices({ environment, active, onClose }: Props & { onClose: () =>
       dismissDisabled={saving}
     >
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="gap-4 px-5 pt-2 pb-8"
