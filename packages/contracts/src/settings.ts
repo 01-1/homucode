@@ -1426,7 +1426,7 @@ export const DuetThreadSettings = Schema.Struct({
 export type DuetThreadSettings = typeof DuetThreadSettings.Type;
 
 export const AgentMemorySettings = Schema.Struct({
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   perAgentHighBytes: PositiveInt.pipe(Schema.withDecodingDefault(Effect.succeed(6 * 1024 ** 3))),
   perAgentMaxBytes: PositiveInt.pipe(Schema.withDecodingDefault(Effect.succeed(8 * 1024 ** 3))),
   groupHighBytes: Schema.NullOr(PositiveInt).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
