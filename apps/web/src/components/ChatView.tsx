@@ -2777,7 +2777,13 @@ export default function ChatView(props: ChatViewProps) {
         if (!event.repeat) copyActiveThreadReference();
       },
       "thread.scrollToEnd": ({ event }) => {
-        if (!endKeyScrollsThread(event, lastUnusedEndKeyAtRef.current)) {
+        if (
+          !endKeyScrollsThread(
+            event,
+            lastUnusedEndKeyAtRef.current,
+            () => composerRef.current?.isCaretAtEnd() === true,
+          )
+        ) {
           lastUnusedEndKeyAtRef.current = event.timeStamp;
           return false;
         }

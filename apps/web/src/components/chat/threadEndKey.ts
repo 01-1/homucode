@@ -3,7 +3,8 @@ import { TYPE_TO_FOCUS_FLOATING_LAYER_SELECTOR } from "./composerFocusRedirect";
 
 const END_REPEAT_WINDOW_MS = 500;
 const TIMELINE_SCROLL_SELECTOR = ".messages-timeline-scroll";
-const THREAD_TEXT_FIELD_SELECTOR = '[data-testid="composer-editor"], [data-thread-find-bar] input';
+const COMPOSER_SELECTOR = '[data-testid="composer-editor"]';
+const FIND_INPUT_SELECTOR = "[data-thread-find-bar] input";
 // Widgets that move their own selection on End.
 const END_KEY_WIDGET_SELECTOR = [
   '[role="grid"]',
@@ -27,14 +28,22 @@ const END_KEY_WIDGET_SELECTOR = [
 export function endKeyScrollsThread(
   event: { readonly target: EventTarget | null; readonly timeStamp: number },
   lastUnusedEndAt: number,
+  isComposerCaretAtEnd: () => boolean,
 ): boolean {
   // A quick second End (or a held one) belongs to whatever took the first.
   if (event.timeStamp - lastUnusedEndAt < END_REPEAT_WINDOW_MS) return false;
   if (document.querySelector(TYPE_TO_FOCUS_FLOATING_LAYER_SELECTOR)) return false;
   const { target } = event;
   if (!(target instanceof Element) || target === document.body) return true;
-  if (isEditableFocused(target))
-    return target.matches(THREAD_TEXT_FIELD_SELECTOR) && isCaretAtFieldEnd(target);
+  if (isEditableFocused(target)) {
+    if (target.matches(COMPOSER_SELECTOR)) return isComposerCaretAtEnd();
+    return (
+      target instanceof HTMLInputElement &&
+      target.matches(FIND_INPUT_SELECTOR) &&
+      target.selectionStart === target.value.length &&
+      target.selectionEnd === target.value.length
+    );
+  }
   if (target.closest(END_KEY_WIDGET_SELECTOR)) return false;
   for (
     let node: Element | null = target;
@@ -47,17 +56,4 @@ export function endKeyScrollsThread(
       return false;
   }
   return true;
-}
-
-function isCaretAtFieldEnd(field: Element): boolean {
-  if (field instanceof HTMLInputElement) {
-    return field.selectionStart === field.value.length && field.selectionEnd === field.value.length;
-  }
-  const selection = window.getSelection();
-  if (!selection?.isCollapsed || !selection.focusNode || !field.contains(selection.focusNode))
-    return false;
-  const rest = document.createRange();
-  rest.setStart(selection.focusNode, selection.focusOffset);
-  rest.setEnd(field, field.childNodes.length);
-  return rest.toString() === "";
 }

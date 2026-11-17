@@ -23,6 +23,7 @@ import { registerCommands } from "~/shortcuts/dispatcher";
 import {
   ComposerPromptEditorTiptap as ComposerPromptEditor,
   type ComposerPromptEditorHandle,
+  isCaretAtDocEnd,
   type ComposerPromptEditorProps,
 } from "./ComposerPromptEditorTiptap";
 
@@ -1012,5 +1013,21 @@ describe("an Arabic line", () => {
     expect(editor.view.coordsAtPos(editor.state.selection.head).left).toBeGreaterThan(
       box.left + box.width / 2,
     );
+  });
+});
+
+describe("caret at the end", () => {
+  it("counts trailing empty lines as text", async () => {
+    await using screen = await mountEditor("hello\n\n");
+    const { editor } = screen;
+    expect(editor.state.doc.childCount).toBeGreaterThan(1);
+    await act(async () => {
+      editor.commands.setTextSelection("hello".length + 1);
+    });
+    expect(isCaretAtDocEnd(editor.state)).toBe(false);
+    await act(async () => {
+      editor.commands.setTextSelection(editor.state.doc.content.size);
+    });
+    expect(isCaretAtDocEnd(editor.state)).toBe(true);
   });
 });

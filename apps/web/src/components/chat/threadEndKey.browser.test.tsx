@@ -30,11 +30,7 @@ describe("endKeyScrollsThread", () => {
             short
           </button>
         </div>
-        <div contentEditable suppressContentEditableWarning data-testid="composer-editor">
-          <p>
-            draft <span data-testid="mention">@file</span>
-          </p>
-        </div>
+        <div contentEditable suppressContentEditableWarning data-testid="composer-editor" />
         <div data-thread-find-bar>
           <input data-testid="find" defaultValue="query" />
         </div>
@@ -48,8 +44,12 @@ describe("endKeyScrollsThread", () => {
       { router: false },
     );
     const at = (id: string) => screen.getByTestId(id).element();
-    const endKeyScrollsThread = (target: EventTarget | null, timeStamp = 10_000, lastUnused = 0) =>
-      endKeyScrollsThreadAt({ target, timeStamp }, lastUnused);
+    const endKeyScrollsThread = (
+      target: EventTarget | null,
+      timeStamp = 10_000,
+      lastUnused = 0,
+      composerCaretAtEnd = false,
+    ) => endKeyScrollsThreadAt({ target, timeStamp }, lastUnused, () => composerCaretAtEnd);
 
     expect(endKeyScrollsThread(document.body)).toBe(true);
     expect(endKeyScrollsThread(at("loose"))).toBe(true);
@@ -58,15 +58,9 @@ describe("endKeyScrollsThread", () => {
     expect(endKeyScrollsThread(at("in-panel"))).toBe(false);
     expect(endKeyScrollsThread(at("option"))).toBe(false);
 
-    const composer = at("composer-editor") as HTMLElement;
-    composer.focus();
-    const caretAt = (node: Node, offset: number) => window.getSelection()?.collapse(node, offset);
-    caretAt(composer.querySelector("p")!.firstChild!, 2);
+    const composer = at("composer-editor");
     expect(endKeyScrollsThread(composer)).toBe(false);
-    caretAt(at("mention").firstChild!, 2);
-    expect(endKeyScrollsThread(composer)).toBe(false);
-    caretAt(composer.querySelector("p")!, composer.querySelector("p")!.childNodes.length);
-    expect(endKeyScrollsThread(composer)).toBe(true);
+    expect(endKeyScrollsThread(composer, 10_000, 0, true)).toBe(true);
 
     const find = at("find") as HTMLInputElement;
     find.setSelectionRange(2, 2);
