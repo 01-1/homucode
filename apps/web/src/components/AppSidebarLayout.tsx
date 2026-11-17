@@ -69,6 +69,18 @@ import { resolveThreadRouteRef } from "../threadRoutes";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
+// MadoHomu's sidebar header sits in the title bar strip like the thread sidebar's
+// brand row: as tall as the top bar, starting right of the floating "Toggle main
+// sidebar" button (and the macOS traffic lights, which move that button), and
+// moving the desktop window. Set here so it holds whatever the header contains.
+const MADOHOMU_SIDEBAR_CHROME_CLASS = cn(
+  "contents",
+  "[&>[data-slot=sidebar-header]]:min-h-(--workspace-topbar-height) [&>[data-slot=sidebar-header]]:shrink-0 [&>[data-slot=sidebar-header]]:justify-center",
+  "md:[&>[data-slot=sidebar-header]]:pl-(--workspace-titlebar-content-left)",
+  isElectron &&
+    "[&>[data-slot=sidebar-header]]:[-webkit-app-region:drag] [&>[data-slot=sidebar-header]_:is(a,button,input,select,textarea)]:[-webkit-app-region:no-drag]",
+);
+
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
   return () => window.removeEventListener("resize", onChange);
@@ -489,7 +501,9 @@ export function AppSidebarLayout({
               style={windowControlsInsetStyle}
             >
               {pathname === "/madohomu" ? (
-                <MadoHomuSidebar />
+                <div className={MADOHOMU_SIDEBAR_CHROME_CLASS}>
+                  <MadoHomuSidebar />
+                </div>
               ) : (
                 <ThreadSidebar routeReveal={sidebarRouteReveal} />
               )}

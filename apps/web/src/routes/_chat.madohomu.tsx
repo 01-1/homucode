@@ -5,7 +5,6 @@ import { MadoHomuPage } from "../components/madohomu/MadoHomuPage";
 type MadoHomuSearch = {
   environmentId?: EnvironmentId;
   threadId?: ThreadId;
-  tab?: "chat" | "tasks";
 };
 
 export const Route = createFileRoute("/_chat/madohomu")({
@@ -16,7 +15,6 @@ export const Route = createFileRoute("/_chat/madohomu")({
     ...(typeof search.threadId === "string" && search.threadId
       ? { threadId: ThreadId.make(search.threadId) }
       : {}),
-    tab: search.tab === "tasks" ? ("tasks" as const) : ("chat" as const),
   }),
   component: MadoHomuPage,
 });

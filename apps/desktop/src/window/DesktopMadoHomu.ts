@@ -97,7 +97,6 @@ const make = Effect.gen(function* () {
     const environmentId = location?.environmentId ?? settings.environmentId;
     if (environmentId) route.searchParams.set("environmentId", environmentId);
     if (location?.threadId) route.searchParams.set("threadId", location.threadId);
-    if (location?.tab) route.searchParams.set("tab", location.tab);
     const url = new URL(getDesktopUrl(environment.isDevelopment));
     url.hash = route.pathname + route.search;
     return url.href;

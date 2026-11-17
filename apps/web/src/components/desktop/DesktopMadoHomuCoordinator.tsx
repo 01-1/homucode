@@ -50,7 +50,6 @@ function EnvironmentMadoHomuCoordinator({ environmentId }: { environmentId: Envi
                 ? { environmentId: EnvironmentId.make(target.environmentId) }
                 : {}),
               ...(target.threadId ? { threadId: ThreadId.make(target.threadId) } : {}),
-              ...(target.tab ? { tab: target.tab } : {}),
             },
           });
       }),

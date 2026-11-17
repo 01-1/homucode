@@ -1694,7 +1694,7 @@ function OpenCommandPaletteDialog(props: {
       kind: "action",
       value: "action:madohomu",
       title: "Open MadoHomu",
-      searchTerms: ["madohomu", "chat", "tasks"],
+      searchTerms: ["madohomu", "chat"],
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         await navigate({ to: "/madohomu", search: { environmentId: madohomuEnvironmentId! } });

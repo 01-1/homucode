@@ -19,6 +19,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
@@ -61,6 +62,9 @@ interface ChatHeaderProps {
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
+  /** Focused views (MadoHomu) show only the thread title. */
+  hideProjectBreadcrumb?: boolean | undefined;
+  trailingControls?: ReactNode | undefined;
 }
 
 function resolveRenameCommit(input: {
@@ -88,6 +92,8 @@ export const ChatHeader = memo(function ChatHeader({
   onNewThreadInProject,
   onOpenProjectSettings,
   onFindInThread,
+  hideProjectBreadcrumb = false,
+  trailingControls,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
@@ -266,7 +272,7 @@ export const ChatHeader = memo(function ChatHeader({
         // While a status line shows beside it, the breadcrumb keeps only its own width so the line starts after the title.
         className="flex-1 overflow-clip [overflow-clip-margin:2px] group-has-[[data-chat-header-status-line]]/chat-header:max-w-1/2 group-has-[[data-chat-header-status-line]]/chat-header:flex-none"
       >
-        {activeProject ? (
+        {activeProject && !hideProjectBreadcrumb ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
@@ -413,6 +419,7 @@ export const ChatHeader = memo(function ChatHeader({
       </WorkspaceBreadcrumb>
       {statusLineKey ? <ThreadHeaderStatusLine statusLineKey={statusLineKey} /> : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+      {trailingControls}
     </div>
   );
 });

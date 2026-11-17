@@ -121,7 +121,7 @@ it.effect(
       yield* madohomu.open;
       expect(created).toBe(1);
       expect(revealed).toBe(1);
-      const location = { environmentId: "local", threadId: "selected", tab: "tasks" as const };
+      const location = { environmentId: "local", threadId: "selected" };
       yield* madohomu.setWindowMode({ mode: "merged", ...location });
       expect(sent).toEqual([{ view: "madohomu", ...location }]);
       expect(closed).toBe(1);
@@ -129,9 +129,6 @@ it.effect(
       expect(created).toBe(2);
       expect(new URLSearchParams(new URL(loaded.at(-1)!).hash.split("?")[1]).get("threadId")).toBe(
         "selected",
-      );
-      expect(new URLSearchParams(new URL(loaded.at(-1)!).hash.split("?")[1]).get("tab")).toBe(
-        "tasks",
       );
       expect(sent.at(-1)).toEqual({ view: "code", ...location });
       const loads = loaded.length;
