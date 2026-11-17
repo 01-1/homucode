@@ -99,6 +99,7 @@ import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useFabScroll } from "./FabScrollContext";
 import { holdLaunchSplashForHomeRows, settleLaunchSplashHomeRows } from "./home-launch-splash";
+import { offerHomeListToLaunchSnapshot } from "./home-launch-snapshot";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
 import { deriveHomeEmptyState } from "./home-empty-state";
@@ -615,6 +616,16 @@ export function HomeScreen(props: HomeScreenProps) {
   useLayoutEffect(() => {
     return hasRowsToLayOut ? holdLaunchSplashForHomeRows() : undefined;
   }, [hasRowsToLayOut]);
+  const showsLaunchRows =
+    hasRowsToLayOut && !hasSearchQuery && (searchMode ?? "resting") === "resting";
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- offers this list's scroll state to the Android launch picture, which is taken outside React
+  useEffect(() => {
+    if (!showsLaunchRows) return;
+    // A row swiped open is not how a launch shows the list.
+    return offerHomeListToLaunchSnapshot(() =>
+      openSwipeableRef.current ? undefined : listRef.current?.getState(),
+    );
+  }, [showsLaunchRows]);
   const selectedEnvironmentLabel =
     props.selectedEnvironmentId === null
       ? null

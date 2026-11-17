@@ -18,6 +18,7 @@ import {
   attachProjectFaviconDatabase,
   projectFaviconDatabaseCache,
 } from "../lib/projectFaviconDatabaseCache";
+import { clearLaunchSnapshot } from "../lib/launchSnapshot";
 import { decodeStoredShellSnapshot } from "./shell-cache-decoding";
 
 const SERVER_CONFIG_CACHE_SCHEMA_VERSION = 1;
@@ -254,6 +255,7 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
     ),
     clear: Effect.fn("MobileEnvironmentCache.clear")((environmentId) => {
       threadWriteOrder.clearEnvironment(environmentId);
+      clearLaunchSnapshot();
       return Effect.promise(() => projectFaviconDatabaseCache.clearEnvironment(environmentId)).pipe(
         Effect.andThen(database.clearEnvironmentCache(environmentId)),
         Effect.mapError(mapDatabaseError("clear-environment")),

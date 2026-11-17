@@ -13,6 +13,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as SecureStore from "expo-secure-store";
 
+import { clearLaunchSnapshot } from "../../lib/launchSnapshot";
 import { runtime } from "../../lib/runtime";
 import { appAtomRegistry } from "../../state/atom-registry";
 import {
@@ -133,8 +134,11 @@ export const cloudAccountService = createCloudAccountService<ClerkInstance>({
     releaseAgentAwarenessRelayTokenProvider();
     setManagedRelaySession(appAtomRegistry, null);
   },
-  // A not-yet-presented onboarding request belongs to the account that left.
-  onSignOutTransition: clearConnectOnboardingRequest,
+  // A not-yet-presented onboarding request and the launch picture belong to the account that left.
+  onSignOutTransition: () => {
+    clearConnectOnboardingRequest();
+    clearLaunchSnapshot();
+  },
   cleanUp: ({ source, accountId, wasActive }) => cleanUpCloudAccount(source, accountId, wasActive),
   prepare: async ({ source, accountId, isCurrent }) => {
     const storedAccount = await getComposerCloudAccountId();
