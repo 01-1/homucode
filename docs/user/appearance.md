@@ -3,7 +3,7 @@
 On web and desktop, open **Settings → Appearance** to choose a theme and follow the system
 appearance or stay in light or dark mode. To use different themes for light and dark mode, select
 the corresponding preview within each theme. Appearance preferences follow
-[Settings sync](./project-settings.md#settings-sync), which is on by default.
+[Settings sync](./project-settings.md#settings-sync).
 
 To keep shared preferences the same across web, desktop and phone, opt into
 **Settings → HomuCode → Settings sync** on each device. If two devices change the

@@ -50,8 +50,8 @@ and other phone-only settings ignore the filter.
 
 ## Settings sync
 
-**Settings → General → Settings sync** is on by default on web, desktop, and mobile. It keeps
-supported client preferences, including themes, appearance, chat, and sidebar settings, in step
+**Settings → General → Settings sync** is off on new web, desktop, and mobile devices; turn it on
+on each device you want in step. It keeps supported client preferences, including themes, appearance, chat, and sidebar settings, in step
 through every connected server. Mobile syncs the preferences it shares with web and desktop.
 Turn it off on a device to keep that device's preferences separate. This does not sync
 server settings or project overrides; those still use the environment selection above.
@@ -59,7 +59,8 @@ server settings or project overrides; those still use the environment selection 
 When both copies changed, or a device first connects with different preferences, a dialog asks
 which value to keep for each setting. **Decide later** pauses sync with that server until the app
 restarts; other servers keep syncing. Microphone choices, the machine for threads without a
-project, onboarding, app-script permissions, and the sync switch itself stay on each device.
+project, onboarding, app-script permissions, Faster phone launch, and the sync switch itself stay on each
+device.
 
 ## Pin and archive projects
 

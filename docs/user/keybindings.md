@@ -22,8 +22,9 @@ does the same. Change these shortcuts in **Settings → Keybindings** under
 **Composer: Opposite Queue or Steer Action**, **Composer: Start in Background**,
 or **Composer: Send and Start New Thread**. These bindings take priority over the
 send shortcut. Click the send button to use the configured follow-up behavior.
-A message that is only "stop" or "wait" stops the running turn either way and
-goes to the agent before anything else in the queue.
+With **Stop or wait jumps the queue** on in **Settings → Threads → Extra features**,
+a message that is only "stop" or "wait" stops the running turn either way and goes to
+the agent before anything else in the queue.
 
 When a thread has queued messages, `mod+Shift+Enter` sends the first one as a steer
 while a turn is running, or as a new turn when the thread is stopped. Change it under
