@@ -5,7 +5,12 @@ import {
   type MadoHomuGroup,
   type MadoHomuGroupKind,
 } from "@t3tools/client-runtime/madohomu";
-import type { EnvironmentId, ServerSettings, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  MadoHomuThreadSettings,
+  ServerSettings,
+  ThreadId,
+} from "@t3tools/contracts";
 
 import {
   buildThreadListV2ListItems,
@@ -15,7 +20,7 @@ import {
 
 type MadoHomuListSettings = Pick<
   ServerSettings,
-  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
 >;
 
 export interface MadoHomuSectionRow {
@@ -56,9 +61,14 @@ export function buildMadoHomuListRows(input: {
   readonly expanded: ReadonlySet<string>;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys?: ReadonlySet<string>;
+  readonly isWorking?: (thread: EnvironmentThreadShell) => boolean;
 }): MadoHomuListRow[] {
   const rows: MadoHomuListRow[] = [];
-  for (const group of groupMadoHomuThreads(input.threads, input.settings, { now: input.now })) {
+  const groups = groupMadoHomuThreads(input.threads, input.settings, {
+    now: input.now,
+    ...(input.isWorking ? { isWorking: input.isWorking } : {}),
+  });
+  for (const group of groups) {
     if (group.threads.length === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
     const collapsible = COLLAPSIBLE.has(group.kind);
     const expanded = collapsible ? input.expanded.has(group.id) : null;
@@ -82,7 +92,7 @@ export function buildMadoHomuListRows(input: {
         thread,
         variant: group.kind === "settled" ? ("slim" as const) : ("card" as const),
         snoozed: group.kind === "snoozed",
-        pinned: false,
+        pinned: thread.pinnedAt != null,
         wokeAt:
           group.kind === "settled" ? null : resolveThreadListV2WokeAt(thread, { now: input.now }),
         isLast: index === group.threads.length - 1,
@@ -144,4 +154,58 @@ export function moveMadoHomuThread(input: {
   const next = group.threads[index + 1];
   if (!next) return null;
   return reorderMadoHomuThreads(order, input.threadId, order[order.indexOf(next.id) + 1] ?? null);
+}
+
+export interface MadoHomuDrop {
+  readonly order: ThreadId[];
+  /** The custom section the thread lands in; null is Pinned. */
+  readonly section: string | null;
+}
+
+/** Drops a pinned thread at `index` of Pinned or a custom section, counted without the thread. */
+export function dropMadoHomuThread(input: {
+  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly settings: MadoHomuListSettings;
+  readonly now: string;
+  readonly threadId: ThreadId;
+  readonly sectionId: string;
+  readonly index: number;
+}): MadoHomuDrop | null {
+  const groups = groupMadoHomuThreads(input.threads, input.settings, { now: input.now });
+  const manual = groups.filter((group) => ALWAYS_SHOWN.has(group.kind));
+  const from = manual.find((group) => group.threads.some((thread) => thread.id === input.threadId));
+  const to = manual.find((group) => group.id === input.sectionId);
+  if (!from || !to) return null;
+  const at = from.threads.findIndex((thread) => thread.id === input.threadId);
+  if (from === to && at === input.index) return null;
+  const others = to.threads.filter((thread) => thread.id !== input.threadId);
+  const order = manualOrder(groups, input.settings.madohomuThreadOrder);
+  const rest = order.filter((id) => id !== input.threadId);
+  const before = others[input.index];
+  const last = others.at(-1);
+  return {
+    // An empty section has no neighbours to sit between, so the thread keeps its saved place.
+    order: before
+      ? reorderMadoHomuThreads(order, input.threadId, before.id)
+      : last
+        ? reorderMadoHomuThreads(order, input.threadId, rest[rest.indexOf(last.id) + 1] ?? null)
+        : order,
+    section: to.kind === "custom" ? to.id : null,
+  };
+}
+
+export function madohomuDropPatch(
+  settings: Pick<ServerSettings, "madohomuThreads">,
+  threadId: ThreadId,
+  drop: MadoHomuDrop,
+) {
+  const entry: MadoHomuThreadSettings = {
+    ...(settings.madohomuThreads[threadId] ?? { icon: null, prompt: "" }),
+    pinned: true,
+    section: drop.section,
+  };
+  return {
+    madohomuThreadOrder: drop.order,
+    madohomuThreads: { [threadId]: entry } as Record<ThreadId, MadoHomuThreadSettings>,
+  };
 }

@@ -42,7 +42,6 @@ function useNewMadoHomuProject(environmentId: EnvironmentId) {
 
 export function MadoHomuProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
   const actions = useMadoHomuActions(environmentId);
-  const newProject = useNewMadoHomuProject(environmentId);
   const projects = useProjects().filter(
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
@@ -63,32 +62,47 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup align="start">
-        <MenuItem onClick={newProject}>
-          <FolderPlusIcon />
-          New project…
-        </MenuItem>
-        {projects.length > 0 && <MenuSeparator />}
-        <MenuRadioGroup
-          value={current?.id ?? ""}
-          onValueChange={(value) => {
-            const project = projects.find((p) => p.id === value);
-            if (project) void actions.changeProject(project.id);
-          }}
-        >
-          {projects.map((p) => (
-            <MenuRadioItem key={p.id} value={p.id} closeOnClick>
-              {p.title}
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-        {actions.settings.madohomuProjectId !== null && (
-          <>
-            <MenuSeparator />
-            <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>
-          </>
-        )}
+        <MadoHomuProjectMenuItems environmentId={environmentId} />
       </MenuPopup>
     </Menu>
+  );
+}
+
+/** "New project…", the project list and "Clear project": the picker's menu, reused by the sidebar. */
+export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
+  const newProject = useNewMadoHomuProject(environmentId);
+  const projects = useProjects().filter(
+    (p) => p.environmentId === environmentId && p.archivedAt === null,
+  );
+  const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
+  return (
+    <>
+      <MenuItem onClick={newProject}>
+        <FolderPlusIcon />
+        New project…
+      </MenuItem>
+      {projects.length > 0 && <MenuSeparator />}
+      <MenuRadioGroup
+        value={current?.id ?? ""}
+        onValueChange={(value) => {
+          const project = projects.find((p) => p.id === value);
+          if (project) void actions.changeProject(project.id);
+        }}
+      >
+        {projects.map((p) => (
+          <MenuRadioItem key={p.id} value={p.id} closeOnClick>
+            {p.title}
+          </MenuRadioItem>
+        ))}
+      </MenuRadioGroup>
+      {actions.settings.madohomuProjectId !== null && (
+        <>
+          <MenuSeparator />
+          <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>
+        </>
+      )}
+    </>
   );
 }
 

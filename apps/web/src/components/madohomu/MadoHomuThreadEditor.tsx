@@ -34,7 +34,6 @@ export function MadoHomuThreadEditor({
   const [color, setColor] = useState(madohomuIconColor(thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
   const [busy, setBusy] = useState(false);
-  const [pinned, setPinned] = useState(isMadoHomuThreadPinned(entry));
   const update = useAtomCommand(threadEnvironment.updateMetadata);
   const save = async () => {
     setBusy(true);
@@ -50,7 +49,7 @@ export function MadoHomuThreadEditor({
           icon.trim() || null,
           prompt,
           color || null,
-          pinned,
+          isMadoHomuThreadPinned(actions.settings.madohomuThreads[thread.id]),
         ))
       )
         return;
@@ -92,14 +91,6 @@ export function MadoHomuThreadEditor({
               <span className="text-xs text-muted-foreground">
                 Included privately with the title on every turn.
               </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={(e) => setPinned(e.target.checked)}
-              />
-              Keep this thread pinned
             </label>
           </div>
         </DialogPanel>

@@ -20,6 +20,7 @@ import {
   androidWorkspaceTabNavigationState,
   type AndroidWorkspaceNavigationTab,
 } from "./android-workspace-tabs";
+import { openMadoHomu, useMadoHomuEnvironments } from "../../madohomu/MadoHomuEntries";
 import { useAppearancePreferences } from "../../settings/appearance/AppearancePreferencesProvider";
 import { useSoftKeyboardShowing } from "../../keyboard/useSoftKeyboardShowing";
 import { useAdaptiveWorkspaceLayout } from "../adaptive-workspace-context";
@@ -49,7 +50,7 @@ interface NativeNavigationProps extends ViewProps {
   readonly actionColor: number;
   readonly actionContentColor: number;
   readonly onTabSelected: (
-    event: NativeSyntheticEvent<{ readonly tab: AndroidWorkspaceNavigationTab }>,
+    event: NativeSyntheticEvent<{ readonly tab: AndroidWorkspaceNavigationTab | "madohomu" }>,
   ) => void;
   readonly onNewThread: () => void;
   readonly onOverlayChange: (event: NativeSyntheticEvent<{ readonly overlay: boolean }>) => void;
@@ -87,7 +88,14 @@ export function AndroidWorkspaceNavigation(props: {
   const window = useWindowDimensions();
   const rail = Boolean(props.rail);
   const floating = !rail && Boolean(props.floating);
-  const tabs = [...visibleNavigationTabs(order, hidden, rail ? 5 : 4), "settings"];
+  // The rail has room for a way into MadoHomu; the bottom bars keep to the workspace tabs.
+  const madohomuEnvironment = useMadoHomuEnvironments()[0];
+  const madohomu = rail ? madohomuEnvironment : undefined;
+  const tabs = [
+    ...visibleNavigationTabs(order, hidden, rail ? 5 : 4),
+    ...(madohomu ? ["madohomu"] : []),
+    "settings",
+  ];
   const { containerColor, indicatorColor, selectedColor, unselectedColor } =
     androidWorkspaceNavigationColors(colors, rail, floating);
   const selectedTab = selectedNavigationTab(
@@ -136,6 +144,10 @@ export function AndroidWorkspaceNavigation(props: {
         onTabSelected={(event) => {
           Keyboard.dismiss();
           const tab = event.nativeEvent.tab;
+          if (tab === "madohomu") {
+            if (madohomu) openMadoHomu(madohomu.environmentId);
+            return;
+          }
           if (tab !== "settings") workspace.dispatch({ type: "select", tab });
           // Reset the root stack even when a nested settings navigator has focus.
           // The provider renders inside the root stack's layout, so the container's root state is

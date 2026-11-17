@@ -22,6 +22,7 @@ import { serverEnvironment } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
+import { madohomuDropPatch, type MadoHomuDrop } from "./madohomuList";
 
 export function useMadoHomuActions(environmentId: EnvironmentId) {
   const config = useEnvironmentServerConfig(environmentId);
@@ -93,6 +94,9 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
 
   const setThreadOrder = (madohomuThreadOrder: ThreadId[]) => save({ madohomuThreadOrder });
 
+  const dropThread = (threadId: ThreadId, drop: MadoHomuDrop) =>
+    save(madohomuDropPatch(settings, threadId, drop));
+
   const addSection = (name: string) =>
     save({ madohomuSections: [...settings.madohomuSections, { id: uuidv4(), name }] });
 
@@ -102,6 +106,18 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
         section.id === id ? { ...section, name } : section,
       ),
     });
+
+  const moveSection = (id: string, direction: "up" | "down") => {
+    const sections = [...settings.madohomuSections];
+    const index = sections.findIndex((section) => section.id === id);
+    const target = index + (direction === "up" ? -1 : 1);
+    const moved = sections[index];
+    const other = sections[target];
+    if (!moved || !other || index < 0) return Promise.resolve(false);
+    sections[index] = other;
+    sections[target] = moved;
+    return save({ madohomuSections: sections });
+  };
 
   const deleteSection = (id: string) =>
     save({
@@ -179,8 +195,10 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     setMorningBrief,
     setThreadPlace,
     setThreadOrder,
+    dropThread,
     addSection,
     renameSection,
+    moveSection,
     deleteSection,
   };
 }

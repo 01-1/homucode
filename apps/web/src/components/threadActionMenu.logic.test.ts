@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 
 import {
+  arrangeThreadActionMenu,
   buildMoveEnvironmentOptions,
   buildThreadActionMenuItems,
   hasRunningSubagents,
@@ -275,5 +276,22 @@ describe("Stop with subagents", () => {
         (item) => item.id === "stop-with-subagents",
       )?.label,
     ).toBe("Stop with subagents");
+  });
+});
+
+describe("arrangeThreadActionMenu", () => {
+  it("puts additions above, beside Rename, and relabels top-level items", () => {
+    const base = buildThreadActionMenuItems(baseState);
+    const shown = arrangeThreadActionMenu(base, {
+      items: [{ id: "x:top", label: "Top" }],
+      afterRename: [{ id: "x:edit", label: "Edit…" }],
+      labels: { pin: "Pin in T3 Code", folder: "Move to T3 Code folder" },
+    });
+    const ids = shown.map((item) => item.id);
+    expect(ids[0]).toBe("x:top");
+    expect(shown[1]?.separatorBefore).toBe(true);
+    expect(ids[ids.indexOf("rename") + 1]).toBe("x:edit");
+    expect(shown.find((item) => item.id === "pin")?.label).toBe("Pin in T3 Code");
+    expect(arrangeThreadActionMenu(base, undefined)).toBe(base);
   });
 });

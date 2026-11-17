@@ -2,20 +2,21 @@
 
 Enable MadoHomu in Settings → General → MadoHomu, then choose the project it focuses on. If you have several connected environments, select the environment in Settings first. Open MadoHomu from the sidebar or the “Open MadoHomu” command palette action.
 
-On mobile, use Settings → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
+On mobile, use Settings → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list, or on Android wide layouts such as an unfolded phone, from MadoHomu in the navigation rail. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
 
 MadoHomu is one thread list in sections, and threads use your normal chat and composer.
 
-- **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them on web and desktop; on mobile use Move up and Move down in the thread menu.
-- **Your own sections** sit below Pinned. Add one from the list, then move pinned threads into it. Deleting a section returns its threads to Pinned.
-- **Scratch** holds every other thread in the project, such as ones made in T3 Code or by agents, and any you move there. Move a thread back with Move to Pinned.
+- **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them. On mobile, tap Reorder in the app bar first, or use Move up and Move down in the thread menu.
+- **Your own sections** sit below Pinned. Add one with the + on the Pinned heading, or with Move to → New section in a thread's menu, then move pinned threads into it. Deleting a section returns its threads to Pinned.
+- **Scratch** holds every other thread in the project, such as ones made in T3 Code or by agents, and any you move there. Drag a thread onto Pinned or a section to pin it, or use Move to in its menu.
+- **Working** shows Scratch threads while they are working and do not need you. "Working threads" in MadoHomu settings can put them at the top of Scratch or leave them in place instead. Pinned threads never move.
 - **Snoozed** and **Settled** hold threads from any section while they are snoozed or settled.
 
-The thread menu (right-click, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt. Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn.
+The thread menu (right-click or the row's … button, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt, and Move to. Inside MadoHomu, T3 Code's own pin and folders are labelled "Pin in T3 Code" and "Move to T3 Code folder". Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn.
 
 MadoHomu's threads are hidden from the T3 Code thread list. To see them there too, set "Show MadoHomu threads in T3 Code" in MadoHomu settings to Scratch only or All. Search and links still open hidden threads.
 
-When you choose MadoHomu's project, "New project" makes one without leaving MadoHomu.
+To change MadoHomu's project, use Change project in the gear menu or MadoHomu settings. "New project" makes one without leaving MadoHomu.
 
 The optional morning brief runs daily at the time you choose, in the server's time zone. It continues the pinned Morning brief thread, summarises work and decisions, and proposes next steps in plan mode. Like any thread, MadoHomu threads (including the brief) use the permission mode picked in their composer, and new ones start in the project's default permission mode. Turning the brief off disables its scheduled task; turning it back on reuses the task. Changing the MadoHomu project or disabling MadoHomu disables the brief too.
 

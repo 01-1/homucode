@@ -27,7 +27,7 @@ export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined
 /** The section for threads that are not pinned: made outside MadoHomu, or unpinned by the user. */
 export const MADOHOMU_SCRATCH_LABEL = "Scratch";
 
-export type MadoHomuGroupKind = "pinned" | "custom" | "scratch" | "snoozed" | "settled";
+export type MadoHomuGroupKind = "pinned" | "custom" | "working" | "scratch" | "snoozed" | "settled";
 export interface MadoHomuGroup<T> {
   readonly kind: MadoHomuGroupKind;
   /** The section id for a custom section, otherwise the kind. */
@@ -38,18 +38,27 @@ export interface MadoHomuGroup<T> {
 
 type MadoHomuGroupSettings = Pick<
   ServerSettings,
-  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder"
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
 >;
 
-/** The one grouping web and mobile both render: Pinned, custom sections, Scratch, Snoozed, Settled. */
+/**
+ * The one grouping web and mobile both render: Pinned, custom sections, Working, Scratch, Snoozed,
+ * Settled. `isWorking` is each client's own test for a thread that is busy and does not need the
+ * user; only Scratch threads move for it, so pinned threads never leave their place.
+ */
 export function groupMadoHomuThreads<
-  T extends Pick<EnvironmentThreadShell, "id" | "updatedAt" | "settledOverride" | "runtime"> &
+  T extends Pick<
+    EnvironmentThreadShell,
+    "id" | "createdAt" | "updatedAt" | "settledOverride" | "runtime"
+  > &
     ThreadSnoozeShell,
 >(
   threads: ReadonlyArray<T>,
   settings: MadoHomuGroupSettings,
-  options: { readonly now: string },
+  options: { readonly now: string; readonly isWorking?: (thread: T) => boolean },
 ): MadoHomuGroup<T>[] {
+  const working = (thread: T) =>
+    settings.madohomuWorkingPlacement !== "none" && options.isWorking?.(thread) === true;
   const groups: MadoHomuGroup<T>[] = [
     { kind: "pinned", id: "pinned", title: "Pinned", threads: [] },
     ...settings.madohomuSections.map((section) => ({
@@ -58,6 +67,7 @@ export function groupMadoHomuThreads<
       title: section.name,
       threads: [] as T[],
     })),
+    { kind: "working", id: "working", title: "Working", threads: [] },
     { kind: "scratch", id: "scratch", title: MADOHOMU_SCRATCH_LABEL, threads: [] },
     { kind: "snoozed", id: "snoozed", title: "Snoozed", threads: [] },
     { kind: "settled", id: "settled", title: "Settled", threads: [] },
@@ -68,7 +78,10 @@ export function groupMadoHomuThreads<
     const entry = settings.madohomuThreads[thread.id];
     if (effectiveSnoozed(thread, options)) group("snoozed").threads.push(thread);
     else if (isShelvedSettled(thread)) group("settled").threads.push(thread);
-    else if (!isMadoHomuThreadPinned(entry)) group("scratch").threads.push(thread);
+    else if (!isMadoHomuThreadPinned(entry))
+      group(
+        settings.madohomuWorkingPlacement === "section" && working(thread) ? "working" : "scratch",
+      ).threads.push(thread);
     else {
       const custom = entry?.section ? byId.get(entry.section) : undefined;
       (custom?.kind === "custom" ? custom : group("pinned")).threads.push(thread);
@@ -76,12 +89,15 @@ export function groupMadoHomuThreads<
   }
   const position = new Map(settings.madohomuThreadOrder.map((id, index) => [id, index]));
   for (const { kind, threads: members } of groups) {
+    // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
     const manual = kind === "pinned" || kind === "custom";
     members.sort(
       (a, b) =>
-        (manual ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) : 0) ||
-        b.updatedAt.localeCompare(a.updatedAt) ||
-        a.id.localeCompare(b.id),
+        (manual
+          ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
+            b.createdAt.localeCompare(a.createdAt)
+          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+            b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
     );
   }
   return groups;
@@ -96,6 +112,55 @@ export function reorderMadoHomuThreads(
   const rest = visibleOrder.filter((id) => id !== moved);
   const index = before === null ? -1 : rest.indexOf(before);
   return index < 0 ? [...rest, moved] : [...rest.slice(0, index), moved, ...rest.slice(index)];
+}
+
+/**
+ * The project threads MadoHomu lists. Subagents report to their parent, so only ones the user
+ * filed get a row, as in T3 Code, plus the open thread so it always has its row.
+ */
+export function madohomuListedThreads<T extends Pick<EnvironmentThreadShell, "id" | "lineage">>(
+  projectThreads: ReadonlyArray<T>,
+  settings: Pick<ServerSettings, "madohomuThreads">,
+  openThreadId: ThreadId | null | undefined,
+): T[] {
+  return projectThreads.filter(
+    (thread) =>
+      thread.lineage.relationshipToParent !== "subagent" ||
+      settings.madohomuThreads[thread.id] !== undefined ||
+      thread.id === openThreadId,
+  );
+}
+
+/** The thread MadoHomu shows: the one the URL names if it is listed, else the first row. */
+export function selectMadoHomuThread<T extends { readonly id: ThreadId }>(
+  groups: ReadonlyArray<MadoHomuGroup<T>>,
+  openThreadId: ThreadId | null | undefined,
+): T | null {
+  const rows = groups.flatMap((group) => group.threads);
+  return rows.find((thread) => thread.id === openThreadId) ?? rows[0] ?? null;
+}
+
+/** The title MadoHomu's "New thread" gives the threads it makes. */
+export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
+
+/**
+ * An untouched thread MadoHomu's "New thread" made (default title, no messages, no run, no icon
+ * or prompt, still pinned), so "New thread" reopens it instead of making another empty one.
+ */
+export function findUntouchedMadoHomuThread<
+  T extends Pick<EnvironmentThreadShell, "id" | "title" | "latestUserMessageAt" | "latestRun">,
+>(pinned: ReadonlyArray<T>, settings: Pick<ServerSettings, "madohomuThreads">): T | undefined {
+  return pinned.find((thread) => {
+    const entry = settings.madohomuThreads[thread.id];
+    return (
+      thread.title === MADOHOMU_NEW_THREAD_TITLE &&
+      thread.latestUserMessageAt === null &&
+      thread.latestRun === null &&
+      isMadoHomuThreadPinned(entry) &&
+      !entry?.icon &&
+      !entry?.prompt
+    );
+  });
 }
 
 /** Whether the T3 Code thread list shows a thread of the MadoHomu project. */

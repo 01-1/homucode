@@ -27,6 +27,8 @@ import {
   parseEnvironmentProjectMenuId,
   resolveThreadMoveOptions,
   threadActionRequiresOperate,
+  arrangeThreadActionMenu,
+  type ThreadActionMenuAdditions,
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
 import { titleRegenerationToast } from "../components/threadTitleRegenerationToast";
@@ -82,9 +84,8 @@ function menuItemIds(items: ReadonlyArray<ContextMenuItem>, ids = new Set<string
   return ids;
 }
 
-/** Items a caller puts above the thread actions, and what to do when one is chosen. */
-export interface ThreadActionMenuExtras {
-  readonly items: ReadonlyArray<ContextMenuItem>;
+/** Items a caller adds to the thread actions, and what to do when one is chosen. */
+export interface ThreadActionMenuExtras extends ThreadActionMenuAdditions {
   readonly onSelect: (id: string) => void;
 }
 
@@ -232,18 +233,13 @@ export function useThreadActionMenu(input: {
           (shell) => !threadRuntimeCanArchive(shell.runtime),
         ),
       });
-      const shown: ReadonlyArray<ContextMenuItem> =
-        extras && extras.items.length > 0
-          ? [
-              ...extras.items,
-              ...items.map((item, index) =>
-                index === 0 ? { ...item, separatorBefore: true } : item,
-              ),
-            ]
-          : items;
+      const shown = arrangeThreadActionMenu(items, extras);
       const clicked = await settlePromise(() => api.contextMenu.show(shown, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
-      if (extras && menuItemIds(extras.items).has(clicked.value)) {
+      if (
+        extras &&
+        menuItemIds([...extras.items, ...(extras.afterRename ?? [])]).has(clicked.value)
+      ) {
         extras.onSelect(clicked.value);
         return;
       }

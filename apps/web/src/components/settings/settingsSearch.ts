@@ -464,6 +464,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     environmentOnly: true,
   },
   {
+    id: "madohomu-working-placement",
+    title: "Working threads",
+    to: "/settings/general",
+    searchTerms: ["MadoHomu working running section top scratch"],
+    environmentOnly: true,
+  },
+  {
     id: "madohomu-morning-brief",
     title: "Morning brief",
     to: "/settings/general",

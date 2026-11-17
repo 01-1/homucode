@@ -11,6 +11,7 @@ export const TOOL_CALL_DENIED_WRITE_PROMPT = `Use the Write tool once to create 
 
 export function toolCallDeniedWriteInput(): OrchestratorFixtureInput {
   return {
+    runtimeMode: "approval-required",
     steps: [
       { type: "message", text: TOOL_CALL_DENIED_WRITE_PROMPT },
       { type: "approve_next_runtime_request", decision: "decline" },

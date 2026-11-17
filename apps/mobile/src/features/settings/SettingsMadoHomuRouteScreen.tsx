@@ -30,6 +30,24 @@ const CODE_VISIBILITY_OPTIONS: ReadonlyArray<{
   { value: "all", label: "All", description: "T3 Code lists every thread of the project." },
 ];
 
+const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
+  readonly value: ServerSettings["madohomuWorkingPlacement"];
+  readonly label: string;
+  readonly description: string;
+}> = [
+  {
+    value: "section",
+    label: "Working section",
+    description: `Working ${MADOHOMU_SCRATCH_LABEL} threads move to their own section.`,
+  },
+  {
+    value: "top",
+    label: `Top of ${MADOHOMU_SCRATCH_LABEL}`,
+    description: `Working threads sort first in ${MADOHOMU_SCRATCH_LABEL}.`,
+  },
+  { value: "none", label: "Leave in place", description: "Working threads keep their place." },
+];
+
 export function SettingsMadoHomuRouteScreen() {
   const menu = useSettingsEnvironmentMenu();
   const { selectedTargets, selectedProjectKey } = useSettingsEnvironmentFilter();
@@ -125,6 +143,20 @@ function EnvironmentMadoHomuSettings(props: {
               separated={index > 0}
               disabled={busy || !actions.canWrite}
               onPress={() => void run(() => actions.save({ madohomuCodeVisibility: option.value }))}
+            />
+          ))}
+          <Text className="px-4 pt-3 text-sm text-foreground-muted">Working threads</Text>
+          {WORKING_PLACEMENT_OPTIONS.map((option, index) => (
+            <ListChoiceRow
+              key={option.value}
+              label={option.label}
+              description={option.description}
+              selected={actions.settings.madohomuWorkingPlacement === option.value}
+              separated={index > 0}
+              disabled={busy || !actions.canWrite}
+              onPress={() =>
+                void run(() => actions.save({ madohomuWorkingPlacement: option.value }))
+              }
             />
           ))}
           <SettingsSwitchRow

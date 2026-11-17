@@ -110,6 +110,7 @@ function ProviderCustomColorPicker(props: {
   readonly onCommit: (value: string) => void;
   readonly onClear: () => void;
   readonly onClose: () => void;
+  readonly round?: boolean | undefined;
 }) {
   const normalized = normalizeProviderAccentColor(props.value);
 
@@ -123,7 +124,7 @@ function ProviderCustomColorPicker(props: {
         render={
           <Button
             type="button"
-            size="icon-sm"
+            size={props.round ? "icon-sm-pill" : "icon-sm"}
             variant="ghost-muted"
             style={normalized ? { backgroundColor: normalized } : undefined}
             aria-label={`${normalized ? "Change" : "Add"} accent color for ${props.displayName}`}
@@ -172,6 +173,8 @@ export function ProviderAccentColorPicker(props: {
   readonly onCommit: (value: string) => void;
   readonly description?: string;
   readonly layout?: "stacked" | "inline";
+  /** A round trigger, to sit among round swatches. */
+  readonly round?: boolean;
 }) {
   const { description, displayName, layout = "stacked", onCommit } = props;
   const value = props.value ?? "";
@@ -207,6 +210,7 @@ export function ProviderAccentColorPicker(props: {
       }
       onCommit={commit}
       onClear={() => commit("")}
+      round={props.round}
       onClose={() => {
         if (draft?.previewing && draft.base === value) commit(draft.color);
       }}

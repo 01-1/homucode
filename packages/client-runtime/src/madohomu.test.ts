@@ -17,6 +17,9 @@ import {
   filterMadoHomuCodeThreads,
   reorderMadoHomuThreads,
   findMadoHomuMorningBriefThread,
+  findUntouchedMadoHomuThread,
+  madohomuListedThreads,
+  selectMadoHomuThread,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
   selectMadoHomuEnvironment,
@@ -128,6 +131,7 @@ describe("MadoHomu sections", () => {
   const shell = (id: string, updatedAt: string, extra: object = {}) => ({
     id: ThreadId.make(id),
     projectId: ProjectId.make("p"),
+    createdAt: updatedAt,
     updatedAt,
     settledOverride: null,
     runtime: null,
@@ -161,8 +165,8 @@ describe("MadoHomu sections", () => {
       [
         shell("a", "2026-11-10"),
         shell("b", "2026-11-11"),
-        shell("new", "2026-11-12"),
-        shell("gone", "2026-11-13"),
+        shell("new", "2026-11-12", { updatedAt: "2026-11-01" }),
+        shell("gone", "2026-11-11", { updatedAt: "2026-11-16" }),
         shell("filed", "2026-11-12"),
         shell("unpinned", "2026-11-12"),
         shell("outside", "2026-11-14"),
@@ -178,12 +182,91 @@ describe("MadoHomu sections", () => {
         group.threads.map((thread: { id: string }) => thread.id),
       ]),
     ).toEqual([
-      ["Pinned", ["gone", "new", "b", "a"]],
+      ["Pinned", ["new", "gone", "b", "a"]],
       ["Work", ["filed"]],
+      ["Working", []],
       ["Scratch", ["outside", "unpinned"]],
       ["Snoozed", ["later"]],
       ["Settled", ["done"]],
     ]);
+  });
+
+  it("shows a working Scratch thread where the setting says, and never moves a pinned one", () => {
+    const threads = [
+      shell("a", "2026-11-10"),
+      shell("outside", "2026-11-14"),
+      shell("busy", "2026-11-01"),
+    ] as never;
+    const placed = (madohomuWorkingPlacement: "section" | "top" | "none") =>
+      groupMadoHomuThreads(
+        threads,
+        { ...settings, madohomuWorkingPlacement },
+        {
+          now: "2026-11-17T00:00:00.000Z",
+          isWorking: (thread: { id: string }) => thread.id === "busy" || thread.id === "a",
+        },
+      )
+        .filter((group) => group.threads.length > 0)
+        .map((group) => [group.title, group.threads.map((thread: { id: string }) => thread.id)]);
+    expect(placed("section")).toEqual([
+      ["Pinned", ["a"]],
+      ["Working", ["busy"]],
+      ["Scratch", ["outside"]],
+    ]);
+    expect(placed("top")).toEqual([
+      ["Pinned", ["a"]],
+      ["Scratch", ["busy", "outside"]],
+    ]);
+    expect(placed("none")).toEqual([
+      ["Pinned", ["a"]],
+      ["Scratch", ["outside", "busy"]],
+    ]);
+  });
+
+  it("lists filed subagents and the open one, and opens the URL thread or the first row", () => {
+    const sub = (id: string) => ({
+      id: ThreadId.make(id),
+      lineage: { relationshipToParent: "subagent" as const },
+    });
+    const top = { id: ThreadId.make("top"), lineage: { relationshipToParent: null } };
+    const listed = madohomuListedThreads(
+      [top, sub("a"), sub("loose"), sub("open")] as never,
+      settings,
+      ThreadId.make("open"),
+    );
+    expect(listed.map((t: { id: string }) => t.id)).toEqual(["top", "a", "open"]);
+    const groups = groupMadoHomuThreads(
+      [shell("a", "2026-11-10"), shell("outside", "2026-11-14")] as never,
+      settings,
+      { now: "2026-11-17T00:00:00.000Z" },
+    );
+    expect(selectMadoHomuThread(groups, ThreadId.make("outside"))?.id).toBe("outside");
+    expect(selectMadoHomuThread(groups, ThreadId.make("missing"))?.id).toBe("a");
+  });
+
+  it("reopens an untouched New thread instead of making another", () => {
+    const fresh = {
+      id: ThreadId.make("a"),
+      title: "New thread",
+      latestUserMessageAt: null,
+      latestRun: null,
+    };
+    const touched = [
+      { ...fresh, id: ThreadId.make("b"), latestUserMessageAt: "2026-11-17" },
+      { ...fresh, id: ThreadId.make("new"), title: "Renamed" },
+      { ...fresh, id: ThreadId.make("later") },
+      { ...fresh, id: ThreadId.make("unpinned") },
+      { ...fresh, id: ThreadId.make("outside") },
+    ];
+    const withIcon = {
+      ...settings,
+      madohomuThreads: {
+        ...settings.madohomuThreads,
+        [ThreadId.make("later")]: entry({ icon: "☀️" }),
+      },
+    };
+    expect(findUntouchedMadoHomuThread(touched, withIcon)).toBeUndefined();
+    expect(findUntouchedMadoHomuThread([...touched, fresh], withIcon)).toBe(fresh);
   });
 
   it("moves a thread before another, or to the end", () => {
