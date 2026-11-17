@@ -56,7 +56,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     id: "status-line",
     page: 1,
     title: "Status line",
-    description: "Show model, context and usage information below the composer.",
+    description: "Show a line with model, context and usage information.",
     setting: "statusLineEnabled",
   },
   {

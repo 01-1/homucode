@@ -385,7 +385,7 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
-import { ThreadStatusBar, ThreadStatusLineRunner } from "./chat/ThreadStatusBar";
+import { ThreadStatusLineRunner } from "./chat/ThreadStatusBar";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { useDelayedStatus } from "../hooks/useDelayedStatus";
 import { useTimelineFollow } from "./chat/useTimelineFollow";
@@ -3940,23 +3940,20 @@ export default function ChatView(props: ChatViewProps) {
                   </div>
                 </div>
                 {statusLineThread !== null && statusLineKey !== undefined ? (
-                  <>
-                    <ThreadStatusLineRunner
-                      statusLineKey={statusLineKey}
-                      environmentId={statusLineThread.environmentId}
-                      createdAt={statusLineThread.createdAt}
-                      source={{
-                        threadId: statusLineThread.id,
-                        cwd: gitCwd,
-                        modelSelection: statusLineThread.modelSelection,
-                        providers: providerStatuses,
-                        usageLimitSources:
-                          serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
-                        contextWindow: activeContextWindow,
-                      }}
-                    />
-                    <ThreadStatusBar statusLineKey={statusLineKey} />
-                  </>
+                  <ThreadStatusLineRunner
+                    statusLineKey={statusLineKey}
+                    environmentId={statusLineThread.environmentId}
+                    createdAt={statusLineThread.createdAt}
+                    source={{
+                      threadId: statusLineThread.id,
+                      cwd: gitCwd,
+                      modelSelection: statusLineThread.modelSelection,
+                      providers: providerStatuses,
+                      usageLimitSources:
+                        serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                      contextWindow: activeContextWindow,
+                    }}
+                  />
                 ) : null}
                 <div
                   aria-hidden
