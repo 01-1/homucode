@@ -5390,7 +5390,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerThread !== undefined &&
         providerTurn !== undefined &&
         providerSessionId &&
-        !modelSelectionsEqual(run.modelSelection, command.modelSelection) &&
+        // A live-applied pick leaves the run's selection stale, so compare with the thread's.
+        !modelSelectionsEqual(thread.modelSelection, command.modelSelection) &&
         (yield* serverSettings.getSettings.pipe(Effect.orDie)).applyModelChangeNow
       ) {
         yield* Ref.update(effects, (existing) => [
@@ -7475,7 +7476,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         source?.status !== "running" ||
         (sourceTurn?.status !== "pending" && sourceTurn?.status !== "running") ||
         command.modelSelection === undefined ||
-        modelSelectionsEqual(source.modelSelection, command.modelSelection) ||
         !modelSelectionsEqual(projection.thread.modelSelection, command.modelSelection) ||
         (sourceMessage !== undefined && isNativeMaintenanceCommand(sourceMessage)) ||
         (yield* stopReachedRun(command, command.threadId, source.id))

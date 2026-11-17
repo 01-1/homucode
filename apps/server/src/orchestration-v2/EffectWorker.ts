@@ -214,6 +214,7 @@ export const layerExecutor: Layer.Layer<
                 modelSelection: effect.request.modelSelection,
               })
               .pipe(
+                Effect.asVoid,
                 Effect.mapError(
                   (cause) =>
                     new OrchestrationEffectExecutionError({

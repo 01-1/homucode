@@ -593,7 +593,7 @@ it.live.each(["pooled", "exclusive"] as const)(
     }),
 );
 
-it.live.each(["in place", "as the next turn", "off"] as const)(
+it.live.each(["in place", "as the next turn", "after a live change", "off"] as const)(
   "applyModelChangeNow restarts a running turn on a new effort (%s)",
   (mode) =>
     Effect.gen(function* () {
@@ -625,6 +625,9 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
           base.openSession(input).pipe(
             Effect.map((session) => ({
               ...session,
+              // Like Claude, which applies some effort changes to the running turn.
+              applyModelSelection: ({ modelSelection }: { modelSelection: ModelSelection }) =>
+                Effect.succeed(modelSelection.options?.[0]?.value === "medium"),
               startTurn: (turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
                 Effect.sync(() =>
                   turns.push({ selection: turn.modelSelection, text: turn.message.text }),
@@ -634,6 +637,9 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
       };
       const high = { ...initialSelection, options: [{ id: "reasoningEffort", value: "high" }] };
       const low = { ...initialSelection, options: [{ id: "reasoningEffort", value: "low" }] };
+      const medium = { ...initialSelection, options: [{ id: "reasoningEffort", value: "medium" }] };
+      // Back to the run's own selection after a live change still has to reach the turn.
+      const target = mode === "after a live change" ? high : low;
 
       const projection = yield* Effect.gen(function* () {
         const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -677,12 +683,22 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
         });
         yield* worker.drain();
         yield* Fiber.join(firstRunning);
+        if (mode === "after a live change") {
+          yield* orchestrator.dispatch({
+            type: "thread.model-selection.set",
+            commandId: CommandId.make(`${name}:live-effort`),
+            threadId,
+            modelSelection: medium,
+          });
+          yield* worker.drain();
+          assert.lengthOf((yield* orchestrator.getThreadProjection(threadId)).attempts, 1);
+        }
         const restartedRunning = yield* turnRunning();
         yield* orchestrator.dispatch({
           type: "thread.model-selection.set",
           commandId: CommandId.make(`${name}:effort`),
           threadId,
-          modelSelection: low,
+          modelSelection: target,
         });
         yield* worker.drain();
         if (applyModelChangeNow) yield* Fiber.join(restartedRunning);
@@ -698,7 +714,7 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
         ),
       );
 
-      assert.equal(projection.thread.modelSelection.options?.[0]?.value, "low");
+      assert.deepEqual(projection.thread.modelSelection, target);
       if (!applyModelChangeNow) {
         assert.deepEqual(
           turns.map((turn) => turn.selection),
@@ -707,7 +723,7 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
         assert.lengthOf(projection.attempts, 1);
         return;
       }
-      if (mode === "in place") {
+      if (mode !== "as the next turn") {
         // The run carries on, so a delegating parent sees no stop.
         assert.deepEqual(
           projection.runs.map((run) => run.status),
@@ -728,13 +744,13 @@ it.live.each(["in place", "as the next turn", "off"] as const)(
       }
       assert.deepEqual(
         turns.map((turn) => turn.selection),
-        [high, low],
+        [high, target],
       );
       assert.include(turns[1]?.text, "Continue the task you were working on.");
       const notice = projection.messages.find((message) => message.notification !== undefined);
       assert.equal(
         notice?.notification?.summary,
-        "Restarted on restart-model-a (reasoningEffort low)",
+        `Restarted on restart-model-a (reasoningEffort ${target.options[0]!.value})`,
       );
     }),
 );
