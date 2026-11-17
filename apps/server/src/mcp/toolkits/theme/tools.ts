@@ -27,14 +27,17 @@ const shared = {
 const ThemeReadTool = Tool.make("t3_theme_read", {
   ...shared,
   description:
-    "Read T3 Code's own themes and the guide to restyle it: color roles and CSS selectors. Call before `t3_theme_set`.",
+    "Read T3 Code's own themes and the guide to restyle it: color roles and CSS selectors. `current` is the theme clients show. Call before `t3_theme_set`.",
   parameters: Schema.Struct({
     themeId: Schema.optionalKey(
-      EnvironmentThemeId.annotate({ description: "Also return this published theme's file." }),
+      EnvironmentThemeId.annotate({
+        description: "Also return this built-in or published theme's file.",
+      }),
     ),
   }),
   success: Schema.Struct({
     current: DefaultThemePreference,
+    currentNote: Schema.optionalKey(Schema.String),
     builtIn: Schema.Array(Schema.String),
     published: Schema.Array(
       Schema.Struct({
@@ -53,10 +56,16 @@ const ThemeReadTool = Tool.make("t3_theme_read", {
 const ThemeSetTool = Tool.make("t3_theme_set", {
   ...shared,
   description:
-    "Restyle T3 Code itself, only when the user asks. With `theme`, publish it as `themeId` (same id updates it) and switch this server's web app and this machine's desktop app to it, not remote desktop apps. Without `theme`, switch to a built-in or published `themeId`. `appearance` sets light, dark, or system mode. Asks the user first below full access.",
+    "Restyle T3 Code itself, only when the user asks. With `theme`, publish it as `themeId` (same id updates it) and switch this server's web app and this machine's desktop app to it, not remote desktop apps. With `base`, the published theme is `base` with only what `theme` sets changed. Without `theme`, switch to a built-in or published `themeId`, such as `lavender`, the default. `appearance` sets light, dark, or system mode. Asks the user first below full access.",
   parameters: Schema.Struct({
     themeId: Schema.optionalKey(EnvironmentThemeId),
     theme: Schema.optionalKey(EnvironmentThemeFile),
+    base: Schema.optionalKey(
+      EnvironmentThemeId.annotate({
+        description:
+          "Id of a built-in or published theme for `theme` to build on, such as `lavender`: its colors, variants, and CSS stay wherever `theme` does not set them, and `theme.css` follows its CSS. To change part of the look the user has now, give the id `t3_theme_read` returned as `current`.",
+      }),
+    ),
     appearance: Schema.optionalKey(Appearance),
   }),
   success: Schema.Struct({

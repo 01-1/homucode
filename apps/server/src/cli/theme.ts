@@ -9,7 +9,12 @@ import {
   environmentThemeFileHasColors,
 } from "@t3tools/contracts";
 import { fromJsonStringPretty, fromLenientJson } from "@t3tools/shared/schemaJson";
-import { BUILT_IN_THEME_IDS, UNPUBLISHABLE_THEME_IDS } from "@t3tools/shared/themePalettes";
+import { findThemeFile, themeOnBase } from "@t3tools/shared/themeBase";
+import {
+  BUILT_IN_THEME_IDS,
+  DEFAULT_THEME_ID,
+  UNPUBLISHABLE_THEME_IDS,
+} from "@t3tools/shared/themePalettes";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
@@ -37,6 +42,7 @@ const encodeSettingsJson = Schema.encodeEffect(fromJsonStringPretty(SparseSettin
 const decodeThemeFileJsonExit = Schema.decodeUnknownExit(
   Schema.fromJsonString(EnvironmentThemeFile),
 );
+const encodeThemeFileJson = Schema.encodeEffect(fromJsonStringPretty(EnvironmentThemeFile));
 const isEnvironmentThemeId = Schema.is(EnvironmentThemeId);
 
 export class ThemeSettingsUnreadableError extends Schema.TaggedError<ThemeSettingsUnreadableError>()(
@@ -108,6 +114,33 @@ export class ThemeFileColorlessError extends Schema.TaggedError<ThemeFileColorle
 ) {
   override get message(): string {
     return `${this.filePath} has no colors to publish.`;
+  }
+}
+
+export class ThemeBaseUnknownError extends Schema.TaggedError<ThemeBaseUnknownError>()(
+  "ThemeBaseUnknownError",
+  { base: Schema.String, known: Schema.Array(Schema.String) },
+) {
+  override get message(): string {
+    return `No theme named "${this.base}" to build on. Available: ${this.known.join(", ")}.`;
+  }
+}
+
+export class ThemeBaseRefusedError extends Schema.TaggedError<ThemeBaseRefusedError>()(
+  "ThemeBaseRefusedError",
+  { filePath: Schema.String, problem: Schema.String },
+) {
+  override get message(): string {
+    return `${this.filePath} ${this.problem}`;
+  }
+}
+
+export class ThemeBaseWithoutFileError extends Schema.TaggedError<ThemeBaseWithoutFileError>()(
+  "ThemeBaseWithoutFileError",
+  {},
+) {
+  override get message(): string {
+    return "--base builds a theme file on another theme, so pass a theme file.";
   }
 }
 
@@ -262,6 +295,7 @@ const publishThemeFile = Effect.fn(function* (input: {
   readonly themesDir: string;
   readonly filePath: string;
   readonly explicitId: Option.Option<string>;
+  readonly base: Option.Option<string>;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -285,16 +319,40 @@ const publishThemeFile = Effect.fn(function* (input: {
     .pipe(
       Effect.mapError((cause) => new ThemeFileUnreadableError({ filePath: input.filePath, cause })),
     );
-  const raw = readThemeFileGuarded(resolvedSource, MAX_THEME_FILE_BYTES);
-  if (raw === null) {
+  const sourceRaw = readThemeFileGuarded(resolvedSource, MAX_THEME_FILE_BYTES);
+  if (sourceRaw === null) {
     return yield* new ThemeFileUnreadableError({ filePath: input.filePath });
   }
 
-  const decoded = decodeThemeFileJsonExit(raw);
+  const decoded = decodeThemeFileJsonExit(sourceRaw);
   if (decoded._tag === "Failure") {
     return yield* new ThemeFileInvalidError({ filePath: input.filePath, cause: decoded.cause });
   }
-  if (!environmentThemeFileHasColors(decoded.value)) {
+  // A file published as is keeps its exact bytes; one built on a base is written out new.
+  let raw = sourceRaw;
+  if (Option.isSome(input.base)) {
+    const published = yield* readPublishedThemes(input.themesDir);
+    const baseFile = findThemeFile(published, input.base.value);
+    if (baseFile === undefined) {
+      return yield* new ThemeBaseUnknownError({
+        base: input.base.value,
+        known: [...BUILT_IN_THEME_IDS, ...published.map((theme) => theme.id)],
+      });
+    }
+    const built = themeOnBase(baseFile, decoded.value);
+    if ("problem" in built) {
+      return yield* new ThemeBaseRefusedError({ filePath: input.filePath, problem: built.problem });
+    }
+    raw = `${yield* encodeThemeFileJson(built).pipe(
+      Effect.mapError((cause) => new ThemeFileInvalidError({ filePath: input.filePath, cause })),
+    )}\n`;
+    if (Buffer.byteLength(raw) > MAX_THEME_FILE_BYTES) {
+      return yield* new ThemeFileTooLargeError({
+        filePath: input.filePath,
+        limit: MAX_THEME_FILE_BYTES,
+      });
+    }
+  } else if (!environmentThemeFileHasColors(decoded.value)) {
     return yield* new ThemeFileColorlessError({ filePath: input.filePath });
   }
 
@@ -402,6 +460,12 @@ const themeSetCommand = Command.make("set", {
     Flag.withDescription("Theme id to publish a file under, instead of its filename."),
     Flag.optional,
   ),
+  base: Flag.String("base").pipe(
+    Flag.withDescription(
+      `A built-in or published theme for the file to build on, such as ${DEFAULT_THEME_ID}: its colors and CSS stay wherever the file does not set them.`,
+    ),
+    Flag.optional,
+  ),
   theme: Argument.String("theme").pipe(
     Argument.withDescription(
       'A theme id (a built-in, or one this machine publishes, where themes/nightfall.json is "nightfall"), or a path to a theme JSON file to publish and set in one step.',
@@ -437,10 +501,13 @@ const themeSetCommand = Command.make("set", {
           themesDir: paths.themesDir,
           filePath: target,
           explicitId: flags.id,
+          base: flags.base,
         });
         themeId = published.themeId;
         revertPublish = published.revert;
         cleanupPublish = published.cleanup;
+      } else if (Option.isSome(flags.base)) {
+        return yield* new ThemeBaseWithoutFileError();
       } else if (looksLikePath) {
         return yield* new ThemeFileUnreadableError({ filePath: target });
       } else if (isEnvironmentThemeId(target)) {
@@ -494,7 +561,7 @@ const themeShowCommand = Command.make("show", { baseDir: baseDirFlag }).pipe(
 
       yield* Console.log(
         defaultTheme === null
-          ? "Environment theme: not set.\n"
+          ? `Environment theme: not set. Each client shows its own pick: ${DEFAULT_THEME_ID}, the default, unless the user chose another there.\n`
           : `Environment theme: "${defaultTheme}".\n`,
       );
       yield* Console.log(

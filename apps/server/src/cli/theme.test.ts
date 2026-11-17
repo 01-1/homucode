@@ -134,6 +134,35 @@ describe("t3 theme", () => {
     }),
   );
 
+  it.effect("publishes a theme file built on a base theme", () =>
+    Effect.gen(function* () {
+      const baseDir = makeBaseDir();
+      const themeFile = NodePath.join(baseDir, "lavender-darker.json");
+      NodeFS.writeFileSync(
+        themeFile,
+        JSON.stringify({
+          name: "Lavender Darker",
+          appearance: "dark",
+          colors: { messageSurface: "#1a0030" },
+        }),
+      );
+
+      yield* runCli(["theme", "set", themeFile, "--base", "lavender", "--base-dir", baseDir]);
+
+      const published = JSON.parse(
+        NodeFS.readFileSync(
+          NodePath.join(baseDir, "userdata", "themes", "lavender-darker.json"),
+          "utf8",
+        ),
+      );
+      assert.equal(published.appearance, "light");
+      assert.equal(published.variants.dark.messageSurface, "#1a0030");
+      assert.isString(published.variants.dark.text);
+      assert.match(published.css, /Adwaita Sans/);
+      assert.equal(readSettings(baseDir).defaultTheme, "lavender-darker");
+    }),
+  );
+
   it.effect("rejects a file that is not a theme and sets nothing", () =>
     Effect.gen(function* () {
       const baseDir = makeBaseDir();

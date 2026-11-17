@@ -43,6 +43,10 @@
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"
     },
+    "./themeBase": {
+      "types": "./src/themeBase.ts",
+      "import": "./src/themeBase.ts"
+    },
     "./themeCss": {
       "types": "./src/themeCss.ts",
       "import": "./src/themeCss.ts"

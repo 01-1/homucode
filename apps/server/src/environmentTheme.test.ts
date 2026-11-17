@@ -75,6 +75,7 @@ const withEnvironmentThemes = <A, E>(
           Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
           Layer.provideMerge(
             Layer.mock(ServerSettingsService)({
+              getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
               updateSettings: (patch) =>
                 patch.defaultTheme === REFUSED_THEME_ID
                   ? Effect.fail(
@@ -303,6 +304,37 @@ it.layer(NodeServices.layer)("environment theme", (it) => {
       selected,
     );
   });
+
+  it.effect("builds a theme on a base, reads built-ins, and refuses an unknown base", () =>
+    withEnvironmentThemes(
+      {},
+      Effect.gen(function* () {
+        const themes = yield* EnvironmentTheme.EnvironmentThemeService;
+        const lavender = (yield* themes.read("lavender")).theme;
+        assert.equal(lavender?.name, "HomuTheme");
+
+        yield* themes.apply({
+          themeId: "lavender-darker",
+          base: "lavender",
+          theme: {
+            name: "Lavender Darker",
+            appearance: "dark",
+            colors: { messageSurface: "#1a0030" },
+          },
+        });
+        const [published] = yield* themes.current;
+        assert.deepEqual(published?.colors, lavender?.colors);
+        assert.equal(published?.variants?.dark?.messageSurface, "#1a0030");
+        assert.equal(published?.variants?.dark?.text, lavender?.variants?.dark?.text);
+        assert.equal(published?.css, lavender?.css);
+
+        const unknown = yield* themes
+          .apply({ themeId: "other", base: "missing", theme: NIGHTFALL_THEME })
+          .pipe(Effect.flip);
+        assert.match(unknown.message, /"missing" is not a built-in or published theme/);
+      }),
+    ),
+  );
 
   it.effect("keeps the served theme when an update does not fit the size limit", () => {
     const large = (name: string): EnvironmentThemeFile => ({

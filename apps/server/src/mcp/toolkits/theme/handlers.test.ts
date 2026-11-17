@@ -81,6 +81,9 @@ it.effect("applies the theme through the service and reports a refusal as an inv
         published: false,
       });
       expect(yield* call({ theme: AGENT_THEME })).toMatchObject({ code: "invalid_request" });
+      expect(yield* call({ themeId: "agent-look", base: "lavender" })).toMatchObject({
+        code: "invalid_request",
+      });
       expect(yield* call({})).toMatchObject({ code: "invalid_request" });
       expect(yield* call({ themeId: "missing" })).toMatchObject({
         code: "invalid_request",
@@ -95,3 +98,13 @@ it.effect("applies the theme through the service and reports a refusal as an inv
     );
   }),
 );
+
+it("reports the default theme when the environment sets none", () => {
+  expect(ThemeHandlers.themeReadResult({ current: "", themes: [] })).toMatchObject({
+    current: "lavender",
+    currentNote: expect.stringMatching(/No environment theme is set/),
+  });
+  expect(ThemeHandlers.themeReadResult({ current: "grove", themes: [] })).not.toHaveProperty(
+    "currentNote",
+  );
+});

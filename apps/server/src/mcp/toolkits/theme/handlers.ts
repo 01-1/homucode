@@ -1,8 +1,7 @@
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import { THEME_GUIDE } from "@t3tools/shared/themeCss";
-import { BUILT_IN_THEME_IDS } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEME_IDS, DEFAULT_THEME_ID } from "@t3tools/shared/themePalettes";
 import * as Effect from "effect/Effect";
-import * as Struct from "effect/Struct";
 import * as EnvironmentTheme from "../../../environmentTheme.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -16,10 +15,15 @@ export const themeReadResult = ({
   themes,
   theme,
 }: EnvironmentTheme.EnvironmentThemeRead) => ({
-  current,
+  current: current || DEFAULT_THEME_ID,
+  ...(current
+    ? {}
+    : {
+        currentNote: `No environment theme is set, so each client shows its own pick: ${DEFAULT_THEME_ID}, the default, unless the user chose another there.`,
+      }),
   builtIn: BUILT_IN_THEME_IDS,
   published: themes.map(({ id, name, css }) => ({ id, name, hasCss: Boolean(css) })),
-  ...(theme === undefined ? {} : { theme: Struct.omit(theme, ["id"]) }),
+  ...(theme === undefined ? {} : { theme }),
   guide: THEME_GUIDE,
 });
 
@@ -40,18 +44,19 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
     }),
   ),
   t3_theme_set: McpToolAccess.writesEnvironment(
-    ({ themeId, theme, appearance }, check) =>
+    ({ themeId, theme, base, appearance }, check) =>
       Effect.gen(function* () {
         const input =
-          themeId !== undefined
-            ? { themeId, theme, appearance }
-            : theme === undefined && appearance !== undefined
+          themeId !== undefined && (base === undefined || theme !== undefined)
+            ? { themeId, theme, base, appearance }
+            : theme === undefined && base === undefined && appearance !== undefined
               ? { appearance }
               : undefined;
         if (input === undefined) {
           return yield* new OrchestratorMcpFailure({
             code: "invalid_request",
-            message: "Give `themeId`, `appearance`, or both. `theme` needs a `themeId`.",
+            message:
+              "Give `themeId`, `appearance`, or both. `theme` needs a `themeId`, and `base` needs a `theme`.",
           });
         }
         const scope = yield* McpInvocationContext.McpInvocationContext;
