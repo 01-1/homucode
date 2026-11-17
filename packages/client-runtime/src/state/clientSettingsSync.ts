@@ -10,6 +10,7 @@ import * as Schema from "effect/Schema";
 /** Settings that describe this device rather than the user's preferences. */
 const DEVICE_LOCAL_KEYS = new Set<string>([
   "settingsSyncEnabled",
+  "fasterPhoneLaunch",
   "onboardingCompletedAt",
   "scratchEnvironmentId",
   "voiceMicrophone",

@@ -20,6 +20,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as ServerSettings from "../serverSettings.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -123,6 +124,7 @@ export const layer: Layer.Layer<
     const eventSink = yield* EventSink.EventSinkV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const sessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
 
     const load = Effect.fn("ProviderTurnControlService.load")(function* (input: {
       readonly threadId: ThreadId;
@@ -464,6 +466,10 @@ export const layer: Layer.Layer<
                       records: message.context?.records ?? [],
                     }),
                     message,
+                    Option.isSome(serverSettings)
+                      ? (yield* serverSettings.value.getSettings.pipe(Effect.orDie))
+                          .messageSentFromEnabled
+                      : true,
                   ),
                   message,
                 ),

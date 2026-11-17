@@ -33,7 +33,7 @@ function savePreferences(transform: (current: Preferences) => Partial<Preference
 
 const runner = createClientSettingsSyncRunner({
   isReady: () => readPreferences() !== null,
-  isEnabled: () => readPreferences()?.settingsSyncEnabled !== false,
+  isEnabled: () => readPreferences()?.settingsSyncEnabled === true,
   targets: () =>
     settingsSyncTargets(
       appAtomRegistry.get(connectedEnvironmentIdsAtom),

@@ -13,6 +13,7 @@ import {
   ClientServerSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
+  PersistedClientSettingsSchema,
   globalIdleCompaction,
   idleCompactionPatch,
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
@@ -595,4 +596,37 @@ describe("SnoozePresetSettings", () => {
     expect(() => decode([...presets, { kind: "after", minutes: 5 }])).toThrow();
     expect(() => decode([{ kind: "at", days: 31, time: "09:00" }])).toThrow();
   });
+});
+
+it("decodes setup behavior defaults without opting into optional features", () => {
+  expect(decodeServerSettings({})).toMatchObject({
+    preferNativeSubagents: false,
+    bareStopWaitEnabled: false,
+    claudeSteersSurviveStop: false,
+    messageSentFromEnabled: true,
+    stopThreadSubagents: false,
+    backgroundGitEnabled: true,
+    buildToolsSettingsVisible: false,
+    cloudBuildEnabled: false,
+    loadBuildEnabled: false,
+    androidBuildEnabled: false,
+    workAssistanceTarget: null,
+    deviceNames: [],
+    buildRepoPath: "",
+    buildBoatCliPath: "boat",
+    buildMachineType: "large",
+    buildOutputFolder: "",
+    buildAppImageFolder: "",
+    statusLineEnabled: false,
+    threadTitleIncludeProjectName: true,
+    threadTitleIdPrefix: false,
+  });
+  expect(decodeClientSettings({})).toMatchObject({
+    settingsSyncEnabled: false,
+    fasterPhoneLaunch: false,
+  });
+  const persisted = Schema.decodeUnknownSync(PersistedClientSettingsSchema);
+  expect(persisted({}).settingsSyncEnabled).toBe(true);
+  expect(persisted({ settingsSyncEnabled: false }).settingsSyncEnabled).toBe(false);
+  expect(persisted({ settingsSyncEnabled: true }).settingsSyncEnabled).toBe(true);
 });

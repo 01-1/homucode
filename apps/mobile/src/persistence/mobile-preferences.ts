@@ -162,8 +162,10 @@ export interface Preferences {
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
-  /** Unset means on, as on web and desktop. */
+  /** Device-local opt-in; existing preference documents preserve their sync choice. */
   readonly settingsSyncEnabled?: boolean;
+  readonly fasterPhoneLaunch?: boolean;
+  readonly featureOffersSeen?: ReadonlyArray<string>;
   /** Per server, the synced copy this phone last agreed with. */
   readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
   /** The synced theme last applied and the phone themes it became. */
@@ -256,6 +258,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
     settingsSyncEnabled?: boolean;
+    fasterPhoneLaunch?: boolean;
+    featureOffersSeen?: ReadonlyArray<string>;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
   } = {};
@@ -409,11 +413,22 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (isWorkspaceSelections(parsed.workspaceSelections)) {
     preferences.workspaceSelections = parsed.workspaceSelections;
   }
+  if (typeof parsed.fasterPhoneLaunch === "boolean")
+    preferences.fasterPhoneLaunch = parsed.fasterPhoneLaunch;
+  if (Array.isArray(parsed.featureOffersSeen))
+    preferences.featureOffersSeen = parsed.featureOffersSeen.filter(
+      (id): id is string => typeof id === "string",
+    );
   if (typeof parsed.settingsSyncEnabled === "boolean") {
     preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
   }
   if (isSettingsSyncBases(parsed.settingsSyncBases)) {
     preferences.settingsSyncBases = parsed.settingsSyncBases;
+    if (
+      parsed.settingsSyncEnabled === undefined &&
+      Object.keys(parsed.settingsSyncBases).length > 0
+    )
+      preferences.settingsSyncEnabled = true;
   }
   if (isSettingsSyncTheme(parsed.settingsSyncTheme)) {
     preferences.settingsSyncTheme = parsed.settingsSyncTheme;
@@ -584,7 +599,9 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       }
     }
 
-    return parsed === null ? {} : sanitizePreferences(parsed);
+    return parsed === null
+      ? { settingsSyncEnabled: false }
+      : sanitizePreferences({ settingsSyncEnabled: true, ...parsed });
   });
 
   const load = lock

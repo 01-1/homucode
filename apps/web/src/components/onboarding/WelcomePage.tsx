@@ -1,6 +1,20 @@
-import { FEATURE_OFFERS, featureOfferSettingsPatch } from "@t3tools/client-runtime/feature-offers";
+import {
+  featureOfferSettingsPatch,
+  selectedFeatureOffers,
+  unseenFeatureOffers,
+} from "@t3tools/client-runtime/feature-offers";
+import { useTheme } from "../../hooks/useTheme";
+import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
+import { WorkAssistancePicker, DeviceNamesSettings } from "../settings/BehaviorSettings";
+import { BuildToolsSetup } from "../settings/BuildToolsSettings";
+import { type ServerSettings } from "@t3tools/contracts";
 import { FeatureOfferChoices } from "./FeatureOffers";
-import { useEnvironmentSettings } from "../../hooks/useSettings";
+import {
+  useEnvironmentSettings,
+  useClientSettings,
+  updateClientSettings,
+} from "../../hooks/useSettings";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -162,11 +176,29 @@ export function WelcomePage({
     storeSelection(next);
   };
   const offerSettings = useEnvironmentSettings(environmentId);
-  const [selectedOffers, setSelectedOffers] = useState<ReadonlySet<string>>(new Set());
-  const saveOffers = useAtomCommand(serverEnvironment.updateSettings);
+  const localSettings = useClientSettings();
+  const { theme, setTheme } = useTheme();
+  const [chosenOffers, setSelectedOffers] = useState<ReadonlySet<string> | null>(null);
+  const selectedOffers = chosenOffers ?? selectedFeatureOffers(offerSettings, localSettings);
+  const [offerStep, setOfferStep] = useState(0);
+  const [chosenWorkTarget, setWorkTarget] = useState<
+    ServerSettings["workAssistanceTarget"] | undefined
+  >();
+  const workTarget =
+    chosenWorkTarget === undefined ? offerSettings.workAssistanceTarget : chosenWorkTarget;
+  const offered = unseenFeatureOffers({ ...offerSettings, featureOffersSeen: [] });
   const canSaveOffers = useAtomValue(
     serverEnvironment.updateSettings.permissionAtom(environmentId),
   );
+  const followups = [
+    ...(canSaveOffers && selectedOffers.has("sent-from") ? ["device-name"] : []),
+    ...(canSaveOffers && selectedOffers.has("work-assistance") ? ["work-assistance"] : []),
+    ...(canSaveOffers && selectedOffers.has("building-t3") ? ["building-t3"] : []),
+  ];
+  const followup = followups[offerStep - 2];
+  const finalOfferStep = canSaveOffers ? 1 + followups.length : 0;
+  const saveOffers = useAtomCommand(serverEnvironment.updateSettings);
+
   const [isImporting, setIsImporting] = useState(false);
   // True from Start until the landing; leaving earlier would drop the import or the landing.
   const holdPageRef = useRef(false);
@@ -205,11 +237,17 @@ export function WelcomePage({
         const saved = await saveOffers({
           environmentId,
           input: {
-            patch: featureOfferSettingsPatch(offerSettings, FEATURE_OFFERS, selectedOffers),
+            patch: {
+              ...featureOfferSettingsPatch(offerSettings, offered, selectedOffers),
+              ...(selectedOffers.has("work-assistance")
+                ? { workAssistanceTarget: workTarget }
+                : {}),
+            },
           },
         });
         if (saved._tag !== "Success") throw new Error("Could not save optional features.");
       }
+      await updateClientSettings({ settingsSyncEnabled: selectedOffers.has("settings-sync") });
       await completeOnboarding();
     })()
       .then(async () => {
@@ -283,6 +321,19 @@ export function WelcomePage({
   const selected = projectImport.canWrite ? projectImport.selected : [];
   const newCount = selected.filter(projectImport.isNew).length;
   const start = () => {
+    if (offerStep < finalOfferStep) {
+      const nextStep = offerStep + 1;
+      if (followups[nextStep - 2] === "work-assistance" && selected.length > 0) {
+        projectImport.setSelectedKeys(new Set(selected.map((candidate) => candidate.key)));
+        void projectImport
+          .runImport(selected, false)
+          .then((completed) => {
+            if (completed) setOfferStep(nextStep);
+          })
+          .catch(() => toastManager.add({ type: "error", title: "Could not import projects" }));
+      } else setOfferStep(nextStep);
+      return;
+    }
     keepChoicesRef.current = scans.some((scan) => scan.data === null);
     if (selected.length === 0) {
       projectImport.finishAfterImport();
@@ -311,28 +362,94 @@ export function WelcomePage({
               Setting up <span className="text-foreground">{label}</span>.
             </p>
             <div className="mt-10 border-t border-border/60">
-              <AgentsSection
-                environmentId={environmentId}
-                label={label}
-                isPrimary={isPrimary}
-                onImportSourceEnabled={() => scans[0]?.refresh()}
-              />
-              <ProjectsSection
-                scan={scans[0]}
-                projectImport={projectImport}
-                isImporting={isImporting}
-              />
-              <WelcomeSection title="Optional features">
-                <FeatureOfferChoices
-                  selected={selectedOffers}
-                  onChange={setSelectedOffers}
-                  disabled={!canSaveOffers || isImporting}
-                />
-              </WelcomeSection>
-              {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
+              {offerStep === 0 ? (
+                <>
+                  <AgentsSection
+                    environmentId={environmentId}
+                    label={label}
+                    isPrimary={isPrimary}
+                    onImportSourceEnabled={() => scans[0]?.refresh()}
+                  />
+                  <ProjectsSection
+                    scan={scans[0]}
+                    projectImport={projectImport}
+                    isImporting={isImporting}
+                  />
+                  <WelcomeSection title="Optional features">
+                    <FeatureOfferChoices
+                      selected={selectedOffers}
+                      onChange={setSelectedOffers}
+                      disabled={!canSaveOffers || isImporting}
+                    />
+                    {localSettings.onboardingCompletedAt === null ? (
+                      <div className="mt-5 grid gap-2 text-sm">
+                        <span>Theme</span>
+                        <Select
+                          value={theme}
+                          onValueChange={(value) => {
+                            const selected = BUILT_IN_THEMES.find((entry) => entry.id === value);
+                            if (selected) setTheme(selected.id);
+                          }}
+                        >
+                          <SelectTrigger aria-label="Setup theme">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            {BUILT_IN_THEMES.map((entry) => (
+                              <SelectItem key={entry.id} value={entry.id}>
+                                {entry.label}
+                              </SelectItem>
+                            ))}
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                    ) : null}
+                  </WelcomeSection>
+                  {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
+                </>
+              ) : (
+                <WelcomeSection
+                  title={
+                    offerStep === 1
+                      ? "Extra features"
+                      : followup === "device-name"
+                        ? "Name this device"
+                        : followup === "work-assistance"
+                          ? "Work assistance"
+                          : "Building T3"
+                  }
+                >
+                  {offerStep === 1 ? (
+                    <FeatureOfferChoices
+                      offers={offered.filter((offer) => offer.page === 2)}
+                      selected={selectedOffers}
+                      onChange={setSelectedOffers}
+                      disabled={!canSaveOffers || isImporting}
+                    />
+                  ) : followup === "work-assistance" ? (
+                    <WorkAssistancePicker
+                      environmentId={environmentId}
+                      value={workTarget}
+                      onChange={setWorkTarget}
+                    />
+                  ) : followup === "device-name" ? (
+                    <DeviceNamesSettings environmentId={environmentId} currentOnly />
+                  ) : (
+                    <BuildToolsSetup environmentId={environmentId} />
+                  )}
+                </WelcomeSection>
+              )}
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-              {agentReady ? (
+              {offerStep > 0 ? (
+                <Button
+                  variant="ghost"
+                  disabled={isImporting}
+                  onClick={() => setOfferStep(offerStep - 1)}
+                >
+                  Back
+                </Button>
+              ) : agentReady ? (
                 <span />
               ) : (
                 <Button variant="ghost-muted" disabled={isImporting} onClick={start}>
@@ -343,16 +460,25 @@ export function WelcomePage({
                 {agentReady ? null : (
                   <span className="text-xs text-muted-foreground">Set up one agent to start.</span>
                 )}
-                <Button disabled={!agentReady || isImporting} onClick={start}>
-                  {isImporting
-                    ? selected.length > 0
-                      ? "Importing…"
-                      : "Starting…"
-                    : newCount > 0
-                      ? `Import ${newCount} ${newCount === 1 ? "project" : "projects"} and start`
-                      : selected.length > 0
-                        ? "Import threads and start"
-                        : "Start"}
+                <Button
+                  disabled={
+                    isImporting ||
+                    !agentReady ||
+                    (followup === "work-assistance" && workTarget === null)
+                  }
+                  onClick={start}
+                >
+                  {offerStep < finalOfferStep
+                    ? "Next"
+                    : isImporting
+                      ? selected.length > 0
+                        ? "Importing…"
+                        : "Starting…"
+                      : newCount > 0
+                        ? `Import ${newCount} ${newCount === 1 ? "project" : "projects"} and start`
+                        : selected.length > 0
+                          ? "Import threads and start"
+                          : "Start"}
                 </Button>
               </div>
             </div>
@@ -1550,8 +1676,8 @@ function useProjectImport({
       });
   };
 
-  const runImport = async (selection: typeof candidates) => {
-    if (isImporting) return;
+  const runImport = async (selection: typeof candidates, finish = true) => {
+    if (isImporting) return false;
     const hasAccess = () =>
       selection.every((candidate) =>
         readEnvironmentScope(candidate.environmentId, AuthOrchestrationOperateScope),
@@ -1560,7 +1686,7 @@ function useProjectImport({
     const stopForDeniedAccess = () => setIsImporting(false);
     if (!hasAccess()) {
       stopForDeniedAccess();
-      return;
+      return false;
     }
     setIsImporting(true);
     importWarningRef.current = "";
@@ -1654,11 +1780,10 @@ function useProjectImport({
     const completed = await importEach().finally(() => {
       holdPageRef.current = false;
     });
-    if (!completed) return;
+    if (!completed) return false;
     for (const scan of scans) {
       if (refreshEnvironments.has(scan.environmentId)) scan.refresh();
     }
-    setIsImporting(false);
     const importedThreadCount = importedThreadTotal();
     if (importedProjectsCount < selection.length) {
       if (importedThreadCount > 0 && skippedThreadCount > 0) {
@@ -1671,7 +1796,17 @@ function useProjectImport({
         importWarningRef.current = "Could not import thread history.";
       }
     }
-    finishAfterImport();
+    if (finish) finishAfterImport();
+    else {
+      try {
+        await Promise.all([...importedProjects.values()].map((project) => waitForProject(project)));
+      } catch (error) {
+        setIsImporting(false);
+        throw error;
+      }
+      setIsImporting(false);
+    }
+    return true;
   };
 
   return {

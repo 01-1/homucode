@@ -76,11 +76,14 @@ const HALT_WORDS = new Set(["stop", "sto", "stp", "stpo", "stopp", "wait", "wiat
  * Only "stop" or "wait", typos and repeats included. The user sends it to halt the running
  * turn now; queued or steered behind that turn, it arrives after the work it meant to halt.
  */
-export function isHaltMessage(message: {
-  readonly text: string;
-  readonly attachments: ReadonlyArray<ChatAttachment>;
-}): boolean {
-  if (message.attachments.length > 0) return false;
+export function isHaltMessage(
+  message: {
+    readonly text: string;
+    readonly attachments: ReadonlyArray<ChatAttachment>;
+  },
+  enabled = false,
+): boolean {
+  if (!enabled || message.attachments.length > 0) return false;
   const words = message.text
     .trim()
     .toLowerCase()

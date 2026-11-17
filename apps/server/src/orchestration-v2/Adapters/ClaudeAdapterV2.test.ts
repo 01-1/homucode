@@ -25,6 +25,7 @@ import type {
   TaskUpdateInput,
   TaskUpdateOutput,
 } from "@anthropic-ai/claude-agent-sdk/sdk-tools";
+import * as ServerSettings from "../../serverSettings.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { toolOutputImages } from "@t3tools/shared/toolOutput";
@@ -5788,19 +5789,28 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     {
       readBy: "none",
       echoes: true,
+      enabled: false,
+      title: "does not redeliver a steer when recovery is off",
+    },
+    {
+      readBy: "none",
+      echoes: true,
+      enabled: true,
       title: "redelivers a steer Claude never read before Stop",
     },
     {
       readBy: "none",
       echoes: false,
+      enabled: true,
       title: "does not redeliver a steer on a CLI that never echoes prompt uuids",
     },
     {
       readBy: "assistant",
       echoes: true,
+      enabled: true,
       title: "does not redeliver a steer Claude read before Stop",
     },
-  ] as const)("$title", ({ readBy, echoes }) =>
+  ] as const)("$title", ({ readBy, echoes, enabled }) =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarnessWithOptions({
         close: (sdkMessages) => Queue.shutdown(sdkMessages),
@@ -5904,12 +5914,13 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         .map((event) => (event.type === "steer.updated" ? event.messageId : undefined));
       assert.deepStrictEqual(
         redelivered,
-        readBy === "none" && echoes ? [MessageId.make("unread-steer")] : [],
+        enabled && readBy === "none" && echoes ? [MessageId.make("unread-steer")] : [],
       );
     }).pipe(
       Effect.scoped,
       Effect.provide(
         Layer.mergeAll(
+          ServerSettings.layerTest({ claudeSteersSurviveStop: enabled }),
           IdAllocator.layer,
           McpProviderSessions.layer,
           NodeServices.layer,

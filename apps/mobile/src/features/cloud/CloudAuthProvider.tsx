@@ -1,5 +1,8 @@
 import { ClerkProvider, getClerkInstance } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
+import * as Effect from "effect/Effect";
+import { runtime } from "../../lib/runtime";
+import * as MobilePreferences from "../../persistence/mobile-preferences";
 import type { ReactNode } from "react";
 
 import {
@@ -18,7 +21,14 @@ if (publishableKey) {
   // observes it for the app's lifetime without a React subscription.
   const clerk = getClerkInstance({ publishableKey });
   cloudAccountService.attach(clerk);
-  void restoreLastCloudAccount(clerk);
+  void runtime
+    .runPromise(
+      MobilePreferences.MobilePreferencesStore.pipe(Effect.flatMap((store) => store.load)),
+    )
+    .then(
+      (preferences) => restoreLastCloudAccount(clerk, preferences.fasterPhoneLaunch === true),
+      () => undefined,
+    );
 } else {
   // Without cloud config no account can ever activate, so drop anything a
   // previous build with cloud enabled left registered.

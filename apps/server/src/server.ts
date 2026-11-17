@@ -1,3 +1,6 @@
+import * as MessageDevices from "./orchestration-v2/MessageDevices.ts";
+import * as BuildTools from "./buildTools/BuildTools.ts";
+import * as BackgroundGit from "./vcs/BackgroundGit.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -823,6 +826,8 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(layerBackground),
   Layer.provideMerge(layerResourceDiagnostics),
   Layer.provideMerge(TraceDiagnostics.layer),
+  Layer.provideMerge(MessageDevices.layer),
+  Layer.provideMerge(BuildTools.layer.pipe(Layer.provide(layerServerSettings))),
   Layer.provideMerge(TriageService.layer.pipe(Layer.provide(GitVcsDriver.layer))),
   // Layers memoize by reference, so this is the same policy the settings layer reads.
   Layer.provideMerge(AnalyticsService.layer.pipe(Layer.provide(ManagedPolicy.layer))),
@@ -833,6 +838,7 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   // GitVcsDriver.layer is memoized and some of its build sites live outside this file, so the
   // fetch interval goes in context here, before the first build captures it.
   Layer.provideMerge(VcsAutomaticFetchInterval.layer.pipe(Layer.provide(layerServerSettings))),
+  Layer.provideMerge(BackgroundGit.layer.pipe(Layer.provide(layerServerSettings))),
   Layer.provide(NetService.layer),
 );
 

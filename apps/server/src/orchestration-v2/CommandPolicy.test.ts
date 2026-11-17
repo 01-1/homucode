@@ -279,7 +279,8 @@ it.each([
   ["stopwatch", false],
   ["", false],
 ] as const)("treats %j as a halt message: %s", (text, halts) => {
-  assert.equal(CommandPolicy.isHaltMessage({ text, attachments: [] }), halts);
+  assert.equal(CommandPolicy.isHaltMessage({ text, attachments: [] }), false);
+  assert.equal(CommandPolicy.isHaltMessage({ text, attachments: [] }, true), halts);
 });
 
 const layer = it.layer(CommandPolicy.layer);

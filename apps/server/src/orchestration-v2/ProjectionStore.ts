@@ -1,3 +1,5 @@
+import * as Option from "effect/Option";
+import * as ServerSettings from "../serverSettings.ts";
 import * as WorkAssistance from "./WorkAssistance.ts";
 import type { ProjectThreadAwarenessV2Input } from "@t3tools/shared/agentAwareness";
 import { applyOrchestrationV2ThreadVisit, pendingGuestMessageCount } from "@t3tools/contracts";
@@ -2234,6 +2236,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
   ProjectionStoreV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const assistanceSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+    const withAssistanceSettings = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      Option.isSome(assistanceSettings)
+        ? effect.pipe(
+            Effect.provideService(ServerSettings.ServerSettingsService, assistanceSettings.value),
+          )
+        : effect;
 
     // SQLite uses the partial conversation index of migration 082 only for this exact predicate.
     const CONVERSATION_INDEX_EXCLUDED_TYPES = sql.literal(
@@ -9363,6 +9372,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getMessagesById: readOnReader(getMessagesById),
       readWorkActivity: (threadId) =>
         WorkAssistance.readActivity(threadId).pipe(
+          withAssistanceSettings,
           Effect.provideService(SqlClient.SqlClient, sql),
           Effect.mapError(
             (cause) =>

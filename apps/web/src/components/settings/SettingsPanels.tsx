@@ -1,3 +1,4 @@
+import { BehaviorSettingsSection } from "./BehaviorSettings";
 import { DuetSettings } from "./DuetSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
@@ -83,6 +84,7 @@ import { isMacPlatform } from "../../lib/utils";
 import {
   useEnvironmentProviders,
   useEnvironments,
+  usePrimaryEnvironment,
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
@@ -175,6 +177,8 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 function AboutVersionSection() {
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const primaryEnvironment = usePrimaryEnvironment();
   const updateState = useDesktopUpdateState();
   const [switchChannel, setSwitchChannel] = useState<DesktopUpdateChannel | null>(null);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
@@ -438,7 +442,11 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
-      {hasDesktopBridge ? <StagedBuildSettingsRow /> : null}
+      {hasDesktopBridge && !primaryEnvironment?.serverConfig?.settings.buildToolsSettingsVisible ? (
+        <StagedBuildSettingsRow
+          {...(primaryEnvironmentId ? { environmentId: primaryEnvironmentId } : {})}
+        />
+      ) : null}
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}
@@ -854,6 +862,22 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection title="Building T3">
+        <SettingsRow
+          title="Show Building T3 settings"
+          description="Configure cloud builds, Android APK builds, and loading AppImages."
+          serverScoped
+          settingKeys={["buildToolsSettingsVisible"]}
+          control={
+            <Switch
+              checked={settings.buildToolsSettingsVisible}
+              onCheckedChange={(value) =>
+                updateSettings({ buildToolsSettingsVisible: Boolean(value) })
+              }
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="settings-sync" title="Settings sync">
         <SettingsRow
           {...setting("settings-sync")}
@@ -2016,6 +2040,7 @@ export function ThreadsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <BehaviorSettingsSection />
       <SettingsSection id="new-projects" title="New projects">
         <SettingsRow
           serverScoped

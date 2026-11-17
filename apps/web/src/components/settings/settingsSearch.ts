@@ -18,6 +18,7 @@ import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
   | "/settings/projects"
+  | "/settings/building-t3"
   | "/settings/general"
   | "/settings/diagnostics"
   | "/settings/voice"
@@ -95,6 +96,7 @@ export interface SettingsSearchAvailability {
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": msg("Diagnostics"),
   "/settings/projects": msg("Projects"),
+  "/settings/building-t3": msg("Building T3"),
   "/settings/general": msg("General"),
   "/settings/appearance": msg("Appearance"),
   "/settings/chat": msg("Chat"),
@@ -149,7 +151,12 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: msg("Code"),
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: [
+      "/settings/projects",
+      "/settings/source-control",
+      "/settings/worktrees",
+      "/settings/building-t3",
+    ],
   },
   {
     heading: msg("Connections"),
@@ -1538,6 +1545,7 @@ const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id,
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
   "/settings/projects": "project",
+  "/settings/building-t3": "environment",
   "/settings/general": null,
   "/settings/voice": null,
   "/settings/appearance": null,

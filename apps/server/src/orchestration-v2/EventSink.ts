@@ -1,3 +1,4 @@
+import * as ServerSettings from "../serverSettings.ts";
 import * as ProjectRouterNoticeGuard from "./ProjectRouterNoticeGuard.ts";
 import {
   CommandId,
@@ -275,6 +276,13 @@ const layerBase: Layer.Layer<
   EventSinkV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const assistanceSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+    const withAssistanceSettings = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      Option.isSome(assistanceSettings)
+        ? effect.pipe(
+            Effect.provideService(ServerSettings.ServerSettingsService, assistanceSettings.value),
+          )
+        : effect;
     yield* WorkAssistance.resetContinuity().pipe(
       Effect.provideService(SqlClient.SqlClient, sql),
       Effect.orDie,
@@ -425,6 +433,7 @@ const layerBase: Layer.Layer<
         });
         // Same transaction: continuity is evaluated once against the batch's final projection.
         yield* WorkAssistance.observeBatch(storedEvents.map((stored) => stored.event)).pipe(
+          withAssistanceSettings,
           Effect.provideService(SqlClient.SqlClient, sql),
         );
         const sequence = storedEvents.at(-1)?.sequence;

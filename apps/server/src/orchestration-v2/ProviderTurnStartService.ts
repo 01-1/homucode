@@ -869,6 +869,7 @@ export const layer: Layer.Layer<
           records: providerMessage.context?.records ?? [],
         }),
         providerMessage,
+        duetSettings.messageSentFromEnabled,
       );
       // Native goal commands go verbatim; handoff history waits a turn.
       const goalDriver =

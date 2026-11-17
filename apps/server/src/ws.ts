@@ -1,3 +1,5 @@
+import * as MessageDevices from "./orchestration-v2/MessageDevices.ts";
+import * as BuildTools from "./buildTools/BuildTools.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
 import * as NodeCrypto from "node:crypto";
@@ -1485,6 +1487,9 @@ export const layerWsRpc = (
           Effect.map(parseDeviceNameRules),
           Effect.orElseSucceed((): ReadonlyArray<DeviceNameRule> => []),
         );
+      const messageDevices = yield* MessageDevices.MessageDevices;
+      const rawSentFrom = sentFromConnection(clientAnalyticsProps);
+      yield* messageDevices.record(rawSentFrom);
       const connectionSentFrom = withDeviceName(
         sentFromConnection(clientAnalyticsProps),
         deviceNameRules,
@@ -1608,6 +1613,7 @@ export const layerWsRpc = (
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const secretCheck = yield* SecretCheck.SecretCheck;
       const statusLine = yield* StatusLine.StatusLine;
+      const buildTools = yield* BuildTools.BuildTools;
       const otlpEndpointCheck = yield* OtlpEndpointCheck.OtlpEndpointCheck;
       const appScripts = yield* AppScripts.AppScripts;
       const textGenerators = yield* TextGenerators.TextGenerators;
@@ -2023,41 +2029,49 @@ export const layerWsRpc = (
               : {}),
           }).pipe(
             Effect.andThen(
-              startup
-                .enqueueCommand(
+              Effect.gen(function* () {
+                const settings = yield* serverSettings.getSettings;
+                const namedSentFrom = withDeviceName(rawSentFrom, [
+                  ...settings.deviceNames,
+                  ...deviceNameRules,
+                ]);
+                return yield* startup.enqueueCommand(
                   (command.type === "prepared-run.retry"
                     ? threadLaunch.retryPreparation(command)
                     : ThreadMessageIntake.dispatchCommand(
                         withConnectionSentFrom(
                           ThreadManagementService.withCreationProvenance(
-                            withClientStopReason(withClientStopScope(command), connectionSentFrom),
+                            withClientStopReason(
+                              withClientStopScope(command, settings.stopThreadSubagents),
+                              namedSentFrom,
+                            ),
                             {
                               createdBy: "user",
                               creationSource:
                                 "creationSource" in command ? command.creationSource : "web",
                             },
                           ),
-                          connectionSentFrom,
+                          namedSentFrom,
                         ),
                       )
                   ).pipe(Effect.provide(intakeContext)),
-                )
-                .pipe(
-                  Effect.tap((result) =>
-                    result.replayed ? Effect.void : recordClientCommandAnalytics(command),
-                  ),
-                  Effect.map((result) => ({ sequence: result.sequence })),
-                  Effect.mapError((cause) => {
-                    const detail = userFacingDispatchErrorMessage(cause);
-                    return new OrchestrationV2DispatchCommandError({
-                      commandId: command.commandId,
-                      commandType: command.type,
-                      message: detail ?? "Failed to dispatch orchestration V2 command",
-                      ...(detail === undefined ? {} : { detail }),
-                      cause,
-                    });
-                  }),
+                );
+              }).pipe(
+                Effect.tap((result) =>
+                  result.replayed ? Effect.void : recordClientCommandAnalytics(command),
                 ),
+                Effect.map((result) => ({ sequence: result.sequence })),
+                Effect.mapError((cause) => {
+                  const detail = userFacingDispatchErrorMessage(cause);
+                  return new OrchestrationV2DispatchCommandError({
+                    commandId: command.commandId,
+                    commandType: command.type,
+                    message: detail ?? "Failed to dispatch orchestration V2 command",
+                    ...(detail === undefined ? {} : { detail }),
+                    cause,
+                  });
+                }),
+              ),
             ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopAutoreviewer]: (input) =>
@@ -2212,7 +2226,8 @@ export const layerWsRpc = (
             "orchestration_v2.command_id": input.commandId,
             "orchestration_v2.project_id": input.projectId,
           }).pipe(
-            Effect.andThen(
+            Effect.andThen(serverSettings.getSettings.pipe(Effect.orDie)),
+            Effect.flatMap((settings) =>
               startup
                 .enqueueCommand(
                   threadLaunch
@@ -2255,7 +2270,10 @@ export const layerWsRpc = (
                                       ? {}
                                       : { context: input.initialMessage.context }),
                                   },
-                                  connectionSentFrom,
+                                  withDeviceName(rawSentFrom, [
+                                    ...settings.deviceNames,
+                                    ...deviceNameRules,
+                                  ]),
                                 ),
                               }),
                           createdBy: "user",
@@ -2755,6 +2773,18 @@ export const layerWsRpc = (
           }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) => sourceControlDiscovery.discover,
         [WS_METHODS.serverCheckSecretSource]: (input) => secretCheck.check(input.source),
+        [WS_METHODS.serverMessageDevices]: Effect.fn("WebSocket.messageDevices")(function* () {
+          const settings = yield* serverSettings.getSettings.pipe(Effect.orDie);
+          const rules = [...settings.deviceNames, ...deviceNameRules];
+          const devices = yield* messageDevices.list;
+          return {
+            rules,
+            current: withDeviceName(rawSentFrom, rules) ?? null,
+            devices: devices.map((device) => withDeviceName(device, rules)!),
+          };
+        }),
+        [WS_METHODS.serverBuildToolsRun]: (input) => buildTools.run(input),
+        [WS_METHODS.serverBuildToolsState]: () => buildTools.changes,
         [WS_METHODS.serverRenderStatusLine]: (input) => statusLine.render(input),
         [WS_METHODS.serverGetTraceDiagnostics]: (_input) =>
           TraceDiagnostics.readTraceDiagnostics({

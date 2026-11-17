@@ -1,3 +1,4 @@
+import { MobileExtraSettings } from "./SetupBehaviorSettings";
 import { useNavigation } from "@react-navigation/native";
 import { SettingsRow } from "./components/SettingsRow";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
@@ -313,6 +314,14 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
             ) : null}
             {props.page === "threads" ? (
               <>
+                {!projectSelected
+                  ? selectedTargets.map((target) => (
+                      <MobileExtraSettings
+                        key={target.environmentId}
+                        environmentId={target.environmentId}
+                      />
+                    ))
+                  : null}
                 <SettingsSection title="Status line">
                   <SettingsSwitchRow
                     icon="terminal"

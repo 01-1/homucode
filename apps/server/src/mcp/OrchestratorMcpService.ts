@@ -1364,20 +1364,24 @@ const make = Effect.gen(function* () {
   ) =>
     requireCapability(scope).pipe(
       Effect.andThen(
-        scope.thread !== undefined ||
+        Effect.gen(function* () {
+          const target = (yield* serverSettings.getSettings.pipe(Effect.orDie))
+            .workAssistanceTarget;
+          return yield* scope.thread !== undefined ||
           scope.client === undefined ||
           scope.requestNamespace !== "local-cli" ||
           scope.client.linked === true ||
-          scope.environmentId !== WorkAssistance.MAIN_ENVIRONMENT ||
-          projectId !== WorkAssistance.MAIN_PROJECT ||
+          scope.environmentId !== target?.environmentId ||
+          projectId !== target?.projectId ||
           (writing && scope.client.access === "read-only")
-          ? Effect.fail(
-              failure(
-                "capability_denied",
-                "Assistance control requires an authenticated local MAIN client.",
-              ),
-            )
-          : Effect.void,
+            ? Effect.fail(
+                failure(
+                  "capability_denied",
+                  "Assistance control requires an authenticated local client for the configured project.",
+                ),
+              )
+            : Effect.void;
+        }),
       ),
     );
 
@@ -2727,6 +2731,7 @@ const make = Effect.gen(function* () {
           projectId,
           observedAt: DateTime.formatIso(state.now),
           latestHumanMessageAt: yield* WorkAssistance.readLatestHumanMessageAt().pipe(
+            Effect.provideService(ServerSettings.ServerSettingsService, serverSettings),
             Effect.mapError(() =>
               failure("orchestration_error", "Unable to read human activity timestamp."),
             ),
@@ -2758,11 +2763,11 @@ const make = Effect.gen(function* () {
       const commandId = WorkAssistance.assistanceCommandId(input.threadId, input.runId);
       const accepted = yield* threadManagement.hasReceipt(commandId);
       const parent = yield* loadThreadRecords(input.threadId, ["runs"]);
-      if (
-        parent.thread.projectId !== WorkAssistance.MAIN_PROJECT ||
-        parent.thread.linkOrigin !== undefined
-      )
-        return yield* failure("capability_denied", "Assistance is restricted to local MAIN work.");
+      if (parent.thread.projectId !== input.projectId || parent.thread.linkOrigin !== undefined)
+        return yield* failure(
+          "capability_denied",
+          "Assistance is restricted to the configured local project.",
+        );
       const run = parent.runs.find((candidate) => candidate.id === input.runId);
       if (run?.rootNodeId == null)
         return yield* failure("invalid_request", "assistance_ineligible:stale_run");

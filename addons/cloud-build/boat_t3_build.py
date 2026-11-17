@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build a committed T3 revision on a disposable Boat VM; never load it."""
+import os
 import argparse
 import fcntl
 import hashlib
@@ -239,7 +240,7 @@ class Boat:
     def call(self, *args, timeout=180):
         self.serial += 1
         log = self.output / f'{self.serial:02d}-{args[0]}.log'
-        command = ['boat', '--no-update', '--json', *args]
+        command = [os.environ.get('T3_BUILD_BOAT_CLI', 'boat'), '--no-update', '--json', *args]
         if args[0] == 'new':
             # File output survives interruption and preserves the created ID for recovery.
             try:

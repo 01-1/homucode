@@ -66,7 +66,11 @@ function onClerkLoad(clerk: ClerkInstance, run: (user: { readonly id: string } |
  * the signed-in user. Until then the last account lets connections use their
  * cached environment credentials; a Clerk token waits for Clerk.
  */
-export async function restoreLastCloudAccount(clerk: ClerkInstance): Promise<void> {
+export async function restoreLastCloudAccount(
+  clerk: ClerkInstance,
+  enabled = false,
+): Promise<void> {
+  if (!enabled) return;
   const accountId = await SecureStore.getItemAsync(LAST_CLOUD_ACCOUNT_KEY).catch(() => null);
   if (accountId === null || cloudAccountService.getState()._tag !== "Unobserved") return;
   const loaded = new Promise<void>((resolve) =>

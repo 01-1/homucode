@@ -1,9 +1,11 @@
+import * as ServerSettings from "../serverSettings.ts";
 import * as WorkAssistance from "./WorkAssistance.ts";
 import * as NodeSqlite from "node:sqlite";
 
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  EnvironmentId,
   MessageId,
   EventId,
   NodeId,
@@ -66,14 +68,24 @@ const adapter = {
   openSession: () => Effect.die("No provider process needed for metadata controls"),
 } as ProviderAdapter.ProviderAdapterV2["Service"];
 const layerDatabase = SqlitePersistence.layerMemory;
+const assistanceTarget = {
+  environmentId: EnvironmentId.make("assistance-environment"),
+  projectId: ProjectId.make("assistance-project"),
+};
+const layerSettings = ServerSettings.layerTest({ workAssistanceTarget: assistanceTarget });
 const layerTest = Layer.mergeAll(
+  layerSettings,
   layerDatabase,
   ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
   EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
   ProviderReplayHarness.layerWithRegistry(
     { name: "control-reads" },
     ProviderAdapterRegistry.layerFromAdapters([adapter]),
-    { databaseLayer: layerDatabase, runEffectWorker: false },
+    {
+      databaseLayer: layerDatabase,
+      runEffectWorker: false,
+      serverSettings: { workAssistanceTarget: assistanceTarget },
+    },
   ),
 );
 
@@ -2382,7 +2394,7 @@ const seedAssistanceWork = Effect.fn("test.seedAssistanceWork")(function* (
     type: "thread.create",
     commandId: CommandId.make("assistance-create"),
     threadId,
-    projectId: WorkAssistance.MAIN_PROJECT,
+    projectId: assistanceTarget.projectId,
     title: "Work",
     modelSelection,
     runtimeMode: "approval-required",

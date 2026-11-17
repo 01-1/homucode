@@ -1,3 +1,5 @@
+import { OrchestrationMessageSentFrom } from "./composerContext.ts";
+import { BuildToolsRequest, BuildToolsState, BuildToolsError } from "./buildTools.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -529,6 +531,9 @@ export const WS_METHODS = {
   serverCommitDesktopUpdate: "server.commitDesktopUpdate",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
+  serverMessageDevices: "server.messageDevices",
+  serverBuildToolsRun: "server.buildToolsRun",
+  serverBuildToolsState: "server.buildToolsState",
   serverRunStorageCleanup: "server.runStorageCleanup",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
@@ -835,6 +840,28 @@ const WsServerCommitDesktopUpdateRpc = Rpc.make(WS_METHODS.serverCommitDesktopUp
   payload: DesktopUpdateCommitInput,
   success: ServerSelfUpdateResult,
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
+});
+
+const WsServerMessageDevicesRpc = Rpc.make(WS_METHODS.serverMessageDevices, {
+  payload: Schema.Struct({}),
+  success: Schema.Struct({
+    current: Schema.NullOr(OrchestrationMessageSentFrom),
+    devices: Schema.Array(OrchestrationMessageSentFrom),
+    rules: ServerSettings.fields.deviceNames,
+  }),
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerBuildToolsRunRpc = Rpc.make(WS_METHODS.serverBuildToolsRun, {
+  payload: BuildToolsRequest,
+  success: BuildToolsState,
+  error: Schema.Union([BuildToolsError, EnvironmentAuthorizationError]),
+});
+const WsServerBuildToolsStateRpc = Rpc.make(WS_METHODS.serverBuildToolsState, {
+  payload: Schema.Struct({}),
+  success: BuildToolsState,
+  stream: true,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerRunStorageCleanupRpc = Rpc.make(WS_METHODS.serverRunStorageCleanup, {
@@ -2201,6 +2228,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCommitDesktopUpdateRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
+  WsServerMessageDevicesRpc,
+  WsServerBuildToolsRunRpc,
+  WsServerBuildToolsStateRpc,
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
   WsServerGetDatabaseStorageRpc,

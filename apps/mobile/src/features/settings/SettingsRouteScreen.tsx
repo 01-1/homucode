@@ -292,6 +292,11 @@ function useSettingsIndexSections(): SettingsListSection[] {
       rows: [
         serverPage("SettingsProviderAccounts", "person.crop.circle", gt("Providers")),
         serverPage("SettingsThreads", "text.bubble", gt("Threads")),
+        ...(selectedTargets.some(
+          (target) => target.serverConfig?.settings.buildToolsSettingsVisible,
+        )
+          ? [serverPage("SettingsBuildingT3", "hammer", gt("Building T3"))]
+          : []),
         page("SettingsScheduledTasks", "clock", gt("Scheduled tasks")),
       ],
     },

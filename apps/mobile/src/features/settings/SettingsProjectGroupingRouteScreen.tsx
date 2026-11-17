@@ -1,3 +1,5 @@
+import { MobileBuildVisibility } from "./SetupBehaviorSettings";
+import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -38,6 +40,7 @@ const GROUPING_OPTIONS: ReadonlyArray<{
 ];
 
 export function SettingsProjectGroupingRouteScreen() {
+  const { selectedTargets } = useSettingsEnvironmentFilter();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
@@ -68,13 +71,33 @@ export function SettingsProjectGroupingRouteScreen() {
             />
           ))}
         </SettingsSection>
+        <SettingsSection title="Building T3">
+          {selectedTargets.map((target) => (
+            <MobileBuildVisibility
+              key={target.environmentId}
+              environmentId={target.environmentId}
+            />
+          ))}
+        </SettingsSection>
+        <SettingsSection title="Faster phone launch">
+          <ListToggleRow
+            label="Faster phone launch"
+            description="Connect using the last signed-in account before sign-in loads. Applies next launch."
+            value={
+              AsyncResult.isSuccess(preferencesResult) &&
+              preferencesResult.value.fasterPhoneLaunch === true
+            }
+            disabled={!preferencesReady}
+            onValueChange={(fasterPhoneLaunch) => savePreferences({ fasterPhoneLaunch })}
+          />
+        </SettingsSection>
         <SettingsSection title="Settings sync">
           <ListToggleRow
             label="Sync settings"
             description="Keep theme, chat and other settings the same as your other devices, through the server this phone first synced with."
             value={
               AsyncResult.isSuccess(preferencesResult)
-                ? preferencesResult.value.settingsSyncEnabled !== false
+                ? preferencesResult.value.settingsSyncEnabled === true
                 : false
             }
             disabled={!preferencesReady}

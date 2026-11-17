@@ -602,7 +602,8 @@
     "./contextChipAccents": {
       "types": "./src/contextChipAccents.ts",
       "import": "./src/contextChipAccents.ts"
-    }
+    },
+    "./stagedBuilds": "./src/stagedBuilds.ts"
   },
   "scripts": {
     "typecheck": "effect-tsgo tsrs --noEmit",

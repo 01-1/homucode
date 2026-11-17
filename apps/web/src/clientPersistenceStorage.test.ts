@@ -38,6 +38,26 @@ afterEach(() => {
 });
 
 describe("clientPersistenceStorage", () => {
+  it.each([undefined, true, false])(
+    "preserves existing settings sync choice %s",
+    async (choice) => {
+      const testWindow = getTestWindow();
+      testWindow.localStorage.setItem(
+        "t3code:client-settings:v1",
+        JSON.stringify({ settingsSyncEnabled: choice }),
+      );
+      const { readBrowserClientSettings } = await import("./clientPersistenceStorage");
+      expect(readBrowserClientSettings()?.settingsSyncEnabled).toBe(choice ?? true);
+    },
+  );
+
+  it("leaves fresh installs opted out of settings sync", async () => {
+    getTestWindow();
+    const { readBrowserClientSettings } = await import("./clientPersistenceStorage");
+    expect(readBrowserClientSettings()).toBeNull();
+    expect(DEFAULT_CLIENT_SETTINGS.settingsSyncEnabled).toBe(false);
+  });
+
   it.each(["not-json", '{"wordWrap":"invalid"}'])(
     "does not treat invalid saved settings as absent: %s",
     async (value) => {

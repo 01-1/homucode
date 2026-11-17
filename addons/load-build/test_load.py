@@ -81,6 +81,29 @@ class Tests(unittest.TestCase):
             guard.write_text(tlb.iso(NOW - timedelta(minutes=5)))
             self.assertIsNone(tlb.active_guard(NOW))
 
+    def test_existing_destination_is_not_overwritten(self):
+        deps = Fake()
+        destination = tlb.live_name(self.staged)
+        destination.write_text('previous')
+        self.assertEqual(self.run_load(deps), 1)
+        self.assertEqual(destination.read_text(), 'previous')
+        self.assertTrue(self.staged.exists())
+        self.assertEqual(deps.calls, [])
+
+    def test_launcher_uses_configured_folder_and_falls_back_to_previous(self):
+        previous = self.dir / 'T3-Code-previous.AppImage'
+        previous.write_text('previous')
+        folder = self.dir / 'other'
+        folder.mkdir()
+        with patch.object(tlb, 'BUILD_FOLDER', folder), patch.object(tlb, 'PREVIOUS_BUILD', previous), \
+                patch.object(tlb.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+            tlb.Real.start_t3()
+            self.assertEqual(run.call_args[0][0][-1], str(previous))
+            staged = folder / 'T3-Code-new.AppImage'
+            staged.write_text('new')
+            tlb.Real.start_t3()
+            self.assertEqual(run.call_args[0][0][-1], str(staged))
+
     def test_sha_mismatch_touches_nothing(self):
         deps = Fake()
         self.sha = '0' * 64
@@ -124,14 +147,14 @@ class Tests(unittest.TestCase):
     def test_detach_passes_settings_to_systemd_run(self):
         # systemd-run uses the user manager's environment, so the settings must be passed on.
         env = {'T3_LOAD_GUARDS': '/q/quiet-until', 'T3_LOAD_PAUSE_FILE': '/q/pause', 'T3_LOAD_WAKE_THREAD': 'thread-1',
-               'UNRELATED': 'x'}
+               'T3_BUILD_FOLDER': '/builds', 'T3_BUILD_PREVIOUS': '/old/T3-Code-old.AppImage', 'UNRELATED': 'x'}
         argv = ['t3-load-build', str(self.staged), self.sha, str(self.wake), '--detach']
         with patch.dict(os.environ, env), patch.object(sys, 'argv', argv), \
                 patch.object(tlb.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
             self.assertEqual(tlb.main(), 0)
         cmd = run.call_args[0][0]
         self.assertEqual(cmd[:2], ['systemd-run', '--user'])
-        for k in ('T3_LOAD_GUARDS', 'T3_LOAD_PAUSE_FILE', 'T3_LOAD_WAKE_THREAD'):
+        for k in tlb.SETTINGS:
             self.assertIn(f'--setenv={k}={env[k]}', cmd)
         self.assertNotIn('--setenv=UNRELATED=x', cmd)
         self.assertNotIn('--detach', cmd)

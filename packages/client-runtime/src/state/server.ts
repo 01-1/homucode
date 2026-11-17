@@ -1366,6 +1366,21 @@ export function createServerEnvironmentAtoms<R, E>(
 
   return {
     configValueAtom,
+    messageDevices: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:message-devices",
+      tag: WS_METHODS.serverMessageDevices,
+      staleTimeMs: 0,
+    }),
+    buildToolsRun: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:build-tools-run",
+      tag: WS_METHODS.serverBuildToolsRun,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    buildToolsState: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:build-tools-state",
+      tag: WS_METHODS.serverBuildToolsState,
+      idleTtlMs: 0,
+    }),
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",
       tag: WS_METHODS.serverRunStorageCleanup,
