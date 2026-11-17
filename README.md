@@ -14,7 +14,7 @@ The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, answered questions that keep every option, no stray clicks on a question that just appeared, and End to jump to the latest message.
 - **Desktop, CLI and mobile.** Opt-in settings sync across web, desktop and phone, opt-in TypeScript app scripts run from a keybinding or `t3 app run`, faster CLI launches, an opt-in phone launch that connects without waiting for sign-in, Linux desktop link fixes, undo for a staged build, and smaller fixes.
 - **Offloading to cloud.** Heavy checks and uncached Android dev clients run on Boat.
-- **Add-ons.** Optional installable tools in [`addons/`](./addons/README.md), all off by default. The optional Building T3 settings page runs cloud builds and staged-build loading with rollback, builds Android APKs and serves them on the LAN. Other addons that are not recommended and do not have an install path: agent team launcher, outside recovery agent, autoreviewer reports, Wekan board relay.
+- **Add-ons.** Optional build tools in [`addons/`](./addons/README.md), all off by default. The optional Building T3 settings page runs cloud builds and staged-build loading with rollback, builds Android APKs and serves them on the LAN.
 
 Only builds from this repository have these changes; upstream's published apps don't. See [Known limits](./CHANGES.md#known-limits).
 

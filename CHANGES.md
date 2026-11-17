@@ -79,7 +79,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Add-ons
 
-- **Optional tools.** [`addons/`](./addons/README.md) holds the tools from [t3code-tools](https://github.com/01-1/t3code-tools): an agent team launcher, cloud builds on boat.dev, an outside agent that restarts T3 when it dies, staged-build loading with rollback, autoreviewer reports, and a Wekan board relay. They are all off by default. Enable "Show Building T3 settings" in Settings → General to configure and run cloud-build and load-build from the app, including checksum verification and automatic rollback on AppImage installs. The page also runs Android APK builds, can serve APKs over the LAN until switched off or the server stops, and sets the AppImage build folder. Setup can open this page too. A T3 Code checkout and a signed-in boat CLI on the server are required for builds. The other four tools stay outside the app.
+- **Optional tools.** [`addons/`](./addons/README.md) holds two build tools: cloud builds on boat.dev and staged-build loading with rollback. Both are off by default. Enable "Show Building T3 settings" in Settings → General to configure and run cloud-build and load-build from the app, including checksum verification and automatic rollback on AppImage installs. The page also runs Android APK builds, can serve APKs over the LAN until switched off or the server stops, and sets the AppImage build folder. Setup can open this page too. A T3 Code checkout and a signed-in boat CLI on the server are required for builds.
 
 ## Smaller items
 
