@@ -6650,23 +6650,39 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>,
           ) {
-            yield* Ref.update(pendingBackgroundTasksByNativeThread, (current) => {
-              const updated = new Map(current);
-              if (tasks.length === 0) {
-                updated.delete(nativeThreadId);
-              } else {
-                updated.set(
-                  nativeThreadId,
-                  new Map(
-                    tasks.map((task) => {
-                      const previous = current.get(nativeThreadId)?.get(task.taskId);
-                      return [task.taskId, { ...previous, ...task }] as const;
-                    }),
-                  ),
+            const startedCommandIds = yield* Ref.modify(
+              pendingBackgroundTasksByNativeThread,
+              (current) => {
+                const previousRoster = current.get(nativeThreadId);
+                const startedCommandIds = tasks.flatMap((task) =>
+                  task.kind === "command" && previousRoster?.has(task.taskId) !== true
+                    ? [task.taskId]
+                    : [],
                 );
-              }
-              return updated;
-            });
+                const updated = new Map(current);
+                if (tasks.length === 0) {
+                  updated.delete(nativeThreadId);
+                } else {
+                  updated.set(
+                    nativeThreadId,
+                    new Map(
+                      tasks.map((task) => {
+                        const previous = previousRoster?.get(task.taskId);
+                        return [task.taskId, { ...previous, ...task }] as const;
+                      }),
+                    ),
+                  );
+                }
+                return [startedCommandIds, updated] as const;
+              },
+            );
+            if (startedCommandIds.length > 0) {
+              yield* addTaskIdsToNativeThreadSet(
+                awaitedBackgroundTasksByNativeThread,
+                nativeThreadId,
+                startedCommandIds,
+              );
+            }
             yield* rememberOpaqueTasks(tasks);
             if (tasks.length > 0) {
               yield* markWakeEligibleOpaqueBackgroundTasks(
@@ -6693,17 +6709,20 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             nativeThreadId: string,
             task: OrchestrationV2PendingBackgroundTask,
           ) {
-            const startedMonitor = yield* Ref.modify(
+            // Claude wakes the agent when a background command or Monitor ends, so both hold
+            // Working from the start; the agent releases one it leaves running.
+            const startedHeldTask = yield* Ref.modify(
               pendingBackgroundTasksByNativeThread,
               (current) => {
                 const roster = new Map(rosterForNativeThread(current, nativeThreadId));
-                const startedMonitor =
-                  task.kind === "monitor" && roster.get(task.taskId)?.kind !== "monitor";
+                const startedHeldTask =
+                  (task.kind === "monitor" || task.kind === "command") &&
+                  roster.get(task.taskId)?.kind !== task.kind;
                 roster.set(task.taskId, task);
-                return [startedMonitor, new Map(current).set(nativeThreadId, roster)] as const;
+                return [startedHeldTask, new Map(current).set(nativeThreadId, roster)] as const;
               },
             );
-            if (startedMonitor) {
+            if (startedHeldTask) {
               yield* addTaskIdsToNativeThreadSet(
                 awaitedBackgroundTasksByNativeThread,
                 nativeThreadId,

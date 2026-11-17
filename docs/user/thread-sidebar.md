@@ -158,9 +158,10 @@ open.
 
 Threads that are working or waiting on work they will resume from move into a collapsed
 **Working** section below the active list.
-That includes subagents, watched pull requests with checks still running, Claude monitors,
-and background commands or other monitors the agent says it is waiting on. A dev server or other process an agent leaves running does not keep a thread
-there. A thread returns to the top of the active list when it finishes, fails, or needs an approval or
+That includes subagents, watched pull requests with checks still running, Claude background
+commands and monitors, and background commands or other monitors the agent says it is waiting on.
+A Claude command keeps the thread there until it ends, unless the agent releases it; with other
+providers, a dev server or other process an agent leaves running does not keep a thread there. A thread returns to the top of the active list when it finishes, fails, or needs an approval or
 answer. The Working section lists the thread you last sent work to first. Pinned threads stay in
 the pinned section.
 

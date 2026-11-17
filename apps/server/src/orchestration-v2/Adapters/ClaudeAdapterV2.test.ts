@@ -12351,7 +12351,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ),
   );
 
-  it.effect("holds only the background tasks the agent marks awaited, until they end", () =>
+  it.effect("holds background commands until they end, except ones the agent releases", () =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarness;
       const now = yield* DateTime.now;
@@ -12397,22 +12397,25 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         harness.sdkMessages,
         roster([WAKE_TASK_ID, "dev-server"], "00000000-0000-4000-8000-000000000301"),
       );
-      yield* nextRoster((tasks) => tasks.length === 2);
+      assert.deepStrictEqual(marks(yield* nextRoster((tasks) => tasks.length === 2)), [
+        [WAKE_TASK_ID, true],
+        ["dev-server", true],
+      ]);
 
-      const marked = yield* awaitBackgroundTasks({
+      const released = yield* awaitBackgroundTasks({
         providerThread: harness.providerThread,
-        taskIds: [WAKE_TASK_ID, "already-finished"],
-        awaited: true,
+        taskIds: ["dev-server", "already-finished"],
+        awaited: false,
       });
-      assert.deepStrictEqual(marked.matched, [WAKE_TASK_ID]);
+      assert.deepStrictEqual(released.matched, ["dev-server"]);
       assert.deepStrictEqual(
-        marks(yield* nextRoster((tasks) => tasks.some((task) => task.awaited === true))),
+        marks(yield* nextRoster((tasks) => tasks.some((task) => task.awaited !== true))),
         [
           [WAKE_TASK_ID, true],
           ["dev-server", false],
         ],
       );
-      // A replacing level rebuilds every entry; the mark must survive it.
+      // A replacing level rebuilds every entry; the release must survive it.
       yield* Queue.offer(
         harness.sdkMessages,
         roster(["dev-server", WAKE_TASK_ID], "00000000-0000-4000-8000-000000000302"),
@@ -12425,7 +12428,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         ],
       );
 
-      // Once the task ends, a reused id starts unmarked.
+      // Once the task ends, a reused id is a new command and starts held.
       yield* Queue.offer(
         harness.sdkMessages,
         claudeSdkFrame({ ...wakeNotification, uuid: "00000000-0000-4000-8000-000000000303" }),
@@ -12437,7 +12440,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       );
       assert.deepStrictEqual(marks(yield* nextRoster((tasks) => tasks.length === 2)), [
         ["dev-server", false],
-        [WAKE_TASK_ID, false],
+        [WAKE_TASK_ID, true],
       ]);
 
       yield* awaitBackgroundTasks({
@@ -12446,23 +12449,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         awaited: true,
       });
       assert.deepStrictEqual(
-        marks(yield* nextRoster((tasks) => tasks.some((task) => task.awaited === true))),
+        marks(yield* nextRoster((tasks) => tasks.every((task) => task.awaited === true))),
         [
           ["dev-server", true],
-          [WAKE_TASK_ID, false],
-        ],
-      );
-      const released = yield* awaitBackgroundTasks({
-        providerThread: harness.providerThread,
-        taskIds: ["dev-server"],
-        awaited: false,
-      });
-      assert.deepStrictEqual(released.matched, ["dev-server"]);
-      assert.deepStrictEqual(
-        marks(yield* nextRoster((tasks) => !tasks.some((task) => task.awaited === true))),
-        [
-          ["dev-server", false],
-          [WAKE_TASK_ID, false],
+          [WAKE_TASK_ID, true],
         ],
       );
       yield* Queue.offer(harness.sdkMessages, turnOneResult);
@@ -14297,6 +14287,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             taskId: taskA,
             description: "work on A",
             kind: "command",
+            awaited: true,
             nativeItemId: "toolu-roster-a",
           },
         ]);
