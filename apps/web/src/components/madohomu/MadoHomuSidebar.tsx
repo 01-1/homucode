@@ -90,6 +90,7 @@ import {
 } from "../ui/menu";
 import { SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "../ui/sidebar";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MadoHomuIcon } from "./MadoHomuIcon";
 import { MadoHomuProjectMenuItems } from "./MadoHomuProjectPicker";
 import { useMadoHomuActions } from "./useMadoHomuActions";
@@ -904,15 +905,21 @@ function HeadingButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className={HEADING_BUTTON_CLASS}
-      onClick={onClick}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={HEADING_BUTTON_CLASS}
+            onClick={onClick}
+          >
+            {children}
+          </button>
+        }
+      />
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
