@@ -4,7 +4,6 @@ import { useCallback } from "react";
 import { View } from "react-native";
 
 import { ListActionRow } from "../../components/ui/ListActionRow";
-import * as Dialog from "../../components/ui/Dialog";
 import { useProjects } from "../../state/entities";
 import {
   clearAddProjectCompletion,
@@ -35,16 +34,9 @@ export function MadoHomuProjectPicker(props: {
     const { onChange, environmentId } = props;
     setAddProjectCompletion((project) => {
       navigation.dispatch(StackActions.popTo(route.name, route.params));
-      if (project.environmentId !== environmentId) {
-        Dialog.alert(
-          "Project added on another environment",
-          "MadoHomu stays on its own environment, so it kept its project.",
-        );
-        return;
-      }
       onChange(project.projectId);
     });
-    navigation.dispatch(StackActions.push("AddProject", { environmentId }));
+    navigation.dispatch(StackActions.push("AddProject", { environmentId, lockEnvironment: true }));
   };
 
   return (
