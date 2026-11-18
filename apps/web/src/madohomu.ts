@@ -115,8 +115,7 @@ export function madohomuNeedsUser(thread: Parameters<typeof resolveSidebarThread
 /** Busy and not waiting on the user: a waiting guest keeps a running thread out of Working. */
 export const madohomuIsWorking = (
   thread: Parameters<typeof resolveSidebarThreadStatus>[0] & Parameters<typeof isThreadWorking>[0],
-) =>
-  !madohomuNeedsUser(thread) && isThreadWorking(thread);
+) => !madohomuNeedsUser(thread) && isThreadWorking(thread);
 
 export function readMadoHomuContext(router: AnyRouter) {
   if (router.state.location?.pathname !== "/madohomu") return null;
