@@ -19,19 +19,32 @@ export function autoUpdateVersion(state: DesktopUpdateState | null): string | nu
   return version === state.notAppliedVersion ? null : version;
 }
 
+export type AutoUpdateOutcome = "installed" | "skipped" | { readonly retryInMs: number };
+
+type AutoUpdateBridge = Pick<
+  DesktopBridge,
+  "getUpdateState" | "downloadUpdate" | "installUpdate" | "getSystemIdleSeconds"
+>;
+
+const humanWaitMs = async (bridge: AutoUpdateBridge) =>
+  Math.max(0, AUTO_UPDATE_IDLE_MS - (await bridge.getSystemIdleSeconds()) * 1000);
+
 /**
- * Downloads the update if needed, then installs it while agents are still idle.
+ * Downloads the update if needed, then installs it while agents and the human are still idle.
  * Each version gets one attempt per session, so a failing install does not retry every few minutes.
+ * Recent keyboard or mouse input returns how long to wait before trying again.
  */
 export async function runAutoUpdate(input: {
-  readonly bridge: Pick<DesktopBridge, "getUpdateState" | "downloadUpdate" | "installUpdate">;
+  readonly bridge: AutoUpdateBridge;
   readonly isIdle: () => boolean;
   readonly attempted: Set<string>;
-}): Promise<"installed" | "skipped"> {
+}): Promise<AutoUpdateOutcome> {
   const { bridge, isIdle, attempted } = input;
   const state = await bridge.getUpdateState();
   const version = autoUpdateVersion(state);
   if (version === null || attempted.has(version) || !isIdle()) return "skipped";
+  const wait = await humanWaitMs(bridge);
+  if (wait > 0) return { retryInMs: wait };
   attempted.add(version);
   if (resolveDesktopUpdateButtonAction(state) === "download") {
     const download = await bridge.downloadUpdate();
@@ -40,6 +53,11 @@ export async function runAutoUpdate(input: {
   if (!isIdle()) {
     attempted.delete(version);
     return "skipped";
+  }
+  const waitAfterDownload = await humanWaitMs(bridge);
+  if (waitAfterDownload > 0) {
+    attempted.delete(version);
+    return { retryInMs: waitAfterDownload };
   }
   return (await bridge.installUpdate(version)).accepted ? "installed" : "skipped";
 }

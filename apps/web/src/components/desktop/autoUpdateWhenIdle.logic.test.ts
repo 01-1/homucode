@@ -32,8 +32,9 @@ const result = (state: DesktopUpdateState): DesktopUpdateActionResult => ({
   state,
 });
 
-function bridge(state: DesktopUpdateState) {
+function bridge(state: DesktopUpdateState, idleSeconds = 600) {
   return {
+    getSystemIdleSeconds: vi.fn(async () => idleSeconds),
     getUpdateState: vi.fn(async () => state),
     downloadUpdate: vi.fn(async () => result(downloaded)),
     installUpdate: vi.fn(async (_version?: string) => result(downloaded)),
@@ -59,6 +60,22 @@ it("does not install when an agent starts during the download", async () => {
     return result(downloaded);
   });
   expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => idle })).toBe("skipped");
+  expect(fake.installUpdate).not.toHaveBeenCalled();
+  expect(attempted.size).toBe(0);
+});
+
+it("waits for five minutes without keyboard or mouse input, before and after the download", async () => {
+  const fake = bridge(available, 120);
+  const attempted = new Set<string>();
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 180_000,
+  });
+  expect(fake.downloadUpdate).not.toHaveBeenCalled();
+
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(300).mockResolvedValueOnce(10);
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 290_000,
+  });
   expect(fake.installUpdate).not.toHaveBeenCalled();
   expect(attempted.size).toBe(0);
 });

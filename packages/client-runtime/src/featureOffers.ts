@@ -144,7 +144,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     page: 2,
     title: "Update when agents are idle",
     description:
-      "Install app updates once this machine's agents have been idle for five minutes, and each provider's updates once its own agents have.",
+      "Install app updates once this machine's agents and keyboard and mouse have been idle for five minutes, and each provider's updates once its own agents have.",
     setting: "autoUpdateWhenIdle",
   },
   {

@@ -56,10 +56,21 @@ export function AutoUpdateWhenIdle() {
     if (!idle || version === null || attempted.has(version) || !bridge) return;
     // Only work, opting out or unmounting cancel an install; the updater's own downloading state does not.
     const period = idlePeriod.current;
-    const timer = setTimeout(() => {
-      void runAutoUpdate({ bridge, attempted, isIdle: () => !period.cancelled }).catch(() => {});
-    }, AUTO_UPDATE_IDLE_MS);
-    return () => clearTimeout(timer);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const attempt = () => {
+      void runAutoUpdate({ bridge, attempted, isIdle: () => !period.cancelled })
+        .then((outcome) => {
+          if (typeof outcome === "object" && !stopped)
+            timer = setTimeout(attempt, outcome.retryInMs);
+        })
+        .catch(() => {});
+    };
+    timer = setTimeout(attempt, AUTO_UPDATE_IDLE_MS);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [idle, version]);
 
   return null;
