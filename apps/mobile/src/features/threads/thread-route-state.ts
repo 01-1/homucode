@@ -41,3 +41,13 @@ export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
     first(draft.incomingShareId),
   ]);
 }
+
+/** `{ madohomu: true }` when the top route was opened from MadoHomu, to pass to routes it opens. */
+export function madohomuRouteFlag(
+  state:
+    | { readonly index: number; readonly routes: ReadonlyArray<{ readonly params?: object }> }
+    | undefined,
+): { readonly madohomu?: true } {
+  const params = state?.routes[state.index]?.params as { readonly madohomu?: unknown } | undefined;
+  return params?.madohomu === true ? { madohomu: true } : {};
+}

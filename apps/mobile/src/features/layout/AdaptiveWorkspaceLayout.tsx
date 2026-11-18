@@ -107,6 +107,7 @@ import { AndroidHingeObserver } from "../../native/AndroidHingeObserver";
 import { WindowHingeContext } from "../../native/window-hinge-context";
 import { useAndroidWorkspaceRoot } from "./workspace/AndroidWorkspaceTabsProvider";
 import { dispatchRootStackReset, rootStackState } from "../../lib/root-stack-reset";
+import { madohomuRouteFlag } from "../threads/thread-route-state";
 import {
   currentWorkspaceSelections,
   workspaceSelectionCheck,
@@ -524,7 +525,10 @@ function AdaptiveWorkspaceLayoutContent(
     if (props.workspaceRouteName === "ThreadFiles" || props.workspaceRouteName === "ThreadFile") {
       return true;
     }
-    navigation.navigate("ThreadFiles", activeThread);
+    navigation.navigate("ThreadFiles", {
+      ...activeThread,
+      ...madohomuRouteFlag(rootStackState(navigation)),
+    });
     return true;
   };
   useHardwareKeyboardCommand("files", handleOpenFilesCommand);

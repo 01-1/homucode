@@ -987,7 +987,12 @@ export function NewTaskDraftScreen(props: {
       <ThreadScreenBinding
         environmentId={selectedProject.environmentId}
         header={
-          <DraftThreadHeader thread={thread} project={selectedProject} cwd={flow.workspaceCwd} />
+          <DraftThreadHeader
+            thread={thread}
+            project={selectedProject}
+            cwd={flow.workspaceCwd}
+            madohomu={props.madohomu === true}
+          />
         }
         draftMode={{
           content: heroViewport,
