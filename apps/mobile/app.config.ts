@@ -17,7 +17,8 @@ const runtimeVersionPolicy =
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 // Forks publish OTAs to their own EAS project; the defaults are upstream's.
-const easProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const easProjectId =
+  repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 const easOwner = repoEnv.T3CODE_EAS_OWNER?.trim() || "pingdotgg";
 const easSlug = repoEnv.T3CODE_EAS_SLUG?.trim() || "t3-code";
 // EAS builds bake in their channel; local Gradle builds need it as a request header.
