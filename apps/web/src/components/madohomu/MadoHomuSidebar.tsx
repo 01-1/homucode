@@ -45,6 +45,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Schema } from "effect";
 import {
   AppWindowIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   EllipsisIcon,
   PlusIcon,
@@ -68,6 +69,12 @@ import {
 import { readLocalApi } from "../../localApi";
 import { madohomuNeedsUser as needsUser } from "../../madohomu";
 import { useServerConfigs } from "../../state/entities";
+import {
+  SETTLED_TAIL_INITIAL_COUNT,
+  SETTLED_TAIL_PAGE_COUNT,
+  useOlderSettledShelf,
+  useOlderSettledShelfGrowth,
+} from "../../state/olderSettledShelf";
 import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -190,6 +197,25 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     false,
     Schema.Boolean,
   );
+  const settledScopeKey = JSON.stringify([environmentId, project?.id]);
+  const [settledTail, setSettledTail] = useState({
+    scopeKey: settledScopeKey,
+    count: SETTLED_TAIL_INITIAL_COUNT,
+  });
+  if (settledTail.scopeKey !== settledScopeKey) {
+    setSettledTail({ scopeKey: settledScopeKey, count: SETTLED_TAIL_INITIAL_COUNT });
+  }
+  const settledVisibleCount =
+    settledTail.scopeKey === settledScopeKey ? settledTail.count : SETTLED_TAIL_INITIAL_COUNT;
+  const olderSettled = useOlderSettledShelf({
+    scopes: project ? [{ environmentId, projectIds: [project.id] }] : [],
+    expanded: settings.madohomuEnabled && settledExpanded,
+    visibleCount: settledVisibleCount,
+  });
+  const settledThreads = groups.find((g) => g.kind === "settled")?.threads ?? [];
+  const listedSettledThreads = settledThreads.filter(olderSettled.isListed);
+  useOlderSettledShelfGrowth(olderSettled, listedSettledThreads);
+  const settledCount = settledThreads.length + olderSettled.unloadedCount(threads);
   const [collapsed, setCollapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, COLLAPSED_SCHEMA);
   const isExpanded = (group: Group) =>
     group.kind === "snoozed"
@@ -203,13 +229,17 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     else setCollapsed((current) => ({ ...current, [group.id]: current[group.id] !== true }));
   };
   const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
-  const [renaming, setRenaming] = useState<{ id: ThreadId; title: string } | null>(null);
+  const [renaming, setRenaming] = useState<{
+    id: ThreadId;
+    title: string;
+    originalTitle: string;
+  } | null>(null);
   const renamingSection = useMadoHomuRenamingSection((s) => s.id);
   const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
   const draftSection = useMadoHomuRenamingSection((s) => s.draft);
   const clearDraftSection = useMadoHomuRenamingSection((s) => s.clearDraft);
   const [dragging, setDragging] = useState<ThreadId | null>(null);
-  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const serverConfigs = useServerConfigs();
   const configLoaded = serverConfigs.has(environmentId);
@@ -239,9 +269,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
 
-  /** The rows a section shows: all when open; collapsed, only the open thread, as T3 Code does. */
   const shownThreads = (group: Group) => {
     if (!isExpanded(group)) return group.threads.filter((t) => t.id === selectedId);
+    if (group.kind === "settled") {
+      const page = listedSettledThreads.slice(0, settledVisibleCount);
+      const selected = group.threads.find((thread) => thread.id === selectedId);
+      if (selected && !page.includes(selected)) page.push(selected);
+      return page;
+    }
     if (group.kind !== "scratch") return group.threads;
     const page = pageMadoHomuRows(
       group.threads,
@@ -292,10 +327,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       return true;
     },
   });
-  const startRename = (threadRef: ScopedThreadRef) => {
-    const thread = threads.find((t) => t.id === threadRef.threadId);
-    if (thread) setRenaming({ id: thread.id, title: thread.title });
-  };
+  const startRename = useStableCallback((threadRef: ScopedThreadRef, rowTitle?: string) => {
+    const title = rowTitle ?? threads.find((t) => t.id === threadRef.threadId)?.title;
+    if (canOperate && title !== undefined) {
+      setRenaming({ id: threadRef.threadId, title, originalTitle: title });
+    }
+  });
   const { openMenu } = useThreadActionMenu({
     threadRef: null,
     projectCwd: project?.workspaceRoot ?? null,
@@ -325,15 +362,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const handleActivate = useStableCallback((threadRef: ScopedThreadRef) =>
     open(threadRef.threadId),
   );
-  const handleEdit = useStableCallback((threadRef: ScopedThreadRef) => {
-    if (canEdit) threadMenu.setEditing(threadRef.threadId);
-  });
   const handleRenameTitleChange = useStableCallback((title: string) =>
     setRenaming((current) => (current ? { ...current, title } : current)),
   );
   const handleCancelRename = useStableCallback(() => setRenaming(null));
   const handleCommitRename = useStableCallback((threadRef: ScopedThreadRef, title: string) => {
-    const original = threads.find((t) => t.id === threadRef.threadId)?.title;
+    const original = renaming?.originalTitle;
     setRenaming(null);
     const trimmed = title.trim();
     if (trimmed.length === 0) {
@@ -733,48 +767,52 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     overId.startsWith(SECTION_DROP_PREFIX)
       ? groups.find((g) => g.id === overId.slice(SECTION_DROP_PREFIX.length))
       : groupOf(overId);
-  const handleDragOver = ({ over }: DragOverEvent) =>
-    setDragOverGroup(over ? (dropGroupOf(String(over.id))?.id ?? null) : null);
+  const handleDragOver = ({ over }: DragOverEvent) => setDragOverId(over ? String(over.id) : null);
   const endDrag = () => {
     setDragging(null);
-    setDragOverGroup(null);
+    setDragOverId(null);
+  };
+  const manualDrop = (moved: ThreadId, overId: string) => {
+    if (moved === overId) return null;
+    const onSection = overId.startsWith(SECTION_DROP_PREFIX);
+    const target = dropGroupOf(overId);
+    const source = groupOf(moved);
+    if (!target || !source || !isManual(target)) return null;
+    if (onSection) {
+      return source.id === target.id ? null : { target, before: null };
+    }
+    const from = manualIds.indexOf(moved);
+    const to = manualIds.indexOf(overId as ThreadId);
+    // Like arrayMove: dragging down lands after the row it is over, dragging up before it.
+    const overIndex = target.threads.findIndex((t) => t.id === overId);
+    const before =
+      from >= 0 && from < to ? (target.threads[overIndex + 1]?.id ?? null) : (overId as ThreadId);
+    return { target, before };
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     endDrag();
     if (!over || active.id === over.id || !canEdit) return;
     const moved = String(active.id) as ThreadId;
     const overId = String(over.id);
-    const onSection = overId.startsWith(SECTION_DROP_PREFIX);
-    const target = dropGroupOf(overId);
-    const source = groupOf(moved);
-    if (!target || !source) return;
-    // Working is a status, not a place: only Scratch unpins.
-    if (target.kind === "working") return;
-    if (target.kind === "scratch") {
-      if (isManual(source)) void actions.patchThread(moved, { pinned: false });
-      return;
+    const drop = manualDrop(moved, overId);
+    if (drop) {
+      void fileThread(moved, groupSection(drop.target), drop.before);
+    } else if (dropGroupOf(overId)?.kind === "scratch") {
+      const source = groupOf(moved);
+      if (source && isManual(source)) void actions.patchThread(moved, { pinned: false });
     }
-    if (!isManual(target)) return;
-    if (onSection) {
-      if (source.id !== target.id) void fileThread(moved, groupSection(target), null);
-      return;
-    }
-    const from = manualIds.indexOf(moved);
-    const to = manualIds.indexOf(overId as ThreadId);
-    if (to < 0) return;
-    // Like arrayMove: dragging down lands after the row it is over, dragging up before it.
-    // The row after is looked up in the target section, since order is shared by all sections.
-    const overIndex = target.threads.findIndex((t) => t.id === overId);
-    const before =
-      from >= 0 && from < to ? (target.threads[overIndex + 1]?.id ?? null) : (overId as ThreadId);
-    void fileThread(moved, groupSection(target), before);
   };
   const draggingGroup = dragging === null ? undefined : groupOf(dragging);
   const draggingPinned = draggingGroup !== undefined && isManual(draggingGroup);
+  const dragOverGroup = dragOverId === null ? undefined : dropGroupOf(dragOverId);
+  const insertion =
+    dragging !== null && !draggingPinned && dragOverId !== null
+      ? manualDrop(dragging, dragOverId)
+      : null;
   // The section a drop would change: another manual section, or Scratch for a pinned row.
   const isDropTarget = (group: Group) =>
     draggingGroup !== undefined &&
-    dragOverGroup === group.id &&
+    dragOverGroup?.id === group.id &&
     group.id !== draggingGroup.id &&
     (isManual(group) || (group.kind === "scratch" && draggingPinned));
   const draggingThread = dragging === null ? undefined : threads.find((t) => t.id === dragging);
@@ -807,6 +845,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         isPinned={false}
         dropVerb={null}
         dragOverPinned={false}
+        insertionBefore={insertion?.target.id === group.id && insertion.before === thread.id}
         folderTintClassName={dragging === thread.id ? "opacity-40" : undefined}
         neverRecede={isManual(group)}
         sweepAction={sweep?.keys.has(key) ? sweep.action : null}
@@ -830,7 +869,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         timestampFormat={timestampFormat}
         onThreadClick={handleThreadClick}
         onThreadActivate={handleActivate}
-        onStartRename={handleEdit}
+        onStartRename={startRename}
         onRenameTitleChange={handleRenameTitleChange}
         onCommitRename={handleCommitRename}
         onCancelRename={handleCancelRename}
@@ -851,26 +890,52 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
 
   const section = (group: Group, header: ReactNode, empty: string | null = null) => {
     const shown = shownThreads(group);
-    const more =
-      isExpanded(group) && group.kind === "scratch" ? group.threads.length - shown.length : 0;
+    const moreScratch = group.kind === "scratch" ? group.threads.length - shown.length : 0;
+    const moreSettled = group.kind === "settled" ? settledCount - shown.length : 0;
     return (
       <SectionBlock
         key={group.id}
         group={group}
         droppable={group.kind !== "snoozed" && group.kind !== "settled"}
         highlighted={isDropTarget(group)}
+        insertionAtEnd={insertion?.target.id === group.id && insertion.before === null}
         header={header}
         empty={isExpanded(group) && group.threads.length === 0 ? empty : null}
       >
         {shown.map((thread) => row(group, thread))}
-        {more > 0 ? (
+        {isExpanded(group) && moreScratch > 0 ? (
           <li className="list-none">
             <button
               type="button"
               className={QUIET_BUTTON_CLASS}
               onClick={() => setScratchCount((n) => n + MADOHOMU_SCRATCH_PAGE)}
             >
-              Show more ({more})
+              Show more ({moreScratch})
+            </button>
+          </li>
+        ) : null}
+        {isExpanded(group) && moreSettled > 0 ? (
+          <li className="list-none">
+            <button
+              type="button"
+              aria-disabled={olderSettled.loading}
+              className={cn(QUIET_BUTTON_CLASS, "aria-disabled:cursor-default")}
+              onClick={() => {
+                if (olderSettled.loading) return;
+                if (olderSettled.failed) olderSettled.retry();
+                else
+                  setSettledTail((current) => ({
+                    ...current,
+                    count: current.count + SETTLED_TAIL_PAGE_COUNT,
+                  }));
+              }}
+            >
+              <ChevronDownIcon aria-hidden className="size-3.5" />
+              {olderSettled.loading
+                ? "Loading"
+                : olderSettled.failed
+                  ? "Could not load older threads. Retry"
+                  : `Show ${Math.min(moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
             </button>
           </li>
         ) : null}
@@ -883,7 +948,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     <SectionHeading
       id={`madohomu-section-${group.id}`}
       title={group.title}
-      count={group.threads.length}
+      count={group.kind === "settled" ? settledCount : group.threads.length}
       attention={attention(group)}
       expanded={isExpanded(group)}
       onToggle={() => toggleExpanded(group)}
@@ -1053,7 +1118,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               </SortableContext>
               {groups
                 .filter(
-                  (g) => (g.kind === "snoozed" || g.kind === "settled") && g.threads.length > 0,
+                  (g) =>
+                    (g.kind === "snoozed" && g.threads.length > 0) ||
+                    (g.kind === "settled" && settledCount > 0),
                 )
                 .map((group) => section(group, heading(group)))}
               <DragOverlay modifiers={OVERLAY_MODIFIERS} dropAnimation={null}>
@@ -1195,6 +1262,7 @@ function SectionBlock({
   children,
   droppable,
   highlighted,
+  insertionAtEnd,
   empty,
 }: {
   group: Group;
@@ -1202,6 +1270,7 @@ function SectionBlock({
   children: ReactNode;
   droppable: boolean;
   highlighted: boolean;
+  insertionAtEnd: boolean;
   empty: string | null;
 }) {
   const { setNodeRef } = useDroppable({
@@ -1212,7 +1281,11 @@ function SectionBlock({
     <section
       ref={setNodeRef}
       aria-labelledby={`madohomu-section-${group.id}`}
-      className={cn("flex flex-col gap-0.5 rounded-md", highlighted && "bg-sidebar-row-hover/60")}
+      className={cn(
+        "flex flex-col gap-0.5 rounded-md",
+        highlighted && "bg-sidebar-row-hover/60",
+        insertionAtEnd && "relative",
+      )}
       data-madohomu-section={group.kind}
     >
       {header}
@@ -1221,6 +1294,12 @@ function SectionBlock({
       ) : (
         <ul className="flex flex-col gap-0.5">{children}</ul>
       )}
+      {insertionAtEnd ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-primary"
+        />
+      ) : null}
     </section>
   );
 }

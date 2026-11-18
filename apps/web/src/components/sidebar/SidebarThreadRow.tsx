@@ -567,6 +567,7 @@ type SidebarThreadRowProps = {
   leadingIcon?: ReactNode | undefined;
   /** MadoHomu's Pinned and custom sections: read rows keep full-strength titles. */
   neverRecede?: boolean | undefined;
+  insertionBefore?: boolean | undefined;
   // Thread folder members carry the folder's tint; the last one closes the card.
   folderTintClassName?: string | undefined;
   folderCardEnd?: boolean | undefined;
@@ -1318,6 +1319,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     : "flex h-9 items-center gap-2.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
                   inFolder && props.leadingIcon === undefined && "ps-9",
+                  props.insertionBefore &&
+                    "before:pointer-events-none before:absolute before:inset-x-1 before:top-0 before:h-0.5 before:rounded-full before:bg-primary",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
@@ -1343,6 +1346,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   ) : null}
                 </span>
               )}
+              {isSelected && props.leadingIcon !== undefined ? (
+                <span className="inline-flex shrink-0 text-primary">
+                  <CheckIcon aria-hidden className="size-3.5" />
+                  <span className="sr-only">Selected</span>
+                </span>
+              ) : null}
               {draftIndicator}
               {title}
               {multiline ? titleLineIcons : null}
@@ -1370,13 +1379,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
                 >
-                  {isSelected && props.leadingIcon !== undefined ? (
-                    // MadoHomu: the open row shares the selected fill, so this marks selection.
-                    <span className="mr-1 inline-flex shrink-0 text-primary">
-                      <CheckIcon aria-hidden className="size-3.5" />
-                      <span className="sr-only">Selected</span>
-                    </span>
-                  ) : null}
                   <span
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",

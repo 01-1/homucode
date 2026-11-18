@@ -14,6 +14,9 @@ import { useEffect, useState } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { olderSettledThreads, threadFamilies } from "./threads";
 
+export const SETTLED_TAIL_INITIAL_COUNT = 10;
+export const SETTLED_TAIL_PAGE_COUNT = 25;
+
 const NO_PAGES: ReadonlyMap<EnvironmentId, number> = new Map();
 
 /**
