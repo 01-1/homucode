@@ -1,3 +1,5 @@
+import type { NavigationState } from "@react-navigation/native";
+
 /** `launchSurface` the MadoHomu launcher activity passes to its React root. */
 export const MADOHOMU_LAUNCH_SURFACE = "madohomu";
 
@@ -18,8 +20,18 @@ export function madohomuLauncherWanted(
     : undefined;
 }
 
-export function madohomuLauncherEnvironmentId(
-  environments: ReadonlyArray<EnvironmentMadoHomuState>,
-): string | undefined {
-  return environments.find((environment) => environment.madohomuEnabled === true)?.environmentId;
+/** Retargets the launcher workspace while preserving any open settings, chat or draft routes. */
+export function madohomuLauncherDestinationAction(
+  state: Pick<NavigationState, "key" | "routes"> | undefined,
+  environmentId: string,
+) {
+  const root = state?.routes[0];
+  const params = root?.params as { readonly environmentId?: string } | undefined;
+  if (!state || root?.name !== "MadoHomu" || params?.environmentId === environmentId) return;
+  return {
+    type: "SET_PARAMS",
+    source: root.key,
+    target: state.key,
+    payload: { params: { environmentId } },
+  };
 }

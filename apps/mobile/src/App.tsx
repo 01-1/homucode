@@ -4,8 +4,8 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
-import { Fragment, useEffect, useRef } from "react";
-import { Platform, StatusBar } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, StatusBar, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ import {
   getActionFromState,
   getStateFromPath,
   type NavigationAction,
+  type NavigationContainerRef,
   type NavigationState,
 } from "@react-navigation/native";
 import { pipe } from "effect/Function";
@@ -109,14 +110,19 @@ import { installClientSettingsSync } from "./features/settings/settingsSync";
 import {
   attachMadoHomuNavigation,
   attachMainNavigation,
+  hasAndroidTaskRouting,
   MadoHomuBackRouting,
   MadoHomuLauncherSync,
+  syncMadoHomuLauncherDestination,
+  taskNavigationState,
   useMadoHomuEnvironmentStates,
 } from "./features/madohomu/madohomuLauncher";
 import {
   MADOHOMU_LAUNCH_SURFACE,
-  madohomuLauncherEnvironmentId,
+  madohomuLauncherWanted,
 } from "./features/madohomu/madohomuLauncherState";
+import { useMadoHomuEnvironments } from "./features/madohomu/MadoHomuEntries";
+import { AndroidTaskSurfaceContext } from "./lib/backHandler";
 import { holdTouches, touchesHeld } from "./lib/strayTouchGuard";
 
 import "../global.css";
@@ -195,15 +201,37 @@ function handleNavigationStateChange(state: NavigationState | undefined): void {
   if (state.routes[state.index]?.name !== "Home") settleLaunchSplashHomeRows();
   setAgentNotificationPathname(workspaceLocationFromState(state).pathname);
   recordAppShortcutNavigationState(state);
+  pruneMountedDrafts(state, taskNavigationState("madohomu"));
+}
+
+function handleNavigationReady(): void {
+  handleNavigationStateChange(taskNavigationState("main"));
+  flushRootNavigationQueue();
+}
+
+function pruneMountedDrafts(
+  mainState = taskNavigationState("main"),
+  launcherState = taskNavigationState("madohomu"),
+) {
+  const state = { routes: [...(mainState?.routes ?? []), ...(launcherState?.routes ?? [])] };
   pruneNewTaskFlowStates(state);
   pruneNewTaskBranchCheckouts(state);
   pruneIncomingShareImports(state);
 }
 
-function handleNavigationReady(): void {
-  handleNavigationStateChange(rootNavigationRef.getRootState());
-  flushRootNavigationQueue();
+function withDraftCleanup(attach: typeof attachMainNavigation) {
+  return (navigation: NavigationContainerRef<ReactNavigation.RootParamList> | null) => {
+    const detach = attach(navigation);
+    return () => {
+      detach();
+      // The replacement root can attach during the same commit.
+      queueMicrotask(() => pruneMountedDrafts());
+    };
+  };
 }
+
+const attachMainRoot = withDraftCleanup(attachMainNavigation);
+const attachLauncherRoot = withDraftCleanup(attachMadoHomuNavigation);
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
@@ -284,32 +312,60 @@ export default function App({ launchSurface }: AppProps) {
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AppContent madohomu={madohomu} />
+          <AndroidTaskSurfaceContext.Provider
+            value={hasAndroidTaskRouting ? (madohomu ? "madohomu" : "main") : null}
+          >
+            <AppContent madohomu={madohomu} />
+          </AndroidTaskSurfaceContext.Provider>
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>
   );
 }
 
-// Android's MadoHomu launcher task: deep links and workspace bookkeeping stay with the main root.
+// Android's MadoHomu task keeps its own stack when the main task navigates.
 function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
-  const environmentId = madohomuLauncherEnvironmentId(useMadoHomuEnvironmentStates().environments);
-  if (!environmentId) return null;
-  // Back routing mounts after the navigator so its Back listener runs first.
+  const { environments, isReady } = useMadoHomuEnvironmentStates();
+  const wanted = madohomuLauncherWanted(environments, isReady);
+  const destination = useMadoHomuEnvironments()[0]?.environmentId;
+  const [lastDestination, setLastDestination] = useState(destination);
+  if (destination && destination !== lastDestination) setLastDestination(destination);
+  // Keep the current task through a disconnect, then retarget only its root when settings return.
+  const environmentId = destination ?? lastDestination;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- updates the launcher root without resetting open routes
+  useEffect(() => {
+    if (environmentId && wanted !== false) syncMadoHomuLauncherDestination(environmentId);
+  }, [environmentId, wanted]);
+  if (wanted === false || !environmentId) {
+    return (
+      <View className="flex-1 items-center justify-center gap-2 bg-screen px-6">
+        <Text className="text-lg font-semibold text-foreground">MadoHomu</Text>
+        <Text className="text-center text-base text-foreground-muted">
+          {wanted === false
+            ? "Enable MadoHomu in HomuCode Settings to use it."
+            : "Waiting for a connection to your MadoHomu environment."}
+        </Text>
+      </View>
+    );
+  }
   return (
-    <Fragment key={environmentId}>
-      <Navigation
-        ref={attachMadoHomuNavigation}
-        initialState={{ routes: [{ name: "MadoHomu", params: { environmentId } }] }}
-        onReady={() => {
-          settleLaunchSplashHomeRows();
-          flushRootNavigationQueue();
-        }}
-        theme={theme}
-        onStateChange={settleLaunchSplashHomeRows}
-      />
-      <MadoHomuBackRouting />
-    </Fragment>
+    <Navigation
+      ref={attachLauncherRoot}
+      initialState={{
+        routes: [{ name: "MadoHomu", params: { environmentId } }],
+      }}
+      onReady={() => {
+        syncMadoHomuLauncherDestination(environmentId);
+        settleLaunchSplashHomeRows();
+        pruneMountedDrafts();
+        flushRootNavigationQueue();
+      }}
+      theme={theme}
+      onStateChange={(state) => {
+        settleLaunchSplashHomeRows();
+        pruneMountedDrafts(taskNavigationState("main"), state);
+      }}
+    />
   );
 }
 
@@ -346,13 +402,14 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
                   <MadoHomuNavigation theme={navigationTheme} />
                 ) : (
                   <Navigation
-                    ref={attachMainNavigation}
+                    ref={attachMainRoot}
                     linking={appLinking}
                     onReady={handleNavigationReady}
                     theme={navigationTheme}
                     onStateChange={handleNavigationStateChange}
                   />
                 )}
+                <MadoHomuBackRouting />
                 <Dialog.Host />
                 <ThreadArrangementHost />
                 <ProjectChipIconRasterizer />

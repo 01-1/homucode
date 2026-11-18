@@ -1,6 +1,7 @@
+import { useTaskHardwareBack } from "../../../lib/backHandler";
 import { useEffect, useState } from "react";
 import { useNavigation, useNavigationState } from "@react-navigation/native";
-import { BackHandler, Keyboard } from "react-native";
+import { Keyboard } from "react-native";
 
 import { AppBar } from "../../../components/ui/AppBar";
 import { useWorkspaceConnectionState } from "../../../state/workspace";
@@ -38,24 +39,15 @@ export function WorkspaceListHeader(props: WorkspaceListHeaderProps) {
     Keyboard.dismiss();
   };
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to BackHandler while searching to close search on Android back
-  useEffect(() => {
-    if (!searching || !listFocused) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // Frozen Home screens can keep effects alive after a detail route opens.
-      const state = navigation.getState();
-      if (
-        !state ||
-        state.routes[state.index]?.name !== "Home" ||
-        isTabActive?.("threads") === false
-      )
-        return false;
-      if (Keyboard.isVisible()) Keyboard.dismiss();
-      else closeSearch();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [closeSearch, searching, listFocused, navigation, isTabActive]);
+  useTaskHardwareBack(searching && listFocused, () => {
+    // Frozen Home screens can keep effects alive after a detail route opens.
+    const state = navigation.getState();
+    if (!state || state.routes[state.index]?.name !== "Home" || isTabActive?.("threads") === false)
+      return false;
+    if (Keyboard.isVisible()) Keyboard.dismiss();
+    else closeSearch();
+    return true;
+  });
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the launch picture, taken outside React, that the search field is drawn in place of the title
   useEffect(() => (searching ? coverHomeForLaunchSnapshot() : undefined), [searching]);

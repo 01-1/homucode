@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { madohomuLauncherEnvironmentId, madohomuLauncherWanted } from "./madohomuLauncherState";
+import { madohomuLauncherWanted } from "./madohomuLauncherState";
 
 const on = (environmentId: string) => ({ environmentId, madohomuEnabled: true });
 const off = (environmentId: string) => ({ environmentId, madohomuEnabled: false });
@@ -16,12 +16,5 @@ describe("madohomuLauncherWanted", () => {
     expect(madohomuLauncherWanted([off("a"), loading("b")], true)).toBeUndefined();
     expect(madohomuLauncherWanted([], false)).toBeUndefined();
     expect(madohomuLauncherWanted([], true)).toBe(false);
-  });
-});
-
-describe("madohomuLauncherEnvironmentId", () => {
-  it("opens the first environment with MadoHomu on", () => {
-    expect(madohomuLauncherEnvironmentId([off("a"), on("b"), on("c")])).toBe("b");
-    expect(madohomuLauncherEnvironmentId([off("a"), loading("b")])).toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { useTaskHardwareBack } from "../../lib/backHandler";
 import {
   WorkspaceColumnsRendererContext,
   WorkspacePresentationHostContext,
@@ -26,14 +27,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  BackHandler,
-  Keyboard,
-  Platform,
-  Pressable,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Keyboard, Platform, Pressable, useWindowDimensions, View } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -835,20 +829,15 @@ function AdaptiveWorkspaceLayoutContent(
     scrimOpacity.set(withTiming(floatingSidebarOpen ? 0.32 : 0, WORKSPACE_PANE_TIMING));
   }, [floatingSidebarOpen, scrimOpacity]);
   const scrimAnimatedStyle = useAnimatedStyle(() => ({ opacity: scrimOpacity.value }));
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Back closes a floating sidebar before it leaves the page
-  useEffect(() => {
-    if (!floatingSidebarOpen || nativeWorkspace) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // A sheet or modal over the workspace takes Back first.
-      const state = rootStackState(navigation);
-      if (state && workspaceRoutesOf(state.routes.slice(0, state.index + 1)).overlays.length > 0) {
-        return false;
-      }
-      setPrimarySidebarVisible(false);
-      return true;
-    });
-    return () => subscription.remove();
-  }, [floatingSidebarOpen, nativeWorkspace, navigation, setPrimarySidebarVisible]);
+  useTaskHardwareBack(floatingSidebarOpen && !nativeWorkspace, () => {
+    // A sheet or modal over the workspace takes Back first.
+    const state = rootStackState(navigation);
+    if (state && workspaceRoutesOf(state.routes.slice(0, state.index + 1)).overlays.length > 0) {
+      return false;
+    }
+    setPrimarySidebarVisible(false);
+    return true;
+  });
   // Showing or hiding the sidebar clips a fixed-width list. A hinge resize instead tracks the
   // animated edge, so the header actions slide with it rather than jumping or being covered.
   const listPaneGap = layout.listPaneGap ?? 0;

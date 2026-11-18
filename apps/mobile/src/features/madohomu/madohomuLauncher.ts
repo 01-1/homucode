@@ -3,34 +3,37 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo";
 import { useEffect } from "react";
 import { BackHandler, Platform } from "react-native";
 
+import { dispatchTaskHardwareBack, type AndroidTaskSurface } from "../../lib/backHandler";
 import { attachRootNavigation, focusRootNavigation } from "../../lib/rootNavigation";
 import { useEnvironments } from "../../state/environments";
-import { madohomuLauncherWanted, type EnvironmentMadoHomuState } from "./madohomuLauncherState";
+import {
+  madohomuLauncherDestinationAction,
+  madohomuLauncherWanted,
+  type EnvironmentMadoHomuState,
+} from "./madohomuLauncherState";
 
-type Surface = "main" | "madohomu";
 type RootNavigation = NavigationContainerRef<ReactNavigation.RootParamList>;
 
 const launcherModule =
   Platform.OS === "android"
     ? requireOptionalNativeModule<{
         setEnabled(enabled: boolean): boolean;
-        foregroundSurface(): Surface;
+        foregroundSurface(): AndroidTaskSurface;
         addListener(
           event: "onForegroundSurfaceChange",
-          listener: (event: { surface: Surface }) => void,
+          listener: (event: { surface: AndroidTaskSurface }) => void,
         ): EventSubscription;
       }>("T3MadoHomuLauncher")
     : null;
 
-const containers = new Map<Surface, RootNavigation>();
+const containers = new Map<AndroidTaskSurface, RootNavigation>();
 const attachListeners = new Set<() => void>();
-let foregroundSurface: Surface = launcherModule?.foregroundSurface() ?? "main";
+let foregroundSurface: AndroidTaskSurface = launcherModule?.foregroundSurface() ?? "main";
 
 // A foreground task without a mounted navigator clears the ref, so global navigation queues.
 launcherModule?.addListener("onForegroundSurfaceChange", ({ surface }) => {
   foregroundSurface = surface;
   focusRootNavigation(containers.get(surface) ?? null);
-  reRegisterBackRouting();
 });
 
 // Deferred past the commit's effects, where navigators and screens add their Back listeners.
@@ -40,7 +43,7 @@ function reRegisterBackRouting() {
   }, 0);
 }
 
-function attachSurfaceNavigation(surface: Surface) {
+function attachSurfaceNavigation(surface: AndroidTaskSurface) {
   return (navigation: RootNavigation | null) => {
     const detach = attachRootNavigation(navigation);
     if (!navigation) return detach;
@@ -90,25 +93,40 @@ export function MadoHomuLauncherSync() {
   return null;
 }
 
+export const hasAndroidTaskRouting = launcherModule !== null;
+
+export function taskNavigationState(surface: AndroidTaskSurface) {
+  return containers.get(surface)?.getRootState();
+}
+
+export function syncMadoHomuLauncherDestination(environmentId: string) {
+  const navigation = containers.get("madohomu");
+  const action = madohomuLauncherDestinationAction(navigation?.getRootState(), environmentId);
+  if (navigation && action) navigation.dispatch(action);
+}
+
 function routeHardwareBack(): boolean {
+  if (dispatchTaskHardwareBack(foregroundSurface)) return true;
   const navigation = containers.get(foregroundSurface);
-  const canGoBack = navigation?.isReady() === true && navigation.canGoBack();
-  if (canGoBack) navigation!.goBack();
+  if (navigation?.isReady() && navigation.canGoBack()) navigation.goBack();
   else BackHandler.exitApp();
   return true;
 }
 
 /**
- * Both roots' navigators share one hardware Back event, newest listener first. This re-registers
- * after every navigator attaches so it runs before both and routes Back to the foreground task.
+ * React Navigation registers an unscoped listener for each root. Register after navigation
+ * mounts so Back goes through the foreground task's screen handlers and then its navigator.
  */
 export function MadoHomuBackRouting() {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the native hardware Back event
   useEffect(() => {
-    let subscription = BackHandler.addEventListener("hardwareBackPress", routeHardwareBack);
+    if (!hasAndroidTaskRouting) return;
+    // React Native deduplicates by callback identity. Each root owns its subscription.
+    const onBack = () => routeHardwareBack();
+    let subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
     const reRegister = () => {
       subscription.remove();
-      subscription = BackHandler.addEventListener("hardwareBackPress", routeHardwareBack);
+      subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
     };
     attachListeners.add(reRegister);
     return () => {
