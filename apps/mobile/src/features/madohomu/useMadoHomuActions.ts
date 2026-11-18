@@ -23,7 +23,7 @@ import { serverEnvironment } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
-import { madohomuDropPatch, type MadoHomuDrop } from "./madohomuList";
+import { madohomuDropPatch, madohomuPlacePatch, type MadoHomuDrop } from "./madohomuList";
 
 export function useMadoHomuActions(environmentId: EnvironmentId) {
   const config = useEnvironmentServerConfig(environmentId);
@@ -83,18 +83,17 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
       : null;
   };
 
-  const entryOf = (threadId: ThreadId) =>
-    settings.madohomuThreads[threadId] ?? { icon: null, prompt: "" };
-
   const setThreadPlace = (threadId: ThreadId, place: { readonly section: string | null } | null) =>
-    save({
-      madohomuThreads: {
-        [threadId]:
-          place === null
-            ? { ...entryOf(threadId), pinned: false, section: null }
-            : { ...entryOf(threadId), pinned: true, section: place.section },
-      },
+    save(madohomuPlacePatch(settings, threadId, place));
+
+  /** Makes a section and files the thread at its end, in one save. */
+  const moveToNewSection = (threadId: ThreadId, name: string) => {
+    const id = uuidv4();
+    return save({
+      madohomuSections: [...settings.madohomuSections, { id, name }],
+      ...madohomuPlacePatch(settings, threadId, { section: id }),
     });
+  };
 
   const setThreadOrder = (madohomuThreadOrder: ThreadId[]) => save({ madohomuThreadOrder });
 
@@ -198,6 +197,7 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     createThread,
     setMorningBrief,
     setThreadPlace,
+    moveToNewSection,
     setThreadOrder,
     dropThread,
     addSection,

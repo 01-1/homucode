@@ -22,6 +22,7 @@ export function ThreadHeader(props: {
   readonly inspectorMode: ThreadInspectorMode | null;
   readonly onOpenFilesInspector: () => void;
   readonly onFindInThread?: (() => void) | undefined;
+  readonly extraMenus?: ReadonlyArray<AppBarMenu>;
 }) {
   const goBack = useWorkspaceBackNavigation();
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
@@ -52,7 +53,10 @@ export function ThreadHeader(props: {
         },
       ]
     : findAction;
-  const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
+  const menus = [
+    ...(props.extraMenus ?? []),
+    ...[gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null),
+  ];
 
   return (
     <AppBar
