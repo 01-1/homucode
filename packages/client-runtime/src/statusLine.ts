@@ -84,27 +84,27 @@ function effortLevel(
   return undefined;
 }
 
-/** The model name the status line script is given, such as `Opus 5.5`. Null without a model. */
-export function statusLineInputModelName(
-  source: Pick<StatusLineInputSource, "modelSelection" | "providers">,
-): string | null {
-  const selection = source.modelSelection;
-  if (selection === null) return null;
-  const provider = source.providers.find(
-    (candidate) => candidate.instanceId === selection.instanceId,
-  );
-  const model = provider?.models.find((candidate) => candidate.slug === selection.model);
-  return statusLineModelName(model?.name ?? selection.model);
-}
-
-/** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
-export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
+function selectedModel(source: Pick<StatusLineInputSource, "modelSelection" | "providers">) {
   const selection = source.modelSelection;
   const provider =
     selection === null
       ? undefined
       : source.providers.find((candidate) => candidate.instanceId === selection.instanceId);
   const model = provider?.models.find((candidate) => candidate.slug === selection?.model);
+  return { selection, provider, model };
+}
+
+/** The model name the status line script is given, such as `Opus 5.5`. Null without a model. */
+export function statusLineInputModelName(
+  source: Pick<StatusLineInputSource, "modelSelection" | "providers">,
+): string | null {
+  const { selection, model } = selectedModel(source);
+  return selection === null ? null : statusLineModelName(model?.name ?? selection.model);
+}
+
+/** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
+export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
+  const { selection, provider, model } = selectedModel(source);
   const displayName = statusLineInputModelName(source);
   const effort = effortLevel(selection, model);
   const fastMode = getModelSelectionBooleanOptionValue(selection, "fastMode");
@@ -429,15 +429,16 @@ function separatorAt(
 ): ReadonlyArray<AnsiSegment> {
   const item = items[index];
   if (item === undefined || !staysAt(item, level)) return [];
-  const next = items.findIndex((other, at) => at > index && staysAt(other, level));
-  if (next === -1) return [];
   let strongest = item.separator;
-  for (const between of items.slice(index + 1, next)) {
-    if (separatorStrength(between.separator) > separatorStrength(strongest)) {
-      strongest = between.separator;
+  for (let at = index + 1; at < items.length; at += 1) {
+    const other = items[at];
+    if (other === undefined) break;
+    if (staysAt(other, level)) return strongest;
+    if (separatorStrength(other.separator) > separatorStrength(strongest)) {
+      strongest = other.separator;
     }
   }
-  return strongest;
+  return [];
 }
 
 // Where a muted label such as `cache ` starts a new value in the middle of an item.
@@ -516,16 +517,23 @@ export function splitStatusLineItems(
   };
   let cursor = 0;
   for (const match of separators) {
-    const shown = match[0].trimEnd().length;
-    pushStretch(cursor, match.index, sliceSegments(line, match.index, match.index + shown));
+    // The separator's own character, without the space a ` |` has before it.
+    const from = match.index + match[0].length - match[0].trimStart().length;
+    pushStretch(cursor, match.index, sliceSegments(line, from, from + 1));
     cursor = match.index + match[0].length;
   }
   pushStretch(cursor, text.length, []);
-  return items.map((item, index) => ({
+  // A line made only of items that can be dropped keeps them, or nothing would be left to hover.
+  const kept: ReadonlyArray<SeparatedItem> = items.some(
+    (item) => item.kind !== "clock" && item.dropAt === 0,
+  )
+    ? items
+    : items.map((item) => ({ ...item, dropAt: 0 }));
+  return kept.map((item, index) => ({
     kind: item.kind,
     segments: item.segments,
     dropAt: item.dropAt,
-    separators: [0, 1, 2, 3].map((level) => separatorAt(items, index, level)),
+    separators: [0, 1, 2, 3].map((level) => separatorAt(kept, index, level)),
   }));
 }
 

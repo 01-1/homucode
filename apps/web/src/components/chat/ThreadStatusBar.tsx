@@ -179,6 +179,7 @@ const PIPE_GAP =
 /** The separator after an item, which depends on what the line has dropped. */
 function Separator(props: { readonly item: StatusLineItem }) {
   const { separators } = props.item;
+  // Levels that share a separator share its array, so a Set leaves one span for each.
   return [...new Set(separators)].map((separator, index) => {
     if (separator.length === 0) return null;
     const shown = SHOWN.filter((_, level) => separators[level] === separator).join(" ");
@@ -231,7 +232,7 @@ const FITS = [
   ["short", "normal", 1, false],
   ["short", "normal", 2, false],
   ["short", "normal", 2, true],
-  ["short", "tight", 2, true],
+  ["short", "normal", 3, true],
   ["short", "tight", 3, true],
 ] as const;
 

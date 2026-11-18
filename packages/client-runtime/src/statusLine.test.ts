@@ -80,10 +80,7 @@ describe("splitStatusLineItems", () => {
     const [line = []] = parseAnsiLines(
       "\u001b[38;5;15m~/code/homucode \u001b[38;5;183mvi@pbox \u001b[38;5;8m| \u001b[38;5;183mO5.5\u001b[38;5;8m, up \u001b[38;5;183m1h02m [21:41:07] \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, v\u001b[38;5;183m2.1.3",
     );
-    const pipe = [
-      { text: " ", ...accent },
-      { text: "|", ...muted },
-    ];
+    const pipe = [{ text: "|", ...muted }];
     const comma = [{ text: ",", ...muted }];
     expect(splitStatusLineItems(line)).toEqual([
       {
@@ -182,6 +179,11 @@ describe("splitStatusLineItems", () => {
       ["out ", "6", ","],
       ["ctx ", "8% ", "(", "80k", ")"],
     ]);
+  });
+
+  it("keeps a line made only of items it could drop", () => {
+    const line = [{ text: "~/repo ci@build-host", color: null, ...plain }];
+    expect(splitStatusLineItems(line).map((item) => item.dropAt)).toEqual([0, 0]);
   });
 
   it("drops a version by its muted label, whatever the provider calls it", () => {
