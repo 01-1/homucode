@@ -1360,6 +1360,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 <span
                   className={cn(
                     "relative ml-auto flex h-6 min-w-8 shrink-0 items-center justify-end",
+                    // MadoHomu rows hide the time on hover, so the slot shrinks to the settle tick
+                    // and the "…" sits right beside it.
+                    !isWoke &&
+                      props.leadingIcon !== undefined &&
+                      props.showActionsButton &&
+                      "group-any-hover/sidebar-row:min-w-3",
                     props.sweepAction !== null && "hidden",
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
