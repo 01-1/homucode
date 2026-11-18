@@ -35,7 +35,9 @@ function hubUsageWindows(
   now: number,
 ): ReadonlyArray<ServerProviderUsageWindow> {
   if (!provider.auth.endpoint) return [];
-  const hub = usageLimitSourceAtEndpoint(sources, provider.auth.endpoint);
+  const hub = usageLimitSourceAtEndpoint(sources, provider.auth.endpoint, {
+    useProviderRoute: provider.driver === "claudeAgent",
+  });
   if (!hub || hub.error) return [];
   const accounts = hub.accounts.flatMap((account) =>
     account.driver !== provider.driver || account.usageLimits.unavailable

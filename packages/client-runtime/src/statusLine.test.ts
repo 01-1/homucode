@@ -458,6 +458,83 @@ describe("buildStatusLineInput", () => {
     });
   });
 
+  it("binds a quota adapter only to its explicit provider route", () => {
+    const provider = source.providers[0]!;
+    const providerRoute = "http://127.0.0.1:8318";
+    const endpoint = "http://127.0.0.1:8838";
+    const { usageLimits, ...providerWithoutLimits } = provider;
+    const adapter = {
+      id: UsageLimitSourceId.make("claude-local-quota"),
+      kind: "cliproxy" as const,
+      label: "Claude quota adapter",
+      origin: endpoint,
+      endpoint,
+      checkedAt: provider.checkedAt,
+      accounts: [
+        {
+          id: "claude-quota",
+          driver: provider.driver,
+          usageLimits: {
+            ...usageLimits!,
+            windows: usageLimits!.windows.map((window) =>
+              window.id === "weekly" ? { ...window, id: "seven_day" } : window,
+            ),
+          },
+        },
+      ],
+    };
+    const withAdapter = (route: string, explicitRoute?: string): StatusLineInputSource => ({
+      ...source,
+      providers: [{ ...providerWithoutLimits, auth: { ...provider.auth, endpoint: route } }],
+      usageLimitSources: [
+        { ...adapter, ...(explicitRoute === undefined ? {} : { providerRoute: explicitRoute }) },
+      ],
+    });
+
+    const associated = withAdapter(providerRoute, providerRoute);
+    expect(buildStatusLineStats(associated)).toMatchObject({
+      fiveHour: { usedPercent: 47, resetsAtMs: Date.parse("2026-11-16T02:01:00.000Z") },
+      weekly: { usedPercent: 43, resetsAtMs: null },
+    });
+    expect(buildStatusLineInput(associated).rate_limits).toMatchObject({
+      five_hour: { used_percentage: 47 },
+      seven_day: { used_percentage: 43 },
+    });
+    for (const unmatched of [
+      withAdapter(providerRoute),
+      withAdapter(providerRoute + "/unrelated", providerRoute),
+      withAdapter(endpoint, providerRoute),
+    ]) {
+      expect(buildStatusLineStats(unmatched)).toMatchObject({ fiveHour: null, weekly: null });
+    }
+    const codex = ProviderInstanceId.make("codex");
+    const codexDriver = ProviderDriverKind.make("codex");
+    expect(
+      buildStatusLineStats({
+        ...associated,
+        modelSelection: { instanceId: codex, model: "gpt-6.2-sol" },
+        providers: [
+          {
+            ...providerWithoutLimits,
+            instanceId: codex,
+            driver: codexDriver,
+            auth: { ...provider.auth, endpoint: providerRoute },
+          },
+        ],
+        usageLimitSources: [
+          ...associated.usageLimitSources,
+          {
+            ...adapter,
+            id: UsageLimitSourceId.make("codex-hub"),
+            origin: providerRoute,
+            endpoint: providerRoute,
+            accounts: adapter.accounts.map((account) => ({ ...account, driver: codexDriver })),
+          },
+        ],
+      }).weekly,
+    ).toEqual({ usedPercent: 43, resetsAtMs: null });
+  });
+
   it("gives a client the same facts to draw itself", () => {
     expect(buildStatusLineStats(source)).toEqual({
       modelName: "Opus 5.5",

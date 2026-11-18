@@ -109,8 +109,8 @@ it.effect("keeps malformed source URLs encodable for config subscribers", () =>
   ),
 );
 
-it.effect("reads a management key from its secret provider", () => {
-  const authorizations: Array<string | undefined> = [];
+it.effect("publishes the provider route while polling the quota adapter with its own key", () => {
+  const requests: Array<{ url: string; method: string; authorization: string | undefined }> = [];
   const keySource = (reference: string) => ({
     provider: SecretProviderId.make("homelab"),
     reference,
@@ -129,14 +129,34 @@ it.effect("reads a management key from its secret provider", () => {
         error: "Could not read the management key from its secret provider.",
       },
     ]);
-    expect(authorizations).toEqual(["Bearer resolved-key"]);
+    expect(snapshots[0]).toMatchObject({
+      endpoint: "http://127.0.0.1:8838",
+      providerRoute: "http://127.0.0.1:8318/team-a",
+    });
+    expect(requests).toEqual([
+      {
+        url: "http://127.0.0.1:8838/v0/management/auth-files",
+        method: "GET",
+        authorization: "Bearer resolved-key",
+      },
+    ]);
+    expect(
+      encodeConfigEvent({
+        version: 1,
+        type: "usageLimitSourcesUpdated",
+        payload: { sources: snapshots },
+      }),
+    ).toMatchObject({
+      payload: { sources: [{ providerRoute: "http://127.0.0.1:8318/team-a" }, {}] },
+    });
   }).pipe(
     Effect.provide([
       ServerSettings.layerTest({
         usageLimitSources: {
           [UsageLimitSourceId.make("resolved-hub")]: {
             kind: "cliproxy",
-            url: "https://resolved.test",
+            url: "http://127.0.0.1:8838",
+            providerRoute: "http://127.0.0.1:8318/team-a/",
             managementKey: keySource("cliproxy#key"),
             enabled: true,
           },
@@ -165,7 +185,11 @@ it.effect("reads a management key from its secret provider", () => {
         HttpClient.HttpClient,
         HttpClient.make((request) =>
           Effect.sync(() => {
-            authorizations.push(request.headers.authorization);
+            requests.push({
+              url: request.url,
+              method: request.method,
+              authorization: request.headers.authorization,
+            });
             return HttpClientResponse.fromWeb(request, Response.json({ files: [] }));
           }),
         ),

@@ -273,8 +273,12 @@ function hubIdentity(environmentId: EnvironmentId, source: UsageLimitSourceSnaps
 export function usageLimitSourceAtEndpoint(
   sources: UsageLimitSourceSnapshots,
   endpoint: string,
+  options?: { readonly useProviderRoute: boolean },
 ): UsageLimitSourceSnapshot | undefined {
-  const matches = sources.filter((source) => (source.endpoint ?? source.origin) === endpoint);
+  const matches = sources.filter((source) => {
+    const route = options?.useProviderRoute ? source.providerRoute : undefined;
+    return (route ?? source.endpoint ?? source.origin) === endpoint;
+  });
   return matches.length === 1 ? matches[0] : undefined;
 }
 

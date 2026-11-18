@@ -540,6 +540,7 @@ export const ClientSettingsSchema = Schema.Struct({
 
   composerRichTextEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   userMessageMarkdownEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  showMessageSenderLabels: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   userMessagePlusBullets: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
@@ -971,22 +972,7 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
-export const UsageLimitSourceConfig = Schema.Struct({
-  kind: Schema.Literal("cliproxy"),
-  label: Schema.optional(TrimmedNonEmptyString),
-  url: TrimmedNonEmptyString,
-  managementKey: SettingsSecretValue.pipe(
-    Schema.withDecodingDefault(Effect.succeed("")),
-    secretSetting,
-  ),
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-});
-export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
-
-export const TextGeneratorKind = Schema.Literals(["openaiCompatible", "anthropic"]);
-export type TextGeneratorKind = typeof TextGeneratorKind.Type;
-
-const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
+const HttpBaseUrl = TrimmedNonEmptyString.check(
   Schema.isMaxLength(2048),
   Schema.makeFilter((value) => {
     try {
@@ -1004,11 +990,27 @@ const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
   }),
 );
 
+export const UsageLimitSourceConfig = Schema.Struct({
+  kind: Schema.Literal("cliproxy"),
+  label: Schema.optional(TrimmedNonEmptyString),
+  url: TrimmedNonEmptyString,
+  providerRoute: Schema.optional(HttpBaseUrl),
+  managementKey: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
+export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
+
+export const TextGeneratorKind = Schema.Literals(["openaiCompatible", "anthropic"]);
+export type TextGeneratorKind = typeof TextGeneratorKind.Type;
+
 /** A model API that only generates text. Its key shares the id namespace with provider instances. */
 export const TextGeneratorConfig = Schema.Struct({
   kind: TextGeneratorKind,
   label: Schema.optional(TrimmedNonEmptyString),
-  baseUrl: TextGeneratorBaseUrl,
+  baseUrl: HttpBaseUrl,
   apiKey: SettingsSecretValue.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
@@ -2371,6 +2373,7 @@ export const ClientSettingsPatch = Schema.Struct({
   pullRequestLinksOpenInApp: Schema.optionalKey(Schema.Boolean),
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
   userMessageMarkdownEnabled: Schema.optionalKey(Schema.Boolean),
+  showMessageSenderLabels: Schema.optionalKey(Schema.Boolean),
   userMessagePlusBullets: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),

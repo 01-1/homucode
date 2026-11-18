@@ -1,3 +1,4 @@
+import { searchableSetting } from "./settingsSearch";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { BuildToolsRequest, EnvironmentId } from "@t3tools/contracts";
@@ -49,20 +50,20 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
       <SettingsSection title="Build folder and launcher">
         {(
           [
-            ["buildRepoPath", "T3 Code checkout", "Path to this machine's HomuCode checkout"],
-            ["buildBoatCliPath", "Boat CLI", "boat"],
-            ["buildMachineType", "Cloud machine type", "large"],
-            ["buildOutputFolder", "Build output folder", "~/hold/t3-builds"],
+            ["buildRepoPath", "build-repo-path", "Path to this machine's HomuCode checkout"],
+            ["buildBoatCliPath", "build-boat-cli", "boat"],
+            ["buildMachineType", "build-machine-type", "large"],
+            ["buildOutputFolder", "build-output-folder", "~/hold/t3-builds"],
             [
               "buildAppImageFolder",
-              "AppImage build folder",
+              "build-appimage-folder",
               state?.buildFolder ?? "Folder containing the running AppImage",
             ],
           ] as const
-        ).map(([key, title, placeholder]) => (
+        ).map(([key, id, placeholder]) => (
           <SettingsRow
             key={key}
-            title={title}
+            {...searchableSetting(id)}
             control={
               <Input
                 key={`${key}:${settings[key]}`}
@@ -84,7 +85,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
       </SettingsSection>
       <SettingsSection title="Cloud build">
         <SettingsRow
-          title="Enable cloud builds"
+          {...searchableSetting("enable-cloud-builds")}
           description="Build or test a committed revision on a disposable boat.dev machine. Install the boat CLI and run boat login on this machine first."
           control={
             <Checkbox
@@ -133,7 +134,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
       </SettingsSection>
       <SettingsSection title="Android APK">
         <SettingsRow
-          title="Enable Android builds"
+          {...searchableSetting("enable-android-builds")}
           description="Build a signed development APK on boat.dev. Uses this machine's existing Android signing key."
           control={
             <Checkbox
@@ -150,7 +151,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           Build Android APK
         </Button>
         <SettingsRow
-          title="Serve APKs on LAN"
+          {...searchableSetting("serve-apks-on-lan")}
           description="Serve ~/app/mobile on port 8767 until switched off or this server stops."
           control={
             <Checkbox
@@ -169,7 +170,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
       </SettingsSection>
       <SettingsSection title="Load build">
         <SettingsRow
-          title="Enable loading builds"
+          {...searchableSetting("enable-loading-builds")}
           description={
             state?.appImageAvailable
               ? "Verify a staged AppImage and restart T3 on it, with automatic rollback if it fails to return."

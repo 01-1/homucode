@@ -1,10 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
-import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
+import {
+  managedCapabilityDenial,
+  type EnvironmentId,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
+import { useManagedPolicy } from "../../state/managedPolicy";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -12,7 +17,9 @@ import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { FEATURE_OFFER_SETTINGS, searchableSetting } from "./settingsSearch";
+import { SettingsScopeNotice } from "./SettingsScopeNotice";
+import { Switch } from "../ui/switch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
@@ -100,13 +107,9 @@ export function DeviceNamesSettings({
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const known = currentOnly
-    ? query.data?.current
-      ? [query.data.current]
-      : []
-    : (query.data?.devices ?? []);
   const devices = [
-    ...known,
+    ...(query.data?.current ? [query.data.current] : []),
+    ...(!currentOnly ? (query.data?.devices ?? []) : []),
     ...(!currentOnly ? (query.data?.rules ?? settings.deviceNames) : []),
   ].filter(
     (device, index, all) =>
@@ -171,36 +174,25 @@ export function DeviceNamesSettings({
 }
 
 export function BehaviorSettingsSection() {
-  const { targets, scope } = useSettingsScope();
+  const { targets, scope, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const update = useUpdateScopedSettings();
   const environmentId =
     targets.length === 1 && (scope.kind === "all" || scope.kind === "environment")
       ? targets[0]?.environmentId
       : undefined;
-  const rows = FEATURE_OFFERS.filter(
-    (offer) =>
-      offer.page === 2 &&
-      offer.setting &&
-      ![
-        "preferNativeSubagents",
-        "threadTitleIdPrefix",
-        "threadTitleIncludeProjectName",
-        "buildToolsSettingsVisible",
-      ].includes(offer.setting),
-  );
   return (
     <>
       <SettingsSection title="Extra features">
-        {rows.map((offer) => {
-          const key = offer.setting!;
-          if (key === "connectDeviceLongSessions" || key === "claudeHoldBackgroundCommands")
+        {FEATURE_OFFERS.map((offer) => {
+          const id = FEATURE_OFFER_SETTINGS[offer.id];
+          const key = offer.setting;
+          if (offer.page !== 2 || !key || key === "claudeHoldBackgroundCommands" || id !== offer.id)
             return null;
           return (
             <SettingsRow
               key={offer.id}
-              id={offer.id}
-              title={offer.title}
+              {...searchableSetting(id)}
               description={offer.description}
               serverScoped
               settingKeys={[key]}
@@ -223,10 +215,67 @@ export function BehaviorSettingsSection() {
         <EnvironmentBehaviorSettings environmentId={environmentId} />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Select one environment to configure work assistance and device names.
+          Select one environment to configure work assistance.
         </p>
       )}
+      <SettingsSection
+        title="T3 Connect"
+        {...(!environmentId ? { id: "connect-device-long-sessions" } : {})}
+      >
+        {environmentId ? (
+          <ConnectSessionSetting environmentId={environmentId} />
+        ) : (
+          <SettingsScopeNotice inline target="environment" targetId="connect-device-long-sessions">
+            Choose an environment to change its T3 Connect session length.
+          </SettingsScopeNotice>
+        )}
+      </SettingsSection>
+      <SettingsSection {...searchableSetting("device-names")}>
+        {environmentId ? (
+          <DeviceNamesSettings environmentId={environmentId} />
+        ) : (
+          <SettingsScopeNotice
+            inline
+            target="environment"
+            targetId="device-names"
+            {...(scope.kind === "all"
+              ? { eligibleEnvironmentIds: connectedEnvironments.map((env) => env.environmentId) }
+              : {})}
+          >
+            Choose an environment to edit device names.
+          </SettingsScopeNotice>
+        )}
+      </SettingsSection>
     </>
+  );
+}
+
+function ConnectSessionSetting({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { connectDeviceLongSessions } = useEnvironmentSettings(environmentId);
+  const update = useAtomCommand(serverEnvironment.updateSettings);
+  const canWrite = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
+  const connectDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "connect");
+  return (
+    <SettingsRow
+      {...searchableSetting("connect-device-long-sessions")}
+      settingKeys={["connectDeviceLongSessions"]}
+      description="Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device in Sharing & access to end its access."
+      managed={connectDenial}
+      control={
+        <Switch
+          aria-label="Stay signed in for 30 days"
+          checked={connectDeviceLongSessions}
+          disabled={!canWrite}
+          onCheckedChange={(enabled) =>
+            void update({ environmentId, input: { patch: { connectDeviceLongSessions: enabled } } })
+          }
+        />
+      }
+    />
   );
 }
 
@@ -273,9 +322,6 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
             }
           />
         ) : null}
-      </SettingsSection>
-      <SettingsSection id={searchableSetting("device-names").id} title="Device names">
-        <DeviceNamesSettings environmentId={environmentId} />
       </SettingsSection>
     </>
   );

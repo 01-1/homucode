@@ -5,6 +5,7 @@ import { AudioPreview } from "../files/AudioPreview";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
 import {
   ComposerContextId,
+  DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
   MessageId,
   NodeId,
@@ -33,6 +34,11 @@ import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import "~/index.css";
 
+import {
+  __setClientSettingsForTests,
+  getClientSettings,
+  persistClientSettingsUpdate,
+} from "../../hooks/useSettings";
 import { environmentThreadDetails } from "../../state/threads";
 import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { ChangedFilesCard } from "./ChangedFilesTree";
@@ -537,6 +543,44 @@ describe("MessagesTimeline work rows", () => {
 });
 
 describe("MessagesTimeline messages", () => {
+  it("shows the sender label only when enabled", async () => {
+    const settings = getClientSettings();
+    using cleanup = new DisposableStack();
+    cleanup.defer(() => __setClientSettingsForTests(settings));
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+    const timelineEntries = [
+      message("Keep this message", {
+        context: {
+          version: 1,
+          records: [],
+          sentFrom: { surface: "desktop", os: "Linux", deviceName: "workstation" },
+        },
+      }),
+    ];
+    await using screen = await renderTimeline(timelineEntries);
+    const setShowSenderLabels = (showMessageSenderLabels: boolean) =>
+      act(() =>
+        persistClientSettingsUpdate(
+          (current) => ({ ...current, showMessageSenderLabels }),
+          async () => {},
+        ),
+      );
+
+    const senderLabel = screen.getByText("Human · workstation (T3 desktop, Linux)", {
+      exact: true,
+    });
+    await expect.element(senderLabel).not.toBeInTheDocument();
+    const messageBody = screen.getByText("Keep this message", { exact: true });
+    await expect.element(messageBody).toBeVisible();
+
+    await setShowSenderLabels(true);
+    await expect.element(senderLabel).toBeVisible();
+
+    await setShowSenderLabels(false);
+    await expect.element(senderLabel).not.toBeInTheDocument();
+    await expect.element(messageBody).toBeVisible();
+  });
+
   it("settles when equally long messages have very different rendered heights", async () => {
     const props = baseProps();
     const tall = message("a\n\n".repeat(6000), { role: "assistant" }, "tall");

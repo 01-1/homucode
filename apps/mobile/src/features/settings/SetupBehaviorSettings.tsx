@@ -4,15 +4,21 @@ import { useState } from "react";
 import { TextInput, View } from "react-native";
 import {
   isManagedSettingPath,
+  managedCapabilityDenial,
   type BuildToolsRequest,
   type EnvironmentId,
+  type ModelSelection,
+  type ServerConfig,
   type ServerSettings,
 } from "@t3tools/contracts";
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
+import { ListActionRow } from "../../components/ui/ListActionRow";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import { Sheet } from "../../components/ui/Sheet";
+import { buildModelOptions } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
@@ -171,6 +177,65 @@ export function MobileBuildVisibility({
   );
 }
 
+function MobileQuickModelSetting({
+  config,
+  disabled,
+  onChange,
+}: {
+  readonly config: ServerConfig;
+  readonly disabled: boolean;
+  readonly onChange: (selection: ModelSelection | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selection = config.settings.quickModelSelection;
+  const models = buildModelOptions(config, selection, undefined, null);
+  const selected = models.find(
+    (model) =>
+      model.selection.instanceId === selection?.instanceId &&
+      model.selection.model === selection.model,
+  );
+  const choose = (next: ModelSelection | null) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <ListActionRow
+        label="Quick model"
+        description="Choose the model used by /q on web and desktop."
+        detail={selected?.label ?? selection?.model ?? "Off"}
+        disabled={disabled}
+        onPress={() => setOpen(true)}
+      />
+      {open ? (
+        <Sheet title="Quick model" onClose={() => setOpen(false)}>
+          <ScreenScrollView>
+            <ListChoiceRow
+              label="Off"
+              selected={selection === null}
+              disabled={disabled}
+              onPress={() => choose(null)}
+            />
+            {models.map((model) => (
+              <ListChoiceRow
+                key={model.key}
+                label={model.label}
+                description={model.providerLabel}
+                selected={selected?.key === model.key}
+                disabled={disabled || model.isUnavailable || model.isHidden}
+                separated
+                onPress={() => choose(model.selection)}
+              />
+            ))}
+            {models.length === 0 ? <Text>No models are available on this environment.</Text> : null}
+          </ScreenScrollView>
+        </Sheet>
+      ) : null}
+    </>
+  );
+}
+
 export function MobileExtraSettings({
   environmentId,
   label,
@@ -179,21 +244,34 @@ export function MobileExtraSettings({
   readonly label: string;
 }) {
   const config = useEnvironmentServerConfig(environmentId);
-  const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const query = useEnvironmentQuery(
     serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
-  if (!settings) return null;
+  const canSetLongSessions = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
+  if (!config) return null;
+  const { settings } = config;
+  const isManaged = (key: keyof ServerSettings) =>
+    config.managedPolicy !== undefined && isManagedSettingPath(config.managedPolicy, key);
   return (
     <SettingsSection title={`Extra features · ${label}`}>
+      <MobileQuickModelSetting
+        config={config}
+        disabled={!canWrite || isManaged("quickModelSelection")}
+        onChange={(quickModelSelection) =>
+          void update({ environmentId, input: { patch: { quickModelSelection } } })
+        }
+      />
       {FEATURE_OFFERS.filter(
         (offer) =>
           offer.page === 2 && offer.setting && offer.setting !== "buildToolsSettingsVisible",
       ).map((offer) => {
         const key = offer.setting!;
-        if (key === "connectDeviceLongSessions") return null;
         return (
           <SettingsSwitchRow
             key={offer.id}
@@ -204,9 +282,19 @@ export function MobileExtraSettings({
                   ? "Stop stops only this thread"
                   : offer.title
             }
-            subtitle={offer.description}
+            subtitle={
+              key === "claudeHoldBackgroundCommands"
+                ? "Keep Claude threads working until background commands finish or the agent releases them."
+                : offer.description
+            }
             value={settings[key] === (offer.enabledValue ?? true)}
-            disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, key)}
+            disabled={
+              isManaged(key) ||
+              (key === "connectDeviceLongSessions"
+                ? !canSetLongSessions ||
+                  managedCapabilityDenial(config.managedPolicy, "connect") !== undefined
+                : !canWrite)
+            }
             onValueChange={(checked) =>
               void update({
                 environmentId,
@@ -261,7 +349,9 @@ export function SettingsBuildingT3RouteScreen() {
         {selectedTargets
           .filter((target) => target.serverConfig?.settings.buildToolsSettingsVisible)
           .map((target) => (
-            <MobileBuildTools key={target.environmentId} environmentId={target.environmentId} />
+            <SettingsSection key={target.environmentId} title={target.label}>
+              <MobileBuildTools environmentId={target.environmentId} />
+            </SettingsSection>
           ))}
       </ScreenScrollView>
     </SettingsScreen>

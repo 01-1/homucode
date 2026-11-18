@@ -1,3 +1,4 @@
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { foldSearchQuery, rankSearchItems, scoreSearchTerms } from "@t3tools/shared/paletteSearch";
 
 import type { SettingsPageTarget } from "./components/settings-page-targets";
@@ -52,6 +53,17 @@ const SETTINGS_SEARCH_TERMS = {
   ],
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
   SettingsHomuCode: [
+    ...FEATURE_OFFERS.map((offer) => offer.title),
+    "T3 Code checkout",
+    "Boat CLI",
+    "Cloud machine type",
+    "Build output folder",
+    "AppImage build folder",
+    "Enable cloud builds",
+    "Enable Android APK builds",
+    "Enable loading AppImages",
+    "Serve APKs on LAN",
+
     "madohomu",
     "duet",
     "show madohomu threads in t3 code",
@@ -63,6 +75,8 @@ const SETTINGS_SEARCH_TERMS = {
     "settings sync",
     "sync devices",
     "faster phone launch",
+    "show message sender labels",
+    "hide sender line sent from device",
     "building t3",
     "cloud build",
     "android apk",
