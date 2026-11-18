@@ -15,6 +15,7 @@ const SECTIONS = [
     title: "Interface",
     rows: [
       { id: "SettingsAppearance", label: "Appearance" },
+      { id: "SettingsHomuCode", label: "HomuCode" },
       { id: "SettingsKeyboard", label: "Keyboard" },
       { id: "SettingsVoice", label: "Voice" },
     ],
@@ -48,6 +49,9 @@ describe("filterSettingsSections", () => {
     { query: "appear", expected: [["Interface", ["Appearance"]]] },
     { query: "KEYBOARD", expected: [["Interface", ["Keyboard"]]] },
     { query: "dark mode", expected: [["Interface", ["Appearance"]]] },
+    { query: "settings sync", expected: [["Interface", ["HomuCode"]]] },
+    { query: "building t3", expected: [["Interface", ["HomuCode"]]] },
+    { query: "morning brief", expected: [["Interface", ["HomuCode"]]] },
     { query: "microphone", expected: [["Interface", ["Voice"]]] },
     { query: "agent credits", expected: [["Server settings", ["Source control"]]] },
     {

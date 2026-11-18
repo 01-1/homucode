@@ -12,6 +12,7 @@ import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
@@ -198,6 +199,7 @@ export function BehaviorSettingsSection() {
           return (
             <SettingsRow
               key={offer.id}
+              id={offer.id}
               title={offer.title}
               description={offer.description}
               serverScoped
@@ -205,6 +207,7 @@ export function BehaviorSettingsSection() {
               control={
                 <Checkbox
                   checked={settings[key] === (offer.enabledValue ?? true)}
+                  aria-label={offer.title}
                   onCheckedChange={(checked) =>
                     update({
                       [key]: checked ? (offer.enabledValue ?? true) : !(offer.enabledValue ?? true),
@@ -245,7 +248,7 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
             ? " Restart to apply your saved choice."
             : " Restart to apply changes."}
       </p>
-      <SettingsSection title="Work assistance">
+      <SettingsSection id={searchableSetting("work-assistance").id} title="Work assistance">
         <SettingsRow
           title="Enable work assistance (not recommended)"
           description="Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself."
@@ -271,7 +274,7 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
           />
         ) : null}
       </SettingsSection>
-      <SettingsSection title="Device names">
+      <SettingsSection id={searchableSetting("device-names").id} title="Device names">
         <DeviceNamesSettings environmentId={environmentId} />
       </SettingsSection>
     </>

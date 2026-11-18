@@ -101,7 +101,6 @@ export function AutoSettleSettingsRows(props: {
     patch: Partial<AutoSettleSettings> & {
       autoResumeLimitedThreads?: boolean;
       snoozeLimitedThreads?: boolean;
-      autoreviewEnabled?: boolean;
     },
   ) => props.write(patch);
 
@@ -143,18 +142,6 @@ export function AutoSettleSettingsRows(props: {
             value={uniformMobileSetting(displayTargets, "snoozeLimitedThreads")}
             disabled={disabledFor("snoozeLimitedThreads")}
             onValueChange={(value) => writeToAll({ snoozeLimitedThreads: value })}
-          />
-        </SettingsSection>
-      ) : null}
-      {!projectSelected ? (
-        <SettingsSection title="Autoreviewers">
-          <SettingsSwitchRow
-            icon="checkmark.circle"
-            label="Autoreviewers (not recommended)"
-            subtitle="Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers."
-            value={uniformMobileSetting(displayTargets, "autoreviewEnabled")}
-            disabled={disabledFor("autoreviewEnabled")}
-            onValueChange={(value) => writeToAll({ autoreviewEnabled: value })}
           />
         </SettingsSection>
       ) : null}

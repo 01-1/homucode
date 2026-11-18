@@ -87,6 +87,20 @@ describe("searchSettings", () => {
     });
   });
 
+  it("finds moved settings on the HomuCode page", () => {
+    for (const query of [
+      "HomuCode",
+      "Quick model",
+      "Device names",
+      "App scripts",
+      "Building T3",
+      "Ask again after a restart",
+      "Update when agents are idle",
+    ]) {
+      expect(searchSettings(query)[0]?.to).toBe("/settings/homucode");
+    }
+  });
+
   it("matches normalized title substrings", () => {
     expect(searchSettings("  WORD   WRAP  ", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
@@ -247,11 +261,13 @@ describe("settings search targets", () => {
   });
 
   it("keeps environment-wide settings out of project scopes", () => {
-    const updates = getSettingsSearchTargetScope("provider-update-checks")!;
-    expect(updates.scope).toBe("environment-defaults");
-    expect(isSettingsSearchScopeAvailable(updates.scope, "environment")).toBe(true);
-    expect(isSettingsSearchScopeAvailable(updates.scope, "all")).toBe(true);
-    expect(isSettingsSearchScopeAvailable(updates.scope, "project")).toBe(false);
+    for (const id of ["provider-update-checks", "show-building-t3", "background-git"]) {
+      const target = getSettingsSearchTargetScope(id)!;
+      expect(target.scope).toBe("environment-defaults");
+      expect(isSettingsSearchScopeAvailable(target.scope, "environment")).toBe(true);
+      expect(isSettingsSearchScopeAvailable(target.scope, "all")).toBe(true);
+      expect(isSettingsSearchScopeAvailable(target.scope, "project")).toBe(false);
+    }
     const fallback = getSettingsSearchTargetScope("fallback-model")!;
     expect(fallback.scope).toBe("environment-defaults");
     expect(isSettingsSearchScopeAvailable(fallback.scope, "environment")).toBe(true);
@@ -385,6 +401,11 @@ describe("movedSettingsPath", () => {
     expect(movedSettingsPath("/settings/storage", "")).toBe("/settings/maintenance");
     expect(movedSettingsPath("/settings/integrations", "devices")).toBe("/settings/devices");
     expect(movedSettingsPath("/settings/beta", "")).toBe("/settings/labs");
+    expect(movedSettingsPath("/settings/building-t3", "")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/chat", "status-line")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/general", "madohomu-enabled")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/general", "madohomu")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/threads", "thread-title-instructions")).toBeNull();
   });
 
   it("leaves current pages alone", () => {

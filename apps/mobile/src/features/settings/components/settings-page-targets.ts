@@ -3,6 +3,7 @@ export const SETTINGS_PAGE_TARGETS = [
   "SettingsEnvironments",
   "SettingsNotifications",
   "SettingsThreads",
+  "SettingsHomuCode",
   "SettingsBuildingT3",
   "SettingsAbout",
   "SettingsArchive",

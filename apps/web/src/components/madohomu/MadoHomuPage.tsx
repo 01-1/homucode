@@ -111,8 +111,8 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
       <SidebarInset>
         <div className="p-6">
           Enable MadoHomu in{" "}
-          <Link to="/settings/general" hash="madohomu-enabled">
-            Settings → MadoHomu
+          <Link to="/settings/homucode" hash="madohomu-enabled">
+            Settings → HomuCode → MadoHomu
           </Link>
           .
         </div>
@@ -246,7 +246,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           <Link to="/madohomu" search={{ environmentId }}>
             ✦ MadoHomu
           </Link>
-          <Link to="/settings/general" hash="madohomu-enabled">
+          <Link to="/settings/homucode" hash="madohomu-enabled">
             Settings
           </Link>
         </div>

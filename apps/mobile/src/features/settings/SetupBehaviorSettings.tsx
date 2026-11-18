@@ -2,7 +2,12 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { TextInput, View } from "react-native";
-import type { BuildToolsRequest, EnvironmentId, ServerSettings } from "@t3tools/contracts";
+import {
+  isManagedSettingPath,
+  type BuildToolsRequest,
+  type EnvironmentId,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
@@ -166,8 +171,15 @@ export function MobileBuildVisibility({
   );
 }
 
-export function MobileExtraSettings({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const settings = useEnvironmentServerConfig(environmentId)?.settings;
+export function MobileExtraSettings({
+  environmentId,
+  label,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+}) {
+  const config = useEnvironmentServerConfig(environmentId);
+  const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const query = useEnvironmentQuery(
@@ -175,14 +187,13 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
   );
   if (!settings) return null;
   return (
-    <SettingsSection title="Extra features">
+    <SettingsSection title={`Extra features · ${label}`}>
       {FEATURE_OFFERS.filter(
         (offer) =>
           offer.page === 2 && offer.setting && offer.setting !== "buildToolsSettingsVisible",
       ).map((offer) => {
         const key = offer.setting!;
-        if (key === "connectDeviceLongSessions" || key === "claudeHoldBackgroundCommands")
-          return null;
+        if (key === "connectDeviceLongSessions") return null;
         return (
           <SettingsSwitchRow
             key={offer.id}
@@ -195,7 +206,7 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
             }
             subtitle={offer.description}
             value={settings[key] === (offer.enabledValue ?? true)}
-            disabled={!canWrite}
+            disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, key)}
             onValueChange={(checked) =>
               void update({
                 environmentId,
@@ -237,7 +248,6 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
         }
       />
       <Text>Device names</Text>
-      <MobileThisDeviceName />
       <MobileDeviceNames environmentId={environmentId} />
     </SettingsSection>
   );
