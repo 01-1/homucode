@@ -47,7 +47,7 @@ export type T3McpToolSummaryAction =
   | "keybinding-update"
   | "usage-read"
   | "project-from-thread"
-  | "worktree-setup-cancel"
+  | "worktree-setup"
   | "secret-request"
   | "worktree-handoff"
   | "worktree-list"
@@ -346,7 +346,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   ),
   t3_worktree_setup_cancel: tool(
     ["Cancel", "Canceling", "Canceled", "worktree setup"],
-    "worktree-setup-cancel",
+    "worktree-setup",
+  ),
+  t3_worktree_setup_retry: tool(
+    ["Retry", "Retrying", "Retried", "worktree setup"],
+    "worktree-setup",
   ),
   t3_thread_configuration: tool(
     ["Read", "Reading", "Read", "thread configuration"],
@@ -484,6 +488,7 @@ const ACTION_TOOLS: Readonly<Record<string, (action: string) => string | undefin
   preview_act: (action) => `preview_${action}`,
   t3_queue: (action) => `t3_queue_${action}`,
   t3_pending_request: (action) => `t3_pending_request_${action}`,
+  t3_worktree_setup: (action) => `t3_worktree_setup_${action}`,
   t3_thread_transfer: (action) =>
     ({ fork: "t3_thread_fork", merge_back: "t3_thread_merge_back", status: "t3_thread_transfers" })[
       action

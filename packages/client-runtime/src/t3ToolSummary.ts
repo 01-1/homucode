@@ -319,8 +319,8 @@ export function summarizeT3ToolCalls(
     case "project-from-thread":
       label = phrase("Created", "create", `projects from threads ${times}`);
       break;
-    case "worktree-setup-cancel":
-      label = phrase("Canceled", "cancel", `worktree setup ${times}`);
+    case "worktree-setup":
+      label = phrase("Changed", "change", `worktree setup ${times}`);
       break;
     case "question-list":
       label = phrase("Listed", "list", `pending questions ${times}`);

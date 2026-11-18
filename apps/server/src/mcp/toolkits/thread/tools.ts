@@ -47,7 +47,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Pin, snooze, settle, archive, mark read or unread, or move a thread to another project or parent. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling files the thread immediately; its active turn keeps running. `move_under` makes it a subagent of `parentThreadId` that reports there; `move_to_root` makes it top-level. Parent moves fail while it has unfinished work. `move_project` needs `projectId`; it moves descendants and keeps checkout paths and active turns. `reorder_pin` puts a pinned thread above `beforeThreadId`, or last with null. `auto_settle_off` keeps it out of automatic settling. `stop_session` ends the provider session; the next message starts a fresh one. `retry_setup` reruns failed worktree setup (`runId`, default newest failed run). `close_guest_share` ends the guest link.",
+    "Pin, snooze, settle, archive, mark read or unread, or move a thread to another project or parent. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling files the thread immediately; its active turn keeps running. `move_under` makes it a subagent of `parentThreadId` that reports there; `move_to_root` makes it top-level. Parent moves fail while it has unfinished work. `move_project` needs `projectId`; it moves descendants and keeps checkout paths and active turns. `reorder_pin` puts a pinned thread above `beforeThreadId`, or last with null. `auto_settle_off` keeps it out of automatic settling. `stop_session` ends the provider session; the next message starts a fresh one. `close_guest_share` ends the guest link.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
@@ -69,14 +69,12 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "auto_settle_on",
       "auto_settle_off",
       "stop_session",
-      "retry_setup",
       "close_guest_share",
     ]),
     snoozedUntil: Schema.optional(IsoDateTime),
     parentThreadId: Schema.optional(ThreadId),
     projectId: Schema.optional(ProjectId),
     beforeThreadId: Schema.optional(Schema.NullOr(ThreadId)),
-    runId: Schema.optional(RunId),
   }),
   success: Schema.Union([
     OrchestrationV2DispatchCommandResult,

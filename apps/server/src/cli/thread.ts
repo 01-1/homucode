@@ -1243,7 +1243,6 @@ const ORGANIZE_ACTIONS = [
   "auto-settle-on",
   "auto-settle-off",
   "stop-session",
-  "retry-setup",
   "close-guest-share",
 ] as const;
 
@@ -1267,10 +1266,6 @@ const threadOrganizeCommand = Command.make("organize", {
     Flag.withDescription("snooze: ISO time to wake the thread."),
     Flag.optional,
   ),
-  runId: Flag.String("run-id").pipe(
-    Flag.withDescription("retry-setup: the failed run. Defaults to the newest failed run."),
-    Flag.optional,
-  ),
   json: jsonFlag,
 }).pipe(
   Command.withDescription(
@@ -1285,11 +1280,6 @@ const threadOrganizeCommand = Command.make("organize", {
       const beforeThreadId = Option.isSome(flags.before)
         ? yield* decodeThreadId(flags.before.value)
         : null;
-      const runId = Option.isSome(flags.runId)
-        ? yield* decodeRunId(flags.runId.value).pipe(
-            Effect.mapError(() => new ThreadUsageError({ detail: "Invalid --run-id." })),
-          )
-        : undefined;
       yield* withThreadTools(
         flags,
         Effect.fn("cli.thread.organize")(function* (tools) {
@@ -1305,7 +1295,6 @@ const threadOrganizeCommand = Command.make("organize", {
               ...(parentThreadId === undefined ? {} : { parentThreadId }),
               ...(flags.action === "reorder-pin" ? { beforeThreadId } : {}),
               ...(Option.isSome(flags.until) ? { snoozedUntil: flags.until.value } : {}),
-              ...(runId === undefined ? {} : { runId }),
             },
             Schema.Unknown,
           );

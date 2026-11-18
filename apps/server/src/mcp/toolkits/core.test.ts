@@ -969,7 +969,6 @@ it.effect(
         "mark_read",
         "auto_settle_off",
         "close_guest_share",
-        "retry_setup",
         "stop_session",
       ]) {
         const result = yield* call("t3_thread_organize", {
@@ -987,7 +986,6 @@ it.effect(
         { type: "thread.visit", threadId: "menu-thread", visitedAt: expect.any(String) },
         { type: "thread.auto-settle.set", enabled: false },
         { type: "thread.guest-share.close" },
-        { type: "prepared-run.retry", runId: "failed-setup-run" },
         { type: "provider-session.detach", providerSessionId: "session-a" },
         { type: "provider-session.detach", providerSessionId: "session-b" },
         { type: "queue.resume" },
@@ -1006,7 +1004,6 @@ it.effect(
                   ...McpToolAccessTestkit.idleThreadProjection(
                     McpToolAccessTestkit.liveThreadShell(id),
                   ),
-                  runs: [{ id: "failed-setup-run", status: "failed" }],
                   providerSessions: [{ id: "session-a" }, { id: "session-b" }],
                 } as never),
               dispatch: (command) => {

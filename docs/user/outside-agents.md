@@ -161,7 +161,7 @@ result that always includes the thread id.
 reorder-pin, snooze (`--until`), settle, archive and their reverses, mark-read,
 mark-unread, move-project (`--project`, an id or a folder inside it),
 move-under (`--parent`), move-to-root, auto-settle-on and auto-settle-off,
-stop-session, retry-setup and close-guest-share.
+stop-session and close-guest-share.
 
 ## Remove an agent
 

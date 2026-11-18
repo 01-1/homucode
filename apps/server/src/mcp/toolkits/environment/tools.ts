@@ -15,7 +15,7 @@ import * as ThreadManagementService from "../../../orchestration-v2/ThreadManage
 import * as Settings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
-/** Settings an agent may change: no secrets, auth, spend, notifications, data deletion, or agent permissions. */
+/** Settings an agent may change: no secrets, auth, spend, notifications, data deletion, agent permissions, or scripts. */
 export const AGENT_SETTINGS = [
   "worktreesDirectory",
   "fastWorktreeCheckout",
@@ -25,8 +25,6 @@ export const AGENT_SETTINGS = [
   "ghqCloneLayout",
   "defaultAutoPull",
   "projectAutoPullOverrides",
-  "defaultProjectScripts",
-  "projectScriptOverrides",
   "automaticGitFetchInterval",
   "providerHealthRefreshInterval",
   "responseStreamingMode",
@@ -42,7 +40,6 @@ export const AGENT_SETTINGS = [
   "compactIdleThreads",
   "idleCompaction",
   "idleCompactionFallback",
-  "autoResumeLimitedThreads",
   "snoozeLimitedThreads",
   "snoozePresets",
   "hiddenThreadTags",

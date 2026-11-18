@@ -1,12 +1,16 @@
 import {
   OrchestratorMcpFailure,
   ServerRemoveKeybindingInput,
+  STATIC_KEYBINDING_COMMANDS,
   ServerUpsertKeybindingInput,
 } from "@t3tools/contracts";
+import { compileResolvedKeybindingRule } from "@t3tools/shared/keybindings";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as CheckpointDiffQuery from "../../../checkpointing/CheckpointDiffQuery.ts";
 import * as Keybindings from "../../../keybindings.ts";
+import { WORKSPACE_PREPARATION_INPUT } from "../../../orchestration-v2/Orchestrator.ts";
+import * as ThreadLaunchService from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as AgentSessionImporter from "../../../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../../../project/AgentSessionScanner.ts";
@@ -15,7 +19,7 @@ import * as WorktreeSetupTracker from "../../../project/WorktreeSetupTracker.ts"
 import * as UsageService from "../../../usage/UsageService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
-import { readThread, unavailable } from "../../threadAccess.ts";
+import { dispatchFailure, newCommandId, readThread, unavailable } from "../../threadAccess.ts";
 import { AppToolkit } from "./tools.ts";
 
 export const DIFF_PAGE_CHARS = 40_000;
@@ -45,7 +49,8 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
         return yield* scanner.scan.pipe(Effect.mapError(unavailable));
       }),
     ),
-    McpToolAccess.writes(
+    // Imported threads take the importer's modes, so a caller below full access asks first.
+    McpToolAccess.writesEnvironment(
       (input) =>
         Effect.gen(function* () {
           const importer = yield* AgentSessionImporter.AgentSessionImporter;
@@ -69,18 +74,25 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
             })
             .pipe(Effect.mapError((error) => invalid(error.message)));
         }),
-      { refusal: "import threads into this environment" },
+      { approval: McpToolAccess.approvalPrompt("import agent sessions as threads") },
     ),
   ),
   t3_thread_diff: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
-      const { projection } = yield* readThread(input.threadId, ["checkpoints"]);
+      const { projection } = yield* readThread(input.threadId, ["checkpoints", "runs"]);
+      // The diff query only counts ready checkpoints of completed runs.
+      const completed = new Set(
+        projection.runs.filter((run) => run.status === "completed").map((run) => run.id),
+      );
       const toTurnCount =
         input.toTurnCount ??
         Math.max(
           0,
           ...projection.checkpoints.flatMap((checkpoint) =>
-            checkpoint.status === "ready" && checkpoint.appRunOrdinal != null
+            checkpoint.status === "ready" &&
+            checkpoint.appRunOrdinal != null &&
+            checkpoint.runId != null &&
+            completed.has(checkpoint.runId)
               ? [checkpoint.appRunOrdinal]
               : [],
           ),
@@ -129,12 +141,21 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
               .removeKeybindingRule(rule)
               .pipe(Effect.mapError((error) => invalid(error.message)));
           }
+          const command = yield* required(input.command, "command");
+          if (!(STATIC_KEYBINDING_COMMANDS as ReadonlyArray<string>).includes(command)) {
+            return yield* invalid(
+              `Agents can bind only built-in commands, not scripts. Valid: ${STATIC_KEYBINDING_COMMANDS.join(", ")}.`,
+            );
+          }
           const rule = yield* decodeUpsertKeybinding({
             key: yield* required(input.key, "key"),
-            command: yield* required(input.command, "command"),
+            command,
             ...(input.when === undefined ? {} : { when: input.when }),
             ...(input.replace === undefined ? {} : { replace: input.replace }),
           }).pipe(Effect.mapError(decodeFailure));
+          if (compileResolvedKeybindingRule(rule) === null) {
+            return yield* invalid("`key` or `when` is not valid shortcut syntax.");
+          }
           return yield* keybindings
             .upsertKeybindingRule(rule)
             .pipe(Effect.mapError((error) => invalid(error.message)));
@@ -145,7 +166,8 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
       }),
     { approval: McpToolAccess.approvalPrompt("change a keyboard shortcut") },
   ),
-  t3_usage_read: McpToolAccess.reads(({ environmentId: _, ...input }) =>
+  // Usage is diagnostics data; only the user's own thread agents read it, not outside clients.
+  t3_usage_read: McpToolAccess.readsAsCaller((input) =>
     Effect.gen(function* () {
       const usage = yield* UsageService.UsageService;
       return yield* usage
@@ -153,8 +175,8 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
         .pipe(Effect.mapError((error) => invalid(error.message)));
     }),
   ),
-  t3_project_from_thread: McpToolAccess.writesThreads(
-    (input) => [input.threadId],
+  // Promotion moves every scratch thread in the folder and their scheduled tasks.
+  t3_project_from_thread: McpToolAccess.writesEnvironment(
     (input) =>
       Effect.gen(function* () {
         const { projection } = yield* readThread(input.threadId);
@@ -163,14 +185,45 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
           .promote({ threadId: projection.thread.id })
           .pipe(Effect.mapError((error) => invalid(error.message)));
       }),
+    { approval: McpToolAccess.approvalPrompt("create a project from a scratch thread") },
   ),
-  t3_worktree_setup_cancel: McpToolAccess.writesThreads(
+  t3_worktree_setup: McpToolAccess.writesThreads(
     (input) => [input.threadId],
     (input) =>
       Effect.gen(function* () {
-        const { projection } = yield* readThread(input.threadId);
-        const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
-        return { cancelled: yield* tracker.cancel(projection.thread.id) };
+        if (input.action === "cancel") {
+          const { projection } = yield* readThread(input.threadId);
+          const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
+          return { cancelled: yield* tracker.cancel(projection.thread.id) };
+        }
+        const { projection } = yield* readThread(input.threadId, ["runs", "turnItems"], {
+          runStatuses: ["failed"],
+          turnItemTypes: ["command_execution"],
+        });
+        const setupRuns = new Set(
+          projection.turnItems.flatMap((item) =>
+            item.type === "command_execution" &&
+            item.input === WORKSPACE_PREPARATION_INPUT &&
+            item.runId !== null
+              ? [item.runId]
+              : [],
+          ),
+        );
+        const runId =
+          input.runId ??
+          projection.runs.findLast((run) => run.status === "failed" && setupRuns.has(run.id))?.id;
+        if (runId === undefined) {
+          return yield* invalid("This thread has no failed worktree setup to retry.");
+        }
+        const launch = yield* ThreadLaunchService.ThreadLaunchService;
+        const result = yield* launch
+          .retryPreparation({
+            commandId: yield* newCommandId(),
+            threadId: projection.thread.id,
+            runId,
+          })
+          .pipe(Effect.mapError(dispatchFailure));
+        return { sequence: result.sequence };
       }),
   ),
 });

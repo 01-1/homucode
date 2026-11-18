@@ -693,20 +693,6 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
               ),
             };
             break;
-          case "retry_setup": {
-            const { projection: failed } = yield* readThread(projection.thread.id, ["runs"], {
-              runStatuses: ["failed"],
-            });
-            const runId = input.runId ?? failed.runs.at(-1)?.id;
-            if (runId === undefined) {
-              return yield* new OrchestratorMcpFailure({
-                code: "invalid_request",
-                message: "This thread has no failed workspace setup to retry.",
-              });
-            }
-            command = { ...common, type: "prepared-run.retry", runId };
-            break;
-          }
           case "snooze":
             if (input.snoozedUntil === undefined) {
               return yield* new OrchestratorMcpFailure({

@@ -549,7 +549,7 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "session-import":
     case "keybinding-update":
     case "project-from-thread":
-    case "worktree-setup-cancel":
+    case "worktree-setup":
     case "worktree-handoff":
     case "project-create":
     case "project-update":

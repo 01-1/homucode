@@ -3,9 +3,11 @@ import {
   AgentSessionImportResult,
   AgentSessionScanResult,
   NonNegativeInt,
+  OrchestrationV2DispatchCommandResult,
   OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
   ProjectId,
+  RunId,
   ServerUpsertKeybindingResult,
   ThreadId,
   ThreadTranscriptImportInput,
@@ -13,11 +15,13 @@ import {
   UsageSummary,
   UsageSummaryInput,
 } from "@t3tools/contracts";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 import * as CheckpointDiffQuery from "../../../checkpointing/CheckpointDiffQuery.ts";
 import * as Keybindings from "../../../keybindings.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
+import * as ThreadLaunchService from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as AgentSessionImporter from "../../../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../../../project/AgentSessionScanner.ts";
@@ -114,15 +118,13 @@ const UsageReadTool = Tool.make("t3_usage_read", {
   ...shared,
   description:
     "Read provider token usage and cost between `sinceDay` and `untilDay` (YYYY-MM-DD) in IANA `timeZone`, as Settings > Usage shows.",
-  parameters: Schema.Struct({
-    environmentId: OrchestratorMcpEnvironmentTarget,
-    ...UsageSummaryInput.fields,
-  }),
+  parameters: UsageSummaryInput,
   success: UsageSummary,
   dependencies: [...threadDependencies, UsageService.UsageService],
 })
   .annotate(Tool.Readonly, true)
-  .annotate(Tool.Destructive, false);
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const ProjectFromThreadTool = Tool.make("t3_project_from_thread", {
   ...shared,
@@ -136,16 +138,26 @@ const ProjectFromThreadTool = Tool.make("t3_project_from_thread", {
   dependencies: [...threadDependencies, ScratchThreadPromotion.ScratchThreadPromotion],
 }).annotate(Tool.Destructive, false);
 
-const WorktreeSetupCancelTool = Tool.make("t3_worktree_setup_cancel", {
+const WorktreeSetupTool = Tool.make("t3_worktree_setup", {
   ...shared,
   description:
-    "Stop a thread's running worktree setup script. Omit `threadId` for this thread. `t3_thread_organize` `retry_setup` runs it again.",
+    "A thread's worktree setup script. Omit `threadId` for this thread. cancel: stop it while it runs. retry: run it again after it failed (`runId`, default the newest failed setup).",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
+    action: Schema.Literals(["cancel", "retry"]),
+    runId: Schema.optional(RunId),
   }),
-  success: Schema.Struct({ cancelled: Schema.Boolean }),
-  dependencies: [...threadDependencies, WorktreeSetupTracker.WorktreeSetupTracker],
+  success: Schema.Union([
+    Schema.Struct({ cancelled: Schema.Boolean }),
+    OrchestrationV2DispatchCommandResult,
+  ]),
+  dependencies: [
+    ...threadDependencies,
+    WorktreeSetupTracker.WorktreeSetupTracker,
+    ThreadLaunchService.ThreadLaunchService,
+    SecureRandom.SecureRandom,
+  ],
 }).annotate(Tool.Destructive, true);
 
 export const AppToolkit = Toolkit.make(
@@ -154,5 +166,5 @@ export const AppToolkit = Toolkit.make(
   KeybindingTool,
   UsageReadTool,
   ProjectFromThreadTool,
-  WorktreeSetupCancelTool,
+  WorktreeSetupTool,
 );

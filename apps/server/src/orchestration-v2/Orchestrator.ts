@@ -787,7 +787,7 @@ function delegatedTasksStopEffect(command: {
   };
 }
 
-const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
+export const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
 const RUNTIME_REQUEST_DELIVERY_FAILED_MESSAGE =
   "T3 Code could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
 
