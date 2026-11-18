@@ -1072,7 +1072,7 @@ function SectionHeading({
               <button
                 type="button"
                 aria-label={`${attention} need you. Expand ${title}`}
-                className="rounded-full bg-warning/15 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/25 focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-full bg-warning/15 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={onToggle}
               />
             }
