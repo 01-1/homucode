@@ -1033,7 +1033,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 onClick={() => {
                   closeSheet();
                   void navigate({
-                    to: "/settings/general",
+                    to: "/settings/homucode",
                     search: { machine: environmentId },
                     hash: "madohomu-enabled",
                   });

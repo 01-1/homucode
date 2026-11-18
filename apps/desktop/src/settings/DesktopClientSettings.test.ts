@@ -68,6 +68,7 @@ const clientSettings: ClientSettings = {
   threadDetailsUsageEnabled: false,
   threadDetailsItems: {},
   sidebarWorkingShelfEnabled: false,
+  sidebarKeepWatchingPullRequests: false,
   sidebarThreadFolderStyle: "tabs",
   loadBalancingEnabled: false,
   loadBalancingWeights: { "environment-1": 75, "environment-2": 0 },

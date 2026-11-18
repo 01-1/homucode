@@ -229,8 +229,8 @@ export function isMadoHomuThreadShownInCode(
 }
 
 /**
- * Drops the threads MadoHomu keeps out of T3 Code's thread lists, reading each
- * thread's environment settings. `isOpenThread` keeps the thread on screen listed.
+ * Applies the active MadoHomu project's visibility to Code's thread lists.
+ * `isOpenThread` keeps the thread on screen listed.
  */
 export function filterMadoHomuCodeThreads<
   T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
@@ -238,19 +238,22 @@ export function filterMadoHomuCodeThreads<
   threads: ReadonlyArray<T>,
   settingsByEnvironment: ReadonlyMap<
     EnvironmentId,
-    Parameters<typeof isMadoHomuThreadShownInCode>[0]
+    Parameters<typeof isMadoHomuThreadShownInCode>[0] &
+      Pick<ServerSettings, "madohomuDestinationEnvironmentId">
   >,
   isOpenThread: (thread: T) => boolean = () => false,
 ): ReadonlyArray<T> {
-  const hides = [...settingsByEnvironment.values()].some(
-    (settings) => settings.madohomuEnabled && settings.madohomuCodeVisibility !== "all",
+  const { environmentId } = resolveMadoHomuDestination(
+    [...settingsByEnvironment].map(([environmentId, settings]) => ({ environmentId, settings })),
   );
-  if (!hides) return threads;
-  return threads.filter((thread) => {
-    if (isOpenThread(thread)) return true;
-    const settings = settingsByEnvironment.get(thread.environmentId);
-    return settings === undefined || isMadoHomuThreadShownInCode(settings, thread);
-  });
+  const settings = environmentId === null ? undefined : settingsByEnvironment.get(environmentId);
+  if (!settings?.madohomuEnabled || settings.madohomuCodeVisibility === "all") return threads;
+  return threads.filter(
+    (thread) =>
+      thread.environmentId !== environmentId ||
+      isOpenThread(thread) ||
+      isMadoHomuThreadShownInCode(settings, thread),
+  );
 }
 
 /** How many Scratch rows show before "Show more", and how many each "Show more" adds. */

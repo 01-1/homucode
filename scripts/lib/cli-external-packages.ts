@@ -63,23 +63,24 @@ export function selectCliRuntimeExternalDependencies(
 export function findInlinedExternalPackages(source: string): {
   readonly regionCount: number;
   readonly inlined: ReadonlyArray<string>;
-  readonly inlinedPackages: ReadonlyArray<string>;
+  readonly inlinedPackagePaths: ReadonlyMap<string, string>;
 } {
   // Rolldown marks each inlined module with a `//#region <path>` line; newer
   // releases (vite-plus 1.4) emit a bare `// <path>` line instead.
-  const regionPattern = /^\/\/(?:#region)?[ \t]+(\S+)[ \t]*$/gm;
+  const regionPattern = /^\/\/(?:#region)?[ \t]+((?:\.\.?\/|\/|[A-Za-z]:\/)[^\r\n]+?|\S+)[ \t]*$/gm;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;
 
   let regionCount = 0;
   const inlined = new Set<string>();
-  const inlinedPackages = new Set<string>();
+  const inlinedPackagePaths = new Map<string, string>();
   for (const region of source.matchAll(regionPattern)) {
     regionCount += 1;
     const regionPath = region[1] ?? "";
     for (const candidate of regionPath.matchAll(packagePattern)) {
       const name = candidate[1];
       if (name === undefined || name === ".pnpm") continue;
-      inlinedPackages.add(name);
+      const packagePath = regionPath.slice(0, candidate.index + candidate[0].length - 1);
+      inlinedPackagePaths.set(packagePath, name);
       if (isExternalCliDependency(name)) inlined.add(name);
     }
   }
@@ -87,6 +88,6 @@ export function findInlinedExternalPackages(source: string): {
   return {
     regionCount,
     inlined: [...inlined].sort(),
-    inlinedPackages: [...inlinedPackages].sort(),
+    inlinedPackagePaths,
   };
 }

@@ -1,3 +1,4 @@
+import { SettingsHomuCodeRouteScreen } from "./features/settings/SettingsHomuCodeRouteScreen";
 import { SettingsBuildingT3RouteScreen } from "./features/settings/SetupBehaviorSettings";
 import {
   isDraftThreadRoute,
@@ -226,6 +227,11 @@ const SETTINGS_SCREENS = {
     screen: SettingsNotificationsRouteScreen,
     linking: "settings/notifications",
     options: settingsPage("Notifications"),
+  }),
+  SettingsHomuCode: createNativeStackScreen({
+    screen: SettingsHomuCodeRouteScreen,
+    linking: "settings/homucode",
+    options: settingsPage("HomuCode"),
   }),
   SettingsBuildingT3: createNativeStackScreen({
     screen: SettingsBuildingT3RouteScreen,

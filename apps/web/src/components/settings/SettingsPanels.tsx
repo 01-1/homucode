@@ -1,5 +1,3 @@
-import { BehaviorSettingsSection } from "./BehaviorSettings";
-import { MadoHomuSettings } from "./MadoHomuSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -24,7 +22,6 @@ import {
   type ResponseStreamingMode,
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
-  SidebarThreadFolderStyle,
   ScreenReaderAnnouncements,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
@@ -36,7 +33,6 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
-import { StagedBuildSettingsRow } from "./StagedBuildSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
@@ -84,7 +80,6 @@ import { isMacPlatform } from "../../lib/utils";
 import {
   useEnvironmentProviders,
   useEnvironments,
-  usePrimaryEnvironment,
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
@@ -152,12 +147,6 @@ const SIDEBAR_PROJECT_SORT_ORDER_LABELS: Record<SidebarProjectSortOrder, string>
 };
 const isSidebarProjectSortOrder = Schema.is(SidebarProjectSortOrder);
 
-const SIDEBAR_THREAD_FOLDER_STYLE_LABELS: Record<SidebarThreadFolderStyle, string> = {
-  cards: "Cards",
-  tabs: "Tab groups",
-};
-const isSidebarThreadFolderStyle = Schema.is(SidebarThreadFolderStyle);
-
 const TIMESTAMP_FORMAT_LABELS = {
   locale: msg("System default"),
   "12-hour": msg("12-hour"),
@@ -177,8 +166,6 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 function AboutVersionSection() {
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const primaryEnvironment = usePrimaryEnvironment();
   const updateState = useDesktopUpdateState();
   const [switchChannel, setSwitchChannel] = useState<DesktopUpdateChannel | null>(null);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
@@ -442,11 +429,6 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
-      {hasDesktopBridge && !primaryEnvironment?.serverConfig?.settings.buildToolsSettingsVisible ? (
-        <StagedBuildSettingsRow
-          {...(primaryEnvironmentId ? { environmentId: primaryEnvironmentId } : {})}
-        />
-      ) : null}
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}
@@ -517,6 +499,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? ["Working section"]
       : []),
+    ...(settings.sidebarKeepWatchingPullRequests ? ["Keep watched pull requests in Working"] : []),
     ...(settings.sidebarThreadFolderStyle !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle
       ? ["Folder style"]
       : []),
@@ -729,6 +712,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarKeepWatchingPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarKeepWatchingPullRequests,
       sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
@@ -862,39 +846,6 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Building T3">
-        <SettingsRow
-          title="Show Building T3 settings"
-          description="Configure cloud builds, Android APK builds, and loading AppImages."
-          serverScoped
-          settingKeys={["buildToolsSettingsVisible"]}
-          control={
-            <Switch
-              checked={settings.buildToolsSettingsVisible}
-              onCheckedChange={(value) =>
-                updateSettings({ buildToolsSettingsVisible: Boolean(value) })
-              }
-            />
-          }
-        />
-      </SettingsSection>
-      <SettingsSection id="settings-sync" title="Settings sync">
-        <SettingsRow
-          {...setting("settings-sync")}
-          description="Keep this device's settings the same as your other devices', through your primary server. When a setting changed in two places, or on first setup, you choose which value to keep."
-          control={
-            <Switch
-              checked={settings.settingsSyncEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ settingsSyncEnabled: Boolean(checked) })
-              }
-              aria-label="Settings sync"
-            />
-          }
-        />
-      </SettingsSection>
-
-      <MadoHomuSettings />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow
@@ -1023,43 +974,25 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("thread-folder-style")}
-          description="Cards tint each folder. Tab groups color the folder name and draw a line beside its threads."
+          {...searchableSetting("watched-pull-requests-in-working")}
+          description="Keep threads watching a pull request in Working after its checks finish."
           resetAction={
-            settings.sidebarThreadFolderStyle !==
-            DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle ? (
+            settings.sidebarKeepWatchingPullRequests ? (
               <SettingResetButton
-                label="folder style"
-                onClick={() =>
-                  updateSettings({
-                    sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
-                  })
-                }
+                label="keep watched pull requests in Working"
+                onClick={() => updateSettings({ sidebarKeepWatchingPullRequests: false })}
               />
             ) : null
           }
           control={
-            <Select
-              value={settings.sidebarThreadFolderStyle}
-              onValueChange={(value) => {
-                if (isSidebarThreadFolderStyle(value)) {
-                  updateSettings({ sidebarThreadFolderStyle: value });
-                }
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Folder style">
-                <SelectValue>
-                  {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[settings.sidebarThreadFolderStyle]}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {SidebarThreadFolderStyle.literals.map((style) => (
-                  <SelectItem hideIndicator key={style} value={style}>
-                    {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[style]}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+            <Switch
+              checked={settings.sidebarKeepWatchingPullRequests}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarKeepWatchingPullRequests: Boolean(checked) })
+              }
+              disabled={!settings.sidebarWorkingShelfEnabled || settings.boringSidebarEnabled}
+              aria-label="Keep watched pull requests in Working"
+            />
           }
         />
       </SettingsSection>
@@ -1291,64 +1224,9 @@ export function ChatSettingsPanel() {
   ] as const;
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
-  const mixedStatusLineCommand = useScopedSettingsMixed(["statusLineCommand"]);
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="status-line" title="Status line">
-        <SettingsRow
-          serverScoped
-          settingKeys={["statusLineEnabled"]}
-          {...searchableSetting("status-line")}
-          description="Show the model, context, and usage limits in the top bar."
-          resetAction={
-            settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled ? (
-              <SettingResetButton
-                label="status line"
-                onClick={() =>
-                  updateSettings({ statusLineEnabled: DEFAULT_UNIFIED_SETTINGS.statusLineEnabled })
-                }
-              />
-            ) : null
-          }
-          control={
-            <ScopedSwitch
-              settingKeys={["statusLineEnabled"]}
-              checked={settings.statusLineEnabled}
-              onCheckedChange={(checked) => updateSettings({ statusLineEnabled: Boolean(checked) })}
-              aria-label="Show the status line"
-            />
-          }
-        />
-        <SettingsRow
-          serverScoped
-          settingKeys={["statusLineCommand"]}
-          {...searchableSetting("status-line-command")}
-          description="A command that reads Claude Code's status line JSON on stdin and prints a line of text, shown in place of the dials. Leave empty for the built-in status line."
-          resetAction={
-            settings.statusLineCommand !== DEFAULT_UNIFIED_SETTINGS.statusLineCommand ? (
-              <SettingResetButton
-                label="status line command"
-                onClick={() =>
-                  updateSettings({ statusLineCommand: DEFAULT_UNIFIED_SETTINGS.statusLineCommand })
-                }
-              />
-            ) : null
-          }
-          control={
-            <DraftInput
-              size="sm"
-              className="w-full sm:w-72"
-              value={mixedStatusLineCommand ? "" : settings.statusLineCommand}
-              onCommit={(next) => updateSettings({ statusLineCommand: next.trim() })}
-              placeholder={mixedStatusLineCommand ? "Mixed" : "Built-in"}
-              spellCheck={false}
-              aria-label="Status line command"
-            />
-          }
-        />
-      </SettingsSection>
-
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
           {...searchableSetting("composer-rich-text")}
@@ -1373,58 +1251,6 @@ export function ChatSettingsPanel() {
                 updateSettings({ composerRichTextEnabled: Boolean(checked) })
               }
               aria-label="Rich text composer"
-            />
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("user-message-markdown")}
-          description="Off shows your sent messages as the plain text you typed."
-          resetAction={
-            settings.userMessageMarkdownEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled ? (
-              <SettingResetButton
-                label="sent message formatting"
-                onClick={() =>
-                  updateSettings({
-                    userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.userMessageMarkdownEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ userMessageMarkdownEnabled: Boolean(checked) })
-              }
-              aria-label="Format sent messages as Markdown"
-            />
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("user-message-plus-bullets")}
-          description="Off keeps a + at the start of a line in your sent messages as you typed it."
-          resetAction={
-            settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets ? (
-              <SettingResetButton
-                label="+ bullets"
-                onClick={() =>
-                  updateSettings({
-                    userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.userMessagePlusBullets}
-              disabled={!settings.userMessageMarkdownEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ userMessagePlusBullets: Boolean(checked) })
-              }
-              aria-label="Lines starting with + become bullets"
             />
           }
         />
@@ -1503,24 +1329,6 @@ export function ChatSettingsPanel() {
         </AdvancedSettings>
       </SettingsSection>
 
-      <SettingsSection id="subagents" title="Subagents">
-        <SettingsRow
-          serverScoped
-          {...searchableSetting("prefer-native-subagents")}
-          settingKeys={["preferNativeSubagents"]}
-          description="Use provider-native subagents for same-provider work. Off routes every subagent through T3 Code. Applies next turn; providers that load instructions at startup need a thread restart."
-          control={
-            <ScopedSwitch
-              settingKeys={["preferNativeSubagents"]}
-              checked={settings.preferNativeSubagents}
-              onCheckedChange={(checked) =>
-                updateSettings({ preferNativeSubagents: Boolean(checked) })
-              }
-              aria-label="Prefer native subagents"
-            />
-          }
-        />
-      </SettingsSection>
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow
           {...searchableSetting("follow-up-behavior")}
@@ -2040,7 +1848,6 @@ export function ThreadsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <BehaviorSettingsSection />
       <SettingsSection id="new-projects" title="New projects">
         <SettingsRow
           serverScoped
@@ -2137,42 +1944,6 @@ export function ThreadsSettingsPanel() {
                 updateSettings({ snoozeLimitedThreads: Boolean(checked) })
               }
               aria-label="Snooze until limits reset"
-            />
-          }
-        />
-      </SettingsSection>
-
-      <SettingsSection id="claude-background-commands" title="Claude background commands">
-        <SettingsRow
-          serverScoped
-          {...searchableSetting("claude-hold-background-commands")}
-          settingKeys={["claudeHoldBackgroundCommands"]}
-          description="Keep Claude threads in Working until new background commands finish or the agent releases them. Applies without restarting. Claude monitors always keep threads working."
-          control={
-            <ScopedSwitch
-              settingKeys={["claudeHoldBackgroundCommands"]}
-              checked={settings.claudeHoldBackgroundCommands}
-              onCheckedChange={(checked) =>
-                updateSettings({ claudeHoldBackgroundCommands: Boolean(checked) })
-              }
-              aria-label="Keep Claude threads working while background commands run"
-            />
-          }
-        />
-      </SettingsSection>
-
-      <SettingsSection id="autoreview" title="Autoreviewers">
-        <SettingsRow
-          serverScoped
-          {...searchableSetting("autoreviewers")}
-          description="Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers."
-          settingKeys={["autoreviewEnabled"]}
-          control={
-            <ScopedSwitch
-              settingKeys={["autoreviewEnabled"]}
-              checked={settings.autoreviewEnabled}
-              onCheckedChange={(checked) => updateSettings({ autoreviewEnabled: Boolean(checked) })}
-              aria-label="Autoreviewers (not recommended)"
             />
           }
         />
@@ -2387,8 +2158,6 @@ export function ThreadsSettingsPanel() {
         <AdvancedSettings
           targetIds={[
             searchableSetting("thread-title-instructions").id,
-            searchableSetting("thread-title-project-name").id,
-            searchableSetting("thread-title-id-prefix").id,
             searchableSetting("response-streaming").id,
           ]}
         >

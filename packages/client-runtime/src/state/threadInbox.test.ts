@@ -20,6 +20,7 @@ function thread(id: string, working: boolean) {
     hasActionableProposedPlan: false,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
+    pendingBackgroundTasks: [],
     interactionMode: "default" as const,
     runtime: working
       ? {
@@ -43,6 +44,38 @@ describe("createInboxReturnTracker", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
   });
+  it("keeps an open pull request watch in Working when opted in until it stops or needs input", () => {
+    const tracker = createInboxReturnTracker();
+    const finished = thread("a", false);
+    const watching = {
+      ...finished,
+      pendingBackgroundTasks: [
+        { kind: "monitor" as const, taskId: "pull-request-watch:github.com/owner/repo#68" },
+      ],
+    };
+    const needsInput = { ...watching, hasPendingUserInput: true };
+    const needsGuestReview = { ...watching, pendingGuestMessageCount: 1 };
+    const otherMonitor = {
+      ...finished,
+      pendingBackgroundTasks: [{ kind: "monitor" as const, taskId: "local-monitor" }],
+    };
+    expect(tracker.observe([watching]).isWorking(watching)).toBe(false);
+    expect(tracker.observe([watching], true).isWorking(watching)).toBe(true);
+    expect(tracker.observe([needsInput], true).isWorking(needsInput)).toBe(false);
+    expect(tracker.observe([needsGuestReview], true).isWorking(needsGuestReview)).toBe(false);
+    expect(tracker.observe([otherMonitor], true).isWorking(otherMonitor)).toBe(false);
+    tracker.observe([watching], true);
+    tracker.observe([finished], true);
+    vi.advanceTimersByTime(2_000);
+    expect(tracker.observe([finished], true).isWorking(finished)).toBe(false);
+    tracker.observe([watching], true);
+    expect(tracker.observe([watching], false).isWorking(watching)).toBe(false);
+    tracker.observe([watching], true);
+    expect(tracker.observe([finished], false).isWorking(finished)).toBe(false);
+
+    tracker.observe([thread("a", true)], true);
+    expect(tracker.observe([watching], false).isWorking(watching)).toBe(true);
+  });
   it("stamps a thread when it stops working, but never on the first observation", () => {
     const tracker = createInboxReturnTracker();
     const first = tracker.observe([thread("a", true), thread("b", false)]);
@@ -65,7 +98,8 @@ describe("createInboxReturnTracker", () => {
     const notify = vi.fn();
     const unsubscribe = tracker.subscribe(notify);
     tracker.observe([thread("a", true)]);
-    tracker.observe([thread("a", false)]);
+    tracker.observe([thread("a", false)], true);
+    tracker.observe([thread("a", false)], false);
     expect(isThreadWorking(thread("a", false))).toBe(false);
     expect(tracker.isWorking(thread("a", false))).toBe(true);
     vi.advanceTimersByTime(1_999);

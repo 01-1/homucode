@@ -8,22 +8,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-import { useSettingsScope } from "./SettingsScopeContext";
+import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { StagedBuildSettingsRow } from "./StagedBuildSettingsRow";
-
-export function BuildToolsSettingsPanel() {
-  const { target } = useSettingsScope();
-  return (
-    <SettingsPageContainer>
-      {target ? (
-        <BuildToolsSetup environmentId={target.environmentId} />
-      ) : (
-        <p>Choose a connected environment.</p>
-      )}
-    </SettingsPageContainer>
-  );
-}
 
 export function BuildToolsSetup({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const settings = useEnvironmentSettings(environmentId);

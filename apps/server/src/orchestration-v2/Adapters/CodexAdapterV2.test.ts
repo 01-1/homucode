@@ -674,7 +674,7 @@ function codexReplayPreamble(input: {
   readonly effort?: string;
   readonly turnPolicy?: Pick<
     typeof CodexClient.V2TurnStartParams.Type,
-    "approvalPolicy" | "sandboxPolicy"
+    "approvalPolicy" | "sandboxPolicy" | "additionalContext"
   >;
 }): Array<CodexReplay.CodexAppServerReplayEntry> {
   return [
@@ -1730,33 +1730,106 @@ describe("CodexAdapterV2 post-settle continuation", () => {
   );
 
   it.effect.each([
-    { runtimeMode: "full-access", turnIdKind: "present", customServer: false },
-    { runtimeMode: "full-access", turnIdKind: "present", customServer: true },
-    { runtimeMode: "auto-accept-edits", turnIdKind: "null", customServer: false },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "browser" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "external" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "launch" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "thread-read" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "thread-send" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "third-party-tool" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate-no-session" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-user-input" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-custom-elicitation" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-tool-form-fields" },
+    { runtimeMode: "auto-accept-edits", turnIdKind: "null", kind: "browser" },
+    { runtimeMode: "auto-accept-edits", turnIdKind: "present", kind: "thread-send" },
   ] as const)(
-    "handles MCP access approvals in $runtimeMode with a $turnIdKind turn id and custom server $customServer",
-    ({ runtimeMode, turnIdKind, customServer }) =>
+    "handles MCP access approvals in $runtimeMode with a $turnIdKind turn id for $kind",
+    ({ runtimeMode, turnIdKind, kind }) =>
       Effect.gen(function* () {
         const nativeThreadId = "mcp-approval-thread";
         const nativeTurnId = "mcp-approval-turn";
         const prompt = "Read the dashboard in Chrome.";
+        const scenario = `mcp-approval-${turnIdKind}-${kind}`;
+        const serverName = {
+          browser: "browser",
+          external: "deployment",
+          delegate: "t3-code-direct",
+          launch: "t3-code",
+          "thread-read": "t3-code",
+          "thread-send": "t3-code",
+          "third-party-tool": "deployment",
+          "delegate-no-session": "t3-code-direct",
+          "t3-user-input": "t3-code",
+          "t3-custom-elicitation": "t3-code",
+          "t3-tool-form-fields": "t3-code",
+        }[kind];
+        const toolName = {
+          browser: undefined,
+          external: undefined,
+          delegate: "delegate_task",
+          launch: "t3_thread_launch",
+          "thread-read": "t3_thread_read",
+          "thread-send": "t3_thread_send",
+          "third-party-tool": "delegate_task",
+          "delegate-no-session": "delegate_task",
+          "t3-user-input": "t3_thread_send",
+          "t3-custom-elicitation": undefined,
+          "t3-tool-form-fields": "t3_thread_send",
+        }[kind];
+        const message =
+          kind === "browser"
+            ? "Allow ChatGPT to use Google Chrome?"
+            : toolName === undefined
+              ? "Confirm this request?"
+              : `Allow the ${serverName} MCP server to run tool "${toolName}"?`;
+        const refused = [
+          "external",
+          "third-party-tool",
+          "delegate-no-session",
+          "t3-user-input",
+          "t3-custom-elicitation",
+          "t3-tool-form-fields",
+        ].includes(kind);
+        const hasT3Mcp =
+          (toolName !== undefined && kind !== "delegate-no-session") ||
+          kind === "t3-custom-elicitation";
+        if (hasT3Mcp) {
+          yield* (yield* McpProviderSessions.McpProviderSessions).set({
+            environmentId: EnvironmentId.make("environment-codex-mcp"),
+            threadId: ThreadId.make(`thread-${scenario}`),
+            providerSessionId: `provider-session-${scenario}`,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            endpoint: "http://127.0.0.1:43123/mcp",
+            authorizationHeader: "Bearer secret-codex-token",
+            browserToolsAvailable: true,
+          });
+        }
+        const { additionalContext } = yield* CodexAdapterV2.buildCodexTurnStartParams({
+          nativeThreadId,
+          codexInput: [{ type: "text", text: prompt }],
+          runtimePolicy: { ...CODEX_TEST_RUNTIME_POLICY, runtimeMode },
+          modelSelection: CODEX_TEST_MODEL_SELECTION,
+          hasT3Mcp,
+        });
         const pending = yield* Queue.unbounded<OrchestrationV2RuntimeRequest>();
         const harness = yield* makeCodexReplayHarness(
           makeCodexReplayTranscript({
-            scenario: `mcp-approval-${turnIdKind}`,
+            scenario,
             entries: [
               ...codexReplayPreamble({
                 nativeThreadId,
                 nativeTurnId,
                 prompt,
-                ...(runtimeMode === "full-access"
-                  ? {}
-                  : {
-                      turnPolicy: {
+                turnPolicy: {
+                  ...(additionalContext === undefined ? {} : { additionalContext }),
+                  ...(runtimeMode === "full-access"
+                    ? {}
+                    : {
                         approvalPolicy: "on-request",
                         sandboxPolicy: { type: "workspaceWrite" },
-                      },
-                    }),
+                      }),
+                },
               }),
               {
                 type: "emit_inbound",
@@ -1766,22 +1839,38 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   params: {
                     threadId: nativeThreadId,
                     turnId: turnIdKind === "null" ? null : nativeTurnId,
-                    serverName: customServer ? "deployment" : "browser",
+                    serverName,
                     mode: "form",
-                    message: customServer
-                      ? "Deploy to production?"
-                      : "Allow ChatGPT to use Google Chrome?",
-                    requestedSchema: customServer
-                      ? { type: "object", properties: {} }
-                      : {
-                          type: "object",
-                          properties: { approval: { type: "string", enum: ["once", "always"] } },
-                          required: ["approval"],
-                        },
+                    message,
+                    ...(toolName !== undefined
+                      ? {
+                          _meta: {
+                            codex_approval_kind: "mcp_tool_call",
+                            tool_name: toolName,
+                            ...(kind === "t3-user-input"
+                              ? { codex_requires_user_input: true }
+                              : {}),
+                          },
+                        }
+                      : {}),
+                    requestedSchema:
+                      kind !== "browser"
+                        ? {
+                            type: "object",
+                            properties:
+                              kind === "t3-tool-form-fields"
+                                ? { confirm: { type: "boolean" } }
+                                : {},
+                          }
+                        : {
+                            type: "object",
+                            properties: { approval: { type: "string", enum: ["once", "always"] } },
+                            required: ["approval"],
+                          },
                   },
                 },
               },
-              ...(customServer
+              ...(refused
                 ? [
                     {
                       type: "expect_outbound" as const,
@@ -1812,12 +1901,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 type: "expect_outbound",
                 frame: {
                   id: 0,
-                  result: customServer
+                  result: refused
                     ? {
                         action: "cancel",
                         _meta: { codex_approval_cancellation_reason: "non_interactive" },
                       }
-                    : { action: "accept", content: { approval: "once" } },
+                    : { action: "accept", content: kind === "browser" ? { approval: "once" } : {} },
                 },
               },
               {
@@ -1874,7 +1963,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         );
         assert.deepEqual(
           approvals.map((approval) => [approval.threadId, approval.appName, approval.prompt]),
-          [[harness.threadId, "Google Chrome", "Allow ChatGPT to use Google Chrome?"]],
+          [[harness.threadId, kind === "browser" ? "Google Chrome" : serverName, message]],
         );
         yield* harness.runtime.respondToRuntimeRequest({
           requestId: request.id,

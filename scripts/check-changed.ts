@@ -113,6 +113,7 @@ const decodeRootPackageJson = Schema.decodeEffect(
       scripts: Schema.Struct({
         "knip:check:files": Schema.String,
         "knip:check:exports": Schema.String,
+        "check:module-resolution": Schema.optional(Schema.String),
       }),
     }),
   ),
@@ -506,6 +507,12 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
 
   const steps: Array<Step<never>> = [
     ...(runPatchCheck ? [{ name: "unused patches", run: checkPatches }] : []),
+    ...(rootPackage.scripts["check:module-resolution"] &&
+    (runPatchCheck ||
+      present.includes("scripts/check-module-resolution.ts") ||
+      present.includes("scripts/module-resolution-baseline.txt"))
+      ? [command("dependency type resolution", ["run", "check:module-resolution"])]
+      : []),
     ...(present.length > 0
       ? [command("format", ["fmt", "--check", "--no-error-on-unmatched-pattern", ...present])]
       : []),

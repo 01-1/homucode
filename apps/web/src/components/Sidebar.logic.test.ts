@@ -1223,6 +1223,7 @@ describe("Working shelf (beta)", () => {
     hasActionableProposedPlan: false,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
+    pendingBackgroundTasks: [],
     interactionMode: "default" as const,
     latestRun: makeLatestRun(),
     runtime: null,

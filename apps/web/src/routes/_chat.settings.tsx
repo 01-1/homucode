@@ -85,7 +85,11 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
       </SettingsScopeNotice>
     );
   }
-  if (SETTINGS_DEVICE_ONLY_PATHS.has(pathname) || pathname === "/settings/projects") {
+  if (
+    SETTINGS_DEVICE_ONLY_PATHS.has(pathname) ||
+    pathname === "/settings/projects" ||
+    pathname === "/settings/homucode"
+  ) {
     return children;
   }
   if (scope.kind === "unavailable")
@@ -179,7 +183,15 @@ export const Route = createFileRoute("/_chat/settings")({
       throw redirect({ to: "/settings/general", replace: true });
     }
     const moved = movedSettingsPath(location.pathname, location.hash);
-    if (moved) throw redirect({ to: moved, search: true, hash: true, replace: true });
+    if (moved) {
+      throw redirect({
+        to: moved,
+        search: true,
+        hash:
+          location.pathname === "/settings/building-t3" && !location.hash ? "building-t3" : true,
+        replace: true,
+      });
+    }
   },
   component: SettingsRouteLayout,
 });

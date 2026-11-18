@@ -112,8 +112,13 @@ export function goalCommandStopsActiveRun(
   }
 }
 
+type DispatchIntentProjection = Pick<
+  OrchestrationV2ThreadProjection,
+  "runs" | "messages" | "providerTurns" | "providerThreads" | "providerSessions" | "turnItems"
+>;
+
 export function resolveMessageDispatchIntent(
-  projection: OrchestrationV2ThreadProjection,
+  projection: DispatchIntentProjection,
   requestedMode: MessageDispatchMode,
   deliveryIntent?: "auto" | "steer" | "restart",
 ): MessageDispatchMode {
@@ -130,6 +135,16 @@ export function resolveMessageDispatchIntent(
     target === undefined || !isActiveRun(target)
       ? undefined
       : providerTurnCapabilities(projection, target);
+  // A steer would break a running automatic compaction; it waits and steers in afterwards.
+  if (
+    turns?.activeSteeringDuringCompaction !== true &&
+    projection.turnItems.some(
+      (item) =>
+        item.type === "compaction" && item.status === "running" && item.runId === target?.id,
+    )
+  ) {
+    return { type: "queue_after_active" };
+  }
   return turns !== undefined &&
     !turns.supportsActiveSteering &&
     !(turns.supportsInterrupt && turns.supportsSteeringByInterruptRestart) &&
@@ -157,10 +172,7 @@ export function followUpOwnerRun(
   );
 }
 
-function providerTurnCapabilities(
-  projection: OrchestrationV2ThreadProjection,
-  run: OrchestrationV2Run,
-) {
+function providerTurnCapabilities(projection: DispatchIntentProjection, run: OrchestrationV2Run) {
   const providerThread = projection.providerThreads.find(
     (candidate) => candidate.id === run.providerThreadId,
   );
@@ -174,7 +186,7 @@ function providerTurnCapabilities(
 }
 
 function resolveDeliveryIntent(
-  projection: OrchestrationV2ThreadProjection,
+  projection: DispatchIntentProjection,
   requestedMode: MessageDispatchMode,
   deliveryIntent?: "auto" | "steer" | "restart",
 ): MessageDispatchMode {

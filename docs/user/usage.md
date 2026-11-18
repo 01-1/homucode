@@ -178,7 +178,9 @@ environment that will connect to the hub and enter its URL and management key.
 
 The hub's Codex, Claude, xAI (shown as Grok) and Antigravity accounts appear under **Usage → Limits**;
 accounts for other providers are not read. Codex accounts show banked reset credits; select an
-account and choose **Use reset** to redeem one. No hub plugin is required.
+account and choose **Use reset** to redeem one. Claude limits come from quota headers the
+hub recorded during Claude Code requests. A window appears after the hub observes it.
+No hub plugin is required.
 
 This connection supplies usage information; configure
 the provider separately to send agent requests through the hub. Remove the hub from the same

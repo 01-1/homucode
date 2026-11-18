@@ -154,7 +154,7 @@ describe("MadoHomu destination", () => {
     ).toBe(b);
   });
 
-  it("keeps the recorded settings host through successive project switches", async () => {
+  it("keeps the settings host and filters Code threads only on the selected machine", async () => {
     const settings = new Map([
       [a, { ...DEFAULT_SERVER_SETTINGS, madohomuEnabled: true, madohomuProjectId: projectId }],
       [b, { ...DEFAULT_SERVER_SETTINGS }],
@@ -167,6 +167,13 @@ describe("MadoHomu destination", () => {
           settings: settings.get(environmentId)!,
         })),
       );
+    const threads = [a, b, c].map((environmentId) => ({
+      environmentId,
+      projectId,
+      id: ThreadId.make("same-thread-id"),
+    }));
+    const visibleMachines = () =>
+      filterMadoHomuCodeThreads(threads, settings).map((thread) => thread.environmentId);
     const writes: Array<{ environmentId: EnvironmentId; patch: ServerSettingsPatch }> = [];
     const save = async (environmentId: EnvironmentId, patch: ServerSettingsPatch) => {
       writes.push({ environmentId, patch });
@@ -183,10 +190,13 @@ describe("MadoHomu destination", () => {
     };
 
     expect(destination().environmentId).toBe(a);
+    expect(visibleMachines()).toEqual([b, c]);
     await writeMadoHomuProject(destination(), project(b), host, save);
     expect(destination().environmentId).toBe(b);
+    expect(visibleMachines()).toEqual([a, c]);
     await writeMadoHomuProject(destination(), project(c), host, save);
     expect(destination().environmentId).toBe(c);
+    expect(visibleMachines()).toEqual([a, b]);
     await writeMadoHomuProject(destination(), project(c), host, save);
     expect(writes).toEqual([
       { environmentId: b, patch: { madohomuEnabled: true, madohomuProjectId: projectId } },

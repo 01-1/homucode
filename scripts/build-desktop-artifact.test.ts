@@ -47,6 +47,7 @@ import {
   stageWslRuntimeArchive,
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
+  findStorePackageDirectory,
   LinuxBrowserSecretHostError,
   LinuxPackagedAppMissingError,
   MacPackagedAppMissingError,
@@ -1919,6 +1920,47 @@ it.effect.skipIf(!symlinksSupported)("rebases packaged links into the isolated t
       resolvedCopiedPackage,
     );
   }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("finds packages in project and global pnpm virtual stores", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-virtual-store-" });
+    const projectRepo = path.join(root, "project");
+    const projectPackage = path.join(
+      projectRepo,
+      "node_modules/.pnpm/@scope+native@1.0.0/node_modules/@scope/native",
+    );
+    yield* fs.makeDirectory(projectPackage, { recursive: true });
+    assert.equal(yield* findStorePackageDirectory(projectRepo, "@scope/native"), projectPackage);
+    assert.equal(yield* findStorePackageDirectory(projectRepo, "missing"), null);
+
+    const globalRepo = path.join(root, "global");
+    const links = path.join(root, "store/links");
+    const scopedPackage = path.join(links, "@scope/native/1.0.0/abc/node_modules/@scope/native");
+    const unscopedPackage = path.join(links, "@/plain/2.0.0/def/node_modules/plain");
+    yield* fs.makeDirectory(scopedPackage, { recursive: true });
+    yield* fs.makeDirectory(unscopedPackage, { recursive: true });
+    yield* fs.makeDirectory(path.join(globalRepo, "node_modules/.pnpm"), { recursive: true });
+    yield* fs.writeFileString(
+      path.join(globalRepo, "node_modules/.modules.yaml"),
+      `${JSON.stringify({ virtualStoreDir: "../../store/links" }, null, 2)}\n`,
+    );
+    assert.equal(yield* findStorePackageDirectory(globalRepo, "@scope/native"), scopedPackage);
+    assert.equal(yield* findStorePackageDirectory(globalRepo, "plain"), unscopedPackage);
+    assert.equal(yield* findStorePackageDirectory(globalRepo, "missing"), null);
+
+    const olderPackage = path.join(links, "@scope/native/0.1.0/def/node_modules/@scope/native");
+    yield* fs.makeDirectory(olderPackage, { recursive: true });
+    for (const bundled of [scopedPackage, olderPackage]) {
+      const sourceMarker = path.relative(path.join(globalRepo, "apps/server"), bundled);
+      assert.equal(
+        yield* findStorePackageDirectory(globalRepo, "@scope/native", sourceMarker),
+        bundled,
+      );
+    }
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 it.effect("preserves packaged app directories from the dir target", () =>

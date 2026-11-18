@@ -1,4 +1,6 @@
 // @effect-diagnostics globalTimers:off - Shelf placement timers run in web and native clients, outside an Effect runtime.
+import { isPullRequestWatchTask } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 import { toSortableTimestamp } from "./threadSort.ts";
 import { effectiveSnoozed } from "./threadSettled.ts";
@@ -9,15 +11,32 @@ type WorkingThreadInput = Pick<
   | "hasPendingApprovals"
   | "hasPendingUserInput"
   | "pendingSubagentRequest"
+  | "pendingBackgroundTasks"
+  | "pendingGuestMessageCount"
   | "interactionMode"
   | "latestRun"
   | "runtime"
 >;
 
-export function isThreadWorking(thread: WorkingThreadInput): boolean {
+export function isThreadWorking(
+  thread: WorkingThreadInput,
+  keepWatchingPullRequests = false,
+): boolean {
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return false;
   if (thread.pendingSubagentRequest != null) return false;
-  if (!threadRuntimeIsActive(thread.runtime) && thread.runtime?.status !== "idle") return false;
+  const watchingPullRequest =
+    keepWatchingPullRequests &&
+    (thread.pendingGuestMessageCount ?? 0) === 0 &&
+    thread.runtime?.status !== "failed" &&
+    thread.runtime?.lastError == null &&
+    thread.pendingBackgroundTasks.some(isPullRequestWatchTask);
+  if (
+    !threadRuntimeIsActive(thread.runtime) &&
+    thread.runtime?.status !== "idle" &&
+    !watchingPullRequest
+  ) {
+    return false;
+  }
   const run = thread.latestRun;
   const runSettled =
     run !== null &&
@@ -120,7 +139,6 @@ type TrackedInboxThread = WorkingThreadInput &
       | "snoozedAt"
       | "snoozedUntil"
       | "activeOrderKey"
-      | "pendingGuestMessageCount"
     >
   >;
 
@@ -149,12 +167,13 @@ export function createInboxReturnTracker() {
   const keyOf = (thread: ThreadKeyInput) => `${thread.environmentId}:${thread.id}`;
   const states = new Map<
     string,
-    { working: boolean; deadline: number | null; placement: string | null }
+    { working: boolean; watchOnly: boolean; deadline: number | null; placement: string | null }
   >();
   const returns = new Map<string, number>();
   const listeners = new Set<() => void>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let version = 0;
+  let keepWatchingPullRequests = false;
   const now = () => {
     // @effect-diagnostics-next-line globalDate:off - The grace deadline is wall-clock time shared by web and native clients.
     return Date.now();
@@ -192,10 +211,14 @@ export function createInboxReturnTracker() {
       };
     },
     getSnapshot: () => version,
-    observe(threads: readonly TrackedInboxThread[] | null): {
+    observe(
+      threads: readonly TrackedInboxThread[] | null,
+      keepWatches = false,
+    ): {
       readonly isWorking: (thread: WorkingThreadInput & ThreadKeyInput) => boolean;
       readonly returnedAt: (thread: ThreadKeyInput) => number | undefined;
     } {
+      keepWatchingPullRequests = keepWatches;
       if (threads === null) {
         clearTimeout(timer);
         timer = undefined;
@@ -211,7 +234,9 @@ export function createInboxReturnTracker() {
         const key = keyOf(thread);
         present.add(key);
         const previous = states.get(key);
-        const actual = isThreadWorking(thread);
+        const workingWithoutWatch = isThreadWorking(thread);
+        const watchOnly = keepWatches && !workingWithoutWatch && isThreadWorking(thread, true);
+        const actual = workingWithoutWatch || watchOnly;
         const placement =
           actual || previous?.working
             ? JSON.stringify([
@@ -244,12 +269,23 @@ export function createInboxReturnTracker() {
         const endedAt = toSortableTimestamp(thread.latestRun?.completedAt ?? undefined);
         const endedLongAgo = endedAt !== null && endedAt <= at - STALE_EXIT_MS;
         const deadline =
-          !actual && previous?.working && !actionable && !moved && !excluded && !endedLongAgo
+          !actual &&
+          previous?.working &&
+          !actionable &&
+          !moved &&
+          !excluded &&
+          !endedLongAgo &&
+          (keepWatches || !previous.watchOnly)
             ? (previous.deadline ?? at + WORKING_EXIT_GRACE_MS)
             : null;
         const working = actual || (deadline !== null && deadline > at);
         if (previous?.working && !working) returns.set(key, at);
-        states.set(key, { working, deadline: working ? deadline : null, placement });
+        states.set(key, {
+          working,
+          watchOnly: watchOnly || (working && !actual && previous?.watchOnly === true),
+          deadline: working ? deadline : null,
+          placement,
+        });
       }
       for (const key of states.keys()) {
         if (!present.has(key)) {
@@ -262,12 +298,13 @@ export function createInboxReturnTracker() {
       states.forEach((state, key) => observedWorking.set(key, state.working));
       const observedReturns = new Map(returns);
       return {
-        isWorking: (thread) => observedWorking.get(keyOf(thread)) ?? isThreadWorking(thread),
+        isWorking: (thread) =>
+          observedWorking.get(keyOf(thread)) ?? isThreadWorking(thread, keepWatches),
         returnedAt: (thread) => observedReturns.get(keyOf(thread)),
       };
     },
     isWorking: (thread: WorkingThreadInput & ThreadKeyInput) =>
-      states.get(keyOf(thread))?.working ?? isThreadWorking(thread),
+      states.get(keyOf(thread))?.working ?? isThreadWorking(thread, keepWatchingPullRequests),
     returnedAt: (thread: ThreadKeyInput) => returns.get(keyOf(thread)),
   };
 }

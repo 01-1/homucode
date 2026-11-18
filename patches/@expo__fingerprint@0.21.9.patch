@@ -1,0 +1,95 @@
+diff --git a/build/Fingerprint.js b/build/Fingerprint.js
+index 8f5bbd7..b377056 100644
+--- a/build/Fingerprint.js
++++ b/build/Fingerprint.js
+@@ -32,11 +32,20 @@ const _Dedup = require("./Dedup");
+ const _Options = require("./Options");
+ const _Sort = require("./Sort");
+ const _Hash = require("./hash/Hash");
++const _Path = require("./utils/Path");
+ const _Sourcer = require("./sourcer/Sourcer");
+ async function createFingerprintAsync(projectRoot, options) {
+     const opts = await (0, _Options.normalizeOptionsAsync)(projectRoot, options);
+     const sources = await (0, _Sourcer.getHashSourcesAsync)(projectRoot, opts);
+-    const normalizedSources = (0, _Sort.sortSources)((0, _Dedup.dedupSources)(sources, projectRoot));
++    const normalizedSources = (0, _Sort.sortSources)((0, _Dedup.dedupSources)(sources, projectRoot).map((source)=>{
++        if ((source.type === 'file' || source.type === 'dir') && source.overrideHashKey == null) {
++            const hashKey = (0, _Path.normalizePnpmVirtualStorePath)(source.filePath);
++            if (hashKey !== source.filePath) {
++                return { ...source, overrideHashKey: hashKey };
++            }
++        }
++        return source;
++    }));
+     const fingerprint = await (0, _Hash.createFingerprintFromSourcesAsync)(normalizedSources, projectRoot, opts);
+     return fingerprint;
+ }
+diff --git a/build/hash/Hash.js b/build/hash/Hash.js
+index 6429d8a..c6f71b8 100644
+--- a/build/hash/Hash.js
++++ b/build/hash/Hash.js
+@@ -191,7 +191,7 @@ async function createFileHashResultsAsync(filePath, limiter, projectRoot, option
+                     } : undefined;
+                     resolve({
+                         type: 'file',
+-                        id: filePath,
++                        id: (0, _Path.normalizePnpmVirtualStorePath)(filePath),
+                         hex,
+                         ...debugInfo ? {
+                             debugInfo
+@@ -244,7 +244,7 @@ async function createDirHashResultsAsync(dirPath, limiter, projectRoot, options,
+     const hex = hasher.digest('hex');
+     return {
+         type: 'dir',
+-        id: dirPath,
++        id: (0, _Path.normalizePnpmVirtualStorePath)(dirPath),
+         hex,
+         ...options.debug ? {
+             debugInfo: {
+diff --git a/build/sourcer/AutolinkingConfig.js b/build/sourcer/AutolinkingConfig.js
+index a79b61a..32d7983 100644
+--- a/build/sourcer/AutolinkingConfig.js
++++ b/build/sourcer/AutolinkingConfig.js
+@@ -73,7 +73,7 @@ function normalizeNode(value, stripPaths, roots, parentKey) {
+     if (stripPaths && typeof value === 'string' && isPathLike(value, roots)) {
+         return undefined;
+     }
+-    return value;
++    return typeof value === 'string' ? (0, _Path.normalizePnpmVirtualStorePath)(value) : value;
+ }
+ /**
+  * True when `value` is a `{ [packageName]: { root | platforms } }` map from react-native-config.
+diff --git a/build/utils/Path.js b/build/utils/Path.js
+index 4e8dce8..483d07a 100644
+--- a/build/utils/Path.js
++++ b/build/utils/Path.js
+@@ -10,6 +10,7 @@ Object.defineProperty(exports, "__esModule", {
+     isIgnoredPath: null,
+     isIgnoredPathWithMatchObjects: null,
+     normalizeFilePath: null,
++    normalizePnpmVirtualStorePath: null,
+     pathExistsAsync: null,
+     toPosixPath: null
+ });
+@@ -41,6 +42,9 @@ _export(exports, {
+     get normalizeFilePath () {
+         return normalizeFilePath;
+     },
++    get normalizePnpmVirtualStorePath () {
++        return normalizePnpmVirtualStorePath;
++    },
+     get pathExistsAsync () {
+         return pathExistsAsync;
+     },
+@@ -163,6 +167,11 @@ const REGEXP_REPLACE_SLASHES = /\\/g;
+ function toPosixPath(filePath) {
+     return _nodeprocess().default.platform === 'win32' ? filePath.replace(REGEXP_REPLACE_SLASHES, '/') : filePath;
+ }
++function normalizePnpmVirtualStorePath(filePath) {
++    // Keep the package and peer graph identity while dropping the machine-specific store root.
++    const match = /^(?:.*\/)?v\d+\/links\/(@[^/]*\/[^/]+\/[^/]+\/[a-f0-9]{64}\/node_modules\/.+)$/.exec(toPosixPath(filePath));
++    return match ? `node_modules/.pnpm-global/${match[1]}` : filePath;
++}
+ async function pathExistsAsync(filePath) {
+     try {
+         const stat = await _promises().default.stat(filePath);

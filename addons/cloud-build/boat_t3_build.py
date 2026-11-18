@@ -110,7 +110,9 @@ if ! pnpm install --frozen-lockfile --store-dir /home/user/pnpm-cache/store --si
   pnpm install --frozen-lockfile --store-dir /home/user/pnpm-cache/store --side-effects-cache=false --verify-store-integrity=true
 fi
 if [ "$cache_restored" != true ]; then
-  if tar -C /home/user/pnpm-cache -czf /tmp/pnpm-store-export.tar.gz store; then cache_exported=true; fi
+  # pnpm recreates the virtual store and project registrations from the cached contents.
+  if tar -C /home/user/pnpm-cache --exclude='store/v*/links' --exclude='store/v*/projects' \
+      -czf /tmp/pnpm-store-export.tar.gz store; then cache_exported=true; fi
 fi
 printf '{"restored":%s,"exported":%s}\n' "$cache_restored" "$cache_exported" > /tmp/pnpm-cache-status.json
 '''.replace('CACHE_SHA256', shlex.quote(cache_sha256))
