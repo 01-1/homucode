@@ -76,6 +76,7 @@ import {
   useOlderSettledShelf,
   useOlderSettledShelfGrowth,
 } from "../../state/olderSettledShelf";
+import { useEnvironment } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
@@ -213,25 +214,31 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     project ? [scopeProjectRef(environmentId, project.id)] : [],
   );
   const hidingTags = useAtomValue(serverEnvironment.hiddenThreadTagsAtom(environmentId)) !== null;
+  const connected = useEnvironment(environmentId)?.connection.phase === "connected";
   const olderSettled = useOlderSettledShelf({
     scopes: project ? [{ environmentId, projectIds: [project.id] }] : [],
     expanded: settings.madohomuEnabled && settledExpanded,
-    visibleCount: settledVisibleCount,
+    visibleCount: connected ? settledVisibleCount : 0,
     keepThread: selectedId === null ? null : scopeThreadRef(environmentId, selectedId),
   });
   const settledThreads = groups.find((g) => g.kind === "settled")?.threads ?? [];
-  const listedSettledThreads = settledThreads.filter(olderSettled.isListed);
+  const listedSettledThreads = connected
+    ? settledThreads.filter(olderSettled.isListed)
+    : settledThreads;
   useOlderSettledShelfGrowth(olderSettled, listedSettledThreads);
   const missingSettled = olderSettled.unloadedCount(projectShells);
   const historyUnavailable =
     missingSettled > 0 &&
-    !olderSettled.canLoadMore &&
-    olderSettled.environments.get(environmentId)?.pages.reads.length === 0;
+    (!connected ||
+      (!olderSettled.canLoadMore &&
+        olderSettled.environments.get(environmentId)?.pages.reads.length === 0));
   const unloadedSettledCount = olderSettled.canLoadMore || historyUnavailable ? missingSettled : 0;
   const settledCount = settledThreads.length + unloadedSettledCount;
   const unknownSettledMatches = hidingTags && unloadedSettledCount > 0;
   const settledHeadingCount = unknownSettledMatches ? `${settledThreads.length}+` : settledCount;
-  const settledPaging = olderSettled.loading || olderSettled.failed;
+  const loadingSettled = connected && olderSettled.loading;
+  const failedSettled = connected && olderSettled.failed;
+  const settledPaging = loadingSettled || failedSettled;
   const [collapsed, setCollapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, COLLAPSED_SCHEMA);
   const isExpanded = (group: Group) =>
     group.kind === "snoozed"
@@ -937,11 +944,11 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           <li className="list-none">
             <button
               type="button"
-              aria-disabled={olderSettled.loading}
+              aria-disabled={loadingSettled}
               className={cn(QUIET_BUTTON_CLASS, "aria-disabled:cursor-default")}
               onClick={() => {
-                if (olderSettled.loading) return;
-                if (olderSettled.failed) olderSettled.retry();
+                if (loadingSettled) return;
+                if (failedSettled) olderSettled.retry();
                 else
                   setSettledTail((current) => ({
                     ...current,
@@ -950,9 +957,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               }}
             >
               <ChevronDownIcon aria-hidden className="size-3.5" />
-              {olderSettled.loading
+              {loadingSettled
                 ? "Loading"
-                : olderSettled.failed
+                : failedSettled
                   ? "Could not load older threads. Retry"
                   : unknownSettledMatches
                     ? "Show more"
