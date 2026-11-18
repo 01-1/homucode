@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[[ $(hostname -s) == pbox ]] || { echo "This installer is for pbox." >&2; exit 1; }
+[[ $(uname -s) == Linux ]] || { echo "The Vite+ wrapper requires Linux." >&2; exit 1; }
+
 here=$(cd "$(dirname "$0")" && pwd)
 lib="$HOME/.local/lib/homucode-checks"
 bin="$HOME/.local/bin/vp"
@@ -9,7 +10,7 @@ if [[ -e $bin || -L $bin ]] && [[ $(readlink "$bin") != "$lib/vp" ]]; then
   echo "Existing Vite+ command at $bin. Move it onto PATH outside ~/.local/bin before installing." >&2
   exit 1
 fi
-printf 'Installing the HomuCode Vite+ wrapper on pbox at %s and %s\n' "$bin" "$lib"
+printf 'Installing the HomuCode Vite+ wrapper at %s and %s\n' "$bin" "$lib"
 mkdir -p "$lib" "$(dirname "$bin")"
 version=$(sed -nE 's/^  vite-plus: ([0-9][^ ]*)$/\1/p' "$here/../../pnpm-workspace.yaml")
 mkdir -p "$lib/vite-plus"

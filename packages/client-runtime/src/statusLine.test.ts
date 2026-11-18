@@ -82,7 +82,7 @@ describe("splitStatusLineItems", () => {
 
   it("splits the built-in line into directory, items, and clock", () => {
     const [line = []] = parseAnsiLines(
-      "\u001b[38;5;15m~/code/homucode \u001b[38;5;183mvi@pbox \u001b[38;5;8m| \u001b[38;5;183mO5.5\u001b[38;5;8m, up \u001b[38;5;183m1h02m [21:41:07] \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, v\u001b[38;5;183m2.1.3",
+      "\u001b[38;5;15m~/code/homucode \u001b[38;5;183muser@workstation \u001b[38;5;8m| \u001b[38;5;183mO5.5\u001b[38;5;8m, up \u001b[38;5;183m1h02m [21:41:07] \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, v\u001b[38;5;183m2.1.3",
     );
     const pipe = [{ text: "|", ...muted }];
     const comma = [{ text: ",", ...muted }];
@@ -96,7 +96,7 @@ describe("splitStatusLineItems", () => {
       },
       {
         kind: "text",
-        segments: [{ text: "vi@pbox", ...accent }],
+        segments: [{ text: "user@workstation", ...accent }],
         dropAt: 2,
         separators: [pipe, pipe, [], []],
       },
@@ -144,10 +144,10 @@ describe("splitStatusLineItems", () => {
   });
 
   it("keeps a styled directory with spaces whole", () => {
-    const [line = []] = parseAnsiLines("/repos/My Project \u001b[38;5;183mvi@pbox");
+    const [line = []] = parseAnsiLines("/repos/My Project \u001b[38;5;183muser@workstation");
     expect(splitStatusLineItems(line).map((item) => [item.kind, item.segments[0]?.text])).toEqual([
       ["directory", "/repos/My Project"],
-      ["text", "vi@pbox"],
+      ["text", "user@workstation"],
     ]);
   });
 
@@ -279,7 +279,7 @@ const context: ContextWindowSnapshot = {
 describe("buildStatusLineInput", () => {
   const source: StatusLineInputSource = {
     threadId: "thread-1",
-    cwd: "/home/vi/code",
+    cwd: "/home/user/code",
     modelSelection: {
       instanceId: ProviderInstanceId.make("claudeAgent"),
       model: "claude-opus-5-5",
@@ -343,8 +343,8 @@ describe("buildStatusLineInput", () => {
     );
     expect(input).toEqual({
       session_id: "thread-1",
-      cwd: "/home/vi/code",
-      workspace: { current_dir: "/home/vi/code", project_dir: "/home/vi/code" },
+      cwd: "/home/user/code",
+      workspace: { current_dir: "/home/user/code", project_dir: "/home/user/code" },
       model: { id: "claude-opus-5-5", display_name: "Opus 5.5" },
       effort: { level: "high" },
       fast_mode: false,
@@ -541,7 +541,7 @@ describe("buildStatusLineInput", () => {
       effort: "high",
       fastMode: false,
       version: "2.1.311",
-      cwd: "/home/vi/code",
+      cwd: "/home/user/code",
       contextPercent: 34,
       contextTokens: 341_000,
       contextMaxTokens: 1_000_000,

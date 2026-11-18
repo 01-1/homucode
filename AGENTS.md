@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
+HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
 
 What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summarized in the [README](README.md#changes-compared-to-t3-code). Keep the fork's changes easy to carry across upstream merges: prefer small, contained edits to upstream code over rewrites.
 
@@ -53,7 +53,7 @@ Of note: Most HomuCode contributions will come from HomuCode itself, often contr
 We need to be on the same page with terminology. When communicating, use this language:
 
 - **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Homura (GitHub `01-1`), who maintains HomuCode. This is who you are talking to now.
+- **we, us, and maintainers** mean the HomuCode maintainer, GitHub `@01-1`. This is who you are talking to now.
 - **upstream maintainers** mean Theo, Julius and the people building T3 Code at `pingdotgg/t3code`.
 - **user** means the person using T3 Code to direct coding agents.
 - **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
@@ -99,11 +99,12 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Android builds
 
-- The fork's GitHub mobile workflows skip themselves outside `pingdotgg/t3code`. Build the Android app on boat.dev instead, from pbox: `scripts/homu-android/build.sh [REF]` (default `origin/main`). It archives the commit, builds and signs a release APK (arm64-v8a and x86_64, JS bundled, no Metro) on a fresh xlarge box, checks the checksum, copies it to `~/app/mobile/HomuCode-development-<sha>.apk`, and deletes the box. It takes about 20 minutes. Logs are in `~/hold/homu-android/<sha>-<variant>/`.
-- `scripts/homu-android/ota.sh [REF]` publishes REF's JavaScript as an over-the-air update instead, in a few minutes, to the `homucode` channel of the `vi1/homucode` EAS project, using the Expo robot token in `~/credentials/expo/token`. Installed APKs download it on launch and apply it the next time they go to the background. Only APKs with the same native fingerprint take it, so a change to native code (a native module, an Expo SDK bump, permissions, `app.config.ts`) still needs `build.sh`; both print the runtime version they built for. Logs are in `~/hold/homu-android/<sha>-development-ota/`.
+- The fork's GitHub mobile workflows skip themselves outside `pingdotgg/t3code`. Build the Android app on boat.dev instead: `scripts/homu-android/build.sh [REF]` (default `origin/main`). It archives the commit, builds and signs a release APK (arm64-v8a and x86_64, JS bundled, no Metro) on a fresh xlarge box, checks the checksum, copies it to `~/app/mobile/HomuCode-development-<sha>.apk`, and deletes the box. It takes about 20 minutes. Logs are in `~/hold/homu-android/<sha>-<variant>/`.
+- `scripts/homu-android/ota.sh [REF]` publishes REF's JavaScript as an over-the-air update instead, in a few minutes, to the `homucode` channel of the configured EAS project, using the Expo robot token in `~/credentials/expo/token`. Installed APKs download it on launch and apply it the next time they go to the background. Only APKs with the same native fingerprint take it, so a change to native code (a native module, an Expo SDK bump, permissions, `app.config.ts`) still needs `build.sh`; both print the runtime version they built for. Logs are in `~/hold/homu-android/<sha>-development-ota/`.
+- For refs with EAS update support, set `T3CODE_EAS_PROJECT_ID` and `T3CODE_EAS_OWNER` as unquoted values in `${XDG_CONFIG_HOME:-$HOME/.config}/homucode/android.env`, or point `HOMUCODE_ANDROID_ENV` to that file. Use the same project as your installed APKs so they keep receiving updates.
 - Keep the default `VARIANT=development` (package `com.t3tools.t3code.dev`): T3's Clerk instance allows that package's sign-in callback, so Connect sign-in works. `APP_NAME` (default `HomuCode`) is the launcher name.
 - It signs with the `t3-preview` key in `~/credentials/android-signing/`. Keep that key, or installed builds stop updating in place. The version code is the build's UTC date and hour, so each build installs over the last.
-- To put it on Homura's phone, serve it on the LAN from pbox: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <pbox wlo1 IPv4> --directory ~/hold/lan-apk`. Give her `http://<ip>:8767/<apk>`. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule above.
+- To put it on the maintainer's phone, serve it on the LAN: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <host LAN IPv4> --directory ~/hold/lan-apk`. Open `http://<ip>:8767/<apk>` from the phone. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule above.
 
 ## Test data
 
@@ -117,9 +118,9 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
-- Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, tests beside changes, and the cross-file checks those miss. On pbox, the Vite+ wrapper sends this to Boat. CI still runs the full test suites.
+- Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, tests beside changes, and the cross-file checks those miss. The optional Vite+ wrapper sends this to Boat. CI still runs the full test suites.
 - While you iterate, run `vp test run <files>`. For big files, add `-t "<name>"`.
-- On pbox, `scripts/homu-boat/install.sh` installs the `vp` wrapper for tests, lint, Knip and typechecks. Staged formatting stays local. During a Boat outage the wrapper runs one check at a time locally at idle priority.
+- On Linux, `scripts/homu-boat/install.sh` installs the `vp` wrapper for tests, lint, Knip and typechecks. Staged formatting stays local. During a Boat outage the wrapper runs one check at a time locally at idle priority.
 - Use `vp run typecheck`; it caches per package. Each package runs `effect-tsgo tsrs --noEmit`, the Rust TypeScript 7 checker with Effect's diagnostics built in. There is no `typescript` package to run.
 - Run `node -e` snippets from `apps/server` or the owning package. `effect` does not resolve from the repo root.
 - Test behavior that can break, such as orchestration and event-sourcing, provider protocol translation, auth and permission guards, persistence and migrations, external-format parsing, race fixes, and the logic a bug fix changed. Leave out tests for what types already guarantee, trivial logic, copy text, smoke runs, mock-call mirrors, callback wiring, and props rendered to static markup.
@@ -160,7 +161,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 - Real agent turns cost money. To watch a turn stream through the pipeline and UI, use the free `Replay (dev)` provider that `vp run dev` registers; [test-t3-app](.agents/skills/test-t3-app/SKILL.md) shows how to start one. Use a real provider only when the change depends on that provider's behavior, and then pick its cheapest model, such as Haiku for Claude or Luna for Codex.
 
-For mobile verification, a missing or outdated native client is an install step, not a blocker. Run `vp run mobile:install <ios|android> [device-id]` on the device host before starting Metro; it targets the only booted simulator or connected Android device when the id is omitted. It installs the dev client for this checkout's native fingerprint from the shared cache in seconds and builds only when no machine has built it yet, so prefer it over `expo run:*`, `xcodebuild`, or `gradlew`, which rebuild from scratch. On pbox, Android cache misses build on Boat. Its stdout is one JSON line; build output goes to the log it names. See `test-t3-mobile` for the full workflow.
+For mobile verification, a missing or outdated native client is an install step, not a blocker. Run `vp run mobile:install <ios|android> [device-id]` on the device host before starting Metro; it targets the only booted simulator or connected Android device when the id is omitted. It installs the dev client for this checkout's native fingerprint from the shared cache in seconds and builds only when no machine has built it yet, so prefer it over `expo run:*`, `xcodebuild`, or `gradlew`, which rebuild from scratch. With the Vite+ wrapper installed, Android cache misses build on Boat. Its stdout is one JSON line; build output goes to the log it names. See `test-t3-mobile` for the full workflow.
 
 ## Evals
 

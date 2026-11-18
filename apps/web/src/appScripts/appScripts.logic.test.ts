@@ -37,7 +37,7 @@ describe("app scripts", () => {
     [false, "localhost", true],
     [false, "127.0.0.1", true],
     [false, "[::1]", true],
-    [false, "pbox.tail1234.ts.net", false],
+    [false, "workstation.tail1234.ts.net", false],
     [false, "192.168.1.20", false],
     [false, "app.t3.codes", false],
     [true, "", true],

@@ -24,6 +24,8 @@ AppImage in the build folder (not part of T3 Code). Status: tested with fakes on
 ## In-app builds
 
 Building T3 also runs `scripts/homu-android/build.sh` for a committed ref (default `origin/main`).
+For refs that support EAS updates, configure the EAS owner and project ID on the T3 server
+as described in [Android builds](../AGENTS.md#android-builds).
 It shows the APK path and can serve the APK folder on the LAN, with an explicit off switch;
 the HTTP server stops with T3. Cloud and Android builds need a signed-in boat CLI on the server.
 Loading builds is available only on AppImage installs and restarts T3, with checksum verification
