@@ -10,12 +10,19 @@ import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
-import { useProjects, useThreadShell, useVisibleThreadShells } from "../../state/entities";
+import {
+  useProjects,
+  useThreadProjection,
+  useThreadShell,
+  useThreadStatus,
+  useVisibleThreadShells,
+} from "../../state/entities";
 import { useEnvironmentShellStatus } from "../../state/shell";
 import { useSnoozeWakeClock } from "../Sidebar.logic";
 import {
   madohomuCreatedThreadIdsAtom,
-  madohomuListLoaded,
+  madohomuFirstRowId,
+  madohomuNamedThread,
   startMadoHomuThread,
 } from "../../madohomu";
 import { toastManager } from "../ui/toast";
@@ -49,17 +56,23 @@ export function useMadoHomuThreads(environmentId: EnvironmentId) {
 export function useMadoHomuSelection(environmentId: EnvironmentId) {
   const search = useSearch({ from: "/_chat/madohomu" });
   const { groups, project } = useMadoHomuThreads(environmentId);
-  const named = useThreadShell(
-    search.threadId ? scopeThreadRef(environmentId, search.threadId) : null,
-  );
-  const status = useEnvironmentShellStatus(environmentId);
-  const created = useAtomValue(madohomuCreatedThreadIdsAtom);
+  const ref = search.threadId ? scopeThreadRef(environmentId, search.threadId) : null;
+  const shell = useThreadShell(ref);
+  const detailRef = shell === null ? ref : null;
+  const { named, listLoaded } = madohomuNamedThread({
+    namedId: search.threadId,
+    shell,
+    detail: useThreadProjection(detailRef),
+    detailStatus: useThreadStatus(detailRef),
+    shellStatus: useEnvironmentShellStatus(environmentId),
+    created: useAtomValue(madohomuCreatedThreadIdsAtom),
+  });
   const selection = resolveMadoHomuSelection({
     namedId: search.threadId,
     named,
     projectId: project?.id ?? null,
-    listLoaded: madohomuListLoaded(status, created, search.threadId),
-    firstId: groups.flatMap((group) => group.threads)[0]?.id ?? null,
+    listLoaded,
+    firstId: madohomuFirstRowId(groups),
   });
   return { ...selection, namedId: search.threadId, namedLoaded: named !== null };
 }

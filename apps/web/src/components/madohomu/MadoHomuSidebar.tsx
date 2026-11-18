@@ -261,7 +261,11 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const selectedRef = selectedId ? scopeThreadRef(environmentId, selectedId) : null;
   const jumpLabels = useThreadNavigationShortcuts({
     orderedThreadKeys: orderedKeys,
-    currentThreadKey: selectedRef ? scopedThreadKey(selectedRef) : null,
+    // A selected thread with no visible row traverses like no selection.
+    currentThreadKey:
+      selectedRef && orderedKeys.includes(scopedThreadKey(selectedRef))
+        ? scopedThreadKey(selectedRef)
+        : null,
     routeThreadRef: selectedRef,
     onNavigate: (key) => {
       const ref = parseScopedThreadKey(key);

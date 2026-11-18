@@ -149,7 +149,11 @@ export function madohomuListedThreads<T extends Pick<EnvironmentThreadShell, "id
  */
 export function resolveMadoHomuSelection(input: {
   readonly namedId: ThreadId | null | undefined;
-  readonly named: Pick<EnvironmentThreadShell, "projectId" | "deletedAt" | "archivedAt"> | null;
+  readonly named: {
+    readonly projectId: ProjectId;
+    readonly deletedAt?: unknown;
+    readonly archivedAt: unknown;
+  } | null;
   readonly projectId: ProjectId | null;
   readonly listLoaded: boolean;
   readonly firstId: ThreadId | null;
@@ -161,7 +165,7 @@ export function resolveMadoHomuSelection(input: {
     return listLoaded ? fallback : { threadId: null, loading: true, replace: false };
   }
   const gone =
-    named.deletedAt !== null || named.archivedAt !== null || named.projectId !== input.projectId;
+    named.deletedAt != null || named.archivedAt != null || named.projectId !== input.projectId;
   return gone ? fallback : { threadId: namedId, loading: false, replace: false };
 }
 

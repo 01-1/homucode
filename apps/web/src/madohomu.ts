@@ -8,6 +8,11 @@ import {
   resolveMadoHomuSelection,
 } from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
+import type {
+  EnvironmentThread,
+  EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
@@ -18,7 +23,11 @@ import { readProjects } from "./state/entities";
 import { environmentServerConfigsAtom, serverEnvironment } from "./state/server";
 import { environmentShell } from "./state/shell";
 import { primaryEnvironmentIdAtom } from "./state/primaryEnvironment";
-import { environmentThreadShells, threadEnvironment } from "./state/threads";
+import {
+  environmentThreadDetails,
+  environmentThreadShells,
+  threadEnvironment,
+} from "./state/threads";
 import { newThreadId } from "./lib/utils";
 import { scheduledTaskDefaultModel } from "./components/settings/scheduledTasksSettings.logic";
 import { providerInstanceEntriesFor } from "./providerInstances";
@@ -50,13 +59,44 @@ export function forgetCreatedMadoHomuThread(threadId: ThreadId) {
   appAtomRegistry.set(madohomuCreatedThreadIdsAtom, next);
 }
 
-/** Whether a missing named thread is gone: the list is live and this client is not making it. */
-export function madohomuListLoaded(
-  status: string | null,
-  created: ReadonlySet<ThreadId>,
-  namedId: ThreadId | null | undefined,
+type NamedShell = Pick<EnvironmentThreadShell, "projectId" | "deletedAt" | "archivedAt">;
+
+/**
+ * What MadoHomu knows of the thread its URL names. The shell list can leave out idle subagents
+ * and older settled threads, so a missing shell falls back to the thread's own detail, and the
+ * thread counts as gone only once that detail has settled without it.
+ */
+export function madohomuNamedThread(input: {
+  readonly namedId: ThreadId | null | undefined;
+  readonly shell: NamedShell | null;
+  readonly detail: EnvironmentThread | null;
+  readonly detailStatus: EnvironmentThreadStatus;
+  readonly shellStatus: string | null;
+  readonly created: ReadonlySet<ThreadId>;
+}) {
+  const { shell, detail } = input;
+  const thread = detail?.projection.thread;
+  const named =
+    shell ?? (thread ? { projectId: thread.projectId, archivedAt: thread.archivedAt } : null);
+  const listLoaded =
+    input.shellStatus === "live" &&
+    !(input.namedId && input.created.has(input.namedId)) &&
+    (named !== null || input.detailStatus === "live" || input.detailStatus === "deleted");
+  return { named, listLoaded };
+}
+
+/** The first row MadoHomu falls back to; folded-away Snoozed and Settled rows are not offered. */
+export function madohomuFirstRowId(
+  groups: ReadonlyArray<{
+    readonly kind: string;
+    readonly threads: ReadonlyArray<{ readonly id: ThreadId }>;
+  }>,
 ) {
-  return status === "live" && !(namedId && created.has(namedId));
+  return (
+    groups
+      .filter((group) => group.kind !== "snoozed" && group.kind !== "settled")
+      .flatMap((group) => group.threads)[0]?.id ?? null
+  );
 }
 
 export function readMadoHomuContext(router: AnyRouter) {
@@ -89,20 +129,23 @@ export function readMadoHomuContext(router: AnyRouter) {
     config.settings,
     { now: new Date().toISOString(), isWorking: isThreadWorking },
   );
+  const openRef = openThreadId ? scopeThreadRef(environmentId, openThreadId) : null;
+  const { named, listLoaded } = madohomuNamedThread({
+    namedId: openThreadId,
+    shell: openRef ? appAtomRegistry.get(environmentThreadShells.threadShellAtom(openRef)) : null,
+    detail: openRef ? appAtomRegistry.get(environmentThreadDetails.threadAtom(openRef)) : null,
+    detailStatus: openRef
+      ? appAtomRegistry.get(environmentThreadDetails.statusAtom(openRef))
+      : "empty",
+    shellStatus: appAtomRegistry.get(environmentShell.stateValueAtom(environmentId)).status,
+    created: appAtomRegistry.get(madohomuCreatedThreadIdsAtom),
+  });
   const { threadId } = resolveMadoHomuSelection({
     namedId: openThreadId,
-    named: openThreadId
-      ? appAtomRegistry.get(
-          environmentThreadShells.threadShellAtom(scopeThreadRef(environmentId, openThreadId)),
-        )
-      : null,
+    named,
     projectId: project.id,
-    listLoaded: madohomuListLoaded(
-      appAtomRegistry.get(environmentShell.stateValueAtom(environmentId)).status,
-      appAtomRegistry.get(madohomuCreatedThreadIdsAtom),
-      openThreadId,
-    ),
-    firstId: groups.flatMap((group) => group.threads)[0]?.id ?? null,
+    listLoaded,
+    firstId: madohomuFirstRowId(groups),
   });
   return {
     environmentId,
@@ -121,7 +164,8 @@ export function openThreadInMadoHomu(router: AnyRouter, threadRef: ScopedThreadR
   const context = readMadoHomuContext(router);
   if (context?.environmentId !== threadRef.environmentId) return null;
   const shell = appAtomRegistry.get(environmentThreadShells.threadShellAtom(threadRef));
-  if (shell?.projectId !== context.project.id) return null;
+  if (shell?.projectId !== context.project.id || shell.archivedAt !== null) return null;
+  if (shell.deletedAt !== null) return null;
   return router.navigate({
     to: "/madohomu",
     search: { environmentId: threadRef.environmentId, threadId: threadRef.threadId },
