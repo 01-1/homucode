@@ -48,6 +48,7 @@ import {
 } from "../state/entities";
 import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "../state/environments";
 import { readLocalApi } from "../localApi";
+import { startMadoHomuBranchThread } from "../madohomu";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -338,6 +339,14 @@ export function useThreadActionMenu(input: {
           return;
         }
         case "new-thread-on-branch": {
+          const inMadoHomu = await startMadoHomuBranchThread(router, {
+            ...threadRef,
+            projectId: thread.projectId,
+            branch: thread.branch,
+            worktreePath: thread.worktreePath,
+          });
+          if (inMadoHomu === false) failureToast("Could not create thread", null);
+          if (inMadoHomu !== null) return;
           const result = await settlePromise(() =>
             handleNewThread(scopeProjectRef(threadRef.environmentId, thread.projectId), {
               branch: thread.branch,

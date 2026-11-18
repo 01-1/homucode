@@ -1370,6 +1370,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
                 >
+                  {isSelected && props.leadingIcon !== undefined ? (
+                    // MadoHomu: the open row shares the selected fill, so this marks selection.
+                    <span className="mr-1 inline-flex shrink-0 text-primary">
+                      <CheckIcon aria-hidden className="size-3.5" />
+                      <span className="sr-only">Selected</span>
+                    </span>
+                  ) : null}
                   <span
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
