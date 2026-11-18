@@ -60,8 +60,15 @@ try {
   step = "waiting for the first window";
   const page = await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
   // An existing database gets the one-time offer of HomuCode features, as an upgrading user would.
-  await page.addLocatorHandler(page.getByRole("dialog", { name: "HomuCode features" }), (dialog) =>
-    dialog.getByRole("button", { name: "Not now" }).click(),
+  await page.addLocatorHandler(
+    page.getByRole("dialog", { name: "HomuCode features" }),
+    async (dialog) => {
+      const dismiss = dialog.getByRole("button", { name: "Not now" });
+      await dismiss.waitFor({ state: "visible" });
+      // The renderer drops clicks during the first 500 ms after an unprompted dialog appears.
+      await NodeTimersPromises.setTimeout(500);
+      await dismiss.click();
+    },
   );
   try {
     step = `finding "${THREAD_TITLE}" in the sidebar`;
