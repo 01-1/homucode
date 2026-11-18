@@ -40,7 +40,8 @@ below.
 
 Each machine installs updates on its own once its agents have stopped working
 for five minutes. The desktop app installs a new version, downloading it first
-if needed, once no thread on that machine has run for five minutes. Each
+if needed, once no thread on that machine has run for five minutes and nobody
+has used the keyboard or mouse on that machine for five minutes. Each
 provider updates once none of that provider's threads on that machine have run
 for five minutes, so a busy Codex thread does not hold back a Claude update.
 Each version is tried once per start, so a failed update waits for you.

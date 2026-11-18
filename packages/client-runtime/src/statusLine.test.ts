@@ -11,6 +11,7 @@ import {
   statusLineModelName,
   reserveStatusLineText,
   splitStatusLineItems,
+  type StatusLineItem,
 } from "./statusLine.ts";
 
 const plain = { background: null, bold: false, dim: false, italic: false, underline: false };
@@ -77,48 +78,63 @@ describe("splitStatusLineItems", () => {
 
   it("splits the built-in line into directory, items, and clock", () => {
     const [line = []] = parseAnsiLines(
-      "\u001b[38;5;15m~/code/homucode \u001b[38;5;183mvi@pbox \u001b[38;5;8m| \u001b[38;5;183mO5.5\u001b[38;5;8m, up \u001b[38;5;183m1h02m [21:41:07] \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, v\u001b[38;5;183m2.1",
+      "\u001b[38;5;15m~/code/homucode \u001b[38;5;183mvi@pbox \u001b[38;5;8m| \u001b[38;5;183mO5.5\u001b[38;5;8m, up \u001b[38;5;183m1h02m [21:41:07] \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, v\u001b[38;5;183m2.1.3",
     );
+    const pipe = [{ text: "|", ...muted }];
+    const comma = [{ text: ",", ...muted }];
     expect(splitStatusLineItems(line)).toEqual([
-      { kind: "directory", segments: [{ text: "~/code/homucode", color: null, ...plain }] },
       {
-        kind: "text",
-        segments: [
-          { text: "vi@pbox", ...accent },
-          { text: " ", ...accent },
-          { text: "|", ...muted },
-        ],
+        kind: "directory",
+        segments: [{ text: "~/code/homucode", color: null, ...plain }],
+        dropAt: 3,
+        // With `user@host` dropped, its ` |` follows the directory.
+        separators: [[], [], pipe, []],
       },
       {
         kind: "text",
-        segments: [
-          { text: "O5.5", ...accent },
-          { text: ",", ...muted },
-        ],
+        segments: [{ text: "vi@pbox", ...accent }],
+        dropAt: 2,
+        separators: [pipe, pipe, [], []],
+      },
+      {
+        kind: "text",
+        segments: [{ text: "O5.5", ...accent }],
+        dropAt: 0,
+        separators: [comma, comma, comma, comma],
       },
       {
         kind: "text",
         segments: [
           { text: "up ", ...muted },
           { text: "1h02m", ...accent },
-          { text: ",", ...muted },
         ],
+        dropAt: 0,
+        separators: [comma, comma, comma, comma],
       },
-      { kind: "clock", segments: [{ text: "[21:41:07]", ...accent }] },
+      {
+        kind: "clock",
+        segments: [{ text: "[21:41:07]", ...accent }],
+        dropAt: 0,
+        separators: [[], [], [], []],
+      },
       {
         kind: "text",
         segments: [
           { text: "cache ", ...muted },
           { text: "37%", ...accent },
-          { text: ",", ...muted },
         ],
+        dropAt: 0,
+        // With the version dropped, nothing follows and the comma goes too.
+        separators: [comma, [], [], []],
       },
       {
         kind: "text",
         segments: [
           { text: "v", ...muted },
-          { text: "2.1", ...accent },
+          { text: "2.1.3", ...accent },
         ],
+        dropAt: 1,
+        separators: [[], [], [], []],
       },
     ]);
   });
@@ -143,29 +159,43 @@ describe("splitStatusLineItems", () => {
 
   it("keeps a line without separators, directory, or clock as one item", () => {
     const line = [{ text: "A6 medium [1:2]", color: null, ...plain }];
-    expect(splitStatusLineItems(line)).toEqual([{ kind: "text", segments: line }]);
+    expect(splitStatusLineItems(line)).toEqual([
+      { kind: "text", segments: line, dropAt: 0, separators: [[], [], [], []] },
+    ]);
   });
+
+  // An item's text, then the separator after it while nothing is dropped.
+  const texts = (item: StatusLineItem) =>
+    [...item.segments, ...(item.separators[0] ?? [])].map((segment) => segment.text);
 
   it("gives each labelled value its own item", () => {
     const [line = []] = parseAnsiLines(
-      "\u001b[38;5;118m+3 \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, in \u001b[38;5;183m5k \u001b[38;5;8mout \u001b[38;5;183m6\u001b[38;5;8m, conx \u001b[38;5;46m8% \u001b[38;5;8m(\u001b[38;5;46m80k\u001b[38;5;8m)",
+      "\u001b[38;5;118m+3 \u001b[38;5;8mcache \u001b[38;5;183m37%\u001b[38;5;8m, in \u001b[38;5;183m5k \u001b[38;5;8mout \u001b[38;5;183m6\u001b[38;5;8m, ctx \u001b[38;5;46m8% \u001b[38;5;8m(\u001b[38;5;46m80k\u001b[38;5;8m)",
     );
-    expect(splitStatusLineItems(line).map((item) => item.segments.map((s) => s.text))).toEqual([
+    expect(splitStatusLineItems(line).map(texts)).toEqual([
       ["+3"],
       ["cache ", "37%", ","],
       ["in ", "5k"],
       ["out ", "6", ","],
-      ["conx ", "8% ", "(", "80k", ")"],
+      ["ctx ", "8% ", "(", "80k", ")"],
     ]);
+  });
+
+  it("keeps a line made only of items it could drop", () => {
+    const line = [{ text: "~/repo ci@build-host", color: null, ...plain }];
+    expect(splitStatusLineItems(line).map((item) => item.dropAt)).toEqual([0, 0]);
+  });
+
+  it("drops a version by its muted label, whatever the provider calls it", () => {
+    const [line = []] = parseAnsiLines(
+      "\u001b[38;5;8mfast \u001b[38;5;183moff\u001b[38;5;8m, v\u001b[38;5;183magy_acp_server_20260818_01_RC01",
+    );
+    expect(splitStatusLineItems(line).map((item) => item.dropAt)).toEqual([0, 1]);
   });
 
   it("gives a clock at the end of an item no extra comma", () => {
     const line = [{ text: "up 5s [9:05], v2", color: null, ...plain }];
-    expect(splitStatusLineItems(line).map((item) => item.segments.map((s) => s.text))).toEqual([
-      ["up 5s", ","],
-      ["[9:05]"],
-      ["v2"],
-    ]);
+    expect(splitStatusLineItems(line).map(texts)).toEqual([["up 5s", ","], ["[9:05]"], ["v2"]]);
   });
 });
 
@@ -179,23 +209,34 @@ describe("expandStatusLineLabel", () => {
     expect(expandStatusLineLabel({ text: "in ", color: "#d7afff", ...plain })).toBeNull();
     expect(expandStatusLineLabel({ text: "style ", color: "#808080", ...plain })).toBeNull();
   });
+
+  it("writes out the model name the built-in script shortened", () => {
+    const model = { text: "O5.5 ", color: "#d7afff", ...plain };
+    expect(expandStatusLineLabel(model, "Opus 5.5")).toBe("Opus 5.5 ");
+    expect(expandStatusLineLabel(model, "Sol 6.2")).toBeNull();
+    expect(expandStatusLineLabel(model)).toBeNull();
+    // A name with nothing to shorten is not treated as a short form of itself.
+    expect(expandStatusLineLabel({ ...model, text: "o" }, "o")).toBeNull();
+  });
 });
 
 describe("reserveStatusLineText", () => {
   it.each([
-    ["8%", "100%"],
-    ["5s", "00h00m"],
-    ["1d02h", "00h00m"],
-    ["10m00s", "00h00m"],
-    ["79.7k ", "000.0k "],
-    ["(80k)", "(000k)"],
-    ["6", "000.0k"],
-    ["999", "000.0k"],
-    ["1.0k", "000.0k"],
-    ["+3 ", "+00 "],
+    ["8%", "00%"],
+    ["100%", "000%"],
+    ["5s", "00s"],
+    ["1d02h", "00d00h"],
+    ["9m59s", "00m00s"],
+    ["79.7k ", "00.0k "],
+    ["(80k)", "(00k)"],
+    ["6", "00"],
+    ["999", "000"],
+    ["1.0k", "00.0k"],
+    ["101.3k", "000.0k"],
+    ["+3 ", "+3 "],
     ["-120", "-120"],
-    ["1234.5k", "1234.5k"],
     ["O5.5 medium", "O5.5 medium"],
+    ["Opus 5.5", "Opus 5.5"],
     ["2.1.325", "2.1.325"],
     ["[21:41:07]", "[21:41:07]"],
   ])("reserves %s as %s", (text, reserved) => {

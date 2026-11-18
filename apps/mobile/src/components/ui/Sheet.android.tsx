@@ -24,15 +24,17 @@ export function Sheet(props: SheetProps) {
     >
       <BottomSheetContext value>
         <RoutedFormSheetContext value={false}>
-          {/* Android FormSheet does not bound flex children. */}
-          <View collapsable={false} className="absolute inset-0 bg-header">
+          {/* Android FormSheet does not bound flex children. Material sheet drags follow the
+              first nested-scrolling native view, and the AppBar's Compose buttons are one, so
+              the content comes first in a reversed column. */}
+          <View collapsable={false} className="absolute inset-0 flex-col-reverse bg-header">
+            <ScreenContent>{props.children}</ScreenContent>
             <AppBar
               sheet
               title={props.title}
               onBack={props.dismissDisabled ? undefined : () => setIsOpen(false)}
               hideBottomBorder
             />
-            <ScreenContent>{props.children}</ScreenContent>
             <View
               pointerEvents="none"
               className="absolute top-1 h-1 w-8 self-center rounded-full bg-header-foreground/40"

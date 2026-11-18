@@ -230,6 +230,7 @@ export const make = Effect.gen(function* () {
         httpBaseUrl: input.httpBaseUrl,
         bearerToken: input.bearerToken,
         clientMetadata: presentation.metadata,
+        deviceName: yield* ClientCapabilities.readClientDeviceName(presentation),
         connectionMethod: input.connectionMethod,
       }).pipe(
         Effect.mapError(mapRemoteEnvironmentError),
@@ -270,6 +271,7 @@ export const make = Effect.gen(function* () {
             ),
           ),
         clientMetadata: presentation.metadata,
+        deviceName: yield* ClientCapabilities.readClientDeviceName(presentation),
         connectionMethod: "relay",
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
       });

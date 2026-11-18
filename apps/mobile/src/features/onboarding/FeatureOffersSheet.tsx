@@ -4,7 +4,7 @@ import {
   updateMobilePreferencesAtom,
   mobileSettingsSyncEnabledAtom,
 } from "../../state/preferences";
-import { MobileBuildTools, MobileDeviceNames } from "../settings/SetupBehaviorSettings";
+import { MobileBuildTools, MobileThisDeviceName } from "../settings/SetupBehaviorSettings";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
@@ -77,8 +77,14 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const settingsSyncEnabled = useAtomValue(mobileSettingsSyncEnabledAtom);
-  const [chosen, setSelected] = useState<ReadonlySet<string> | null>(null);
-  const [step, setStep] = useState(0);
+  const draft =
+    preferences.featureOffersDraft?.environmentId === environmentId
+      ? preferences.featureOffersDraft
+      : undefined;
+  const [chosen, setSelected] = useState<ReadonlySet<string> | null>(() =>
+    draft ? new Set(draft.selected) : null,
+  );
+  const [savedStep, setStep] = useState(draft?.step ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
@@ -100,6 +106,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     ...(includes("sent-from") ? ["device-name"] : []),
     ...(includes("building-t3") ? ["building-t3"] : []),
   ];
+  const step = Math.max(0, Math.min(savedStep, pages.length + followups.length - 1));
   const followup = followups[step - pages.length];
   const last = step === pages.length + followups.length - 1;
   const save = async (apply: boolean) => {
@@ -115,6 +122,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
           ...offers.filter((offer) => offer.platform === "mobile").map((offer) => offer.id),
         ]),
       ],
+      featureOffersDraft: null,
       ...(apply && offers.some((offer) => offer.id === "settings-sync")
         ? { settingsSyncEnabled: selected.has("settings-sync") }
         : {}),
@@ -146,16 +154,26 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
         : pages[step]?.[0]?.page === 2
           ? "Extra features"
           : "HomuCode features";
-  const select = (id: string, checked: boolean) =>
-    setSelected((current) => {
-      const next = new Set(current ?? selected);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
+  // Saved on the phone: a dropped connection closes this sheet, and reopening it restores them.
+  const keep = (next: { readonly selected: ReadonlySet<string>; readonly step: number }) =>
+    savePreferences({
+      featureOffersDraft: { environmentId, selected: [...next.selected], step: next.step },
     });
+  const select = (id: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    setSelected(next);
+    keep({ selected: next, step });
+  };
+  const goTo = (next: number) => {
+    setStep(next);
+    keep({ selected, step: next });
+  };
   return (
     <Sheet title={title} onClose={() => void save(false)} dismissDisabled={busy}>
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         contentContainerClassName="gap-4 p-5 pb-12"
       >
@@ -208,7 +226,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             );
           })
         ) : followup === "device-name" ? (
-          <MobileDeviceNames environmentId={environmentId} currentOnly />
+          <MobileThisDeviceName />
         ) : (
           <MobileBuildTools environmentId={environmentId} />
         )}
@@ -220,11 +238,11 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             loading={busy}
             onPress={() => {
               if (last) void save(true);
-              else setStep(step + 1);
+              else goTo(step + 1);
             }}
           />
           {step > 0 ? (
-            <Button label="Back" fullWidth disabled={busy} onPress={() => setStep(step - 1)} />
+            <Button label="Back" fullWidth disabled={busy} onPress={() => goTo(step - 1)} />
           ) : null}
           <Button
             label="Not now"

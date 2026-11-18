@@ -65,6 +65,7 @@ export function MadoHomuThreadEditor(props: {
   return (
     <Sheet title="Edit MadoHomu thread" onClose={props.onClose} dismissDisabled={busy}>
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="gap-4 p-5 pb-12"

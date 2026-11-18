@@ -104,6 +104,14 @@ const SettingsSyncTheme = Schema.Struct({
 type SettingsSyncTheme = typeof SettingsSyncTheme.Type;
 const isSettingsSyncTheme = Schema.is(SettingsSyncTheme);
 
+const FeatureOffersDraft = Schema.Struct({
+  environmentId: Schema.String,
+  selected: Schema.Array(Schema.String),
+  step: Schema.Number,
+});
+export type FeatureOffersDraft = typeof FeatureOffersDraft.Type;
+const isFeatureOffersDraft = Schema.is(FeatureOffersDraft);
+
 const isDevicePins = Schema.is(Schema.Record(Schema.String, DevicePinsState));
 const isThreadListFilters = Schema.is(ThreadListFilters);
 const isPullRequestActivityVisibility = Schema.is(PullRequestActivityVisibility);
@@ -167,6 +175,10 @@ export interface Preferences {
   readonly settingsSyncEnabled?: boolean;
   readonly fasterPhoneLaunch?: boolean;
   readonly featureOffersSeen?: ReadonlyArray<string>;
+  /** HomuCode features choices not saved to the server yet; null once they are. */
+  readonly featureOffersDraft?: FeatureOffersDraft | null;
+  /** This phone's name, sent to every server it connects to. */
+  readonly deviceName?: string;
   /** Per server, the synced copy this phone last agreed with. */
   readonly settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
   /** The synced theme last applied and the phone themes it became. */
@@ -262,6 +274,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     settingsSyncEnabled?: boolean;
     fasterPhoneLaunch?: boolean;
     featureOffersSeen?: ReadonlyArray<string>;
+    featureOffersDraft?: FeatureOffersDraft;
+    deviceName?: string;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
   } = {};
@@ -421,6 +435,10 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.featureOffersSeen = parsed.featureOffersSeen.filter(
       (id): id is string => typeof id === "string",
     );
+  if (isFeatureOffersDraft(parsed.featureOffersDraft))
+    preferences.featureOffersDraft = parsed.featureOffersDraft;
+  if (typeof parsed.deviceName === "string" && parsed.deviceName.trim() !== "")
+    preferences.deviceName = parsed.deviceName.trim().slice(0, 40);
   if (typeof parsed.settingsSyncEnabled === "boolean") {
     preferences.settingsSyncEnabled = parsed.settingsSyncEnabled;
   }
