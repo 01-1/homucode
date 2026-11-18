@@ -599,6 +599,7 @@ function ThreadRouteContent(
       environmentId: String(selectedThread.environmentId),
       threadId: String(selectedThread.id),
       path: path.split("/").filter((segment) => segment.length > 0),
+      ...(props.route.params?.madohomu === true ? { madohomu: true } : {}),
     };
     navigation.navigate("ThreadFile", params);
   };

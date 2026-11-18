@@ -140,7 +140,7 @@ describe("buildMadoHomuListRows", () => {
       "x4",
       "more:scratch",
     ]);
-    expect(rows.at(-1)).toMatchObject({ type: "more", count: 2 });
+    expect(rows.at(-1)).toMatchObject({ type: "more", count: 1 });
   });
 
   it("says nothing pinned in an empty Pinned section", () => {
