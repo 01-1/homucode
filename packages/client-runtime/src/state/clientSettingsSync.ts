@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 const DEVICE_LOCAL_KEYS = new Set<string>([
   "settingsSyncEnabled",
   "fasterPhoneLaunch",
+  "showMessageSenderLabels",
   "onboardingCompletedAt",
   "scratchEnvironmentId",
   "voiceMicrophone",

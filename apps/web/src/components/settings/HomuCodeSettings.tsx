@@ -82,6 +82,19 @@ function HomuCodeDeviceSettings() {
       </SettingsSection>
       <SettingsSection title="Sent messages">
         <SettingsRow
+          {...searchableSetting("show-message-sender-labels")}
+          description="Show who sent each message above its bubble in chat."
+          control={
+            <Switch
+              checked={settings.showMessageSenderLabels}
+              onCheckedChange={(showMessageSenderLabels) =>
+                void updateClientSettings({ showMessageSenderLabels })
+              }
+              aria-label="Show message sender labels"
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("user-message-markdown")}
           description="Off shows your sent messages as the plain text you typed."
           resetAction={

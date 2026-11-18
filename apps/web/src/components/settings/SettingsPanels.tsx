@@ -547,6 +547,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? ["Rich text composer"]
       : []),
+    ...(settings.showMessageSenderLabels !== DEFAULT_UNIFIED_SETTINGS.showMessageSenderLabels
+      ? ["Show message sender labels"]
+      : []),
     ...(settings.userMessageMarkdownEnabled !== DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled
       ? ["Format sent messages as Markdown"]
       : []),
@@ -699,6 +702,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
+      showMessageSenderLabels: DEFAULT_UNIFIED_SETTINGS.showMessageSenderLabels,
       userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
       userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,

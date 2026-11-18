@@ -45,6 +45,12 @@ it("keeps device preferences usable when the linked environment is unavailable",
   await expect.element(toggle).toBeChecked();
   await userEvent.click(toggle);
   await expect.element(toggle).not.toBeChecked();
+
+  const senderLabels = page.getByRole("switch", { name: "Show message sender labels" });
+  await expect.element(senderLabels).toBeChecked();
+  await userEvent.click(senderLabels);
+  await expect.element(senderLabels).not.toBeChecked();
+
   await expect
     .element(page.getByRole("switch", { name: "Show Building T3 settings" }))
     .not.toBeInTheDocument();

@@ -1,3 +1,6 @@
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult, Atom } from "effect/reactivity";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { messageSourceLabel } from "@t3tools/shared/messageSource";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
@@ -1499,6 +1502,21 @@ function OpenSenderThreadButton(props: {
   );
 }
 
+const showMessageSenderLabelsAtom = Atom.map(
+  mobilePreferencesAtom,
+  (preferences) =>
+    !AsyncResult.isSuccess(preferences) || preferences.value.showMessageSenderLabels !== false,
+);
+
+function MessageSenderLabel({ label }: { readonly label: string }) {
+  const show = useAtomValue(showMessageSenderLabelsAtom);
+  return show ? (
+    <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
+      {label}
+    </Text>
+  ) : null;
+}
+
 /** Automation prompts are long, repeated runbooks; a folded bubble keeps them out of the way. */
 function ThreadAutomationMessageRow(props: {
   readonly environmentId: EnvironmentId;
@@ -1529,9 +1547,7 @@ function ThreadAutomationMessageRow(props: {
 
   return (
     <View className="mb-5 items-end">
-      <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-        Automatic · Scheduled task
-      </Text>
+      <MessageSenderLabel label="Automatic · Scheduled task" />
       <View
         className="min-w-0 rounded-[20px]"
         style={{
@@ -2092,9 +2108,7 @@ function renderFeedEntry(
           className={cn("items-end", props.userMessageGrouping.groupedWithNext ? "mb-1" : "mb-5")}
           {...(enterAnimated ? { entering: FadeInDown.duration(220) } : {})}
         >
-          <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-            {messageSourceLabel(message)}
-          </Text>
+          <MessageSenderLabel label={messageSourceLabel(message)} />
           {presentation.guestName !== undefined ? (
             <GuestMessageName name={presentation.guestName} />
           ) : null}

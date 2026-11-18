@@ -64,6 +64,20 @@ export function SettingsHomuCodeRouteScreen() {
             onValueChange={(fasterPhoneLaunch) => savePreferences({ fasterPhoneLaunch })}
           />
         </SettingsSection>
+        <SettingsSection title="Sent messages">
+          <ListToggleRow
+            label="Show message sender labels"
+            description="Show who sent each message above its bubble in chat."
+            value={
+              !AsyncResult.isSuccess(preferencesResult) ||
+              preferencesResult.value.showMessageSenderLabels !== false
+            }
+            disabled={!preferencesReady}
+            onValueChange={(showMessageSenderLabels) =>
+              savePreferences({ showMessageSenderLabels })
+            }
+          />
+        </SettingsSection>
         <SettingsSection title="Settings sync">
           <ListToggleRow
             label="Sync settings"

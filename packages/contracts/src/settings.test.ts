@@ -627,8 +627,10 @@ it("decodes setup behavior defaults without opting into optional features", () =
   expect(decodeClientSettings({})).toMatchObject({
     settingsSyncEnabled: false,
     fasterPhoneLaunch: false,
+    showMessageSenderLabels: true,
   });
   const persisted = Schema.decodeUnknownSync(PersistedClientSettingsSchema);
+  expect(persisted({ showMessageSenderLabels: false }).showMessageSenderLabels).toBe(false);
   expect(persisted({}).settingsSyncEnabled).toBe(true);
   expect(persisted({ settingsSyncEnabled: false }).settingsSyncEnabled).toBe(false);
   expect(persisted({ settingsSyncEnabled: true }).settingsSyncEnabled).toBe(true);

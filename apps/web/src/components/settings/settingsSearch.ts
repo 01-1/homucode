@@ -880,6 +880,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
+    id: "show-message-sender-labels",
+    title: "Show message sender labels",
+    to: "/settings/homucode",
+    searchTerms: ["hide sender line human automatic sent from device message chat"],
+  },
+  {
     id: "user-message-markdown",
     title: "Format sent messages as Markdown",
     to: "/settings/homucode",
