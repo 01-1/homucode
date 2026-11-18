@@ -1527,6 +1527,16 @@ const CODEX_T3_MCP_TOOL_TIMEOUT_SEC = 65 * 60;
 // `t3-code-direct.<tool>`; t3McpToolPresentation.ts must keep resolving that form.
 const CODEX_T3_DIRECT_MCP_SERVER = "t3-code-direct";
 const CODEX_DIRECT_ONLY_T3_TOOLS = ["t3_thread_wait", "delegate_task"];
+const isCodexDelegateTaskApproval = Schema.is(
+  Schema.Struct({
+    mode: Schema.Literal("form"),
+    serverName: Schema.Literal(CODEX_T3_DIRECT_MCP_SERVER),
+    _meta: Schema.Struct({
+      codex_approval_kind: Schema.Literal("mcp_tool_call"),
+      tool_name: Schema.Literal("delegate_task"),
+    }),
+  }),
+);
 
 function codexThreadRuntimeParams(input: {
   readonly threadId: ThreadId | null;
@@ -6239,6 +6249,16 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 return {
                   action: "accept",
                   content: { approval: "once" },
+                } satisfies CodexSchema.McpServerElicitationRequestResponse;
+              }
+              // The authenticated T3 endpoint enforces the caller's delegation permissions.
+              if (
+                isCodexDelegateTaskApproval(payload) &&
+                (yield* mcpSessions.read(context.input.threadId)) !== undefined
+              ) {
+                return {
+                  action: "accept",
+                  content: {},
                 } satisfies CodexSchema.McpServerElicitationRequestResponse;
               }
               yield* reportFullAccessRefusal(payload.threadId, "an MCP approval request");
