@@ -66,12 +66,11 @@ export function MobileThisDeviceName() {
       <Text>Phone name</Text>
       <TextInput
         accessibilityLabel="Phone name"
-        key={name}
         defaultValue={name}
         placeholder="Name this device"
         maxLength={40}
         className="rounded-lg border border-border p-3 text-foreground"
-        onEndEditing={(event) => savePreferences({ deviceName: event.nativeEvent.text.trim() })}
+        onChangeText={(text) => savePreferences({ deviceName: text.trim() })}
       />
       <Text className="text-foreground-muted">
         Agents on every server see this name, unless a server names this device itself.
