@@ -16,7 +16,7 @@ import {
   isListedThreadLineage,
   type ThreadId,
 } from "@t3tools/contracts";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,13 +32,22 @@ import { Sheet } from "../../components/ui/Sheet";
 import { useBarOverlap } from "../../components/ui/useBarInset";
 import { uuidv4 } from "../../lib/uuid";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
-import { useVisibleThreadShells } from "../../state/entities";
+import { useThreadShells, useVisibleThreadShells } from "../../state/entities";
+import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../../state/olderSettledShelf";
 import { threadListEnvironmentsAtom } from "../../state/presentation";
 import { useEnvironmentScope } from "../../state/session";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import { useThreadListActions } from "../home/useThreadListActions";
 import { openSettings } from "../settings/settings-navigation";
-import { ThreadListV2Row, ThreadListV2Section } from "../threads/thread-list-v2-items";
+import {
+  ThreadListV2Row,
+  ThreadListV2Section,
+  ThreadListV2ShowMoreRow,
+} from "../threads/thread-list-v2-items";
+import {
+  THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
+  THREAD_LIST_V2_SETTLED_PAGE_COUNT,
+} from "../threads/threadListV2";
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
 import { useOpenThreadPullRequests } from "../threads/use-open-thread-pull-requests";
 import { useThreadListNow } from "../threads/use-thread-list-now";
@@ -49,6 +58,7 @@ import {
   moveMadoHomuThread,
   type MadoHomuDrop,
   type MadoHomuListRow,
+  type MadoHomuThreadRow,
 } from "./madohomuList";
 import { MadoHomuIcon } from "./MadoHomuIcon";
 import { MadoHomuProjectPicker } from "./MadoHomuProjectPicker";
@@ -99,6 +109,13 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const barOverlap = useBarOverlap();
   const [toggled, setToggled] = useState<ReadonlySet<string>>(() => rememberedToggled);
   const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
+  const projectId = actions.project?.id;
+  const [settledPage, setSettledPage] = useState({
+    projectId,
+    limit: THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
+  });
+  const settledLimit =
+    settledPage.projectId === projectId ? settledPage.limit : THREAD_LIST_V2_SETTLED_INITIAL_COUNT;
   const [choosingProject, setChoosingProject] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -137,29 +154,50 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         madohomuThreads: { ...savedSettings.madohomuThreads, ...dropPatch.madohomuThreads },
       }
     : savedSettings;
+  const inProject = (thread: EnvironmentThreadShell) =>
+    thread.environmentId === environmentId &&
+    thread.projectId === projectId &&
+    thread.archivedAt === null &&
+    thread.deletedAt === null;
+  const projectThreads = useThreadShells().filter(inProject);
   const threads = useVisibleThreadShells().filter(
     (thread) =>
-      thread.environmentId === environmentId &&
-      thread.projectId === actions.project?.id &&
-      thread.archivedAt === null &&
-      thread.deletedAt === null &&
+      inProject(thread) &&
       // Subagents and side chats report to their parent; only ones the user filed get a row.
       (isListedThreadLineage(thread.lineage) || settings.madohomuThreads[thread.id] !== undefined),
   );
   const now = useThreadListNow(threads);
   // Reorder mode needs a project to edit; without one the screen shows the picker instead.
   const reorderMode = reordering && settings.madohomuEnabled && actions.project !== null;
+  const settledScopes = useMemo(
+    () => (projectId === undefined ? [] : [{ environmentId, projectIds: [projectId] }]),
+    [environmentId, projectId],
+  );
+  const settledShelf = useOlderSettledShelf({
+    scopes: settledScopes,
+    expanded: settings.madohomuEnabled && !reorderMode && toggled.has("settled"),
+    visibleCount: settledLimit,
+  });
+  // The server counts hidden tags too. Subtract all local project rows from that count.
+  const unloadedSettledCount = settledShelf.unloadedCount(projectThreads);
   const rows = buildMadoHomuListRows({
     threads,
     settings,
     now,
     toggled,
     scratchCount,
+    settledLimit,
+    isListedSettled: settledShelf.isListed,
+    unloadedSettledCount,
     keepManualOpen: reorderMode,
     snoozeEnvironmentIds,
     queuedThreadKeys,
     isWorking: isThreadWorking,
   });
+  const listedSettledThreads = rows
+    .filter((row): row is MadoHomuThreadRow => row.type === "thread" && row.kind === "settled")
+    .map((row) => row.row.item.thread);
+  useOlderSettledShelfGrowth(settledShelf, listedSettledThreads);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId, madohomu: true }));
   const create = async () => {
@@ -351,12 +389,37 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       return (
         <Text className="px-5 py-2 text-sm text-foreground-muted">
           {item.kind === "custom"
-            ? "Use Move to in a thread's menu"
-            : madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: false })}
+            ? "Use Move to in a thread's menu."
+            : madohomuEmptyPinnedText({
+                hasThreads: threads.length > 0 || unloadedSettledCount > 0,
+                canDrag: false,
+              })}
         </Text>
       );
     }
     if (item.type === "more") {
+      if (item.kind === "settled") {
+        return (
+          <ThreadListV2ShowMoreRow
+            hiddenCount={item.count}
+            {...(settledShelf.loading
+              ? { state: "loading" }
+              : settledShelf.failed
+                ? { state: "failed" }
+                : {})}
+            onPress={() => {
+              if (settledShelf.failed) {
+                settledShelf.retry();
+              } else {
+                setSettledPage({
+                  projectId,
+                  limit: settledLimit + THREAD_LIST_V2_SETTLED_PAGE_COUNT,
+                });
+              }
+            }}
+          />
+        );
+      }
       return (
         <Pressable
           accessibilityRole="button"
@@ -539,7 +602,12 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           </View>
           <LegendList
             data={rows}
-            extraData={{ settings, canEdit }}
+            extraData={{
+              settings,
+              canEdit,
+              settledLoading: settledShelf.loading,
+              settledFailed: settledShelf.failed,
+            }}
             renderScrollComponent={NativeScrollView}
             keyExtractor={(row) => row.key}
             getItemType={(row) => row.type}

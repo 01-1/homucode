@@ -1,4 +1,5 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   groupMadoHomuThreads,
   isMadoHomuThreadPinned,
@@ -51,6 +52,7 @@ export interface MadoHomuEmptyRow {
 export interface MadoHomuMoreRow {
   readonly type: "more";
   readonly key: string;
+  readonly kind: "scratch" | "settled";
   readonly count: number;
 }
 
@@ -87,6 +89,9 @@ export function buildMadoHomuListRows(input: {
   readonly toggled: ReadonlySet<string>;
   /** How many Scratch rows show before "Show more". */
   readonly scratchCount?: number;
+  readonly settledLimit: number;
+  readonly isListedSettled: (thread: EnvironmentThreadShell) => boolean;
+  readonly unloadedSettledCount: number;
   /** Reorder mode: Pinned and custom sections stay open so every drop target shows. */
   readonly keepManualOpen?: boolean;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
@@ -106,7 +111,9 @@ export function buildMadoHomuListRows(input: {
       : {}),
   });
   for (const group of groups) {
-    if (group.threads.length === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
+    const count =
+      group.threads.length + (group.kind === "settled" ? input.unloadedSettledCount : 0);
+    if (count === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
     const manual = ALWAYS_SHOWN.has(group.kind);
     const expanded =
       manual && input.keepManualOpen
@@ -118,23 +125,28 @@ export function buildMadoHomuListRows(input: {
       kind: group.kind,
       id: group.id,
       title: group.title,
-      count: group.threads.length,
+      count,
       expanded,
       attention: expanded === false ? group.threads.filter(madohomuNeedsUser).length : 0,
     });
     if (expanded === false) continue;
-    if (group.threads.length === 0) {
+    if (count === 0) {
       rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
       continue;
     }
-    const { shown, more } =
+    const shown =
       group.kind === "scratch"
         ? pageMadoHomuRows(
             group.threads,
             input.scratchCount ?? MADOHOMU_SCRATCH_PAGE,
             madohomuNeedsUser,
-          )
-        : { shown: group.threads, more: 0 };
+          ).shown
+        : group.kind === "settled"
+          ? sortSettledThreads(group.threads.filter(input.isListedSettled)).slice(
+              0,
+              input.settledLimit,
+            )
+          : group.threads;
     const items = buildThreadListV2ListItems({
       items: shown.map((thread, index) => ({
         thread,
@@ -163,11 +175,12 @@ export function buildMadoHomuListRows(input: {
         canMoveDown: manual && index < items.length - 1,
       });
     });
-    if (more > 0) {
+    if ((group.kind === "scratch" || group.kind === "settled") && shown.length < count) {
       rows.push({
         type: "more",
         key: `more:${group.id}`,
-        count: more,
+        kind: group.kind,
+        count: count - shown.length,
       });
     }
   }

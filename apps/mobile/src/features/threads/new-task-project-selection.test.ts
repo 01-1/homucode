@@ -6,6 +6,7 @@ import type { HomeProjectScope } from "../home/homeThreadList";
 import {
   getProjectScopeSelectionTarget,
   isSameRepository,
+  madohomuDraftSendBlockReason,
   newTaskDestination,
   newTaskFilteredProject,
   resolveDraftProjectSelection,
@@ -76,6 +77,31 @@ describe("getProjectScopeSelectionTarget", () => {
     // With nothing connected, the usual order still applies.
     expect(target([], "server")).toBe(server);
     expect(target([])).toBe(mac);
+  });
+});
+
+describe("madohomuDraftSendBlockReason", () => {
+  it("requires the original machine and project to still be the configured MadoHomu project", () => {
+    const original = makeProject("madohomu", "mac");
+    const origin = { environmentId: original.environmentId, projectId: original.id };
+    const settings = { madohomuEnabled: true, madohomuProjectId: original.id };
+
+    expect(madohomuDraftSendBlockReason(origin, original, settings)).toBeNull();
+    expect(
+      madohomuDraftSendBlockReason(origin, makeProject("madohomu", "server"), settings),
+    ).toContain("Switch this draft back");
+    expect(madohomuDraftSendBlockReason(origin, makeProject("other", "mac"), settings)).toContain(
+      "Switch this draft back",
+    );
+    expect(madohomuDraftSendBlockReason(origin, original, undefined)).toContain("Reconnect");
+    for (const changed of [
+      { ...settings, madohomuEnabled: false },
+      { ...settings, madohomuProjectId: ProjectId.make("other") },
+    ]) {
+      expect(madohomuDraftSendBlockReason(origin, original, changed)).toContain(
+        "MadoHomu settings",
+      );
+    }
   });
 });
 

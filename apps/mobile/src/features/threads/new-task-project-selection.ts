@@ -160,6 +160,23 @@ export function resolveDraftProjectSelection(
 
 type ProjectRef = { readonly environmentId: string; readonly projectId: string };
 
+export function madohomuDraftSendBlockReason(
+  origin: Partial<ProjectRef> | undefined,
+  selected: Pick<EnvironmentProject, "environmentId" | "id">,
+  settings: Pick<ServerConfig["settings"], "madohomuEnabled" | "madohomuProjectId"> | undefined,
+): string | null {
+  if (origin?.environmentId !== selected.environmentId || origin.projectId !== selected.id) {
+    return "Switch this draft back to the machine and project where you opened it, then try again.";
+  }
+  if (settings === undefined) {
+    return "Reconnect to the original machine so MadoHomu's settings can load, then try again.";
+  }
+  if (!settings.madohomuEnabled || settings.madohomuProjectId !== selected.id) {
+    return "Enable MadoHomu and select the original project in MadoHomu settings, then try again.";
+  }
+  return null;
+}
+
 /** The live copy of the thread list's filtered project a new thread starts in: the remembered one if it is a copy. */
 export function newTaskFilteredProject(
   scope: HomeProjectScope,
