@@ -1,3 +1,5 @@
+import type { ProjectId } from "@t3tools/contracts";
+
 export type NewTaskDraftRouteParams = {
   readonly requestId?: string;
   readonly environmentId?: string | string[];
@@ -42,18 +44,18 @@ export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
   ]);
 }
 
-/** `{ madohomu: true }` when the nearest thread route was opened from MadoHomu. */
-export function madohomuRouteFlag(
-  state:
-    | {
-        readonly index: number;
-        readonly routes: ReadonlyArray<{ readonly name: string; readonly params?: object }>;
-      }
-    | undefined,
-): { readonly madohomu?: true } {
-  const thread = state?.routes
-    .slice(0, state.index + 1)
-    .findLast((route) => route.name === "Thread");
-  const params = thread?.params as { readonly madohomu?: unknown } | undefined;
-  return params?.madohomu === true ? { madohomu: true } : {};
+export type MadoHomuThreadRouteParams = {
+  readonly madohomu?: boolean;
+  /** Resolve a link's project membership once its thread loads. */
+  readonly madohomuLinkProjectId?: ProjectId;
+};
+
+export function isMadoHomuThreadRoute(
+  params: MadoHomuThreadRouteParams,
+  projectId?: ProjectId,
+): boolean {
+  return (
+    params.madohomu === true ||
+    (projectId !== undefined && projectId === params.madohomuLinkProjectId)
+  );
 }

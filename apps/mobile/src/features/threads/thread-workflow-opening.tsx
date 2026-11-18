@@ -45,13 +45,13 @@ export function useWorkflowOpening(ref: ScopedThreadRef | null) {
       : environmentThreadDetails.threadAtom(scopeThreadRef(ref.environmentId, parentId)),
     (parent) => (parentId === null ? null : (parent?.projection.subagents ?? null)),
   );
-  return projection === null
-    ? null
-    : resolveWorkflowOpening({
-        thread: projection.thread,
-        messages: projection.messages,
-        parentSubagents,
-      });
+  if (projection === null) return null;
+  const opening = resolveWorkflowOpening({
+    thread: projection.thread,
+    messages: projection.messages,
+    parentSubagents,
+  });
+  return opening === null ? null : { ...opening, projectId: projection.thread.projectId };
 }
 
 function memberRowSubagent(
@@ -98,7 +98,10 @@ export function ThreadWorkflowOpening(props: {
         disabled={threadId === null}
         onPress={() => {
           if (threadId !== null)
-            openLinkedThread({ environmentId: String(props.environmentId), threadId });
+            openLinkedThread(
+              { environmentId: String(props.environmentId), threadId },
+              opening.projectId,
+            );
         }}
         className="rounded-lg px-3 py-3 active:bg-subtle"
       >

@@ -373,7 +373,10 @@ export function NewTaskDraftScreen(props: {
     if (next !== null) void switchEnvironment(next);
     return true;
   };
-  const cycleEnvironmentCommands = environments.length > 1 ? (["cycleHost"] as const) : [];
+  // A MadoHomu draft stays in the project and environment it opened with.
+  const lockedToMadoHomu = props.madohomu === true;
+  const cycleEnvironmentCommands =
+    isFocused && !lockedToMadoHomu && environments.length > 1 ? (["cycleHost"] as const) : [];
   useHardwareKeyboardCommand(cycleEnvironmentCommands, cycleEnvironment);
   const preventRemove =
     (isIncomingShareHoldingRoute && !isProjectPickerReturnActive) || flow.submitting;
@@ -772,8 +775,6 @@ export function NewTaskDraftScreen(props: {
       The shared content is no longer in the inbox. You can continue editing this task draft.
     </Text>
   ) : null;
-  // A MadoHomu draft stays in MadoHomu's project: no project or environment to switch to.
-  const lockedToMadoHomu = props.madohomu === true;
   const hero = lockedToMadoHomu ? (
     <View className="items-center gap-2 px-6" testID="new-task-hero">
       <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">

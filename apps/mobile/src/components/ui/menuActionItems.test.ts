@@ -63,3 +63,30 @@ describe("appBarMenuItemsFromActions", () => {
     ).toMatchObject([{ id: "devices", title: "Devices", displayInline: true }]);
   });
 });
+
+it("keeps an untitled inline group out of the popup submenu hierarchy", () => {
+  const onSelect = vi.fn();
+  const items = appBarMenuItemsFromActions(
+    [
+      {
+        id: "move",
+        title: "Move to",
+        subactions: [
+          { id: "pinned", title: "Pinned" },
+          {
+            title: "",
+            displayInline: true,
+            subactions: [{ id: "new-section", title: "New section…" }],
+          },
+        ],
+      },
+    ],
+    onSelect,
+  );
+  expect(items).toMatchObject([{ items: [{ id: "pinned" }, { inline: true }] }]);
+  expect(menuActionsFromAppBarItems(items)).toMatchObject([
+    { subactions: [{ id: "pinned" }, { id: "new-section", title: "New section…" }] },
+  ]);
+  findAppBarMenuItem(items, "new-section")?.onPress();
+  expect(onSelect).toHaveBeenCalledWith("new-section");
+});

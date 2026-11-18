@@ -45,7 +45,7 @@ const summary = (rows: ReturnType<typeof buildMadoHomuListRows>) =>
   );
 
 const localSettled = {
-  unloadedSettledCount: 0,
+  settledHistory: { totalCount: 0, status: "complete" as const },
   settledLimit: 10,
   isListedSettled: () => true,
 };
@@ -79,20 +79,41 @@ describe("buildMadoHomuListRows", () => {
     ]);
   });
 
-  it("counts unloaded Settled threads and lists only the available page when expanded", () => {
+  it("counts only visible Settled threads while paging through filtered history", () => {
     const below = ThreadId.make("below");
     const options = {
       threads,
       settings,
       now: NOW,
-      unloadedSettledCount: 40,
+      settledHistory: { totalCount: 40, status: "pageable" as const },
       settledLimit: 1,
       isListedSettled: (thread: (typeof threads)[number]) => thread.id !== below,
     };
     const collapsed = buildMadoHomuListRows({ ...options, toggled: new Set() });
-    expect(collapsed.at(-1)).toMatchObject({ kind: "settled", count: 40, expanded: false });
-    const loading = buildMadoHomuListRows({ ...options, toggled: new Set(["settled"]) });
+    expect(collapsed.at(-1)).toMatchObject({
+      kind: "settled",
+      count: 0,
+      countIsPartial: true,
+      expanded: false,
+    });
+    const toggled = new Set(["settled"]);
+    const loading = buildMadoHomuListRows({ ...options, toggled });
     expect(summary(loading).slice(-2)).toEqual(["section:settled", "more:settled"]);
+    expect(loading.at(-1)).toMatchObject({ count: null });
+    const countCaughtUp = buildMadoHomuListRows({
+      ...options,
+      toggled,
+      settledHistory: { totalCount: 0, status: "pageable" as const },
+    });
+    expect(countCaughtUp.at(-1)).toMatchObject({ kind: "settled", count: null });
+
+    const offline = buildMadoHomuListRows({
+      ...options,
+      toggled,
+      settledHistory: { totalCount: 40, status: "unavailable" },
+    });
+    expect(summary(offline).slice(-2)).toEqual(["section:settled", "empty:settled"]);
+    expect(offline.at(-2)).toMatchObject({ count: 0, countIsPartial: true });
 
     const settled = ["shown", "next", "below"].map((id, index) =>
       makeThreadShellFixture({
@@ -101,32 +122,27 @@ describe("buildMadoHomuListRows", () => {
         settledOverride: "settled",
       }),
     );
-    const open = buildMadoHomuListRows({
-      ...options,
-      threads: [...threads, ...settled],
-      toggled: new Set(["settled"]),
-      unloadedSettledCount: 37,
-    });
+    const open = buildMadoHomuListRows({ ...options, threads: [...threads, ...settled], toggled });
     expect(summary(open).slice(-3)).toEqual(["section:settled", "shown", "more:settled"]);
-    expect(open.at(-3)).toMatchObject({ count: 40, expanded: true });
-    expect(open.at(-1)).toMatchObject({ kind: "settled", count: 39 });
-    const more = buildMadoHomuListRows({
+    expect(open.at(-3)).toMatchObject({ count: 3, countIsPartial: true, expanded: true });
+    expect(open.at(-1)).toMatchObject({ count: null });
+
+    const exhausted = {
       ...options,
       threads: [...threads, ...settled],
-      toggled: new Set(["settled"]),
-      settledLimit: 25,
-      unloadedSettledCount: 37,
-    });
-    expect(summary(more).slice(-4)).toEqual(["section:settled", "shown", "next", "more:settled"]);
-    const all = buildMadoHomuListRows({
-      ...options,
-      threads: [...threads, ...settled],
-      toggled: new Set(["settled"]),
-      settledLimit: 25,
+      toggled,
       isListedSettled: () => true,
-      unloadedSettledCount: 0,
-    });
+      settledHistory: { totalCount: 40, status: "complete" as const },
+    };
+    const paged = buildMadoHomuListRows(exhausted);
+    expect(paged.at(-3)).toMatchObject({ count: 3, countIsPartial: false });
+    expect(paged.at(-1)).toMatchObject({ kind: "settled", count: 2 });
+    const all = buildMadoHomuListRows({ ...exhausted, settledLimit: 25 });
     expect(summary(all).slice(-4)).toEqual(["section:settled", "shown", "next", "below"]);
+
+    const allHidden = buildMadoHomuListRows({ ...exhausted, threads });
+    expect(summary(allHidden).slice(-2)).toEqual(["section:settled", "empty:settled"]);
+    expect(allHidden.at(-2)).toMatchObject({ count: 0, countIsPartial: false });
   });
 
   it("collapses any section, counting the rows that need the user, except in Reorder mode", () => {

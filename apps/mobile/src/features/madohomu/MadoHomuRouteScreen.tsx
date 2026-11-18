@@ -9,6 +9,7 @@ import {
   madohomuIconColor,
 } from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
+import { effectiveSnoozed, isShelvedSettled } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   AuthOrchestrationOperateScope,
@@ -89,7 +90,7 @@ function reorderSectionsOf(
     const manual = row.kind === "pinned" || row.kind === "custom";
     if (row.type === "section") {
       if (manual) sections.push({ id: row.id, title: row.title, threads: [] });
-      else dimmed.push(`${row.title} (${row.count})`);
+      else dimmed.push(`${row.title} (${row.count}${row.countIsPartial ? " loaded" : ""})`);
     } else if (row.type === "thread" && manual) {
       const thread = row.row.item.thread;
       sections
@@ -159,12 +160,12 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     thread.projectId === projectId &&
     thread.archivedAt === null &&
     thread.deletedAt === null;
+  // Subagents and side chats report to their parent; only ones the user filed get a row.
+  const hasListedLineage = (thread: EnvironmentThreadShell) =>
+    isListedThreadLineage(thread.lineage) || settings.madohomuThreads[thread.id] !== undefined;
   const projectThreads = useThreadShells().filter(inProject);
   const threads = useVisibleThreadShells().filter(
-    (thread) =>
-      inProject(thread) &&
-      // Subagents and side chats report to their parent; only ones the user filed get a row.
-      (isListedThreadLineage(thread.lineage) || settings.madohomuThreads[thread.id] !== undefined),
+    (thread) => inProject(thread) && hasListedLineage(thread),
   );
   const now = useThreadListNow(threads);
   // Reorder mode needs a project to edit; without one the screen shows the picker instead.
@@ -178,8 +179,18 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     expanded: settings.madohomuEnabled && !reorderMode && toggled.has("settled"),
     visibleCount: settledLimit,
   });
-  // The server counts hidden tags too. Subtract all local project rows from that count.
   const unloadedSettledCount = settledShelf.unloadedCount(projectThreads);
+  const settledPages = settledShelf.environments.get(environmentId)?.pages;
+  const settledHistoryStatus =
+    settledPages?.frontier != null && (unloadedSettledCount > 0 || settledShelf.pages.size > 0)
+      ? "pageable"
+      : unloadedSettledCount > 0 && settledPages?.reads.length === 0
+        ? "unavailable"
+        : "complete";
+  const localSettledCount = projectThreads.filter(
+    (thread) =>
+      hasListedLineage(thread) && isShelvedSettled(thread) && !effectiveSnoozed(thread, { now }),
+  ).length;
   const rows = buildMadoHomuListRows({
     threads,
     settings,
@@ -188,7 +199,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     scratchCount,
     settledLimit,
     isListedSettled: settledShelf.isListed,
-    unloadedSettledCount,
+    settledHistory: {
+      totalCount: localSettledCount + unloadedSettledCount,
+      status: settledHistoryStatus,
+    },
     keepManualOpen: reorderMode,
     snoozeEnvironmentIds,
     queuedThreadKeys,
@@ -300,20 +314,21 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             </Text>
           </View>
         ) : undefined;
+      const countLabel = `${item.count} ${item.count === 1 ? "thread" : "threads"}${item.countIsPartial ? " loaded" : ""}`;
       const disclosure =
         item.expanded === null
           ? undefined
           : {
               expanded: item.expanded,
               onToggle: () => toggleSection(item.id),
-              accessibilityLabel: `${item.title}, ${item.count} ${item.count === 1 ? "thread" : "threads"}${item.attention > 0 ? `, ${item.attention} need you` : ""}`,
+              accessibilityLabel: `${item.title}, ${countLabel}${item.attention > 0 ? `, ${item.attention} need you` : ""}`,
               accessibilityHint: `${item.expanded ? "Collapses" : "Expands"} the section.`,
             };
       const heading = (accessory?: ReactNode) => (
         <ThreadListV2Section
           label={item.title}
           badge={badge}
-          count={item.count}
+          count={item.countIsPartial ? `${item.count} loaded` : item.count}
           tone={item.kind === "snoozed" ? "snoozed" : "default"}
           {...(disclosure ? { disclosure } : {})}
           accessory={accessory}
@@ -390,10 +405,14 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         <Text className="px-5 py-2 text-sm text-foreground-muted">
           {item.kind === "custom"
             ? "Use Move to in a thread's menu."
-            : madohomuEmptyPinnedText({
-                hasThreads: threads.length > 0 || unloadedSettledCount > 0,
-                canDrag: false,
-              })}
+            : item.kind === "settled"
+              ? settledHistoryStatus === "unavailable"
+                ? "Connect to load older settled threads."
+                : "No visible settled threads."
+              : madohomuEmptyPinnedText({
+                  hasThreads: threads.length > 0 || unloadedSettledCount > 0,
+                  canDrag: false,
+                })}
         </Text>
       );
     }
@@ -605,6 +624,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             extraData={{
               settings,
               canEdit,
+              settledHistoryStatus,
               settledLoading: settledShelf.loading,
               settledFailed: settledShelf.failed,
             }}

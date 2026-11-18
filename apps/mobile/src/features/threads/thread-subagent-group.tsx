@@ -114,10 +114,11 @@ export function ThreadSubagentGroup(props: {
   const members = props.activities.flatMap(({ projectedItem }) =>
     projectedItem.item.type === "subagent" ? [projectedItem.item] : [],
   );
-  const liveAgents = useAtomValue(
-    environmentThreadDetails.threadAtom(scopeThreadRef(props.environmentId, members[0]!.threadId)),
-    (thread) => thread?.projection.subagents,
+  const parentAtom = environmentThreadDetails.threadAtom(
+    scopeThreadRef(props.environmentId, members[0]!.threadId),
   );
+  const liveAgents = useAtomValue(parentAtom, (thread) => thread?.projection.subagents);
+  const parentProjectId = useAtomValue(parentAtom, (thread) => thread?.projection.thread.projectId);
   const { presentationById } = useEnvironments();
   const agents = members.map((item) => {
     const live = liveAgents?.find((agent) => agent.id === item.subagentId);
@@ -228,7 +229,11 @@ export function ThreadSubagentGroup(props: {
                   navigation.dispatch(
                     StackActions.push("Thread", {
                       ...linked,
-                      ...madohomuLinkFlag(rootStackState(navigation), linked),
+                      ...madohomuLinkFlag(
+                        rootStackState(navigation),
+                        linked,
+                        agent.childThreadId === null ? undefined : parentProjectId,
+                      ),
                     }),
                   );
                 }}

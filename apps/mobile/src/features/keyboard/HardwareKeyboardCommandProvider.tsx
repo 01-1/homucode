@@ -24,7 +24,7 @@ import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
 import { useThreadShell } from "../../state/entities";
 import type { GitActionProgress } from "../../state/use-vcs-action-state";
 import { GitActionProgressOverlay } from "../threads/GitActionProgressOverlay";
-import { madohomuRouteFlag } from "../threads/thread-route-state";
+import { madohomuRouteFlag } from "../madohomu/madohomuLinkFlag";
 import { CommandPalette } from "./CommandPalette";
 import {
   dispatchHardwareKeyboardCommand,

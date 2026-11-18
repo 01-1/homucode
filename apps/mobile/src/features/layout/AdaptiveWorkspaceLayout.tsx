@@ -107,7 +107,7 @@ import { AndroidHingeObserver } from "../../native/AndroidHingeObserver";
 import { WindowHingeContext } from "../../native/window-hinge-context";
 import { useAndroidWorkspaceRoot } from "./workspace/AndroidWorkspaceTabsProvider";
 import { dispatchRootStackReset, rootStackState } from "../../lib/root-stack-reset";
-import { madohomuRouteFlag } from "../threads/thread-route-state";
+import { madohomuRouteFlag } from "../madohomu/madohomuLinkFlag";
 import {
   currentWorkspaceSelections,
   workspaceSelectionCheck,

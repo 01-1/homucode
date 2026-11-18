@@ -6,7 +6,10 @@ import { AsyncResult } from "effect/reactivity";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { serverEnvironment } from "../../state/server";
 import { environmentThreadShells, environmentThreads } from "../../state/threads";
-import { madohomuRouteFlag } from "../threads/thread-route-state";
+import {
+  isMadoHomuThreadRoute,
+  type MadoHomuThreadRouteParams,
+} from "../threads/thread-route-state";
 
 function loadedProjectId(environmentId: EnvironmentId, threadId: ThreadId): ProjectId | undefined {
   const atom = environmentThreads.stateAtom(environmentId, threadId);
@@ -18,31 +21,57 @@ function loadedProjectId(environmentId: EnvironmentId, threadId: ThreadId): Proj
   );
 }
 
-/**
- * `{ madohomu: true }` for a thread opened from a MadoHomu thread screen when the target is in
- * MadoHomu's project, so it opens without the project subtitle. Other targets open as usual.
- */
-export function madohomuLinkFlag(
-  state: Parameters<typeof madohomuRouteFlag>[0],
-  target: { readonly environmentId: string; readonly threadId: string },
-  localParentProjectId?: ProjectId,
-): { readonly madohomu?: true } {
-  if (madohomuRouteFlag(state).madohomu !== true) return {};
-  const source = state?.routes
+type ThreadTarget = { readonly environmentId: string; readonly threadId: string };
+type StackState =
+  | {
+      readonly index: number;
+      readonly routes: ReadonlyArray<{ readonly name: string; readonly params?: object }>;
+    }
+  | undefined;
+
+type ActiveThreadParams = Partial<ThreadTarget> & MadoHomuThreadRouteParams;
+
+function activeThreadParams(state: StackState): ActiveThreadParams | undefined {
+  const thread = state?.routes
     .slice(0, state.index + 1)
-    .findLast((route) => route.name === "Thread")?.params as
-    | { readonly environmentId?: unknown }
-    | undefined;
-  // MadoHomu is one project in one environment.
-  if (source?.environmentId !== target.environmentId) return {};
+    .findLast((route) => route.name === "Thread");
+  return thread?.params as ActiveThreadParams | undefined;
+}
+
+function knownProjectId(target: ThreadTarget): ProjectId | undefined {
   const environmentId = EnvironmentId.make(target.environmentId);
-  const settings = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId))?.settings;
-  if (settings?.madohomuEnabled !== true || settings.madohomuProjectId === null) return {};
   const threadId = ThreadId.make(target.threadId);
   const shell = appAtomRegistry.get(
     environmentThreadShells.threadShellAtom(scopeThreadRef(environmentId, threadId)),
   );
-  const projectId =
-    shell?.projectId ?? loadedProjectId(environmentId, threadId) ?? localParentProjectId;
+  return shell?.projectId ?? loadedProjectId(environmentId, threadId);
+}
+
+function activeThreadIsMadoHomu(params: ActiveThreadParams | undefined): boolean {
+  if (params === undefined) return false;
+  if (params.madohomu === true) return true;
+  if (!params.madohomuLinkProjectId || !params.environmentId || !params.threadId) return false;
+  return isMadoHomuThreadRoute(
+    params,
+    knownProjectId({ environmentId: params.environmentId, threadId: params.threadId }),
+  );
+}
+
+export function madohomuRouteFlag(state: StackState): { readonly madohomu?: true } {
+  return activeThreadIsMadoHomu(activeThreadParams(state)) ? { madohomu: true } : {};
+}
+
+export function madohomuLinkFlag(
+  state: StackState,
+  target: ThreadTarget,
+  localParentProjectId?: ProjectId,
+): MadoHomuThreadRouteParams {
+  const source = activeThreadParams(state);
+  if (source?.environmentId !== target.environmentId || !activeThreadIsMadoHomu(source)) return {};
+  const environmentId = EnvironmentId.make(target.environmentId);
+  const settings = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId))?.settings;
+  if (settings?.madohomuEnabled !== true || settings.madohomuProjectId === null) return {};
+  const projectId = knownProjectId(target) ?? localParentProjectId;
+  if (projectId === undefined) return { madohomuLinkProjectId: settings.madohomuProjectId };
   return projectId === settings.madohomuProjectId ? { madohomu: true } : {};
 }
