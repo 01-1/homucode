@@ -1,4 +1,5 @@
-// Generated from https://github.com/01-1/statusline/blob/main/statusline.sh. Update by copying it again.
+// Generated from https://github.com/01-1/statusline/blob/main/statusline.sh. Update by copying it
+// again, keeping the `ctx` label, which is `conx` there.
 export const BUILT_IN_STATUS_LINE_SCRIPT = `#!/bin/bash
 # Claude Code status line: https://github.com/01-1/statusline
 input=$(cat)
@@ -55,7 +56,7 @@ segs=()
 [ -n "$model" ] && segs+=("$(c 183)\${model}\${effort:+ $(effort_color "$effort")$effort}")
 if [ -n "$ctx_k" ] || [ -n "$used" ]; then
   uc=$(c 15); [ -n "$used" ] && uc=$(used_color "$used")
-  s="$(c 8)conx"
+  s="$(c 8)ctx"
   [ -n "$used" ] && s="$s \${uc}$(printf '%.0f' "$used")%"
   if [ -n "$ctx_k" ]; then
     if [ -n "$used" ]; then s="$s $(c 8)(\${uc}\${ctx_k}$(c 8))"; else s="$s \${uc}\${ctx_k}"; fi
