@@ -1,3 +1,4 @@
+import * as NodeModule from "node:module";
 import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -53,41 +54,41 @@ describe("shouldBundleCliDependency", () => {
 });
 
 it.layer(NodeServices.layer)("external package dependency closure", (it) => {
-  // Read the pnpm store directly: isolation hides transitive names and exports maps can block package.json.
   const readInstalledPackages = Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
+    const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const storeDir = path.resolve(
-      path.dirname(NodeURL.fileURLToPath(import.meta.url)),
-      "../../node_modules/.pnpm",
-    );
-
-    // Paths under store files such as lock.yaml raise ENOTDIR, not absence.
-    const isPresent = (candidate: string) =>
-      fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
-
+    const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
     const installed = new Map<string, PackageManifest>();
-    if (!(yield* isPresent(storeDir))) return installed;
-
-    for (const entry of yield* fileSystem.readDirectory(storeDir)) {
-      const modulesDir = path.join(storeDir, entry, "node_modules");
-      if (!(yield* isPresent(modulesDir))) continue;
-
-      for (const owner of yield* fileSystem.readDirectory(modulesDir)) {
-        const names = owner.startsWith("@")
-          ? (yield* fileSystem.readDirectory(path.join(modulesDir, owner))).map(
-              (scoped) => `${owner}/${scoped}`,
-            )
-          : [owner];
-
-        for (const name of names) {
-          if (installed.has(name)) continue;
-          const manifestPath = path.join(modulesDir, name, "package.json");
-          if (!(yield* isPresent(manifestPath))) continue;
-          installed.set(name, decodeManifest(yield* fileSystem.readFileString(manifestPath)));
+    const queue = ["server", "desktop"].map((app) => path.join(repo, "apps", app, "package.json"));
+    const seen = new Set(queue);
+    for (const manifestPath of queue) {
+      const manifest = decodeManifest(yield* fs.readFileString(manifestPath));
+      const declaration = {
+        ...manifest.dependencies,
+        ...manifest.optionalDependencies,
+        ...manifest.peerDependencies,
+      };
+      const resolveFromPackage = NodeModule.createRequire(manifestPath).resolve;
+      for (const name of Object.keys(declaration)) {
+        if (!isRuntimeExternalCliDependency(name)) continue;
+        // Search real install paths even when a package does not export its manifest.
+        for (const directory of resolveFromPackage.paths(name) ?? []) {
+          const candidate = path.join(directory, name, "package.json");
+          if (!(yield* fs.exists(candidate))) continue;
+          const realPath = yield* fs.realPath(candidate);
+          if (!seen.has(realPath)) {
+            seen.add(realPath);
+            queue.push(realPath);
+            installed.set(name, decodeManifest(yield* fs.readFileString(realPath)));
+          }
+          break;
         }
       }
     }
+    assert.isTrue(
+      installed.has("@cursor/sdk"),
+      "the server's staged dependencies must be installed",
+    );
     return installed;
   }).pipe(Effect.cached, Effect.runSync);
 
@@ -189,13 +190,15 @@ var x = 1;
   });
 
   it("reports the packages that were inlined, not just the violations", () => {
+    const globalPackage = "../../../.local/store/v11/links/@/yaml/2.4.0/hash/node_modules/yaml";
     const source =
       region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js") +
-      region("../../node_modules/.pnpm/yaml@2.4.0/node_modules/yaml/dist/index.js") +
+      region(`${globalPackage}/dist/index.js`) +
       region("../../src/server/main.ts");
     const result = findInlinedExternalPackages(source);
 
-    assert.deepStrictEqual(result.inlinedPackages, ["effect", "yaml"]);
+    assert.deepStrictEqual([...result.inlinedPackagePaths.values()], ["effect", "yaml"]);
+    assert.equal(result.inlinedPackagePaths.get(globalPackage), "yaml");
     assert.deepStrictEqual(result.inlined, []);
   });
 
@@ -203,7 +206,7 @@ var x = 1;
     const source = [
       "// \0rolldown/runtime.js",
       "var x = 1;",
-      "// ../../node_modules/.pnpm/node-addon-api@7.1.1/node_modules/node-addon-api/index.js",
+      "// ../../../shared store/v11/links/@/node-addon-api/7.1.1/hash/node_modules/node-addon-api/index.js",
       "var y = 2; // trailing comment",
       "// ../../src/server/main.ts",
       "",
@@ -212,6 +215,12 @@ var x = 1;
 
     assert.strictEqual(result.regionCount, 3);
     assert.deepStrictEqual(result.inlined, ["node-addon-api"]);
+    assert.equal(
+      result.inlinedPackagePaths.get(
+        "../../../shared store/v11/links/@/node-addon-api/7.1.1/hash/node_modules/node-addon-api",
+      ),
+      "node-addon-api",
+    );
   });
 });
 

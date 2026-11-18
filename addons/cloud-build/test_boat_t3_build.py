@@ -135,6 +135,12 @@ with open(os.environ['CALLS'], 'a') as out:
 if os.environ.get('FAIL_RESTORED') and (store / 'package').exists():
     sys.exit(1)
 (store / 'package').write_text('public package')
+for name in ('links', 'projects'):
+    directory = store / 'v11' / name
+    directory.mkdir(parents=True, exist_ok=True)
+    link = directory / 'package'
+    if not link.is_symlink():
+        link.symlink_to('../../package')
 ''')
             fake.chmod(0o755)
             env = os.environ | {'PATH': str(bin_dir) + ':' + os.environ['PATH'],
@@ -153,6 +159,9 @@ if os.environ.get('FAIL_RESTORED') and (store / 'package').exists():
             cache = cloud.DependencyCache(root / 'cache', 'key')
             cache.publish(root / 'pnpm-store-export.tar.gz')
             archive, checksum = cache.lookup()
+            with cloud.tarfile.open(archive) as store_archive:
+                self.assertNotIn('store/v11/links', store_archive.getnames())
+                self.assertNotIn('store/v11/projects', store_archive.getnames())
             cloud.shutil.copyfile(archive, root / 'pnpm-store.tar.gz')
             cloud.shutil.rmtree(root / 'remote')
             self.assertEqual(install(checksum).returncode, 0)

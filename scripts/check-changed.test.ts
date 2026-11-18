@@ -390,6 +390,7 @@ function launcherFixture() {
       scripts: {
         "knip:check:files": "knip --include files",
         "knip:check:exports": "knip --exports",
+        "check:module-resolution": "node scripts/check-module-resolution.ts",
       },
     }),
   );
@@ -482,6 +483,7 @@ it("checks changed source paths through the Windows launcher", () => {
   expect(calls.some(({ args }) => args[0] === "fmt" && args.includes(project.source))).toBe(true);
   expect(calls.some(({ args }) => args[0] === "run" && args.includes("typecheck"))).toBe(true);
   expect(calls.some(({ args }) => args[0] === "install")).toBe(false);
+  expect(calls.some(({ args }) => args.includes("check:module-resolution"))).toBe(false);
   expect(result.stdout).toContain("fixture stdout: lint");
   expect(result.stdout).toContain("fixture stderr: lint");
 });
@@ -519,6 +521,10 @@ it.each(["install", "lint"])("reports a failing %s step with its output", (step)
     "--ignore-scripts",
   ]);
   expect(install?.cwd).not.toBe(project.root);
+  expect(project.calls().map(({ args }) => args)).toContainEqual([
+    "run",
+    "check:module-resolution",
+  ]);
   expect(result.stdout + result.stderr).toContain(`fixture stdout: ${step}`);
   expect(result.stdout + result.stderr).toContain(`fixture stderr: ${step}`);
   expect(result.stdout).toContain(step === "install" ? "FAIL  unused patches" : "FAIL  lint");
