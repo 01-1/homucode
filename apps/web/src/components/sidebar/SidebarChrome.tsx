@@ -1,4 +1,4 @@
-import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
+import { canOpenMadoHomuAtom } from "../../madohomu";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
@@ -227,7 +227,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
-  const madohomuEnvironmentId = useAtomValue(madohomuDestinationEnvironmentIdAtom);
+  const canOpenMadoHomu = useAtomValue(canOpenMadoHomuAtom);
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -280,7 +280,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
-          {madohomuEnvironmentId ? (
+          {canOpenMadoHomu ? (
             <SidebarUtilityItem
               icon={<span>✦</span>}
               label="Open MadoHomu"
@@ -288,7 +288,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                 closeMobileSidebar();
                 void navigate({
                   to: "/madohomu",
-                  search: { environmentId: madohomuEnvironmentId! },
+                  search: {},
                 });
               }}
             />

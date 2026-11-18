@@ -9,7 +9,6 @@ import {
   ScheduledTaskId,
   type MadoHomuThreadSettings,
   type EnvironmentId,
-  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { randomUUID } from "../../lib/utils";
@@ -106,7 +105,6 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     if (result._tag !== "Success") return false;
     return save({ madohomuMorningBriefTaskId: result.value.task.id });
   };
-  const changeProject = (projectId: ProjectId | null) => save({ madohomuProjectId: projectId });
   /** A thread's entry with `patch` applied; a patch replaces the whole entry, so this keeps the rest. */
   const threadEntry = (
     threadId: ThreadId,
@@ -137,7 +135,6 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     save,
     createThread,
     setMorningBrief,
-    changeProject,
     threadEntry,
     patchThread,
     setThreadSettings,

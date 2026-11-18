@@ -1,6 +1,7 @@
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { type ReactNode, useEffect } from "react";
 import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
@@ -10,6 +11,7 @@ import ChatView from "../ChatView";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { forgetCreatedMadoHomuThread } from "../../madohomu";
+import { useEnvironment } from "../../state/environments";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
 import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
@@ -23,9 +25,15 @@ import {
 export function MadoHomuPage() {
   const environmentId = useMadoHomuEnvironmentId();
   return environmentId ? (
-    <MadoHomuWorkspace environmentId={environmentId} />
+    <MadoHomuWorkspace key={environmentId} environmentId={environmentId} />
   ) : (
-    <MadoHomuMessage>Connect to an environment to use MadoHomu.</MadoHomuMessage>
+    <SidebarInset>
+      <MadoHomuTitlebar />
+      <MadoHomuNoProject
+        environmentId={null}
+        message="Connect to an environment to use MadoHomu."
+      />
+    </SidebarInset>
   );
 }
 
@@ -83,6 +91,7 @@ function MadoHomuWindowModeButton({
 }
 
 function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
+  const environment = useEnvironment(environmentId);
   const { settings, project } = useMadoHomuThreads(environmentId);
   const selection = useMadoHomuSelection(environmentId);
   const selectedId = selection.threadId;
@@ -91,30 +100,29 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
   const { namedId, namedLoaded, replace } = selection;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the fallback thread into the URL once the named one is known to be gone, and drops the just-made mark once its shell arrives.
   useEffect(() => {
-    if (namedId && namedLoaded) forgetCreatedMadoHomuThread(namedId);
+    if (namedId && namedLoaded) forgetCreatedMadoHomuThread(scopeThreadRef(environmentId, namedId));
     if (!replace || selectedId === null || namedId === selectedId) return;
     void navigate({
       to: "/madohomu",
-      search: (prev) => ({ ...prev, threadId: selectedId }),
+      search: { environmentId, threadId: selectedId },
       replace: true,
     });
-  }, [namedId, namedLoaded, navigate, replace, selectedId]);
-  if (!settings.madohomuEnabled)
-    return (
-      <MadoHomuMessage>
-        Enable MadoHomu in{" "}
-        <Link to="/settings/general" hash="madohomu-enabled">
-          Settings → MadoHomu
-        </Link>
-        .
-      </MadoHomuMessage>
-    );
+  }, [environmentId, namedId, namedLoaded, navigate, replace, selectedId]);
   const windowMode = <MadoHomuWindowModeButton environmentId={environmentId} />;
-  if (!project)
+  if (!settings.madohomuEnabled || !project)
     return (
       <SidebarInset>
         <MadoHomuTitlebar trailing={windowMode} />
-        <MadoHomuNoProject environmentId={environmentId} />
+        <MadoHomuNoProject
+          environmentId={environmentId}
+          {...(environment?.connection.phase !== "connected"
+            ? {
+                message: `Reconnect ${environment?.label ?? "the selected machine"}, or choose a project on another machine.`,
+              }
+            : !settings.madohomuEnabled
+              ? { message: "Choose a project to enable MadoHomu on its machine." }
+              : {})}
+        />
       </SidebarInset>
     );
   if (selection.loading)
@@ -193,14 +201,5 @@ function MadoHomuTitlebar({ trailing }: { trailing?: ReactNode }) {
     >
       {trailing}
     </div>
-  );
-}
-
-function MadoHomuMessage({ children }: { children: ReactNode }) {
-  return (
-    <SidebarInset>
-      <MadoHomuTitlebar />
-      <p className="p-6 text-sm text-muted-foreground">{children}</p>
-    </SidebarInset>
   );
 }

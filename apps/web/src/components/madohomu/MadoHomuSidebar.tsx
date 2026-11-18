@@ -170,7 +170,9 @@ function failureToast(title: string, result: AtomCommandResult<unknown, unknown>
 
 export function MadoHomuSidebar() {
   const environmentId = useMadoHomuEnvironmentId();
-  return environmentId ? <MadoHomuThreadList environmentId={environmentId} /> : null;
+  return environmentId ? (
+    <MadoHomuThreadList key={environmentId} environmentId={environmentId} />
+  ) : null;
 }
 
 function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId }) {
@@ -1013,9 +1015,15 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               finalFocus={() => useMadoHomuRenamingSection.getState().draft === null}
             >
               <MenuSub>
-                <MenuSubTrigger disabled={!actions.canWrite}>Change project…</MenuSubTrigger>
+                <MenuSubTrigger>Change project…</MenuSubTrigger>
                 <MenuSubPopup>
-                  <MadoHomuProjectMenuItems environmentId={environmentId} onChosen={closeSheet} />
+                  <MadoHomuProjectMenuItems
+                    environmentId={environmentId}
+                    onChosen={(id) => {
+                      closeSheet();
+                      void navigate({ to: "/madohomu", search: { environmentId: id } });
+                    }}
+                  />
                 </MenuSubPopup>
               </MenuSub>
               <MenuItem disabled={!enabled || !project || !canEdit} onClick={addSection}>
@@ -1024,7 +1032,11 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               <MenuItem
                 onClick={() => {
                   closeSheet();
-                  void navigate({ to: "/settings/general", hash: "madohomu-enabled" });
+                  void navigate({
+                    to: "/settings/general",
+                    search: { machine: environmentId },
+                    hash: "madohomu-enabled",
+                  });
                 }}
               >
                 MadoHomu settings

@@ -14,8 +14,8 @@ export interface CommandPaletteOpenDetail {
   readonly linkedThreads?: CommandPaletteLinkedThreads;
   /** With `open: "add-project"`: called with the added project instead of opening a thread in it. */
   readonly onProjectAdded?: CommandPaletteProjectAdded;
-  /** With `open: "add-project"`: the only environment the project may be added to. */
-  readonly environmentId?: EnvironmentId;
+  /** With `open: "add-project"`: the machines available for the new project. */
+  readonly environmentIds?: ReadonlyArray<EnvironmentId>;
 }
 
 export function openCommandPalette(detail: CommandPaletteOpenDetail = {}): void {
@@ -27,7 +27,7 @@ export function openCommandPalette(detail: CommandPaletteOpenDetail = {}): void 
   } else if (detail.open === "add-project") {
     dispatchCommandPalette({
       _tag: "OpenAddProject",
-      ...(detail.environmentId ? { environmentId: detail.environmentId } : {}),
+      ...(detail.environmentIds ? { environmentIds: detail.environmentIds } : {}),
       ...(detail.onProjectAdded ? { onProjectAdded: detail.onProjectAdded } : {}),
     });
   } else if (detail.query !== undefined) {

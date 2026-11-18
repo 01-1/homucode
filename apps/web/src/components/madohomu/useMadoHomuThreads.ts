@@ -56,7 +56,7 @@ export function useMadoHomuSelection(environmentId: EnvironmentId) {
   const shell = useThreadShell(ref);
   const detailRef = shell === null ? ref : null;
   const { named, listLoaded } = madohomuNamedThread({
-    namedId: search.threadId,
+    ref,
     shell,
     detail: useThreadProjection(detailRef),
     detailStatus: useThreadStatus(detailRef),

@@ -1,8 +1,29 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { projectKey } from "@t3tools/client-runtime/state/entities";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import {
+  AuthOrchestrationOperateScope,
+  AuthSettingsWriteScope,
+  type EnvironmentId,
+  type ProjectId,
+  resolveEnvironmentMachineKind,
+} from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { ChevronsUpDownIcon, FolderPlusIcon } from "lucide-react";
 
 import { openCommandPalette } from "../../commandPaletteBus";
+import {
+  madohomuProjectSelectionPendingAtom,
+  madohomuSavedDestinationEnvironmentIdAtom,
+  saveMadoHomuProject,
+} from "../../madohomu";
 import { useProjects } from "../../state/entities";
+import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { environmentServerConfigsAtom } from "../../state/server";
+import { useEnvironmentsWithScope } from "../../state/session";
+import { expectsPrimaryEnvironment } from "../../state/shell";
+import { resolveEnvironmentOptionLabel } from "../BranchToolbar.logic";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Button } from "../ui/button";
 import {
   Menu,
@@ -15,47 +36,116 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { useMadoHomuActions } from "./useMadoHomuActions";
 
-/**
- * Opens T3 Code's own add-project flow (new folder, existing folder, clone) and makes
- * the project it ends on MadoHomu's project, instead of opening a thread in it.
- */
-function useNewMadoHomuProject(environmentId: EnvironmentId, onChosen?: () => void) {
-  const { changeProject } = useMadoHomuActions(environmentId);
-  return () =>
+type OnProjectChosen = (environmentId: EnvironmentId) => void;
+
+function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProjectChosen) {
+  const { environments } = useEnvironments();
+  const primary = usePrimaryEnvironmentId();
+  const saved = useAtomValue(madohomuSavedDestinationEnvironmentIdAtom);
+  const configs = useAtomValue(environmentServerConfigsAtom);
+  const pending = useAtomValue(madohomuProjectSelectionPendingAtom);
+  const writers = useEnvironmentsWithScope(environments, AuthSettingsWriteScope);
+  const creators = useEnvironmentsWithScope(environments, AuthOrchestrationOperateScope);
+  const writable = new Set(
+    environments
+      .filter((env) => env.connection.phase === "connected" && writers.has(env.environmentId))
+      .map((env) => env.environmentId),
+  );
+  const canSetDestination = primary === null ? !expectsPrimaryEnvironment() : writable.has(primary);
+  const canChoose = (id: EnvironmentId) =>
+    !pending && writable.has(id) && (id === saved || canSetDestination);
+  const machines = new Map(
+    environments.map((env) => [
+      env.environmentId,
+      {
+        label: resolveEnvironmentOptionLabel({
+          isPrimary: env.environmentId === primary,
+          environmentId: env.environmentId,
+          runtimeLabel: env.label,
+        }),
+        kind: resolveEnvironmentMachineKind(env.serverConfig),
+      },
+    ]),
+  );
+  const projects = useProjects()
+    .filter((project) => project.archivedAt === null && machines.has(project.environmentId))
+    .map((project) => ({
+      ...project,
+      key: projectKey(scopeProjectRef(project.environmentId, project.id)),
+      machine: machines.get(project.environmentId)!,
+    }));
+  const currentId =
+    environmentId === null
+      ? null
+      : (configs.get(environmentId)?.settings.madohomuProjectId ?? null);
+  const current = projects.find(
+    (project) => project.environmentId === environmentId && project.id === currentId,
+  );
+  const choose = async (id: EnvironmentId, projectId: ProjectId | null) => {
+    try {
+      if (await saveMadoHomuProject(id, projectId)) onChosen?.(id);
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title:
+          projectId === null
+            ? "Could not clear MadoHomu’s project"
+            : "Could not select MadoHomu’s project",
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+    }
+  };
+  const addTargets = environments
+    .filter((env) => canChoose(env.environmentId) && creators.has(env.environmentId))
+    .map((env) => env.environmentId);
+  const newProject = () =>
     openCommandPalette({
       open: "add-project",
-      environmentId,
-      onProjectAdded: (project) => {
-        if (project.environmentId !== environmentId) {
-          toastManager.add({
-            type: "warning",
-            title: "Project added on another environment",
-            description: "MadoHomu stays on its own environment, so it kept its project.",
-          });
-          return;
-        }
-        void changeProject(project.projectId);
-        onChosen?.();
-      },
+      environmentIds: addTargets,
+      onProjectAdded: (project) => choose(project.environmentId, project.projectId),
     });
+  const clear =
+    environmentId !== null && !pending && writable.has(environmentId)
+      ? () => void choose(environmentId, null)
+      : null;
+  return {
+    canChoose,
+    clear,
+    choose,
+    current,
+    currentId,
+    newProject,
+    addTargets,
+    pending,
+    projects,
+  };
 }
 
 export function MadoHomuProjectPicker({
   environmentId,
+  onChosen,
   showNew = true,
 }: {
-  environmentId: EnvironmentId;
-  /** The no-project screen has its own "New project…" button above the picker. */
+  environmentId: EnvironmentId | null;
+  onChosen?: OnProjectChosen;
   showNew?: boolean;
 }) {
-  const actions = useMadoHomuActions(environmentId);
-  const projects = useProjects().filter(
-    (p) => p.environmentId === environmentId && p.archivedAt === null,
-  );
-  const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
-  if (!showNew && projects.length === 0) return null;
+  const picker = useProjectPicker(environmentId, onChosen);
+  return <ProjectPicker picker={picker} showNew={showNew} showClear />;
+}
+
+function ProjectPicker({
+  picker,
+  showNew,
+  showClear = false,
+}: {
+  picker: ReturnType<typeof useProjectPicker>;
+  showNew: boolean;
+  showClear?: boolean;
+}) {
+  if (!showNew && picker.projects.length === 0 && (!showClear || picker.currentId === null))
+    return null;
   return (
     <Menu>
       <MenuTrigger
@@ -63,78 +153,84 @@ export function MadoHomuProjectPicker({
           <Button
             variant="outline"
             className="w-full min-w-48 justify-between"
-            disabled={!actions.canWrite}
+            disabled={picker.pending}
             aria-label="MadoHomu project"
           />
         }
       >
-        <span className="min-w-0 truncate">{current?.title ?? "Choose a project"}</span>
+        <span className="min-w-0 truncate">
+          {picker.current
+            ? `${picker.current.title} · ${picker.current.machine.label}`
+            : "Choose a project"}
+        </span>
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup align="start">
-        <MadoHomuProjectMenuItems environmentId={environmentId} showNew={showNew} showClear />
+        <ProjectMenuItems picker={picker} showClear={showClear} showNew={showNew} />
       </MenuPopup>
     </Menu>
   );
 }
 
-/** "New project…", the project list and "Clear project": the picker's menu, reused by the sidebar. */
+/** Settings and the sidebar share one list of projects and their owning machines. */
 export function MadoHomuProjectMenuItems({
   environmentId,
   onChosen,
-  showNew = true,
-  showClear = false,
 }: {
   environmentId: EnvironmentId;
-  onChosen?: () => void;
-  showNew?: boolean;
-  /** Settings' picker only: the gear menu leaves it out so a slip cannot empty the view. */
-  showClear?: boolean;
+  onChosen?: OnProjectChosen;
 }) {
-  const actions = useMadoHomuActions(environmentId);
-  const newProject = useNewMadoHomuProject(environmentId, onChosen);
-  const projects = useProjects().filter(
-    (p) => p.environmentId === environmentId && p.archivedAt === null,
-  );
-  const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
+  const picker = useProjectPicker(environmentId, onChosen);
+  return <ProjectMenuItems picker={picker} />;
+}
+
+function ProjectMenuItems({
+  picker,
+  showClear = false,
+  showNew = true,
+}: {
+  picker: ReturnType<typeof useProjectPicker>;
+  showClear?: boolean;
+  showNew?: boolean;
+}) {
+  const { addTargets, canChoose, clear, choose, current, currentId, newProject, projects } = picker;
   return (
     <>
       {showNew && (
         <>
-          <MenuItem onClick={newProject}>
+          <MenuItem disabled={addTargets.length === 0} onClick={newProject}>
             <FolderPlusIcon />
             New project…
           </MenuItem>
           {projects.length > 0 && <MenuSeparator />}
         </>
       )}
-      <MenuRadioGroup
-        value={current?.id ?? ""}
-        onValueChange={(value) => {
-          const project = projects.find((p) => p.id === value);
-          if (!project) return;
-          void actions.changeProject(project.id);
-          onChosen?.();
-        }}
-      >
-        {projects.map((p) => (
-          <MenuRadioItem key={p.id} value={p.id} closeOnClick>
+      <MenuRadioGroup value={current?.key ?? ""}>
+        {projects.map((project) => (
+          <MenuRadioItem
+            key={project.key}
+            value={project.key}
+            disabled={!canChoose(project.environmentId)}
+            onClick={() => void choose(project.environmentId, project.id)}
+            closeOnClick
+          >
             <span className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate">{p.title}</span>
+              <EnvironmentMachineIcon kind={project.machine.kind} aria-hidden />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate">{project.title}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {project.machine.label}
+                </span>
+              </span>
               <MenuRadioItemIndicator />
             </span>
           </MenuRadioItem>
         ))}
       </MenuRadioGroup>
-      {showClear && actions.settings.madohomuProjectId !== null && (
+      {showClear && currentId !== null && (
         <>
           <MenuSeparator />
-          <MenuItem
-            onClick={() => {
-              void actions.changeProject(null);
-              onChosen?.();
-            }}
-          >
+          <MenuItem disabled={clear === null} onClick={clear ?? undefined}>
             Clear project
           </MenuItem>
         </>
@@ -143,18 +239,31 @@ export function MadoHomuProjectMenuItems({
   );
 }
 
-export function MadoHomuNoProject({ environmentId }: { environmentId: EnvironmentId }) {
-  const { canWrite } = useMadoHomuActions(environmentId);
-  const newProject = useNewMadoHomuProject(environmentId);
+export function MadoHomuNoProject({
+  environmentId,
+  message = "Make a new project for MadoHomu to focus on, or choose one you already have.",
+}: {
+  environmentId: EnvironmentId | null;
+  message?: string;
+}) {
+  const navigate = useNavigate();
+  const picker = useProjectPicker(
+    environmentId,
+    (id) => void navigate({ to: "/madohomu", search: { environmentId: id } }),
+  );
   return (
     <div className="mx-auto w-full max-w-md space-y-4 p-6">
       <h1 className="text-xl font-semibold">MadoHomu</h1>
-      <p>Make a new project for MadoHomu to focus on, or choose one you already have.</p>
-      <Button className="w-full" disabled={!canWrite} onClick={newProject}>
+      <p>{message}</p>
+      <Button
+        className="w-full"
+        disabled={picker.addTargets.length === 0}
+        onClick={picker.newProject}
+      >
         <FolderPlusIcon />
         New project…
       </Button>
-      <MadoHomuProjectPicker environmentId={environmentId} showNew={false} />
+      <ProjectPicker picker={picker} showNew={false} />
     </div>
   );
 }
