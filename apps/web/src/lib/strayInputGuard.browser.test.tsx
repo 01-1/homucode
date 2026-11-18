@@ -144,6 +144,16 @@ it("drops keys after focus moves unasked, but not after the user moves it", asyn
   await userEvent.click(composer);
   await userEvent.keyboard("e");
   await expect.element(composer).toHaveValue("ade");
+
+  // An unprompted field that mounts and takes focus in one task, just after the user's press.
+  const offer = document.createElement("div");
+  offer.setAttribute("data-unprompted", "");
+  const offerField = document.createElement("input");
+  offer.append(offerField);
+  screen.container.append(offer);
+  offerField.focus();
+  await userEvent.keyboard("f");
+  expect(offerField.value).toBe("");
 });
 
 it("drops shortcut keys just after an unprompted surface appears, but not typing", async () => {

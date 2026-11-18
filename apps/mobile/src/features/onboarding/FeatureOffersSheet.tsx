@@ -89,7 +89,8 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
-  useHoldTouchesOnAppear("feature-offers");
+  const [presentation] = useState(() => Symbol("feature offers"));
+  useHoldTouchesOnAppear(presentation);
   const pending = useRef(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a tap outside dismisses the native sheet, which the root touch hold cannot see
   useEffect(() => {

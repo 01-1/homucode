@@ -112,7 +112,7 @@ export function installStrayInputGuard(): Disposable {
     if (pointer && hitTestFrame === null) hitTestFrame = requestAnimationFrame(hitTest);
   };
 
-  const observer = new MutationObserver((records) => {
+  const recordChanges = (records: MutationRecord[]) => {
     const time = now();
     for (const record of records) {
       if (record.type === "attributes") {
@@ -122,7 +122,10 @@ export function installStrayInputGuard(): Disposable {
       for (const node of record.addedNodes) if (node instanceof Element) appeared(node, time);
     }
     scheduleHitTest();
-  });
+  };
+  const observer = new MutationObserver(recordChanges);
+  // A control can mount and take focus or a press in the same task, before the observer runs.
+  const recordPending = () => recordChanges(observer.takeRecords());
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -153,6 +156,7 @@ export function installStrayInputGuard(): Disposable {
   };
   const onPointerDown = (event: PointerEvent) => {
     if (!event.isTrusted) return;
+    recordPending();
     if (hitTestFrame !== null) {
       cancelAnimationFrame(hitTestFrame);
       hitTest();
@@ -183,13 +187,17 @@ export function installStrayInputGuard(): Disposable {
   };
 
   const onFocusIn = (event: FocusEvent) => {
+    recordPending();
     const time = now();
     const own = time - pressedAt < OWN_FOCUS_MS || time - keyedAt < OWN_FOCUS_MS;
     if (appearedRecently(event.target) || (!own && !asked())) focusMovedAt = time;
     else if (own) focusMovedAt = Number.NEGATIVE_INFINITY;
   };
   const onKeyDown = (event: KeyboardEvent) => {
-    if (!event.isTrusted || event.isComposing || MODIFIER_KEYS.has(event.key)) return;
+    if (!event.isTrusted || event.isComposing) return;
+    // A key ends any dropped press, so keyboard context menus and clicks are its own.
+    swallowingPress = false;
+    if (MODIFIER_KEYS.has(event.key)) return;
     if (event.repeat && swallowedKeys.has(event.code)) {
       swallow(event);
       return;
