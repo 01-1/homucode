@@ -69,8 +69,8 @@ export function SettingsHomuCodeRouteScreen() {
             label="Show message sender labels"
             description="Show who sent each message above its bubble in chat."
             value={
-              !AsyncResult.isSuccess(preferencesResult) ||
-              preferencesResult.value.showMessageSenderLabels !== false
+              AsyncResult.isSuccess(preferencesResult) &&
+              preferencesResult.value.showMessageSenderLabels === true
             }
             disabled={!preferencesReady}
             onValueChange={(showMessageSenderLabels) =>

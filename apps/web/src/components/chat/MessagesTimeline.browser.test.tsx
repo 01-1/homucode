@@ -5,6 +5,7 @@ import { AudioPreview } from "../files/AudioPreview";
 import { cdp, page, userEvent } from "vite-plus/test/browser";
 import {
   ComposerContextId,
+  DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
   MessageId,
   NodeId,
@@ -542,11 +543,11 @@ describe("MessagesTimeline work rows", () => {
 });
 
 describe("MessagesTimeline messages", () => {
-  it("hides the sender label without changing the message text", async () => {
+  it("shows the sender label only when enabled", async () => {
     const settings = getClientSettings();
     using cleanup = new DisposableStack();
     cleanup.defer(() => __setClientSettingsForTests(settings));
-    __setClientSettingsForTests({ ...settings, showMessageSenderLabels: true });
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
     const timelineEntries = [
       message("Keep this message", {
         context: {
@@ -568,15 +569,16 @@ describe("MessagesTimeline messages", () => {
     const senderLabel = screen.getByText("Human · workstation (T3 desktop, Linux)", {
       exact: true,
     });
-    await expect.element(senderLabel).toBeVisible();
-
-    await setShowSenderLabels(false);
-
     await expect.element(senderLabel).not.toBeInTheDocument();
-    await expect.element(screen.getByText("Keep this message", { exact: true })).toBeVisible();
+    const messageBody = screen.getByText("Keep this message", { exact: true });
+    await expect.element(messageBody).toBeVisible();
 
     await setShowSenderLabels(true);
     await expect.element(senderLabel).toBeVisible();
+
+    await setShowSenderLabels(false);
+    await expect.element(senderLabel).not.toBeInTheDocument();
+    await expect.element(messageBody).toBeVisible();
   });
 
   it("settles when equally long messages have very different rendered heights", async () => {

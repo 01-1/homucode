@@ -1505,7 +1505,7 @@ function OpenSenderThreadButton(props: {
 const showMessageSenderLabelsAtom = Atom.map(
   mobilePreferencesAtom,
   (preferences) =>
-    !AsyncResult.isSuccess(preferences) || preferences.value.showMessageSenderLabels !== false,
+    AsyncResult.isSuccess(preferences) && preferences.value.showMessageSenderLabels === true,
 );
 
 function MessageSenderLabel({ label }: { readonly label: string }) {

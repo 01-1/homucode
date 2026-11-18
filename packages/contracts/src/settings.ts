@@ -540,7 +540,7 @@ export const ClientSettingsSchema = Schema.Struct({
 
   composerRichTextEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   userMessageMarkdownEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  showMessageSenderLabels: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  showMessageSenderLabels: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   userMessagePlusBullets: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
