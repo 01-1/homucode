@@ -22,7 +22,11 @@ import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2Pe
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import { isOrchestrationV2WorkActive, latestProviderTurnForAttempt } from "@t3tools/contracts";
+import {
+  isOrchestrationV2WorkActive,
+  latestProviderTurnForAttempt,
+  legacyThreadPin,
+} from "@t3tools/contracts";
 
 function trimmed(value: string | null | undefined): string | undefined {
   const result = value?.trim();
@@ -47,6 +51,19 @@ export function subagentThreadTitle(input: {
     end -= 1;
   }
   return `${detail.slice(0, end)}...`;
+}
+
+export function inheritSubagentPins(parent: OrchestrationV2AppThread, now: DateTime.Utc) {
+  const newPin = { pinnedAt: DateTime.formatIso(now), orderKey: null };
+  const legacyPin = legacyThreadPin(parent) === null ? null : newPin;
+  const devicePins = Object.fromEntries(
+    Object.entries(parent.devicePins ?? {}).map(([deviceId, pin]) => [
+      deviceId,
+      pin === null ? null : newPin,
+    ]),
+  );
+  const pinned = legacyPin !== null || Object.values(devicePins).some((pin) => pin !== null);
+  return { legacyPin, devicePins, pinnedAt: pinned ? now : null, pinOrderKey: null };
 }
 
 export function makeSubagentChildThread(input: {
@@ -98,6 +115,8 @@ export function makeSubagentChildThread(input: {
     snoozedAt: null,
     pinnedAt: null,
     pinOrderKey: null,
+    legacyPin: null,
+    devicePins: {},
     autoSettleDisabledAt: null,
     // A guest link belongs to the thread it was made for.
     guestShare: null,

@@ -74,6 +74,10 @@ Pin a thread from its menu to keep it above your active work. Thread and project
 pins belong to the device you are using, including their pinned order. Pinning or
 unpinning on your phone does not change your desktop pins.
 
+New subagents start unpinned. Turn on **Settings → HomuCode → Subagents →
+Subagents inherit parent pin** to pin new subagents on the same server on each
+device where their parent is pinned.
+
 On web and desktop, unpinning, settling, snoozing, and archiving a thread each show
 a notification with **Undo** for five seconds. Undo restores the thread's previous
 state, including its pinned position, and reopens an archived thread you were

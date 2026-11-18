@@ -40,6 +40,8 @@ import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { inheritSubagentPins } from "@t3tools/provider-core/server/subagentProjection";
+import * as ServerSettings from "../serverSettings.ts";
 import { makeProviderFailureTurnItem } from "@t3tools/provider-core/server/failure";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import { stripUnservedToolOutputImageBytes } from "./toolOutputImageBytes.ts";
@@ -248,6 +250,7 @@ export const layer: Layer.Layer<
   | ProjectionStore.ProjectionStoreV2
   | ThreadCommandExecutor.ThreadCommandExecutor
   | ProviderInstanceRegistry.ProviderInstanceRegistry
+  | ServerSettings.ServerSettingsService
 > = Layer.effect(
   ProviderEventIngestorV2,
   Effect.gen(function* () {
@@ -259,6 +262,7 @@ export const layer: Layer.Layer<
     const analytics = yield* ProviderTurnAnalytics;
     const agentScope = yield* AgentScope;
     const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
     const usageLimitResets = yield* UsageLimitResetFallback;
     const scope = yield* Effect.scope;
     const completedTurnAnalytics = new Set<string>();
@@ -494,12 +498,17 @@ export const layer: Layer.Layer<
                       }),
                     )
                   : null;
+              const inheritPin =
+                parent !== null &&
+                offered.lineage.relationshipToParent === "subagent" &&
+                (yield* serverSettings.subagentsInheritParentPin);
               const created =
                 parent === null
                   ? offered
                   : {
                       ...offered,
                       projectId: parent.projectId,
+                      ...(inheritPin ? inheritSubagentPins(parent, offered.createdAt) : {}),
                       ...((offered.workspaceRoot ?? parent.workspaceRoot) === undefined
                         ? {}
                         : { workspaceRoot: offered.workspaceRoot ?? parent.workspaceRoot }),

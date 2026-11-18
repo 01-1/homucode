@@ -141,6 +141,11 @@ it.effect.each(["provider", "mcp"] as const)(
         ...makeParentThread(),
         pinnedAt: parentCreatedAt,
         pinOrderKey: "a0",
+        legacyPin: { pinnedAt: DateTime.formatIso(parentCreatedAt), orderKey: "a0" },
+        devicePins: {
+          phone: { pinnedAt: DateTime.formatIso(parentCreatedAt), orderKey: "a1" },
+          laptop: null,
+        },
         autoSettleDisabledAt: parentCreatedAt,
       };
       const childThread = makeSubagentChildThread({
@@ -160,6 +165,8 @@ it.effect.each(["provider", "mcp"] as const)(
       assert.equal(parentThread.pinOrderKey, "a0");
       assert.isNull(childThread.pinnedAt);
       assert.isNull(childThread.pinOrderKey);
+      assert.isNull(childThread.legacyPin);
+      assert.deepEqual(childThread.devicePins, {});
       assert.isNull(childThread.autoSettleDisabledAt);
 
       for (const thread of [parentThread, childThread]) {

@@ -138,7 +138,10 @@ function HomuCodeServerSettings() {
   const canWrite =
     !projectSelected && targets.every((target) => writable.has(target.environment.environmentId));
 
-  const write = (key: "statusLineEnabled" | "autoreviewEnabled", enabled: boolean) => {
+  const write = (
+    key: "statusLineEnabled" | "autoreviewEnabled" | "subagentsInheritParentPin",
+    enabled: boolean,
+  ) => {
     if (
       writing.current ||
       !canWrite ||
@@ -173,6 +176,22 @@ function HomuCodeServerSettings() {
           onValueChange={(enabled) => write("statusLineEnabled", enabled)}
         />
       </SettingsSection>
+      {!projectSelected ? (
+        <SettingsSection title="Subagents">
+          <SettingsSwitchRow
+            icon="pin"
+            label="Subagents inherit parent pin"
+            subtitle="Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server."
+            value={uniformMobileSetting(targets, "subagentsInheritParentPin")}
+            disabled={
+              !canWrite ||
+              pending ||
+              managedSettingReason(targets, "subagentsInheritParentPin") !== undefined
+            }
+            onValueChange={(enabled) => write("subagentsInheritParentPin", enabled)}
+          />
+        </SettingsSection>
+      ) : null}
       {!projectSelected && autoreviewTargets.length > 0 ? (
         <SettingsSection title="Autoreviewers">
           <SettingsSwitchRow

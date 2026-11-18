@@ -711,6 +711,7 @@ function layerTest(input: {
           getInstance: () => Effect.undefined,
         }),
         layerConfiguredEventSink,
+        input.serverSettingsLayer ?? ServerSettings.layerTest(),
         IdAllocator.layer,
         layerTestStores,
         ThreadCommandExecutor.layer,
