@@ -16,6 +16,9 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { environmentThreadShells } from "../../state/threads";
 
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
+
 const KIND_LABELS = {
   subagent: "Subagent",
   command: "Command",
@@ -37,7 +40,15 @@ export function ThreadBackgroundWorkSheet({ route }: StaticScreenProps<Backgroun
     void Haptics.selectionAsync();
     // A thread replaces the leaf sheet so workspace back navigation still works.
     navigation.dispatch(
-      StackActions.replace("Thread", { environmentId: target.environmentId, threadId }),
+      StackActions.replace("Thread", {
+        environmentId: target.environmentId,
+        threadId,
+        ...madohomuLinkFlag(
+          rootStackState(navigation),
+          { environmentId: target.environmentId, threadId },
+          thread?.projectId,
+        ),
+      }),
     );
   };
   const content = (

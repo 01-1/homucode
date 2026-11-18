@@ -46,6 +46,7 @@ export function HomuCodeSettingsPanel() {
   return (
     <SettingsPageContainer searchTargetFallbacks={{ homucode: "settings-sync" }}>
       <HomuCodeDeviceSettings />
+      <MadoHomuSettings />
       {unavailableReason === null ? (
         <HomuCodeEnvironmentSettings />
       ) : (
@@ -205,7 +206,6 @@ function HomuCodeEnvironmentSettings() {
 
   return (
     <>
-      <MadoHomuSettings />
       <BehaviorSettingsSection />
       <SettingsSection id="subagents" title="Subagents">
         <SettingsRow

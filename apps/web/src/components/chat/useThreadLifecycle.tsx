@@ -3,6 +3,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import type { Dispatch } from "react";
 import type { ComposerThreadTarget } from "../../composerDraftStore";
 import type { ComposerHandleRef } from "../../composerHandleContext";
+import { openThreadInMadoHomu } from "../../madohomu";
 import {
   isThreadWokeUnseen,
   branchMismatchKey,
@@ -507,6 +508,16 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     }
     const routeRef = resolveThreadOpenRoute(threadRef, shell);
     if (scopedThreadKey(routeRef) === routeThreadKey) return;
+    // A parent or subagent shares this thread's project, which stands in for a missing shell.
+    const activeDetail = activeThreadRef
+      ? appAtomRegistry.get(environmentThreadDetails.threadAtom(activeThreadRef))?.projection
+      : undefined;
+    const isLinked =
+      activeDetail?.thread.lineage.parentThreadId === threadId ||
+      activeDetail?.subagents.some((subagent) => subagent.childThreadId === threadId) === true;
+    const linkedProjectId =
+      threadEnvironmentId === environmentId && isLinked ? (activeThread?.projectId ?? null) : null;
+    if (openThreadInMadoHomu(router, routeRef, linkedProjectId)) return;
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(routeRef),

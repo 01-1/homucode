@@ -235,6 +235,29 @@ beforeEach(() => {
   }));
 });
 
+it("restores a queued MadoHomu creation when its original project is missing", async () => {
+  setOperateGrant("secondary", true);
+  const queued = message({
+    threadId: ThreadId.make("new-thread"),
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+    creation: {
+      projectId: ProjectId.make("madohomu-project"),
+      projectCwd: "/cached/project",
+      workspaceMode: "local",
+      branch: "feature",
+      worktreePath: null,
+      madohomu: true,
+    },
+  });
+  await state.manager.enqueue(queued);
+  await runDrain();
+
+  expect(state.start).not.toHaveBeenCalled();
+  expect(state.prepare).not.toHaveBeenCalled();
+  expect(remaining()).toEqual([]);
+  expect(state.draftText).toContain(queued.text);
+});
+
 describe("queued PR checkout", () => {
   const queuedPullRequest = () =>
     message({

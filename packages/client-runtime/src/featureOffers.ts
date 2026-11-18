@@ -33,7 +33,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     page: 1,
     title: "MadoHomu",
     description:
-      "A focused Chat and Tasks view for one project, with its own desktop app and an optional morning brief.",
+      "A focused view for one project with your threads in sections, its own desktop app and an optional morning brief.",
   },
   {
     id: "quick-model",

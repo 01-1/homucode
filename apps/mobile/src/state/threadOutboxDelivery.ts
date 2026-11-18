@@ -20,11 +20,13 @@ import {
   managedRuntimeModeDenial,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type EnvironmentId,
+  type ServerConfig,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import * as Cause from "effect/Cause";
 import { AsyncResult, Atom } from "effect/reactivity";
 
+import { madohomuDraftSendBlockReason } from "../features/threads/new-task-project-selection";
 import { createDebugLogger } from "../lib/debugLog";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { buildProjectThreadStartTurnInput } from "../lib/projectThreadStartTurn";
@@ -41,6 +43,7 @@ import {
 } from "./acknowledged-thread-messages";
 import { appAtomRegistry } from "./atom-registry";
 import { restoredNewTaskDraftKey } from "./new-task-draft-key";
+import { stampRecoveryDraftProject } from "./recover-failed-thread-draft";
 import {
   clearPendingThreadCreationOutcome,
   pendingThreadCreationOutcomesAtom,
@@ -196,6 +199,22 @@ function findCreationProject(
     (candidate) =>
       candidate.environmentId === message.environmentId &&
       candidate.id === message.creation?.projectId,
+  );
+}
+
+function queuedMadoHomuBlockReason(
+  message: QueuedThreadMessage,
+  config: ServerConfig,
+): string | null {
+  if (message.creation?.madohomu !== true) return null;
+  const project = findCreationProject(
+    appAtomRegistry.get(environmentProjects.projectsAtom),
+    message,
+  );
+  return madohomuDraftSendBlockReason(
+    { environmentId: message.environmentId, projectId: message.creation.projectId },
+    project,
+    config.settings,
   );
 }
 
@@ -535,19 +554,6 @@ function recoveryDraftKey(queuedMessage: QueuedThreadMessage): string {
   return queuedMessage.creation
     ? restoredNewTaskDraftKey(queuedMessage.messageId)
     : scopedThreadKey(queuedMessage.environmentId, queuedMessage.threadId);
-}
-
-function stampRecoveryDraftProject(queuedMessage: QueuedThreadMessage, draftKey: string): void {
-  if (!queuedMessage.creation) {
-    return;
-  }
-  updateComposerDraftSettings(draftKey, {
-    project: {
-      environmentId: queuedMessage.environmentId,
-      projectId: queuedMessage.creation.projectId,
-      createdAt: queuedMessage.createdAt,
-    },
-  });
 }
 
 async function preserveUploadedAttachmentsForEditor(
@@ -985,7 +991,7 @@ export function createThreadOutboxDelivery(): {
   const sendQueuedCreation = async (
     queuedMessage: QueuedThreadMessage,
     creation: QueuedThreadCreation,
-    projectCwd: string,
+    projectCwd: string | null,
   ): Promise<boolean> => {
     const hasAccess = () =>
       readEnvironmentScope(queuedMessage.environmentId, AuthOrchestrationOperateScope);
@@ -998,6 +1004,13 @@ export function createThreadOutboxDelivery(): {
       serverEnvironment.configValueAtom(queuedMessage.environmentId),
     );
     if (!serverConfig) return false;
+    const launched = launchedCreations.get(queuedMessage.messageId);
+    const resendingLaunch = launched?.revision === threadOutboxRevision(queuedMessage.messageId);
+    if (!resendingLaunch) {
+      const blockReason = queuedMadoHomuBlockReason(queuedMessage, serverConfig);
+      if (blockReason !== null) return restoreQueuedMessage(queuedMessage, blockReason);
+    }
+    if (projectCwd === null) return false;
     const settings = resolveQueuedThreadSettings(
       queuedMessage,
       {
@@ -1070,9 +1083,9 @@ export function createThreadOutboxDelivery(): {
     );
     if (!hasAccess()) return true;
     let workspace = creation;
-    const launched = launchedCreations.get(persistedMessage.messageId);
-    if (launched?.revision === deliveryRevision) {
-      workspace = launched.workspace;
+    const previousLaunch = launchedCreations.get(persistedMessage.messageId);
+    if (previousLaunch?.revision === deliveryRevision) {
+      workspace = previousLaunch.workspace;
     } else if (creation.pullRequestReference) {
       const checkout = await runDeliveryCommand(gitEnvironment.preparePullRequestThread, {
         environmentId: queuedMessage.environmentId,
@@ -1102,6 +1115,15 @@ export function createThreadOutboxDelivery(): {
         worktreePath: checkout.value.worktreePath,
         startFromOrigin: false,
       };
+    }
+    // A retry of an already dispatched command still targets the same origin.
+    if (creation.madohomu && previousLaunch?.revision !== deliveryRevision) {
+      const latestConfig = appAtomRegistry.get(
+        serverEnvironment.configValueAtom(persistedMessage.environmentId),
+      );
+      if (!latestConfig) return false;
+      const reason = queuedMadoHomuBlockReason(persistedMessage, latestConfig);
+      if (reason !== null) return restoreQueuedMessage(persistedMessage, reason);
     }
     launchedCreations.set(persistedMessage.messageId, { revision: deliveryRevision, workspace });
     const deliveryResult = await runDeliveryCommand(threadEnvironment.startTurn, {
@@ -1420,7 +1442,7 @@ export function createThreadOutboxDelivery(): {
               recoverEditedCreationAfterDelivery(nextQueuedMessage)
             : removeQueuedMessage("[thread-outbox] failed to remove message for a missing thread")
           : creation !== undefined
-            ? creationProjectCwd !== null
+            ? creationProjectCwd !== null || creation.madohomu
               ? sendQueuedCreation(nextQueuedMessage, creation, creationProjectCwd)
               : removeQueuedMessage("[thread-outbox] dropped pending task for a missing project")
             : thread !== undefined

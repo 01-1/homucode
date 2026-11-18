@@ -239,17 +239,20 @@ function setup() {
       holdStatus = true;
     },
     snapshot,
+    setDraft(key: string, draft: ComposerDraft) {
+      write(key, draft);
+    },
     clearWorkspace(key: string) {
       act(() => write(key, { workspaceSelection: undefined }));
     },
     get current() {
       return current;
     },
-    async render(active: boolean) {
+    async render(active: boolean, routeDraftId?: string) {
       await act(async () =>
         root.render(
           <RegistryContext.Provider value={registry}>
-            <NewTaskFlowProvider active={active} flowKey="test-flow">
+            <NewTaskFlowProvider active={active} flowKey="test-flow" routeDraftId={routeDraftId}>
               <Probe />
             </NewTaskFlowProvider>
           </RegistryContext.Provider>,
@@ -442,3 +445,39 @@ it.each([
     expect(screen.current.selectedProject).toEqual(screen.projects[expectedProject]);
   },
 );
+
+it("keeps a reopened MadoHomu draft bound to its original project during catalog gaps", async () => {
+  using screen = setup();
+  const [otherProject, original, otherMachine] = screen.projects;
+  const draftKey = "new-task:restored-branch";
+  const stamp = {
+    environmentId: original!.environmentId,
+    projectId: original!.id,
+    createdAt: "2026-10-26T00:00:00Z",
+    madohomu: true as const,
+  };
+  screen.setDraft(draftKey, { text: "keep this branch draft", attachments: [], project: stamp });
+  mocks.projects.mockReturnValue([otherProject, otherMachine]);
+  await screen.render(true, draftKey);
+
+  expect(screen.current.selectedProject).toBeNull();
+  expect(screen.current.unopenableRouteDraft).toBeNull();
+  await act(async () => {
+    screen.current.setProject(otherProject!);
+    expect(await screen.current.switchEnvironment(otherMachine!.environmentId)).toBe(false);
+  });
+  expect(mocks.retargetDraft).not.toHaveBeenCalled();
+
+  mocks.projects.mockReturnValue(screen.projects);
+  await screen.render(true, draftKey);
+  expect(screen.current.selectedProject).toBe(original);
+  expect(screen.current.draftKey).toBe(draftKey);
+  expect(screen.current.prompt).toBe("keep this branch draft");
+
+  // Once the flow has written its route binding, another catalog gap also cannot retarget it.
+  act(() => screen.current.setSubmitting(true));
+  mocks.projects.mockReturnValue([otherProject, otherMachine]);
+  await screen.render(true, draftKey);
+  expect(screen.current.selectedProject).toBeNull();
+  expect(screen.snapshot(draftKey).project).toEqual(stamp);
+});

@@ -19,6 +19,8 @@ export function DraftThreadHeader(props: {
   readonly thread: EnvironmentThreadShell;
   readonly project: EnvironmentProject;
   readonly cwd: string | null;
+  /** A MadoHomu draft, which never names its project. */
+  readonly madohomu: boolean;
 }) {
   const navigation = useNavigation();
   const environmentId = props.thread.environmentId;
@@ -38,7 +40,7 @@ export function DraftThreadHeader(props: {
     navigation.navigate("NewTaskFiles", {
       environmentId,
       cwd: props.cwd,
-      projectName: props.project.title,
+      ...(props.madohomu ? { madohomu: true } : { projectName: props.project.title }),
     });
   };
   const requiresThread = () =>

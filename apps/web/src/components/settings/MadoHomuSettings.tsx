@@ -1,30 +1,116 @@
+import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
-import { type EnvironmentId } from "@t3tools/contracts";
+import { type ReactNode, useRef, useState } from "react";
+import { EnvironmentId, type ServerSettings } from "@t3tools/contracts";
+import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
+import {
+  canUpdateMadoHomuDesktopLauncherAtom,
+  madohomuDestinationEnvironmentIdAtom,
+  madohomuDesktopLauncherEnabledAtom,
+  saveMadoHomuDesktopLauncherEnabled,
+} from "../../madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
-import { MadoHomuProjectPicker } from "../madohomu/MadoHomuPage";
+import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
+import { useEnvironments } from "../../state/environments";
+import { isConnectedWithConfig } from "./scopedSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
-import { SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  SettingsRow,
+  SettingsSearchTarget,
+  SettingsSection,
+  useSettingsSearchTargetId,
+} from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { toastManager } from "../ui/toast";
+
+const CODE_VISIBILITY_LABELS = {
+  hidden: "None",
+  scratch: `${MADOHOMU_SCRATCH_LABEL} only`,
+  all: "All",
+} as const satisfies Record<ServerSettings["madohomuCodeVisibility"], string>;
+
+const WORKING_PLACEMENT_LABELS = {
+  section: "Working section",
+  top: `Top of ${MADOHOMU_SCRATCH_LABEL}`,
+  none: "Leave in place",
+} as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
 
 export function MadoHomuSettings() {
-  const { target, targets, scope } = useSettingsScope();
+  const { target, scope, search, selectScope } = useSettingsScope();
+  const { environments } = useEnvironments();
+  const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
+  const searchTargetId = useSettingsSearchTargetId();
   if (scope.kind === "project" || scope.kind === "checkout") return null;
-  if (targets.length > 1)
+  const machineId =
+    (search.machine ? EnvironmentId.make(search.machine) : destination) ??
+    target?.environmentId ??
+    environments[0]?.environmentId;
+  const selected = environments.find((candidate) => candidate.environmentId === machineId);
+  const label = selected?.label ?? machineId;
+  const selectMachine = (environmentId: EnvironmentId | null) => {
+    if (environmentId !== null && environmentId !== search.machine) {
+      selectScope({ ...search, machine: environmentId });
+    }
+  };
+  const environmentPicker =
+    environments.length > 1 || (machineId && !selected && environments.length > 0) ? (
+      <SettingsRow
+        title="Environment"
+        control={
+          <Select value={machineId ?? null} onValueChange={selectMachine}>
+            <SelectTrigger aria-label="MadoHomu environment" size="sm">
+              <SelectValue>{label}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              {environments.map(({ environmentId, label }) => (
+                <SelectItem key={environmentId} value={environmentId}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+      />
+    ) : null;
+  if (!selected || !isConnectedWithConfig(selected)) {
     return (
       <SettingsSection id="madohomu" title="MadoHomu">
-        <p className="p-4 text-sm text-muted-foreground">
-          Choose an environment above to configure MadoHomu.
-        </p>
+        {environmentPicker}
+        <SettingsSearchTarget
+          id={searchTargetId?.startsWith("madohomu-") ? searchTargetId : undefined}
+        >
+          <p className="p-4 text-sm text-muted-foreground">
+            {label
+              ? `Reconnect ${label} to configure MadoHomu.`
+              : "Connect an environment to configure MadoHomu."}
+          </p>
+        </SettingsSearchTarget>
       </SettingsSection>
     );
-  return target ? <EnvironmentMadoHomuSettings environmentId={target.environmentId} /> : null;
+  }
+  return (
+    <EnvironmentMadoHomuSettings
+      key={selected.environmentId}
+      environmentId={selected.environmentId}
+      environmentPicker={environmentPicker}
+      onProjectChosen={selectMachine}
+    />
+  );
 }
 
-function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: EnvironmentId }) {
+function EnvironmentMadoHomuSettings({
+  environmentId,
+  environmentPicker,
+  onProjectChosen,
+}: {
+  environmentId: EnvironmentId;
+  environmentPicker: ReactNode;
+  onProjectChosen: (environmentId: EnvironmentId) => void;
+}) {
   const actions = useMadoHomuActions(environmentId);
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,9 +132,10 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
   };
   return (
     <SettingsSection id="madohomu" title="MadoHomu">
+      {environmentPicker}
       <SettingsRow
         {...searchableSetting("madohomu-enabled")}
-        description="A focused Chat and Tasks view for one project. Every MadoHomu thread starts pinned."
+        description="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
         control={
           <Switch
             aria-label="Enable MadoHomu"
@@ -63,13 +150,83 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
       {actions.settings.madohomuEnabled ? (
         <>
           <SettingsRow {...searchableSetting("madohomu-project")}>
-            <MadoHomuProjectPicker environmentId={environmentId} />
+            <MadoHomuProjectPicker environmentId={environmentId} onChosen={onProjectChosen} />
             <div className="py-2 text-sm">
-              <Link to="/madohomu" search={{ environmentId }}>
+              <Link
+                to="/madohomu"
+                search={{ environmentId }}
+                className="underline underline-offset-2"
+              >
                 Open MadoHomu
               </Link>
             </div>
           </SettingsRow>
+          <SettingsRow
+            {...searchableSetting("madohomu-code-visibility")}
+            description={`Which threads of the MadoHomu project T3 Code's thread list shows. ${MADOHOMU_SCRATCH_LABEL} threads are the ones not pinned in MadoHomu.`}
+            control={
+              <Select
+                value={actions.settings.madohomuCodeVisibility}
+                disabled={!actions.canWrite || busy}
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  void run(() => actions.save({ madohomuCodeVisibility: value }));
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Show MadoHomu threads in T3 Code"
+                  className="w-36"
+                  size="sm"
+                >
+                  <SelectValue>
+                    {CODE_VISIBILITY_LABELS[actions.settings.madohomuCodeVisibility]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {(
+                    Object.keys(CODE_VISIBILITY_LABELS) as Array<
+                      keyof typeof CODE_VISIBILITY_LABELS
+                    >
+                  ).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {CODE_VISIBILITY_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+          <SettingsRow
+            {...searchableSetting("madohomu-working-placement")}
+            description={`Where a ${MADOHOMU_SCRATCH_LABEL} thread shows in MadoHomu while it is working. Pinned threads keep their place.`}
+            control={
+              <Select
+                value={actions.settings.madohomuWorkingPlacement}
+                disabled={!actions.canWrite || busy}
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  void run(() => actions.save({ madohomuWorkingPlacement: value }));
+                }}
+              >
+                <SelectTrigger aria-label="Working threads" className="w-36" size="sm">
+                  <SelectValue>
+                    {WORKING_PLACEMENT_LABELS[actions.settings.madohomuWorkingPlacement]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {(
+                    Object.keys(WORKING_PLACEMENT_LABELS) as Array<
+                      keyof typeof WORKING_PLACEMENT_LABELS
+                    >
+                  ).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {WORKING_PLACEMENT_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
           <SettingsRow
             {...searchableSetting("madohomu-morning-brief")}
             description="A daily summary of work in progress, decisions waiting on you, and proposed next steps. The agent plans and asks for approval before acting."
@@ -114,24 +271,44 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
               <p className="text-sm text-error">{actions.taskQuery.error}</p>
             ) : null}
           </SettingsRow>
-          {isElectron ? (
-            <SettingsRow
-              {...searchableSetting("madohomu-desktop-app")}
-              description="Add MadoHomu to this desktop's app launcher. Opens a separate, phone-sized window."
-              control={
-                <Switch
-                  aria-label="MadoHomu desktop app"
-                  checked={actions.settings.madohomuDesktopAppEnabled}
-                  disabled={busy || !actions.canWrite}
-                  onCheckedChange={(enabled) =>
-                    void run(() => actions.save({ madohomuDesktopAppEnabled: enabled }))
-                  }
-                />
-              }
-            />
-          ) : null}
         </>
       ) : null}
+      {isElectron ? <MadoHomuDesktopLauncherSetting busy={busy} run={run} /> : null}
     </SettingsSection>
+  );
+}
+
+function MadoHomuDesktopLauncherSetting({
+  busy,
+  run,
+}: {
+  busy: boolean;
+  run: (action: () => Promise<boolean>) => Promise<void>;
+}) {
+  const launcherEnabled = useAtomValue(madohomuDesktopLauncherEnabledAtom);
+  const canWrite = useAtomValue(canUpdateMadoHomuDesktopLauncherAtom);
+  return (
+    <SettingsRow
+      {...searchableSetting("madohomu-desktop-app")}
+      description="Add MadoHomu to this desktop's app launcher. Opens a separate window."
+      control={
+        <Switch
+          aria-label="MadoHomu desktop app"
+          checked={launcherEnabled === true}
+          disabled={busy || !canWrite}
+          onCheckedChange={(enabled) =>
+            void run(() =>
+              saveMadoHomuDesktopLauncherEnabled(enabled).catch(() => {
+                toastManager.add({
+                  type: "error",
+                  title: "Could not save the MadoHomu desktop preference",
+                });
+                return false;
+              }),
+            )
+          }
+        />
+      }
+    />
   );
 }

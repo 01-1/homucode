@@ -15,6 +15,7 @@ import {
 } from "react";
 
 import { copyThreadReference } from "../../lib/copyThreadReference";
+import { rootStackState } from "../../lib/root-stack-reset";
 import {
   firstWorkspaceDetailOpen,
   workspaceHasColumns,
@@ -23,6 +24,7 @@ import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
 import { useThreadShell } from "../../state/entities";
 import type { GitActionProgress } from "../../state/use-vcs-action-state";
 import { GitActionProgressOverlay } from "../threads/GitActionProgressOverlay";
+import { madohomuRouteFlag } from "../madohomu/madohomuLinkFlag";
 import { CommandPalette } from "./CommandPalette";
 import {
   dispatchHardwareKeyboardCommand,
@@ -173,7 +175,10 @@ export function HardwareKeyboardCommandProvider({
       const thread = parseActiveThreadPath(pathname);
       if (!thread) return;
       if (command === "files" && !/\/files(?:\/|$)/.test(pathname)) {
-        navigation.navigate("ThreadFiles", thread);
+        navigation.navigate("ThreadFiles", {
+          ...thread,
+          ...madohomuRouteFlag(rootStackState(navigation)),
+        });
       }
       if (command === "terminal" && !/\/terminal(?:\/|$)/.test(pathname)) {
         navigation.navigate("ThreadTerminal", thread);

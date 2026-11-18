@@ -1086,7 +1086,6 @@ export const DesktopMadoHomuWindowMode = Schema.Struct({
   mode: Schema.Literals(["split", "merged"]),
   environmentId: Schema.optionalKey(Schema.String),
   threadId: Schema.optionalKey(Schema.String),
-  tab: Schema.optionalKey(Schema.Literals(["chat", "tasks"])),
 });
 export type DesktopMadoHomuWindowMode = typeof DesktopMadoHomuWindowMode.Type;
 

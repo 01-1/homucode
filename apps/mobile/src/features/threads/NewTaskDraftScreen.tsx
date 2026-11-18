@@ -65,6 +65,7 @@ import {
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useProjectClone } from "../../state/projectClones";
 import { projectEnvironment } from "../../state/projects";
+import { serverEnvironment } from "../../state/server";
 import { sourceControlEnvironment } from "../../state/sourceControl";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProjectCloneBanner } from "./ProjectCloneBanner";
@@ -84,7 +85,10 @@ import {
   useHardwareKeyboardCommand,
 } from "../keyboard/hardwareKeyboardCommands";
 import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
-import { resolveDraftProjectSelection } from "./new-task-project-selection";
+import {
+  madohomuDraftSendBlockReason,
+  resolveDraftProjectSelection,
+} from "./new-task-project-selection";
 import {
   resolveNewTaskBranchLabel,
   resolveNewTaskWorkspaceLabel,
@@ -157,10 +161,13 @@ export function NewTaskDraftScreen(props: {
   };
   readonly draftId?: string;
   readonly incomingShareId?: string;
+  /** Started from a MadoHomu row: the draft must still target that MadoHomu project. */
+  readonly madohomu?: boolean;
 }) {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
   const flow = useNewTaskFlow();
+  const lockedToMadoHomu = flow.madohomuOrigin !== undefined || props.madohomu === true;
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const goBack = useWorkspaceBackNavigation();
@@ -228,6 +235,7 @@ export function NewTaskDraftScreen(props: {
     }
   };
   const deleteProject = useAtomCommand(projectEnvironment.delete, { reportFailure: false });
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings);
   const removeClonedProject = async () => {
     if (!selectedProject) return;
     const removed = selectedProject;
@@ -288,8 +296,9 @@ export function NewTaskDraftScreen(props: {
       : null;
   const pickerDraftId = unopenableRouteDraftKind === "pickProject" ? props.draftId : undefined;
   const isProjectPickerReturnActive =
-    (isReturningToProjectPicker && !requestedInitialProjectAvailable) ||
-    unopenableRouteDraftKind !== null;
+    !lockedToMadoHomu &&
+    ((isReturningToProjectPicker && !requestedInitialProjectAvailable) ||
+      unopenableRouteDraftKind !== null);
   const isIncomingShareAwaitingServerConfig = Boolean(
     incomingShare?.attachments.some((attachment) => attachment.type === "file") &&
     selectedEnvironmentServerConfig === null,
@@ -361,12 +370,13 @@ export function NewTaskDraftScreen(props: {
     isIncomingShareTransferPending || flow.submitting || isImportingContext;
   const { environments, selectedEnvironmentId, switchEnvironment, switchingToEnvironmentId } = flow;
   const cycleEnvironment = () => {
-    if (isComposerInteractionLocked) return true;
+    if (isComposerInteractionLocked || lockedToMadoHomu) return true;
     const next = nextEnvironmentId(environments, switchingToEnvironmentId ?? selectedEnvironmentId);
     if (next !== null) void switchEnvironment(next);
     return true;
   };
-  const cycleEnvironmentCommands = environments.length > 1 ? (["cycleHost"] as const) : [];
+  const cycleEnvironmentCommands =
+    isFocused && !lockedToMadoHomu && environments.length > 1 ? (["cycleHost"] as const) : [];
   useHardwareKeyboardCommand(cycleEnvironmentCommands, cycleEnvironment);
   const preventRemove =
     (isIncomingShareHoldingRoute && !isProjectPickerReturnActive) || flow.submitting;
@@ -461,13 +471,14 @@ export function NewTaskDraftScreen(props: {
         return;
       }
 
-      if (projects.length > 0) {
+      if (!lockedToMadoHomu && projects.length > 0) {
         // oxlint-disable-next-line react/set-state-in-effect -- Route-driven project resolution starts the return-to-picker flow when no project matches.
         setIsReturningToProjectPicker(true);
       }
       return;
     }
 
+    if (lockedToMadoHomu) return;
     const selection = resolveDraftProjectSelection(
       selectedProjectKey,
       projects,
@@ -499,6 +510,7 @@ export function NewTaskDraftScreen(props: {
   }, [
     goBack,
     isFocused,
+    lockedToMadoHomu,
     projectScopes,
     projects,
     flow.draftKey,
@@ -654,6 +666,21 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
 
+    if (lockedToMadoHomu) {
+      const settings = appAtomRegistry.get(
+        serverEnvironment.configValueAtom(selectedProject.environmentId),
+      )?.settings;
+      const blockReason = madohomuDraftSendBlockReason(
+        flow.madohomuOrigin,
+        selectedProject,
+        settings,
+      );
+      if (blockReason !== null) {
+        Dialog.alert("MadoHomu draft kept", blockReason);
+        return null;
+      }
+    }
+
     const message = flow.buildPendingTaskMessage(creationMetadata, {
       currentCheckoutBranch: queuesInsteadOfStarting ? null : flow.currentCheckoutBranchName,
     });
@@ -673,10 +700,21 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
     promptInputRef.current?.blur();
+    if (message.creation?.madohomu) {
+      void updateSettings({
+        environmentId: selectedProject.environmentId,
+        input: {
+          patch: {
+            madohomuThreads: { [message.threadId]: { icon: null, prompt: "", pinned: true } },
+          },
+        },
+      });
+    }
     navigation.dispatch(
-      CommonActions.setParams(
-        submittedThreadParams(String(message.environmentId), String(message.threadId)),
-      ),
+      CommonActions.setParams({
+        ...submittedThreadParams(String(message.environmentId), String(message.threadId)),
+        ...(message.creation?.madohomu ? { madohomu: true } : {}),
+      }),
     );
     // The composer has moved to the submitted thread; a pick still converting
     // would otherwise resurrect this draft.
@@ -693,6 +731,20 @@ export function NewTaskDraftScreen(props: {
     return message.messageId;
   }
 
+  if (!selectedProject && lockedToMadoHomu) {
+    return (
+      <ThreadScreenFallback header={<AppBar title="New thread" onBack={goBack} />}>
+        <View className="flex-1 items-center justify-center gap-3 p-4">
+          <Text className="text-center text-foreground">
+            The original MadoHomu project is unavailable.
+          </Text>
+          <Text className="text-center text-foreground-muted">
+            Reconnect to its machine or restore the project to continue.
+          </Text>
+        </View>
+      </ThreadScreenFallback>
+    );
+  }
   // Keep the current surface until the local draft selection is ready. Publishing
   // an empty loading surface here flashes between two already-cached threads.
   if (!selectedProject) return null;
@@ -708,7 +760,7 @@ export function NewTaskDraftScreen(props: {
             : null
       : "Wait for shared content to finish importing.";
   const chooseProject = () => {
-    if (isComposerInteractionLocked) {
+    if (isComposerInteractionLocked || lockedToMadoHomu) {
       return;
     }
     promptInputRef.current?.blur();
@@ -716,7 +768,7 @@ export function NewTaskDraftScreen(props: {
     navigation.navigate("NewTaskProject", { incomingShareId: props.incomingShareId });
   };
   const openContextPicker = (routeName: "NewTaskBranch" | "NewTaskEnvironment") => {
-    if (isComposerInteractionLocked) {
+    if (isComposerInteractionLocked || (lockedToMadoHomu && routeName === "NewTaskEnvironment")) {
       return;
     }
     promptInputRef.current?.blur();
@@ -738,7 +790,14 @@ export function NewTaskDraftScreen(props: {
       The shared content is no longer in the inbox. You can continue editing this task draft.
     </Text>
   ) : null;
-  const hero = flow.isScratchDraft ? (
+  const hero = lockedToMadoHomu ? (
+    <View className="items-center gap-2 px-6" testID="new-task-hero">
+      <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
+        What should we build?
+      </Text>
+      {shareUnavailableNotice}
+    </View>
+  ) : flow.isScratchDraft ? (
     <View className="items-center gap-2 px-6" testID="new-task-hero">
       <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
         What should we work on?
@@ -926,7 +985,7 @@ export function NewTaskDraftScreen(props: {
           />
         </View>
       ) : null}
-      {viewportHeight < SHORT_DRAFT_VIEWPORT_HEIGHT ? contextControls : null}
+      {viewportHeight < SHORT_DRAFT_VIEWPORT_HEIGHT && !lockedToMadoHomu ? contextControls : null}
       {flow.canChooseWorkspace ? workspaceControls : null}
     </View>
   );
@@ -935,7 +994,7 @@ export function NewTaskDraftScreen(props: {
     return (
       <ThreadScreenFallback header={<AppBar title="New thread" onBack={goBack} />}>
         <View className="flex-1 justify-end gap-3 p-4">
-          {environmentControl}
+          {lockedToMadoHomu ? null : environmentControl}
           <Text className="text-foreground-muted">
             Your draft is saved on this device. Connect to an environment to choose its first model.
           </Text>
@@ -967,7 +1026,12 @@ export function NewTaskDraftScreen(props: {
       <ThreadScreenBinding
         environmentId={selectedProject.environmentId}
         header={
-          <DraftThreadHeader thread={thread} project={selectedProject} cwd={flow.workspaceCwd} />
+          <DraftThreadHeader
+            thread={thread}
+            project={selectedProject}
+            cwd={flow.workspaceCwd}
+            madohomu={lockedToMadoHomu}
+          />
         }
         draftMode={{
           content: heroViewport,

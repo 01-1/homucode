@@ -458,6 +458,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     environmentOnly: true,
   },
   {
+    id: "madohomu-code-visibility",
+    title: "Show MadoHomu threads in T3 Code",
+    to: "/settings/homucode",
+    searchTerms: ["MadoHomu hide threads sidebar scratch pinned visibility"],
+    environmentOnly: true,
+  },
+  {
+    id: "madohomu-working-placement",
+    title: "Working threads",
+    to: "/settings/homucode",
+    searchTerms: ["MadoHomu working running section top scratch"],
+    environmentOnly: true,
+  },
+  {
     id: "madohomu-morning-brief",
     title: "Morning brief",
     to: "/settings/homucode",

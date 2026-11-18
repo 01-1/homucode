@@ -40,7 +40,7 @@ import {
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
-import { MadoHomuSidebar } from "./madohomu/MadoHomuPage";
+import { MadoHomuSidebar } from "./madohomu/MadoHomuSidebar";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
@@ -68,6 +68,18 @@ import { registerCommands, registerMenuAction } from "../shortcuts/dispatcher";
 import { resolveThreadRouteRef } from "../threadRoutes";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
+
+// MadoHomu's sidebar header sits in the title bar strip like the thread sidebar's
+// brand row: as tall as the top bar, starting right of the floating "Toggle main
+// sidebar" button (and the macOS traffic lights, which move that button), and
+// moving the desktop window. Set here so it holds whatever the header contains.
+const MADOHOMU_SIDEBAR_CHROME_CLASS = cn(
+  "contents",
+  "[&>[data-slot=sidebar-header]]:min-h-(--workspace-topbar-height) [&>[data-slot=sidebar-header]]:shrink-0 [&>[data-slot=sidebar-header]]:justify-center",
+  "md:[&>[data-slot=sidebar-header]]:pl-(--workspace-titlebar-content-left)",
+  isElectron &&
+    "[&>[data-slot=sidebar-header]]:[-webkit-app-region:drag] [&>[data-slot=sidebar-header]_:is(a,button,input,select,textarea)]:[-webkit-app-region:no-drag]",
+);
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -317,6 +329,11 @@ function registerAppShellCommands(router: AnyRouter, shellElement: Element): () 
 function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
   const router = useRouter();
   const usagePageOpen = useLocation({ select: (location) => location.pathname === "/usage" });
+  // MadoHomu has one sidebar, so "main" would name nothing.
+  const sidebarLabel = useLocation({
+    select: (location) =>
+      location.pathname === "/madohomu" ? "Toggle sidebar" : "Toggle main sidebar",
+  });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar } = useSidebar();
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
@@ -399,12 +416,13 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
                   "pointer-events-auto",
                   isSidebarVisible && stageBackdropVariant && "relative top-auto translate-y-0",
                 )}
-                aria-label="Toggle main sidebar"
+                aria-label={sidebarLabel}
               />
             }
           />
           <TooltipPopup side="bottom">
-            Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+            {sidebarLabel}
+            {shortcutLabel ? ` (${shortcutLabel})` : ""}
           </TooltipPopup>
         </Tooltip>
       ) : null}
@@ -489,7 +507,9 @@ export function AppSidebarLayout({
               style={windowControlsInsetStyle}
             >
               {pathname === "/madohomu" ? (
-                <MadoHomuSidebar />
+                <div className={MADOHOMU_SIDEBAR_CHROME_CLASS}>
+                  <MadoHomuSidebar />
+                </div>
               ) : (
                 <ThreadSidebar routeReveal={sidebarRouteReveal} />
               )}

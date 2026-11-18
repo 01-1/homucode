@@ -8,6 +8,7 @@ import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
 import { startTransition, useMemo, useState } from "react";
+import { useMadoHomuCodeThreads } from "../madohomu/useMadoHomuCodeThreads";
 import { Platform } from "react-native";
 
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -70,6 +71,11 @@ function ReadyHomeRouteScreen() {
     Platform.OS === "android"
       ? primarySidebarSearchQuery
       : (workspace?.state.tabs.threads.query ?? localSearchQuery);
+  const codeThreads = useMadoHomuCodeThreads(
+    threads,
+    searchQuery,
+    nativePrimaryColumn?.selectedThreadKey ?? null,
+  );
   const setSearchQuery = (query: string) => {
     // The query re-renders the whole workspace; a transition keeps the search field responsive.
     if (Platform.OS === "android") startTransition(() => setPrimarySidebarSearchQuery(query));
@@ -243,7 +249,7 @@ function ReadyHomeRouteScreen() {
           searchQuery={searchQuery}
           selectedEnvironmentId={selectedEnvironmentId}
           selectedProjectKey={selectedProjectKey}
-          threads={threads}
+          threads={codeThreads}
           visible={visible}
         />
         <ThreadUndoNotice visible={visible} />

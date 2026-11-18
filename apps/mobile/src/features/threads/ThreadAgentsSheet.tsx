@@ -8,6 +8,7 @@ import {
   isOrchestrationV2WorkActive,
   type EnvironmentId,
   type OrchestrationV2Subagent,
+  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { deriveSubagentElapsedMs, formatDuration } from "@t3tools/shared/orchestrationTiming";
@@ -22,6 +23,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { AppText as Text } from "../../components/ui/AppText";
 import { environmentThreadDetails } from "../../state/threads";
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 import { useEnvironments } from "../../state/environments";
 import { SubagentRow } from "./SubagentRow";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
@@ -46,7 +49,9 @@ export function useThreadTurnSubagents(target: AgentsTarget | null): ThreadTurnS
   );
 }
 
-export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
+export function ThreadAgentsSheet({
+  route,
+}: StaticScreenProps<AgentsTarget & { readonly projectId?: ProjectId }>) {
   const target = route.params;
   const navigation = useNavigation();
   const openInspector = useOpenThreadInspector();
@@ -65,7 +70,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
     [subagents],
   );
 
-  const openChildThread = (child: { environmentId: EnvironmentId; threadId: ThreadId }) => {
+  const openChildThread = (child: AgentsTarget, localParentProjectId?: ProjectId) => {
     void Haptics.selectionAsync();
     if (
       openInspector(target, {
@@ -80,6 +85,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
       StackActions.replace("Thread", {
         environmentId: child.environmentId,
         threadId: child.threadId,
+        ...madohomuLinkFlag(rootStackState(navigation), child, localParentProjectId),
       }),
     );
   };
@@ -106,7 +112,12 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
                 subagent={subagent}
                 environmentId={target.environmentId}
                 tickSeconds={hasLiveAgent}
-                onOpen={openChildThread}
+                onOpen={(child) =>
+                  openChildThread(
+                    child,
+                    subagent.childThreadId === null ? undefined : target.projectId,
+                  )
+                }
               />
             </View>
           ) : (
@@ -116,7 +127,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
               subagent={subagent}
               group={group}
               onOpen={(threadId) =>
-                openChildThread({ environmentId: target.environmentId, threadId })
+                openChildThread({ environmentId: target.environmentId, threadId }, target.projectId)
               }
             />
           );

@@ -11,6 +11,9 @@ const harness = vi.hoisted(() => ({
   getRoute: (): unknown => undefined,
 }));
 
+// Ordinary thread navigation must work without initializing native environment state.
+vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
+vi.mock("../../state/threads", () => ({ environmentThreadShells: {} }));
 vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 vi.mock("../layout/AdaptiveWorkspaceLayout", () => ({
   useWorkspacePaneState: () => ({ fileInspector: { supported: true } }),

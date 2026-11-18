@@ -54,6 +54,9 @@ const SETTINGS_SEARCH_TERMS = {
   SettingsHomuCode: [
     "madohomu",
     "duet",
+    "show madohomu threads in t3 code",
+    "hide threads",
+    "scratch",
     "focused project",
     "morning brief",
     "daily time",

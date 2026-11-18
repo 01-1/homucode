@@ -84,7 +84,11 @@ export function resolveRouteDraft(input: {
   readonly routeDraftId: string | undefined;
   readonly draftsLoaded: boolean;
   readonly stamp:
-    | { readonly environmentId: EnvironmentId; readonly projectId: ProjectId }
+    | {
+        readonly environmentId: EnvironmentId;
+        readonly projectId: ProjectId;
+        readonly madohomu?: true;
+      }
     | undefined;
   readonly projects: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
@@ -97,13 +101,12 @@ export function resolveRouteDraft(input: {
   if (routeDraftId === undefined || input.flow.draftKey !== null) return { kind: "none" };
   if (!input.draftsLoaded) return { kind: "pending" };
   if (!isNewTaskDraftKey(routeDraftId) || stamp === undefined) return { kind: "missing" };
-  // The stamped project must be loaded: the composer falls back to the
-  // environment's first project otherwise, and the draft would be sent
-  // somewhere the user never chose.
+  // Locked drafts can bind while their project is unavailable. Their flow keeps the original
+  // destination and shows the draft when the project returns.
   const loaded = input.projects.some(
     (project) => project.environmentId === stamp.environmentId && project.id === stamp.projectId,
   );
-  if (!loaded)
+  if (!loaded && stamp.madohomu !== true)
     return input.stampedEnvironmentLoading ? { kind: "pending" } : { kind: "pickProject" };
   return {
     kind: "open",

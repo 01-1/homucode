@@ -129,7 +129,6 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
   }
   const checkoutProject = project ?? resolvedProject;
   const workspaceRoot = project?.workspaceRoot;
-  const needsPreparation = Boolean(initialProjectRef.branch && !draftId);
   const waitingForProject =
     !project &&
     (catalogState.isLoadingConnections ||
@@ -137,6 +136,11 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
         catalogState.hasConnectingEnvironment &&
         catalogState.connectionError === null));
 
+  const needsPreparation = Boolean(
+    initialProjectRef.branch &&
+    !draftId &&
+    (params.madohomu !== true || checkoutProject || waitingForProject),
+  );
   // The checkout is keyed by its request, so a reconnect that drops and
   // restores the project reads the same checkout instead of running another.
   const flowKey = newTaskFlowKey(currentRoute);
@@ -213,6 +217,7 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
               : params.incomingShareId
           }
           draftId={draftId}
+          madohomu={params.madohomu === true}
         />
       )}
     </>

@@ -19,13 +19,15 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { useThreadActionMenu, type ThreadActionMenuExtras } from "~/hooks/useThreadActionMenu";
+import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
 import { canShareWithGuestAtom } from "./guestShareAvailability";
@@ -61,6 +63,11 @@ interface ChatHeaderProps {
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
+  /** Focused views (MadoHomu) show only the thread title. */
+  hideProjectBreadcrumb?: boolean | undefined;
+  trailingControls?: ReactNode | undefined;
+  /** A focused view's own items (MadoHomu's Move to and Edit…) for the thread menu. */
+  menuExtras?: ThreadActionMenuExtras | undefined;
 }
 
 function resolveRenameCommit(input: {
@@ -88,6 +95,9 @@ export const ChatHeader = memo(function ChatHeader({
   onNewThreadInProject,
   onOpenProjectSettings,
   onFindInThread,
+  hideProjectBreadcrumb = false,
+  trailingControls,
+  menuExtras,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
@@ -210,10 +220,22 @@ export const ChatHeader = memo(function ChatHeader({
     onFind: onFindInThread,
     canShareWithGuest,
   });
+  // A focused view (MadoHomu) relabels T3's own pin and folder items.
+  const openThreadMenu = (position: { x: number; y: number }) =>
+    hideProjectBreadcrumb && isServerThread
+      ? openMenu(position, {
+          threadRef: activeThreadRef,
+          extras: menuExtras ?? {
+            items: [],
+            labels: MADOHOMU_THREAD_MENU_LABELS,
+            onSelect: () => {},
+          },
+        })
+      : openMenu(position);
   const openMenuFromTitle = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (isTrailingDoubleClick(event.detail)) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    openMenu({ x: rect.left, y: rect.bottom + 4 });
+    openThreadMenu({ x: rect.left, y: rect.bottom + 4 });
   };
   // A native menu takes the second click, so only the in-page menu lets a double-click reach here.
   const handleTitleDoubleClick = (event: ReactMouseEvent) => {
@@ -239,7 +261,7 @@ export const ChatHeader = memo(function ChatHeader({
         });
       return;
     }
-    openMenu({ x: event.clientX, y: event.clientY });
+    openThreadMenu({ x: event.clientX, y: event.clientY });
   };
   const handleRenameKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -257,7 +279,8 @@ export const ChatHeader = memo(function ChatHeader({
       ref={breadcrumbContainerRef}
       className={cn(
         "group/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        rightPanelOpen ? "pr-10" : "pr-24",
+        // Clears the floating panel toggles, which are 32px wide below sm.
+        rightPanelOpen ? "pr-10" : trailingControls ? "pr-28 sm:pr-24" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
@@ -266,7 +289,7 @@ export const ChatHeader = memo(function ChatHeader({
         // While a status line shows beside it, the breadcrumb keeps only its own width so the line starts after the title.
         className="flex-1 overflow-clip [overflow-clip-margin:2px] group-has-[[data-chat-header-status-line]]/chat-header:max-w-1/2 group-has-[[data-chat-header-status-line]]/chat-header:flex-none"
       >
-        {activeProject ? (
+        {activeProject && !hideProjectBreadcrumb ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
@@ -413,6 +436,7 @@ export const ChatHeader = memo(function ChatHeader({
       </WorkspaceBreadcrumb>
       {statusLineKey ? <ThreadHeaderStatusLine statusLineKey={statusLineKey} /> : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+      {trailingControls}
     </div>
   );
 });

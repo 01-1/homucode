@@ -14,6 +14,7 @@ import {
 } from "@react-navigation/native";
 import {
   createContext,
+  type ComponentProps,
   use,
   useEffect,
   useEffectEvent,
@@ -83,7 +84,11 @@ import {
 } from "../terminal/terminalLaunchContext";
 import type { ThreadDetailScreenProps } from "./ThreadDetailScreen";
 import { ThreadScreenBinding, ThreadScreenFallback, ThreadScreenHost } from "./ThreadScreenHost";
-import { draftRouteIdentity } from "./thread-route-state";
+import {
+  draftRouteIdentity,
+  isMadoHomuThreadRoute,
+  type MadoHomuThreadRouteParams,
+} from "./thread-route-state";
 import { NewTaskDraftRouteScreen, type NewTaskDraftRouteParams } from "./NewTaskDraftRouteScreen";
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -115,6 +120,7 @@ import {
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
 import { ThreadHeader } from "./ThreadHeader";
+import { MadoHomuThreadHeader } from "../madohomu/MadoHomuThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
   useAndroidWorkspaceBack,
@@ -164,13 +170,15 @@ function OpeningThreadLoadingScreen() {
   );
 }
 
-type ThreadRouteScreenRouteProps = StaticScreenProps<{
-  readonly environmentId?: string;
-  readonly threadId?: string;
-  readonly draft?: NewTaskDraftRouteParams;
-  readonly inspector?: ThreadInspectorTarget;
-  readonly prompt?: string | string[];
-}>;
+type ThreadRouteScreenRouteProps = StaticScreenProps<
+  {
+    readonly environmentId?: string;
+    readonly threadId?: string;
+    readonly draft?: NewTaskDraftRouteParams;
+    readonly inspector?: ThreadInspectorTarget;
+    readonly prompt?: string | string[];
+  } & MadoHomuThreadRouteParams
+>;
 
 interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
   readonly inspectorPresentation?: ThreadInspectorPresentation;
@@ -324,14 +332,22 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
   }
 
-  if (
-    routeName === "Thread" &&
-    !props.inspectorPresentation &&
-    threadRouteOpensDraft({
-      connectionState: routeConnectionState,
-      detailStatus: selectedThreadDetailState.status,
-    })
-  ) {
+  const opensDraft = threadRouteOpensDraft({
+    connectionState: routeConnectionState,
+    detailStatus: selectedThreadDetailState.status,
+  });
+
+  // MadoHomu is locked to one project, so a draft for the environment's first project is wrong.
+  if (opensDraft && (params.madohomu === true || params.madohomuLinkProjectId !== undefined)) {
+    return withInspectorHeader(
+      <ThreadUnavailableScreen
+        actionLabel="Back to MadoHomu"
+        onAction={() => navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))}
+      />,
+    );
+  }
+
+  if (routeName === "Thread" && !props.inspectorPresentation && opensDraft) {
     return <UnavailableThreadDraftRedirect environmentId={environmentId} />;
   }
 
@@ -534,8 +550,11 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
+  const inMadoHomu =
+    isMadoHomuThreadRoute(params, selectedThread?.projectId) ||
+    selectedThreadCreation?.message.creation?.madohomu === true;
   const headerSubtitle = [
-    selectedThreadProject?.title ?? null,
+    inMadoHomu ? null : (selectedThreadProject?.title ?? null),
     selectedEnvironmentConnection?.environmentLabel ?? null,
     // A linked environment's delegated task names its parent; other linked work its origin.
     delegatedFrom !== null
@@ -597,6 +616,7 @@ function ThreadRouteContent(
       environmentId: String(selectedThread.environmentId),
       threadId: String(selectedThread.id),
       path: path.split("/").filter((segment) => segment.length > 0),
+      ...(inMadoHomu ? { madohomu: true } : {}),
     };
     navigation.navigate("ThreadFile", params);
   };
@@ -613,7 +633,7 @@ function ThreadRouteContent(
           <ThreadFileNavigatorPane
             cwd={selectedThreadCwd}
             environmentId={selectedThread.environmentId}
-            projectName={selectedThreadProject?.title ?? "Files"}
+            projectName={(inMadoHomu ? null : selectedThreadProject?.title) ?? "Files"}
             selectedPath={null}
             onSelectFile={(path) =>
               closeInspectorSheet
@@ -835,7 +855,7 @@ function ThreadRouteContent(
     }
     // Open recovery by draft id or the sheet creates an empty draft and strands restored content.
     try {
-      await recoverFailedThreadDraft(creation);
+      await recoverFailedThreadDraft(creation, inMadoHomu);
     } catch (error) {
       Dialog.alert(
         "Could not restore draft",
@@ -848,6 +868,7 @@ function ThreadRouteContent(
       StackActions.replace("Thread", {
         draft: {
           draftId: restoredNewTaskDraftKey(creation.messageId),
+          ...(inMadoHomu ? { madohomu: true } : {}),
           environmentId: String(creation.environmentId),
           projectId: String(creation.creation.projectId),
           ...(selectedThreadProject ? { title: selectedThreadProject.title } : {}),
@@ -985,6 +1006,19 @@ function ThreadRouteContent(
   }
 
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
+  const threadHeaderProps = {
+    title: selectedThread.title,
+    subtitle: threadSyncLabel ?? headerSubtitle,
+    gitControls: threadGitControlProps,
+    hasThreadCwd: selectedThreadCwd !== null,
+    inspectorMode,
+    onOpenFilesInspector: handleOpenFilesInspector,
+    ...(props.onReturnToThread ? { onReturnToThread: props.onReturnToThread } : {}),
+    onFindInThread:
+      serverConfig?.threadFind === true
+        ? () => openThreadFind(scopedThreadKey(selectedThread.environmentId, selectedThread.id))
+        : undefined,
+  } satisfies ComponentProps<typeof ThreadHeader>;
   const renderThreadRouteBody = () => (
     <>
       <GitActionProgressOverlay
@@ -996,24 +1030,14 @@ function ThreadRouteContent(
       <>
         <ThreadScreenBinding
           header={
-            props.inspectorPresentation ? null : (
-              <ThreadHeader
-                title={selectedThread.title}
-                subtitle={threadSyncLabel ?? headerSubtitle}
-                gitControls={threadGitControlProps}
-                hasThreadCwd={selectedThreadCwd !== null}
-                inspectorMode={inspectorMode}
-                onOpenFilesInspector={handleOpenFilesInspector}
-                onReturnToThread={props.onReturnToThread}
-                onFindInThread={
-                  serverConfig?.threadFind === true
-                    ? () =>
-                        openThreadFind(
-                          scopedThreadKey(selectedThread.environmentId, selectedThread.id),
-                        )
-                    : undefined
-                }
+            props.inspectorPresentation ? null : inMadoHomu ? (
+              <MadoHomuThreadHeader
+                environmentId={selectedThread.environmentId}
+                thread={selectedThread}
+                {...threadHeaderProps}
               />
+            ) : (
+              <ThreadHeader {...threadHeaderProps} />
             )
           }
           canOperateThread={canOperateThread}

@@ -45,6 +45,7 @@ import {
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
+  EllipsisIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
   PinIcon,
@@ -248,6 +249,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  statusNote,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -265,6 +267,8 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  /** A status the row shows as an icon alone (MadoHomu's Done), named here. */
+  statusNote: string | null;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
@@ -283,6 +287,7 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {statusNote ? <div className="text-success-foreground">{statusNote}</div> : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -558,6 +563,11 @@ type SidebarThreadRowProps = {
   pinningSupported: boolean;
   isPinned: boolean;
   sortable?: SortableThreadRowBag | undefined;
+  /** Replaces the project favicon on one-line rows; a folder row with one keeps the normal inset. */
+  leadingIcon?: ReactNode | undefined;
+  /** MadoHomu's Pinned and custom sections: read rows keep full-strength titles. */
+  neverRecede?: boolean | undefined;
+  insertionBefore?: boolean | undefined;
   // Thread folder members carry the folder's tint; the last one closes the card.
   folderTintClassName?: string | undefined;
   folderCardEnd?: boolean | undefined;
@@ -594,6 +604,8 @@ type SidebarThreadRowProps = {
   isRenaming: boolean;
   renamingTitle: string;
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
+  /** A "…" button that opens the same menu as right-click: shown on hover and focus, always on touch. */
+  showActionsButton?: boolean | undefined;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
@@ -746,13 +758,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const shouldRecede = shouldRecedeSidebarThread({
-    status,
-    isUnread,
-    isWoke,
-    isActive: props.isActive,
-    isSelected,
-  });
+  const shouldRecede =
+    props.neverRecede !== true &&
+    shouldRecedeSidebarThread({
+      status,
+      isUnread,
+      isWoke,
+      isActive: props.isActive,
+      isSelected,
+    });
   const topStatus =
     status === "preparing" || status === "working"
       ? {
@@ -862,6 +876,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      statusNote={
+        variant.startsWith("folder") &&
+        topStatus?.icon === "done" &&
+        props.leadingIcon !== undefined
+          ? topStatus.label
+          : null
+      }
     />
   );
 
@@ -878,6 +899,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.preventDefault();
     onContextMenu(threadRef, { x: event.clientX, y: event.clientY });
   };
+  const handleActionsClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    onContextMenu(threadRef, { x: rect.left, y: rect.bottom + 4 });
+  };
+  const actionsButton =
+    props.showActionsButton && !isRenaming && !props.sortable?.isDragging ? (
+      <button
+        type="button"
+        aria-label={`Actions for ${thread.title}`}
+        onClick={handleActionsClick}
+        onKeyDown={(event) => event.stopPropagation()}
+        className="hidden size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:inline-flex focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-focus-within/sidebar-row:inline-flex group-any-hover/sidebar-row:inline-flex pointer-coarse:inline-flex"
+      >
+        <EllipsisIcon aria-hidden className="size-3.5" />
+      </button>
+    ) : null;
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
     if (
@@ -993,7 +1032,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
-      "[&:not(:hover):not(:focus-within)_*]:text-secondary-label",
+      // Themes may tint secondary-label with the accent; MadoHomu's own-icon rows stay neutral.
+      (props.leadingIcon === undefined
+        ? "[&:not(:hover):not(:focus-within)_*]:text-secondary-label"
+        : "[&:not(:hover):not(:focus-within)_*]:text-foreground/55"),
     props.isActive
       ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
       : isSelected || props.sweepAction !== null
@@ -1276,7 +1318,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     ? "flex flex-col justify-center px-2.5 py-1.5"
                     : "flex h-9 items-center gap-2.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
-                  inFolder && "ps-9",
+                  inFolder && props.leadingIcon === undefined && "ps-9",
+                  props.insertionBefore &&
+                    "before:pointer-events-none before:absolute before:inset-x-1 before:top-0 before:h-0.5 before:rounded-full before:bg-primary",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
@@ -1287,7 +1331,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           >
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
-              {inFolder ? null : (
+              {props.leadingIcon !== undefined ? (
+                <span className="flex shrink-0 items-center">{props.leadingIcon}</span>
+              ) : inFolder ? null : (
                 <span
                   className={cn(
                     "flex shrink-0 items-center transition-opacity",
@@ -1300,11 +1346,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   ) : null}
                 </span>
               )}
+              {isSelected && props.leadingIcon !== undefined ? (
+                <span className="inline-flex shrink-0 text-primary">
+                  <CheckIcon aria-hidden className="size-3.5" />
+                  <span className="sr-only">Selected</span>
+                </span>
+              ) : null}
               {draftIndicator}
               {title}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
+              {actionsButton}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title
@@ -1316,6 +1369,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 <span
                   className={cn(
                     "relative ml-auto flex h-6 min-w-8 shrink-0 items-center justify-end",
+                    // MadoHomu rows hide the time on hover, so the slot shrinks to the settle tick
+                    // and the "…" sits right beside it.
+                    !isWoke &&
+                      props.leadingIcon !== undefined &&
+                      props.showActionsButton &&
+                      "group-any-hover/sidebar-row:min-w-3",
                     props.sweepAction !== null && "hidden",
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
@@ -1324,6 +1383,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                       !isWoke && "group-any-hover/sidebar-row:opacity-0",
+                      // MadoHomu rows: the "…" then sits right beside the settle tick.
+                      !isWoke &&
+                        props.leadingIcon !== undefined &&
+                        props.showActionsButton &&
+                        "group-any-hover/sidebar-row:hidden",
                     )}
                   >
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1349,6 +1413,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
+                    ) : inFolder &&
+                      topStatus?.icon === "done" &&
+                      props.leadingIcon !== undefined ? (
+                      // MadoHomu rows leave the title its room: Done is the icon alone.
+                      <span className={cn("inline-flex", topStatus.className)}>
+                        <TopStatusIcon icon="done" className="size-3" />
+                        <span className="sr-only">{topStatus.label}</span>
+                      </span>
                     ) : inFolder && topStatus ? (
                       // Folder rows have no status line, so the status takes the time slot.
                       <span
@@ -1869,6 +1941,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
           branchMismatch={branchMismatch}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
+          statusNote={null}
         />
       </Tooltip>
     </li>

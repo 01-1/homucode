@@ -19,6 +19,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { ProviderIcon, ProviderInstanceIcon } from "../../components/ProviderIcon";
 import { cn } from "../../lib/cn";
+import { rootStackState } from "../../lib/root-stack-reset";
 import type { ThreadFeedActivity } from "../../lib/threadActivity";
 import { serverEnvironment } from "../../state/server";
 import { environmentThreadDetails } from "../../state/threads";
@@ -29,6 +30,7 @@ import { SubagentRow } from "./SubagentRow";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 import { subagentThreadTarget } from "./threadAgentsPresentation";
 import { WorkLogBlock } from "./work-log-layout";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
 
@@ -112,10 +114,11 @@ export function ThreadSubagentGroup(props: {
   const members = props.activities.flatMap(({ projectedItem }) =>
     projectedItem.item.type === "subagent" ? [projectedItem.item] : [],
   );
-  const liveAgents = useAtomValue(
-    environmentThreadDetails.threadAtom(scopeThreadRef(props.environmentId, members[0]!.threadId)),
-    (thread) => thread?.projection.subagents,
+  const parentAtom = environmentThreadDetails.threadAtom(
+    scopeThreadRef(props.environmentId, members[0]!.threadId),
   );
+  const liveAgents = useAtomValue(parentAtom, (thread) => thread?.projection.subagents);
+  const parentProjectId = useAtomValue(parentAtom, (thread) => thread?.projection.thread.projectId);
   const { presentationById } = useEnvironments();
   const agents = members.map((item) => {
     const live = liveAgents?.find((agent) => agent.id === item.subagentId);
@@ -219,10 +222,18 @@ export function ThreadSubagentGroup(props: {
                     )
                   )
                     return;
+                  const linked = {
+                    environmentId: String(target.environmentId),
+                    threadId: String(target.threadId),
+                  };
                   navigation.dispatch(
                     StackActions.push("Thread", {
-                      environmentId: String(target.environmentId),
-                      threadId: String(target.threadId),
+                      ...linked,
+                      ...madohomuLinkFlag(
+                        rootStackState(navigation),
+                        linked,
+                        agent.childThreadId === null ? undefined : parentProjectId,
+                      ),
                     }),
                   );
                 }}

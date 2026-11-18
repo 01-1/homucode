@@ -79,7 +79,7 @@ const make = Effect.gen(function* () {
     launcherEnabled: false,
     environmentId: null,
   };
-  let window: Electron.BrowserWindow | null = null;
+  let window: { browser: Electron.BrowserWindow; explicitSplit: boolean } | null = null;
   let appliedLauncher: boolean | null = null;
   const entryPath = environment.path.join(
     environment.homeDirectory,
@@ -94,13 +94,17 @@ const make = Effect.gen(function* () {
   );
   const madohomuUrl = (location?: Omit<DesktopMadoHomuWindowMode, "mode">) => {
     const route = new URL("https://route.invalid/madohomu");
-    const environmentId = location?.environmentId ?? settings.environmentId;
+    // Launches follow the saved destination in the renderer. Split and merge carry an explicit route.
+    const environmentId = location?.environmentId;
     if (environmentId) route.searchParams.set("environmentId", environmentId);
     if (location?.threadId) route.searchParams.set("threadId", location.threadId);
-    if (location?.tab) route.searchParams.set("tab", location.tab);
     const url = new URL(getDesktopUrl(environment.isDevelopment));
     url.hash = route.pathname + route.search;
     return url.href;
+  };
+  const windowEnvironmentId = (browser: Electron.BrowserWindow) => {
+    const route = browser.webContents.getURL().split("#")[1];
+    return new URLSearchParams(route?.split("?")[1]).get("environmentId");
   };
   const report = (effect: Effect.Effect<void, DesktopMadoHomuError>) => {
     runFork(
@@ -111,21 +115,30 @@ const make = Effect.gen(function* () {
     function* (location: Omit<DesktopMadoHomuWindowMode, "mode"> | undefined) {
       requested = true;
       if (!configured) return;
-      if (window && !window.isDestroyed()) {
-        if (location) {
+      const existing = window;
+      if (existing && !existing.browser.isDestroyed()) {
+        // Clicking a thread also adds an environment to the route. Only Split pins the window.
+        const routedEnvironment = windowEnvironmentId(existing.browser);
+        if (
+          location ||
+          (!existing.explicitSplit &&
+            routedEnvironment !== null &&
+            routedEnvironment !== settings.environmentId)
+        ) {
           yield* Effect.tryPromise({
-            try: () => window!.loadURL(madohomuUrl(location)),
+            try: () => existing.browser.loadURL(madohomuUrl(location)),
             catch: (cause) => new DesktopMadoHomuError({ operation: "open", cause }),
           });
+          existing.explicitSplit = location !== undefined;
         }
-        yield* windows.reveal(window);
+        yield* windows.reveal(existing.browser);
         requested = false;
         return;
       }
       const created = yield* windows.create(
         {
-          width: 440,
-          height: 820,
+          width: 1100,
+          height: 720,
           minWidth: 360,
           minHeight: 480,
           title: "MadoHomu",
@@ -142,10 +155,10 @@ const make = Effect.gen(function* () {
         },
         { auxiliary: true, app: true },
       );
-      window = created;
+      window = { browser: created, explicitSplit: location !== undefined };
       yield* history.register(created.webContents, { surface: "madohomu" });
       created.once("closed", () => {
-        if (window === created) window = null;
+        if (window?.browser === created) window = null;
       });
       created.once("ready-to-show", () => report(windows.reveal(created)));
       created.on("page-title-updated", (event) => {
@@ -216,19 +229,16 @@ const make = Effect.gen(function* () {
         settings.environmentId === next.environmentId
       )
         return;
-      const previousEnvironment = settings.environmentId;
       const wasEnabled = settings.enabled;
       settings = next;
       configured = true;
       if (!next.enabled && wasEnabled) {
         requested = false;
-        window?.close();
-        window = null;
-      } else if (window && previousEnvironment !== next.environmentId) {
-        yield* Effect.tryPromise({
-          try: () => window!.loadURL(madohomuUrl()),
-          catch: (cause) => new DesktopMadoHomuError({ operation: "configure", cause }),
-        });
+        const pinned = window?.explicitSplit ? windowEnvironmentId(window.browser) : null;
+        if (window && (pinned === null || pinned === next.environmentId)) {
+          window.browser.close();
+          window = null;
+        }
       }
       const launcher = next.enabled && next.launcherEnabled;
       if (appliedLauncher !== launcher) {
@@ -287,13 +297,13 @@ const make = Effect.gen(function* () {
     open,
     setWindowMode: Effect.fn("DesktopMadoHomu.setWindowMode")(
       function* ({ mode, ...location }) {
-        if (!settings.enabled) return;
+        if (!settings.enabled && !location.environmentId) return;
         if (mode === "split") {
           yield* openWindow(location);
           yield* navigateMain("code", location);
         } else {
           yield* navigateMain("madohomu", location);
-          window?.close();
+          window?.browser.close();
           window = null;
         }
       },

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import {
+  isMadoHomuThreadPinned,
   MADOHOMU_ICON_COLORS,
   madohomuIconColor,
-  isMadoHomuThreadPinned,
 } from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
@@ -16,15 +16,16 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { Sheet } from "../../components/ui/Sheet";
-import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { MadoHomuIcon, MADOHOMU_ICONS } from "./MadoHomuIcon";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 
+export type MadoHomuEditableThread = Pick<EnvironmentThreadShell, "id" | "title">;
+
 export function MadoHomuThreadEditor(props: {
   readonly environmentId: EnvironmentId;
-  readonly thread: EnvironmentThreadShell;
+  readonly thread: MadoHomuEditableThread;
   readonly onClose: () => void;
 }) {
   const actions = useMadoHomuActions(props.environmentId);
@@ -33,7 +34,6 @@ export function MadoHomuThreadEditor(props: {
   const [icon, setIcon] = useState(entry?.icon ?? "");
   const [color, setColor] = useState(madohomuIconColor(props.thread.id, entry?.color));
   const [prompt, setPrompt] = useState(entry?.prompt ?? "");
-  const [pinned, setPinned] = useState(isMadoHomuThreadPinned(entry));
   const [busy, setBusy] = useState(false);
   const update = useAtomCommand(threadEnvironment.updateMetadata);
   const validColor = /^#[0-9a-fA-F]{6}$/.test(color);
@@ -53,7 +53,13 @@ export function MadoHomuThreadEditor(props: {
       if (
         !(await actions.save({
           madohomuThreads: {
-            [props.thread.id]: { icon: icon.trim() || null, color, prompt: prompt.trim(), pinned },
+            [props.thread.id]: {
+              ...entry,
+              pinned: isMadoHomuThreadPinned(entry),
+              icon: icon.trim() || null,
+              color,
+              prompt: prompt.trim(),
+            },
           },
         }))
       )
@@ -165,12 +171,6 @@ export function MadoHomuThreadEditor(props: {
             Included privately with the title on every turn.
           </Text>
         </View>
-        <SettingsSwitchRow
-          label="Keep this thread pinned"
-          value={pinned}
-          onValueChange={setPinned}
-          disabled={busy}
-        />
         <Button
           label="Save"
           tone="primary"

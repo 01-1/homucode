@@ -4,6 +4,7 @@ export function threadDragGapOffset(
   sourceHeight: number,
   insertionOffset: number,
 ): number {
+  "worklet";
   if (rowOffset === sourceOffset) return 0;
   if (insertionOffset <= sourceOffset) {
     return rowOffset >= insertionOffset && rowOffset < sourceOffset ? sourceHeight : 0;

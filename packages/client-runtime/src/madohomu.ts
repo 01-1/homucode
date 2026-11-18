@@ -7,6 +7,7 @@ import type {
   ScheduledTaskId,
   ScheduledTaskUpsertInput,
   ServerSettings,
+  ServerSettingsPatch,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -14,20 +15,275 @@ import {
   type LegacyProjectSettingsFields,
 } from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
+import { getThreadSortTimestamp } from "./state/threadSort.ts";
+import {
+  effectiveSnoozed,
+  isShelvedSettled,
+  type ThreadSnoozeShell,
+} from "./state/threadSettled.ts";
 
 export function isMadoHomuThreadPinned(entry: MadoHomuThreadSettings | undefined): boolean {
   return entry !== undefined && entry.pinned !== false;
 }
 
-export function orderMadoHomuThreads<T extends Pick<EnvironmentThreadShell, "id" | "updatedAt">>(
+/** The section for threads that are not pinned: made outside MadoHomu, or unpinned by the user. */
+export const MADOHOMU_SCRATCH_LABEL = "Scratch";
+
+export type MadoHomuGroupKind = "pinned" | "custom" | "working" | "scratch" | "snoozed" | "settled";
+export interface MadoHomuGroup<T> {
+  readonly kind: MadoHomuGroupKind;
+  /** The section id for a custom section, otherwise the kind. */
+  readonly id: string;
+  readonly title: string;
+  readonly threads: T[];
+}
+
+type MadoHomuGroupSettings = Pick<
+  ServerSettings,
+  "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
+>;
+
+/**
+ * The one grouping web and mobile both render: Pinned, custom sections, Working, Scratch, Snoozed,
+ * Settled. `isWorking` is each client's own test for a thread that is busy and does not need the
+ * user; only Scratch threads move for it, so pinned threads never leave their place.
+ */
+export function groupMadoHomuThreads<
+  T extends Pick<
+    EnvironmentThreadShell,
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "latestUserMessageAt"
+    | "latestUserAuthoredMessageAt"
+    | "settledOverride"
+    | "runtime"
+  > &
+    ThreadSnoozeShell,
+>(
   threads: ReadonlyArray<T>,
-  entries: Readonly<Record<ThreadId, MadoHomuThreadSettings>>,
+  settings: MadoHomuGroupSettings,
+  options: { readonly now: string; readonly isWorking?: (thread: T) => boolean },
+): MadoHomuGroup<T>[] {
+  const working = (thread: T) =>
+    settings.madohomuWorkingPlacement !== "none" && options.isWorking?.(thread) === true;
+  const groups: MadoHomuGroup<T>[] = [
+    { kind: "pinned", id: "pinned", title: "Pinned", threads: [] },
+    ...settings.madohomuSections.map((section) => ({
+      kind: "custom" as const,
+      id: section.id,
+      title: section.name,
+      threads: [] as T[],
+    })),
+    { kind: "working", id: "working", title: "Working", threads: [] },
+    { kind: "scratch", id: "scratch", title: MADOHOMU_SCRATCH_LABEL, threads: [] },
+    { kind: "snoozed", id: "snoozed", title: "Snoozed", threads: [] },
+    { kind: "settled", id: "settled", title: "Settled", threads: [] },
+  ];
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const group = (id: string) => byId.get(id)!;
+  for (const thread of threads) {
+    const entry = settings.madohomuThreads[thread.id];
+    if (effectiveSnoozed(thread, options)) group("snoozed").threads.push(thread);
+    else if (isShelvedSettled(thread)) group("settled").threads.push(thread);
+    else if (!isMadoHomuThreadPinned(entry))
+      group(
+        settings.madohomuWorkingPlacement === "section" && working(thread) ? "working" : "scratch",
+      ).threads.push(thread);
+    else {
+      const custom = entry?.section ? byId.get(entry.section) : undefined;
+      (custom?.kind === "custom" ? custom : group("pinned")).threads.push(thread);
+    }
+  }
+  const position = new Map(settings.madohomuThreadOrder.map((id, index) => [id, index]));
+  for (const { kind, threads: members } of groups) {
+    // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
+    const manual = kind === "pinned" || kind === "custom";
+    // The other sections keep the T3 Code list's clock: what the user last wrote, so an agent
+    // working on its own never moves a row.
+    members.sort(
+      (a, b) =>
+        (manual
+          ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
+            b.createdAt.localeCompare(a.createdAt)
+          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+            getThreadSortTimestamp(b, "updated_at") - getThreadSortTimestamp(a, "updated_at")) ||
+        a.id.localeCompare(b.id),
+    );
+  }
+  return groups;
+}
+
+/** The new `madohomuThreadOrder` after dropping `moved` before `before` (null drops it last). */
+export function reorderMadoHomuThreads(
+  visibleOrder: ReadonlyArray<ThreadId>,
+  moved: ThreadId,
+  before: ThreadId | null,
+): ThreadId[] {
+  const rest = visibleOrder.filter((id) => id !== moved);
+  const index = before === null ? -1 : rest.indexOf(before);
+  return index < 0 ? [...rest, moved] : [...rest.slice(0, index), moved, ...rest.slice(index)];
+}
+
+/**
+ * The new `madohomuThreadOrder` after moving `moved` to the end, keeping the order `shownOrder`
+ * (the rows as the sidebar renders them) gives them. Threads without a row keep their own order.
+ */
+export function moveMadoHomuThreadsLast(
+  savedOrder: ReadonlyArray<ThreadId>,
+  shownOrder: ReadonlyArray<ThreadId>,
+  moved: ReadonlyArray<ThreadId>,
+): ThreadId[] {
+  const movedSet = new Set(moved);
+  const shown = shownOrder.filter((id) => movedSet.has(id));
+  const shownSet = new Set(shown);
+  return [
+    ...savedOrder.filter((id) => !movedSet.has(id)),
+    ...shown,
+    ...moved.filter((id) => !shownSet.has(id)),
+  ];
+}
+
+/**
+ * The project threads MadoHomu lists. Subagents report to their parent, so only ones the user
+ * filed get a row, as in T3 Code, plus the open thread so it always has its row.
+ */
+export function madohomuListedThreads<T extends Pick<EnvironmentThreadShell, "id" | "lineage">>(
+  projectThreads: ReadonlyArray<T>,
+  settings: Pick<ServerSettings, "madohomuThreads">,
+  openThreadId: ThreadId | null | undefined,
 ): T[] {
-  return [...threads].sort(
-    (a, b) =>
-      Number(isMadoHomuThreadPinned(entries[b.id])) -
-        Number(isMadoHomuThreadPinned(entries[a.id])) || b.updatedAt.localeCompare(a.updatedAt),
+  return projectThreads.filter(
+    (thread) =>
+      thread.lineage.relationshipToParent !== "subagent" ||
+      settings.madohomuThreads[thread.id] !== undefined ||
+      thread.id === openThreadId,
   );
+}
+
+/**
+ * The thread MadoHomu shows. A named thread still in the project stays open whatever the list's
+ * filtering hides, and one not loaded yet is `loading`. Only one known to be gone (deleted,
+ * archived, moved, or absent once the list has loaded) falls back to the first row, with
+ * `replace` set so the URL follows; so does a URL that names no thread.
+ */
+export function resolveMadoHomuSelection(input: {
+  readonly namedId: ThreadId | null | undefined;
+  readonly named: {
+    readonly projectId: ProjectId;
+    readonly deletedAt?: unknown;
+    readonly archivedAt: unknown;
+  } | null;
+  readonly projectId: ProjectId | null;
+  readonly listLoaded: boolean;
+  readonly firstId: ThreadId | null;
+}): { readonly threadId: ThreadId | null; readonly loading: boolean; readonly replace: boolean } {
+  const { namedId, named, firstId, listLoaded } = input;
+  const fallback = { threadId: firstId, loading: firstId === null && !listLoaded, replace: true };
+  if (!namedId) return fallback;
+  if (named === null) {
+    return listLoaded ? fallback : { threadId: null, loading: true, replace: false };
+  }
+  const gone =
+    named.deletedAt != null || named.archivedAt != null || named.projectId !== input.projectId;
+  return gone ? fallback : { threadId: namedId, loading: false, replace: false };
+}
+
+/** The title MadoHomu's "New thread" gives the threads it makes. */
+export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
+
+/**
+ * An untouched thread MadoHomu's "New thread" made (default title, no messages, no run, no icon,
+ * colour or prompt, still in Pinned itself), so "New thread" reopens it instead of making another empty one.
+ */
+export function findUntouchedMadoHomuThread<
+  T extends Pick<EnvironmentThreadShell, "id" | "title" | "latestUserMessageAt" | "latestRun">,
+>(pinned: ReadonlyArray<T>, settings: Pick<ServerSettings, "madohomuThreads">): T | undefined {
+  return pinned.find((thread) => {
+    const entry = settings.madohomuThreads[thread.id];
+    return (
+      thread.title === MADOHOMU_NEW_THREAD_TITLE &&
+      thread.latestUserMessageAt === null &&
+      thread.latestRun === null &&
+      isMadoHomuThreadPinned(entry) &&
+      !entry?.section &&
+      !entry?.color &&
+      !entry?.icon &&
+      !entry?.prompt
+    );
+  });
+}
+
+/** Whether the T3 Code thread list shows a thread of the MadoHomu project. */
+export function isMadoHomuThreadShownInCode(
+  settings: Pick<
+    ServerSettings,
+    "madohomuEnabled" | "madohomuProjectId" | "madohomuThreads" | "madohomuCodeVisibility"
+  >,
+  thread: Pick<EnvironmentThreadShell, "id" | "projectId">,
+): boolean {
+  if (!settings.madohomuEnabled || thread.projectId !== settings.madohomuProjectId) return true;
+  if (settings.madohomuCodeVisibility === "all") return true;
+  if (settings.madohomuCodeVisibility === "hidden") return false;
+  return !isMadoHomuThreadPinned(settings.madohomuThreads[thread.id]);
+}
+
+/**
+ * Applies the active MadoHomu project's visibility to Code's thread lists.
+ * `isOpenThread` keeps the thread on screen listed.
+ */
+export function filterMadoHomuCodeThreads<
+  T extends Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">,
+>(
+  threads: ReadonlyArray<T>,
+  settingsByEnvironment: ReadonlyMap<
+    EnvironmentId,
+    Parameters<typeof isMadoHomuThreadShownInCode>[0] &
+      Pick<ServerSettings, "madohomuDestinationEnvironmentId">
+  >,
+  isOpenThread: (thread: T) => boolean = () => false,
+): ReadonlyArray<T> {
+  const { environmentId } = resolveMadoHomuDestination(
+    [...settingsByEnvironment].map(([environmentId, settings]) => ({ environmentId, settings })),
+  );
+  const settings = environmentId === null ? undefined : settingsByEnvironment.get(environmentId);
+  if (!settings?.madohomuEnabled || settings.madohomuCodeVisibility === "all") return threads;
+  return threads.filter(
+    (thread) =>
+      thread.environmentId !== environmentId ||
+      isOpenThread(thread) ||
+      isMadoHomuThreadShownInCode(settings, thread),
+  );
+}
+
+/** How many Scratch rows show before "Show more", and how many each "Show more" adds. */
+export const MADOHOMU_SCRATCH_PAGE = 10;
+
+/**
+ * The rows of a paged section: the first `count`, plus every later row that needs the user, so an
+ * approval or a question never hides behind "Show more". `more` is how many rows stay hidden.
+ */
+export function pageMadoHomuRows<T>(
+  rows: ReadonlyArray<T>,
+  count: number,
+  needsUser: (row: T) => boolean,
+): { readonly shown: T[]; readonly more: number } {
+  const shown = rows.filter((row, index) => index < count || needsUser(row));
+  return { shown, more: rows.length - shown.length };
+}
+
+/**
+ * What an empty Pinned section says. `canDrag` is false where rows only drag in a reorder mode,
+ * so the text never promises a gesture that does nothing.
+ */
+export function madohomuEmptyPinnedText(input: {
+  readonly hasThreads: boolean;
+  readonly canDrag: boolean;
+}): string {
+  if (!input.hasThreads) return "No threads yet. Choose New thread to start one.";
+  return input.canDrag
+    ? "Nothing pinned. Drag a thread here, or use Move to in its menu."
+    : "Nothing pinned. Use Move to in a thread's menu.";
 }
 
 export const MADOHOMU_ICON_COLORS = [
@@ -108,49 +364,124 @@ export function madohomuMorningBriefInput(input: {
   };
 }
 
-type MadoHomuTask = Pick<
-  EnvironmentThreadShell,
-  "id" | "hasPendingApprovals" | "hasPendingUserInput" | "updatedAt"
-> & { readonly runtime: Pick<NonNullable<EnvironmentThreadShell["runtime"]>, "status"> | null };
-
-export function madohomuTaskLabel(thread: MadoHomuTask): string {
-  if (thread.hasPendingApprovals) return "Needs approval";
-  if (thread.hasPendingUserInput) return "Needs input";
-  if (
-    thread.runtime &&
-    ["queued", "preparing", "starting", "running"].includes(thread.runtime.status)
-  ) {
-    return "Running";
-  }
-  return "Recent";
+interface MadoHomuEnvironment {
+  readonly environmentId: EnvironmentId;
+  readonly settings: Pick<
+    ServerSettings,
+    "madohomuEnabled" | "madohomuDestinationEnvironmentId"
+  > | null;
 }
 
-export function orderMadoHomuTasks<T extends MadoHomuTask>(threads: ReadonlyArray<T>): T[] {
-  const rank = (thread: T) => {
-    const label = madohomuTaskLabel(thread);
-    return label === "Needs approval" || label === "Needs input" ? 0 : label === "Running" ? 1 : 2;
+interface MadoHomuDestination {
+  readonly anchorEnvironmentId: EnvironmentId | null;
+  readonly savedEnvironmentId: EnvironmentId | null;
+  readonly environmentId: EnvironmentId | null;
+}
+
+/** Clients with the same linked machines choose the same settings host and launch destination. */
+export function resolveMadoHomuDestination(
+  environments: ReadonlyArray<MadoHomuEnvironment>,
+): MadoHomuDestination {
+  const ordered = [...environments].sort((a, b) =>
+    a.environmentId < b.environmentId ? -1 : a.environmentId > b.environmentId ? 1 : 0,
+  );
+  // Older clients could have written a pointer to more than one machine.
+  const saved = ordered.find((host) => host.settings?.madohomuDestinationEnvironmentId != null);
+  const savedEnvironmentId = saved?.settings?.madohomuDestinationEnvironmentId ?? null;
+  const legacy = ordered.find((host) => host.settings?.madohomuEnabled);
+  return {
+    // Connection, permission and enabled state can change independently on different clients.
+    anchorEnvironmentId: saved?.environmentId ?? ordered[0]?.environmentId ?? null,
+    savedEnvironmentId,
+    environmentId: savedEnvironmentId ?? legacy?.environmentId ?? null,
   };
-  return [...threads].sort(
-    (a, b) =>
-      rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
+}
+
+interface MadoHomuSettingsHost {
+  readonly label: string;
+  readonly connected: boolean;
+  readonly settingsLoaded: boolean;
+  readonly canWrite: boolean;
+}
+
+type ReadMadoHomuSettingsHost = (environmentId: EnvironmentId) => MadoHomuSettingsHost | null;
+
+function madoHomuProjectAnchor(
+  destination: MadoHomuDestination,
+  environmentId: EnvironmentId,
+): EnvironmentId | null {
+  return destination.savedEnvironmentId === environmentId ? null : destination.anchorEnvironmentId;
+}
+
+export function madoHomuProjectSelectionIssue(
+  destination: MadoHomuDestination,
+  environmentId: EnvironmentId,
+  readHost: ReadMadoHomuSettingsHost,
+  clear = false,
+): string | null {
+  const issue = (id: EnvironmentId, isAnchor: boolean) => {
+    const host = readHost(id);
+    const label = host?.label ?? id;
+    const purpose = isAnchor ? " to save the launch destination" : " to change the project";
+    if (!host?.connected) return `Connect to ${label}${purpose}.`;
+    if (!host.settingsLoaded) return `Wait for settings from ${label} to load${purpose}.`;
+    if (!host.canWrite) return `Settings write access on ${label} is required${purpose}.`;
+    return null;
+  };
+  const anchor = clear ? null : madoHomuProjectAnchor(destination, environmentId);
+  return (
+    issue(environmentId, false) ??
+    (anchor !== null && anchor !== environmentId ? issue(anchor, true) : null)
   );
 }
 
-export function selectMadoHomuEnvironment(
-  primary: EnvironmentId | null,
-  environments: ReadonlyArray<{
-    environmentId: EnvironmentId;
-    madohomuEnabled: boolean;
-    madohomuDesktopAppEnabled: boolean;
-  }>,
-): EnvironmentId | null {
-  const enabled = environments.filter((environment) => environment.madohomuEnabled);
-  return (
-    enabled.find((e) => e.environmentId === primary && e.madohomuDesktopAppEnabled)
-      ?.environmentId ??
-    enabled.find((e) => e.madohomuDesktopAppEnabled)?.environmentId ??
-    enabled.find((e) => e.environmentId === primary)?.environmentId ??
-    enabled[0]?.environmentId ??
-    null
+/** Store the project on its owner before publishing the destination on the shared settings host. */
+export async function writeMadoHomuProject(
+  destination: MadoHomuDestination,
+  { environmentId, projectId }: { environmentId: EnvironmentId; projectId: ProjectId | null },
+  readHost: ReadMadoHomuSettingsHost,
+  writeSettings: (
+    environmentId: EnvironmentId,
+    patch: ServerSettingsPatch,
+  ) => Promise<ServerSettings>,
+): Promise<void> {
+  const issue = madoHomuProjectSelectionIssue(
+    destination,
+    environmentId,
+    readHost,
+    projectId === null,
   );
+  if (issue !== null) throw new Error(issue);
+
+  const anchor = projectId === null ? null : madoHomuProjectAnchor(destination, environmentId);
+  const owner = await writeSettings(environmentId, {
+    madohomuProjectId: projectId,
+    ...(projectId !== null ? { madohomuEnabled: true } : {}),
+    ...(anchor === environmentId ? { madohomuDestinationEnvironmentId: environmentId } : {}),
+  });
+  if (owner.madohomuProjectId !== projectId || (projectId !== null && !owner.madohomuEnabled)) {
+    throw new Error(
+      `${readHost(environmentId)?.label ?? environmentId} did not save the project selection.`,
+    );
+  }
+  if (anchor === null) return;
+
+  const label = readHost(anchor)?.label ?? anchor;
+  try {
+    const saved =
+      anchor === environmentId
+        ? owner
+        : await writeSettings(anchor, { madohomuDestinationEnvironmentId: environmentId });
+    if (saved.madohomuDestinationEnvironmentId !== environmentId) {
+      throw new Error("The server did not confirm the destination setting.");
+    }
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `The project was saved on its machine. The launch destination could not be saved on ${label}. ${detail}`,
+      {
+        cause,
+      },
+    );
+  }
 }

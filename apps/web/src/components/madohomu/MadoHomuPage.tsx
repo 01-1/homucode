@@ -1,431 +1,205 @@
-import { useAtomValue } from "@effect/atom-react";
-import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { MadoHomuIcon, MadoHomuIconPicker } from "./MadoHomuIcon";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import {
-  madohomuIconColor,
-  madohomuTaskLabel,
-  isMadoHomuThreadPinned,
-  orderMadoHomuTasks,
-  orderMadoHomuThreads,
-} from "@t3tools/client-runtime/madohomu";
-import {
-  AuthOrchestrationOperateScope,
-  MADOHOMU_THREAD_PROMPT_MAX_LENGTH,
-  ProjectId,
-  type EnvironmentId,
-  type ThreadId,
-} from "@t3tools/contracts";
-import { useRef, useState } from "react";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useProjects, useVisibleThreadShells } from "../../state/entities";
-import { useEnvironmentScope } from "../../state/session";
-import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { type ReactNode, useEffect } from "react";
+import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
+import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import {
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarInset,
-  SidebarTrigger,
-  useSidebar,
-} from "../ui/sidebar";
-import {
-  Dialog,
-  DialogPopup,
-  DialogHeader,
-  DialogTitle,
-  DialogPanel,
-  DialogFooter,
-} from "../ui/dialog";
+import { SidebarInset } from "../ui/sidebar";
+import { forgetCreatedMadoHomuThread } from "../../madohomu";
+import { useEnvironment } from "../../state/environments";
 import { useMadoHomuActions } from "./useMadoHomuActions";
-
-function useMadoHomuEnvironmentId() {
-  const search = useSearch({ from: "/_chat/madohomu" });
-  const primary = usePrimaryEnvironmentId();
-  const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
-  return search.environmentId ?? destination ?? primary;
-}
-
-export function MadoHomuProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
-  const actions = useMadoHomuActions(environmentId);
-  const projects = useProjects().filter(
-    (p) => p.environmentId === environmentId && p.archivedAt === null,
-  );
-  return (
-    <label className="grid gap-2 text-sm">
-      Project
-      <select
-        aria-label="MadoHomu project"
-        className="rounded-md border bg-background p-2"
-        disabled={!actions.canWrite}
-        value={actions.settings.madohomuProjectId ?? ""}
-        onChange={(event) =>
-          void actions.changeProject(event.target.value ? ProjectId.make(event.target.value) : null)
-        }
-      >
-        <option value="">Choose a project</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.title}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
+import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
+import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
+import { useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
+import {
+  useMadoHomuNewThread,
+  useMadoHomuSelection,
+  useMadoHomuThreads,
+} from "./useMadoHomuThreads";
 
 export function MadoHomuPage() {
   const environmentId = useMadoHomuEnvironmentId();
   return environmentId ? (
-    <MadoHomuWorkspace environmentId={environmentId} />
+    <MadoHomuWorkspace key={environmentId} environmentId={environmentId} />
   ) : (
     <SidebarInset>
-      <p className="p-6">Connect to an environment to use MadoHomu.</p>
+      <MadoHomuTitlebar />
+      <MadoHomuNoProject
+        environmentId={null}
+        message="Connect to an environment to use MadoHomu."
+      />
     </SidebarInset>
   );
 }
 
-function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
-  const { settings, project } = useMadoHomuActions(environmentId);
-  const search = useSearch({ from: "/_chat/madohomu" });
-  const navigate = useNavigate();
-  const threads = useVisibleThreadShells().filter(
-    (t) =>
-      t.environmentId === environmentId &&
-      t.projectId === project?.id &&
-      t.deletedAt === null &&
-      t.archivedAt === null,
-  );
-  const selected = threads.find((t) => t.id === search.threadId) ?? threads[0];
-  const open = (threadId: ThreadId) =>
-    void navigate({ to: "/madohomu", search: { environmentId, threadId, tab: "chat" } });
-  if (!settings.madohomuEnabled)
-    return (
-      <SidebarInset>
-        <div className="p-6">
-          Enable MadoHomu in{" "}
-          <Link to="/settings/homucode" hash="madohomu-enabled">
-            Settings → HomuCode → MadoHomu
-          </Link>
-          .
-        </div>
-      </SidebarInset>
-    );
-  if (!project)
-    return (
-      <SidebarInset>
-        <div className="mx-auto w-full max-w-md space-y-4 p-6">
-          <h1 className="text-xl font-semibold">MadoHomu</h1>
-          <p>Choose the project MadoHomu focuses on.</p>
-          <MadoHomuProjectPicker environmentId={environmentId} />
-        </div>
-      </SidebarInset>
-    );
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden">
-      <header className="flex shrink-0 items-center gap-3 border-b p-2 [-webkit-app-region:drag]">
-        <div className="[-webkit-app-region:no-drag]">
-          <SidebarTrigger />
-        </div>
-        <span className="min-w-0 flex-1 truncate text-sm">{project.title}</span>
-        {isElectron && window.desktopBridge?.setMadoHomuWindowMode ? (
-          <div className="[-webkit-app-region:no-drag]">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const bridge = window.desktopBridge;
-                if (bridge)
-                  void bridge
-                    .setMadoHomuWindowMode?.({
-                      mode: bridge.isMadoHomuWindow?.() ? "merged" : "split",
-                      environmentId,
-                      ...(selected ? { threadId: selected.id } : {}),
-                      tab: search.tab ?? "chat",
-                    })
-                    .catch(() =>
-                      toastManager.add({ type: "error", title: "Could not move MadoHomu" }),
-                    );
-              }}
-            >
-              {window.desktopBridge.isMadoHomuWindow?.() ? "Merge" : "Split"}
-            </Button>
-          </div>
-        ) : null}
-        <div
-          role="tablist"
-          aria-label="MadoHomu"
-          className="flex gap-1 [-webkit-app-region:no-drag]"
-        >
-          {(["chat", "tasks"] as const).map((tab) => (
-            <Button
-              key={tab}
-              role="tab"
-              aria-selected={(search.tab ?? "chat") === tab}
-              variant={(search.tab ?? "chat") === tab ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => void navigate({ to: "/madohomu", search: { ...search, tab } })}
-            >
-              {tab === "chat" ? "Chat" : "Tasks"}
-            </Button>
-          ))}
-        </div>
-      </header>
-      {search.tab === "tasks" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <h1 className="mb-3 text-lg font-semibold">Tasks</h1>
-          {orderMadoHomuTasks(threads).map((thread) => (
-            <button
-              key={thread.id}
-              className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-muted"
-              onClick={() => open(thread.id)}
-            >
-              <MadoHomuIcon
-                icon={settings.madohomuThreads[thread.id]?.icon ?? null}
-                color={madohomuIconColor(thread.id, settings.madohomuThreads[thread.id]?.color)}
-              />
-              <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-              <span className="text-xs text-muted-foreground">{madohomuTaskLabel(thread)}</span>
-            </button>
-          ))}
-          {threads.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Create a thread to get started.</p>
-          ) : null}
-        </div>
-      ) : selected ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <ChatView environmentId={environmentId} threadId={selected.id} routeKind="server" />
-        </div>
-      ) : (
-        <p className="p-6">Create a thread in the sidebar to start chatting.</p>
-      )}
-    </SidebarInset>
-  );
-}
-
-export function MadoHomuSidebar() {
-  const environmentId = useMadoHomuEnvironmentId();
-  return environmentId ? <MadoHomuThreadList environmentId={environmentId} /> : null;
-}
-
-function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId }) {
-  const actions = useMadoHomuActions(environmentId);
-  const search = useSearch({ from: "/_chat/madohomu" });
-  const navigate = useNavigate();
-  const { isMobile, setOpenMobile } = useSidebar();
-  const threads = orderMadoHomuThreads(
-    useVisibleThreadShells().filter(
-      (t) =>
-        t.environmentId === environmentId &&
-        t.projectId === actions.project?.id &&
-        t.deletedAt === null &&
-        t.archivedAt === null,
-    ),
-    actions.settings.madohomuThreads,
-  );
-  const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const [editing, setEditing] = useState<ThreadId | null>(null);
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
-  const open = (threadId: ThreadId) => {
-    if (isMobile) setOpenMobile(false);
-    void navigate({ to: "/madohomu", search: { environmentId, threadId, tab: "chat" } });
-  };
-  const edited = threads.find((t) => t.id === editing);
+function MadoHomuWindowModeButton({
+  environmentId,
+  threadId,
+}: {
+  environmentId: EnvironmentId;
+  threadId?: ThreadId | undefined;
+}) {
+  const bridge = isElectron ? window.desktopBridge : undefined;
+  if (!bridge?.setMadoHomuWindowMode) return null;
+  const split = bridge.isMadoHomuWindow?.() === true;
+  const label = split ? "Merge MadoHomu into the main window" : "Open MadoHomu in its own window";
+  // One pop-out arrow, pointing out to split and back in to merge.
+  const Icon = split ? SquareArrowDownLeftIcon : SquareArrowOutUpRightIcon;
+  const toggle = () =>
+    void bridge
+      .setMadoHomuWindowMode?.({
+        mode: split ? "merged" : "split",
+        environmentId,
+        ...(threadId ? { threadId } : {}),
+      })
+      .catch(() => toastManager.add({ type: "error", title: "Could not move MadoHomu" }));
   return (
     <>
-      <SidebarHeader>
-        <div className="flex items-center justify-between">
-          <Link to="/madohomu" search={{ environmentId }}>
-            ✦ MadoHomu
-          </Link>
-          <Link to="/settings/homucode" hash="madohomu-enabled">
-            Settings
-          </Link>
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        {actions.settings.madohomuEnabled ? (
-          <div className="space-y-1 p-2">
+      <Button
+        aria-label={label}
+        className="hidden shrink-0 [-webkit-app-region:no-drag] min-[700px]:inline-flex"
+        size="sm"
+        variant="ghost"
+        onClick={toggle}
+      >
+        <Icon className="size-3.5" />
+        {split ? "Merge" : "Split"}
+      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
             <Button
-              variant="outline"
-              size="sm"
-              disabled={
-                busy ||
-                !actions.project ||
-                !actions.modelSelection ||
-                !actions.canWrite ||
-                !canOperate
-              }
-              onClick={async () => {
-                if (pending.current) return;
-                pending.current = true;
-                setBusy(true);
-                await (async () => {
-                  const id = await actions.createThread();
-                  if (id) open(id);
-                })().finally(() => {
-                  pending.current = false;
-                  setBusy(false);
-                });
-              }}
-            >
-              New thread
-            </Button>
-            {threads.map((thread) => (
-              <div key={thread.id} className="flex items-center rounded-md hover:bg-muted">
-                <button
-                  className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left text-sm"
-                  aria-current={search.threadId === thread.id ? "page" : undefined}
-                  onClick={() => open(thread.id)}
-                >
-                  <MadoHomuIcon
-                    icon={actions.settings.madohomuThreads[thread.id]?.icon ?? null}
-                    color={madohomuIconColor(
-                      thread.id,
-                      actions.settings.madohomuThreads[thread.id]?.color,
-                    )}
-                  />
-                  <span className="truncate">{thread.title}</span>
-                  {!isMadoHomuThreadPinned(actions.settings.madohomuThreads[thread.id]) ? (
-                    <span className="ml-auto text-xs text-muted-foreground">Temporary</span>
-                  ) : null}
-                </button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Edit ${thread.title}`}
-                  disabled={!canOperate || !actions.canWrite}
-                  onClick={() => setEditing(thread.id)}
-                >
-                  ✎
-                </Button>
-              </div>
-            ))}
-            {!actions.modelSelection ? (
-              <p className="p-2 text-xs text-muted-foreground">
-                Set up an agent in Settings to create threads.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </SidebarContent>
-      <SidebarFooter>
-        <Link to="/">Open T3 Code</Link>
-      </SidebarFooter>
-      {edited ? (
-        <MadoHomuThreadEditor
-          key={edited.id}
-          environmentId={environmentId}
-          thread={edited}
-          onClose={() => setEditing(null)}
-        />
-      ) : null}
+              aria-label={label}
+              className="shrink-0 [-webkit-app-region:no-drag] min-[700px]:hidden"
+              size="icon-sm"
+              variant="ghost"
+              onClick={toggle}
+            />
+          }
+        >
+          <Icon className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">{label}</TooltipPopup>
+      </Tooltip>
     </>
   );
 }
 
-function MadoHomuThreadEditor({
-  environmentId,
-  thread,
-  onClose,
-}: {
-  environmentId: EnvironmentId;
-  thread: ReturnType<typeof useVisibleThreadShells>[number];
-  onClose: () => void;
-}) {
-  const actions = useMadoHomuActions(environmentId);
-  const entry = actions.settings.madohomuThreads[thread.id];
-  const [title, setTitle] = useState(thread.title);
-  const [icon, setIcon] = useState(entry?.icon ?? "");
-  const [color, setColor] = useState(madohomuIconColor(thread.id, entry?.color));
-  const [prompt, setPrompt] = useState(entry?.prompt ?? "");
-  const [busy, setBusy] = useState(false);
-  const [pinned, setPinned] = useState(isMadoHomuThreadPinned(entry));
-  const update = useAtomCommand(threadEnvironment.updateMetadata);
-  const save = async () => {
-    setBusy(true);
-    await (async () => {
-      if (
-        (await update({ environmentId, input: { threadId: thread.id, title: title.trim() } }))
-          ._tag !== "Success"
-      )
-        return;
-      if (
-        !(await actions.setThreadSettings(
-          thread.id,
-          icon.trim() || null,
-          prompt,
-          color || null,
-          pinned,
-        ))
-      )
-        return;
-      onClose();
-    })().finally(() => {
-      setBusy(false);
+function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
+  const environment = useEnvironment(environmentId);
+  const { settings, project } = useMadoHomuThreads(environmentId);
+  const selection = useMadoHomuSelection(environmentId);
+  const selectedId = selection.threadId;
+  const threadMenu = useMadoHomuThreadMenu(environmentId);
+  const navigate = useNavigate();
+  const { namedId, namedLoaded, replace } = selection;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the fallback thread into the URL once the named one is known to be gone, and drops the just-made mark once its shell arrives.
+  useEffect(() => {
+    if (namedId && namedLoaded) forgetCreatedMadoHomuThread(scopeThreadRef(environmentId, namedId));
+    if (!replace || selectedId === null || namedId === selectedId) return;
+    void navigate({
+      to: "/madohomu",
+      search: { environmentId, threadId: selectedId },
+      replace: true,
     });
-  };
+  }, [environmentId, namedId, namedLoaded, navigate, replace, selectedId]);
+  const windowMode = <MadoHomuWindowModeButton environmentId={environmentId} />;
+  if (!settings.madohomuEnabled || !project)
+    return (
+      <SidebarInset>
+        <MadoHomuTitlebar trailing={windowMode} />
+        <MadoHomuNoProject
+          environmentId={environmentId}
+          {...(environment?.connection.phase !== "connected"
+            ? {
+                message: `Reconnect ${environment?.label ?? "the selected machine"}, or choose a project on another machine.`,
+              }
+            : !settings.madohomuEnabled
+              ? { message: "Choose a project to enable MadoHomu on its machine." }
+              : {})}
+        />
+      </SidebarInset>
+    );
+  if (selection.loading)
+    return (
+      <SidebarInset>
+        <MadoHomuTitlebar trailing={windowMode} />
+        <p className="p-6 text-sm text-muted-foreground" role="status">
+          Loading…
+        </p>
+      </SidebarInset>
+    );
+  if (!selectedId)
+    return (
+      <SidebarInset>
+        <MadoHomuTitlebar trailing={windowMode} />
+        <MadoHomuNoThreads environmentId={environmentId} />
+      </SidebarInset>
+    );
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden">
+      <ChatView
+        environmentId={environmentId}
+        threadId={selectedId}
+        routeKind="server"
+        focusedHeader={{
+          trailing: (
+            <MadoHomuWindowModeButton environmentId={environmentId} threadId={selectedId} />
+          ),
+          menuExtras: threadMenu.menuExtras(selectedId),
+        }}
+      />
+      {threadMenu.editor}
+    </SidebarInset>
+  );
+}
+
+function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) {
+  const actions = useMadoHomuActions(environmentId);
+  const { createThread, creating } = useMadoHomuNewThread(environmentId);
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-sm text-muted-foreground">No threads yet.</p>
+      <Button
+        disabled={creating || !actions.modelSelection || !actions.canWrite}
+        onClick={() => void createThread()}
+      >
+        <SquarePenIcon aria-hidden />
+        New thread
+      </Button>
+      {!actions.modelSelection ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            No agent is set up yet, so MadoHomu cannot start a thread.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link to="/settings/providers" search={{ environmentId }} />}
+          >
+            Open provider settings
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** A title bar without a thread: room for the floating sidebar toggle and a strip that moves the window. */
+function MadoHomuTitlebar({ trailing }: { trailing?: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-end px-3",
+        isElectron && "drag-region wco:pr-(--workspace-native-controls-inset)",
+      )}
     >
-      <DialogPopup>
-        <DialogHeader>
-          <DialogTitle>Edit MadoHomu thread</DialogTitle>
-        </DialogHeader>
-        <DialogPanel>
-          <div className="grid gap-4">
-            <label className="grid gap-1 text-sm">
-              Title
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={500} />
-            </label>
-            <MadoHomuIconPicker
-              icon={icon}
-              color={color}
-              onIconChange={setIcon}
-              onColorChange={setColor}
-            />
-            <label className="grid gap-1 text-sm">
-              Thread prompt
-              <Textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                maxLength={MADOHOMU_THREAD_PROMPT_MAX_LENGTH}
-              />
-              <span className="text-xs text-muted-foreground">
-                Included privately with the title on every turn.
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={(e) => setPinned(e.target.checked)}
-              />
-              Keep this thread pinned
-            </label>
-          </div>
-        </DialogPanel>
-        <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={busy || !title.trim()} onClick={() => void save()}>
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+      {trailing}
+    </div>
   );
 }

@@ -13,6 +13,7 @@ export function appBarMenuItemsFromActions(
           id,
           title: action.title,
           icon: action.image,
+          ...(action.displayInline === undefined ? {} : { inline: action.displayInline }),
           items: appBarMenuItemsFromActions(action.subactions, onSelect),
         }
       : {

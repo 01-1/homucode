@@ -19,6 +19,7 @@ import {
 } from "./ChatView.logic";
 import { usePullRequestDraftThread } from "./chat/usePullRequestDraftThread";
 import { usePullRequestLinking } from "../hooks/usePullRequestLinking";
+import type { ThreadActionMenuExtras } from "../hooks/useThreadActionMenu";
 import { useComposerSelection } from "./chat/useComposerSelection";
 import { useComposerFocus } from "./chat/useComposerFocus";
 import { useProjectCloneBanner } from "./chat/useProjectCloneBanner";
@@ -133,10 +134,11 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   assistantCitationFromLocation,
   useSideChatCitationReveal,
@@ -397,6 +399,7 @@ import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransitio
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { endKeyScrollsThread } from "./chat/threadEndKey";
+import { openThreadInMadoHomu } from "../madohomu";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -424,6 +427,8 @@ type ChatViewProps =
       onDiffPanelOpen?: () => void;
       reserveTitleBarControlInset?: boolean;
       forceExpandedMobileComposer?: boolean;
+      /** Header extras for a focused view such as MadoHomu: hides the project breadcrumb and adds trailing controls. */
+      focusedHeader?: { trailing?: ReactNode; menuExtras?: ThreadActionMenuExtras };
       /** A side chat in its parent's right panel; the parent keeps the keyboard and workspace UI. */
       embedded?: SideChatParentPanel;
       routeKind: "server";
@@ -454,6 +459,7 @@ export default function ChatView(props: ChatViewProps) {
     forceExpandedMobileComposer = false,
     embedded: parentPanel,
   } = props;
+  const focusedHeader = routeKind === "server" ? props.focusedHeader : undefined;
   const embedded = parentPanel !== undefined;
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -594,6 +600,7 @@ export default function ChatView(props: ChatViewProps) {
   const clientSettingsHydrated = useClientSettingsHydrated();
   const timestampFormat = settings.timestampFormat;
   const navigate = useNavigate();
+  const router = useRouter();
   // Selects primitives: an object here is new on every router store update, which
   // re-renders ChatView on unrelated navigation state changes.
   const citationHref = useLocation({ select: (location) => location.href });
@@ -923,6 +930,10 @@ export default function ChatView(props: ChatViewProps) {
         title,
         sideChat: true,
         open: (): void => {
+          // A side chat's parent shares its project, so MadoHomu keeps it in view.
+          if (openThreadInMadoHomu(router, sideChatParentRef, activeThread?.projectId ?? null)) {
+            return;
+          }
           void navigate({
             to: "/$environmentId/$threadId",
             params: buildThreadRouteParams(sideChatParentRef),
@@ -934,11 +945,12 @@ export default function ChatView(props: ChatViewProps) {
       return {
         title: parentSubagentThread?.title ?? "Parent thread",
         open: (): void => {
+          const route = resolveThreadOpenRoute(parentSubagentThreadRef, parentSubagentThread);
+          // A subagent's parent shares its project, so MadoHomu keeps it in view.
+          if (openThreadInMadoHomu(router, route, activeThread?.projectId ?? null)) return;
           void navigate({
             to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(
-              resolveThreadOpenRoute(parentSubagentThreadRef, parentSubagentThread),
-            ),
+            params: buildThreadRouteParams(route),
           });
         },
       };
@@ -953,6 +965,7 @@ export default function ChatView(props: ChatViewProps) {
         ? {}
         : {
             open: (): void => {
+              if (openThreadInMadoHomu(router, parentRef)) return;
               void navigate({
                 to: "/$environmentId/$threadId",
                 params: buildThreadRouteParams(parentRef),
@@ -3346,7 +3359,8 @@ export default function ChatView(props: ChatViewProps) {
       }}
       files={{
         projectId: activeProject?.id,
-        projectName: activeProject?.title ?? null,
+        // A focused view (MadoHomu) shows no project name, so the root crumb reads "Files".
+        projectName: activeProject ? (focusedHeader ? "Files" : activeProject.title) : null,
         workspaceRoot: activeWorkspaceRoot,
         availableEditors,
         pendingSurfaceIds: pendingFileSurfaceIds,
@@ -3459,6 +3473,13 @@ export default function ChatView(props: ChatViewProps) {
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}
               {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
+              {...(focusedHeader
+                ? {
+                    hideProjectBreadcrumb: true,
+                    trailingControls: focusedHeader.trailing,
+                    menuExtras: focusedHeader.menuExtras,
+                  }
+                : {})}
             />
           </header>
         )}

@@ -126,14 +126,8 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { isElectron } from "../env";
-import {
-  resolveShortcutCommand,
-  shortcutLabelForCommand,
-  threadJumpCommandForIndex,
-  threadJumpIndexFromCommand,
-  threadTraversalDirectionFromCommand,
-} from "../keybindings";
-import { isModelPickerOpen } from "../modelPickerVisibility";
+import { shortcutLabelForCommand } from "../keybindings";
+import { useThreadNavigationShortcuts } from "../hooks/useThreadNavigationShortcuts";
 import { isMacPlatform } from "~/lib/utils";
 import { readLocalApi } from "../localApi";
 import { configuredHostedAppUrl } from "../hostedPairing";
@@ -163,7 +157,7 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
 import { useProjectPin } from "../hooks/useProjectGroupUpdate";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
-import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
+import { openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
@@ -190,11 +184,18 @@ import { environmentPresentations } from "../state/presentation";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
-import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
+import {
+  SETTLED_TAIL_INITIAL_COUNT,
+  SETTLED_TAIL_PAGE_COUNT,
+  useOlderSettledShelf,
+  useOlderSettledShelfGrowth,
+} from "../state/olderSettledShelf";
 import { useThreadSearch } from "../state/queries";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { madohomuCodeVisibilitySettingsAtom } from "../madohomuCodeVisibility";
+import { filterMadoHomuCodeThreads } from "@t3tools/client-runtime/madohomu";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import {
@@ -233,7 +234,6 @@ import {
   orderItemsByPreferredIds,
   planSidebarThreadDrop,
   reduceSidebarProjectScopeMenuState,
-  resolveAdjacentThreadId,
   resolveSidebarSweepKeys,
   resolveSidebarDropTarget,
   resolveSidebarDropVerb,
@@ -257,8 +257,6 @@ import {
   sortThreadsForSidebar,
   sortWorkingThreadsBySend,
   useSnoozeWakeClock,
-  threadShortcutContext,
-  useThreadJumpHintsVisible,
   type SidebarListItem,
   type SidebarSection,
   resolveSidebarRowThreadId,
@@ -358,7 +356,7 @@ function sameSidebarProviderEntries(
 }
 
 // Resolve providers per environment because default instance ids collide across environments.
-const sidebarProviderEntriesAtom = Atom.make((get) => {
+export const sidebarProviderEntriesAtom = Atom.make((get) => {
   const providersByEnvironment = get(environmentPresentations.providersByEnvironmentAtom);
   const derived = deriveProviderEntriesByEnvironment(
     [...get(environmentPresentations.serverConfigsAtom)].map(
@@ -389,8 +387,6 @@ const NO_SEARCH_MATCHES = { titleMatches: EMPTY_THREADS, contentMatches: EMPTY_T
 const NO_MESSAGE_MATCH_KEYS: ReadonlySet<string> = new Set();
 const SEARCH_RESULTS_PAGE_COUNT = 50;
 
-const SETTLED_TAIL_INITIAL_COUNT = 10;
-const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SEARCH_SORT_KEY = "t3code:sidebar:search-sort";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
@@ -1282,14 +1278,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const threads = useQuietThreadShells();
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
-  const listedThreads =
-    promotingDraftThreadKeys.length === 0
-      ? threads
-      : threads.map((thread) =>
-          promotingDraftThreadKeys.includes(threadShellKey(thread))
-            ? asLaunchingThread(thread)
-            : thread,
-        );
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1306,6 +1294,23 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const hasThreadSearchQuery = threadSearchQuery.trim().length > 0;
   const isSearchingThreads = hasThreadSearchQuery || sidebarSearchFiltersNarrowList(searchFilters);
   const canClearThreadSearch = hasThreadSearchQuery || countSidebarSearchFilters(searchFilters) > 0;
+  // MadoHomu keeps its threads out of this list; search and the open thread still reach them.
+  const madohomuSettings = useAtomValue(madohomuCodeVisibilitySettingsAtom);
+  const codeThreads = isSearchingThreads
+    ? threads
+    : filterMadoHomuCodeThreads(
+        threads,
+        madohomuSettings,
+        (thread) => threadShellKey(thread) === routeRowThreadKey,
+      );
+  const listedThreads =
+    promotingDraftThreadKeys.length === 0
+      ? codeThreads
+      : codeThreads.map((thread) =>
+          promotingDraftThreadKeys.includes(threadShellKey(thread))
+            ? asLaunchingThread(thread)
+            : thread,
+        );
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1694,17 +1699,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threadFolderBlocksRef = useRef(threadFolderBlocks);
   const settledThreadKeysRef = useRef(settledThreadKeys);
   const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
-
-  const jumpLabelByKey = (() => {
-    const mapping = new Map<string, string>();
-    for (const [index, threadKey] of orderedThreadKeys.entries()) {
-      const jumpCommand = threadJumpCommandForIndex(index);
-      if (!jumpCommand) break;
-      const label = shortcutLabelForCommand(keybindings, jumpCommand);
-      if (label) mapping.set(threadKey, label);
-    }
-    return mapping;
-  })();
 
   const navigateToThread = (threadRef: ScopedThreadRef) => {
     if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
@@ -3755,52 +3749,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   );
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window keydown for thread navigation shortcuts using the current thread list
-  useEffect(() => {
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat || isCommandPaletteOpen() || isModelPickerOpen()) {
-        return;
-      }
-      const command = resolveShortcutCommand(event, keybindings, {
-        platform: navigator.platform,
-        context: threadShortcutContext(routeThreadRef),
-      });
-      const navigateToThreadKey = (targetThreadKey: string | null) => {
-        if (!targetThreadKey) return false;
-        const targetThread = threadByKey.get(targetThreadKey);
-        if (!targetThread) return false;
-        event.preventDefault();
-        event.stopPropagation();
-        navigateToThread(scopeThreadRef(targetThread.environmentId, targetThread.id));
-        return true;
-      };
-      const traversalDirection = threadTraversalDirectionFromCommand(command);
-      if (traversalDirection !== null) {
-        navigateToThreadKey(
-          resolveAdjacentThreadId({
-            threadIds: orderedThreadKeys,
-            currentThreadId: routeRowThreadKey,
-            direction: traversalDirection,
-          }),
-        );
-        return;
-      }
-      const jumpIndex = threadJumpIndexFromCommand(command ?? "");
-      if (jumpIndex === null) return;
-      navigateToThreadKey(orderedThreadKeys[jumpIndex] ?? null);
-    };
-    window.addEventListener("keydown", onWindowKeyDown);
-    return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [
-    keybindings,
-    navigateToThread,
+  const jumpLabelByKey = useThreadNavigationShortcuts({
     orderedThreadKeys,
-    routeRowThreadKey,
+    currentThreadKey: routeRowThreadKey,
     routeThreadRef,
-    threadByKey,
-  ]);
-
-  const showJumpHints = useThreadJumpHintsVisible(keybindings, routeThreadRef);
+    onNavigate: (targetThreadKey) => {
+      const targetThread = threadByKey.get(targetThreadKey);
+      if (!targetThread) return false;
+      void navigateToThread(scopeThreadRef(targetThread.environmentId, targetThread.id));
+      return true;
+    },
+  });
 
   const handleNewThreadClick = (event?: ReactMouseEvent) => {
     if (
@@ -4437,9 +4396,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             }
                             isRouteThread={routeThreadKey === threadKey}
                             readOpensPullRequestsInRightPanel={readOpensPullRequestsInRightPanel}
-                            jumpLabel={
-                              showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null
-                            }
+                            jumpLabel={jumpLabelByKey.get(threadKey) ?? null}
                             currentEnvironmentId={primaryEnvironmentId}
                             environmentLabel={
                               environmentLabelById.get(thread.environmentId) ?? null

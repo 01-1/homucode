@@ -35,7 +35,7 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
-import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
+import { memo, useCallback, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
@@ -197,7 +197,7 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
 
-function ThreadListV2Section(props: {
+export function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
   readonly tone?: "default" | "snoozed";
@@ -208,6 +208,11 @@ function ThreadListV2Section(props: {
     readonly accessibilityLabel: string;
     readonly accessibilityHint: string;
   };
+  /** Sits right after the label, outside its text, so a long label truncates before it. */
+  readonly badge?: ReactNode;
+  /** A quiet count at the end of the rule, before the disclosure. */
+  readonly count?: number | string;
+  readonly accessory?: ReactNode;
 }) {
   const snoozed = props.tone === "snoozed";
   const sidebarPane = props.pane === "sidebar";
@@ -218,8 +223,9 @@ function ThreadListV2Section(props: {
   const content = (
     <>
       <Text
+        numberOfLines={1}
         className={cn(
-          "text-xs font-t3-medium",
+          "shrink text-xs font-t3-medium",
           sidebarPane
             ? "text-drawer-foreground-muted"
             : snoozed
@@ -229,12 +235,23 @@ function ThreadListV2Section(props: {
       >
         {props.label}
       </Text>
+      {props.badge}
       <View
         className={cn(
           "h-px flex-1",
           snoozed ? "bg-primary/20" : sidebarPane ? "bg-drawer-border" : "bg-border",
         )}
       />
+      {props.count === undefined ? null : (
+        <Text
+          className={cn(
+            "text-xs tabular-nums",
+            sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-tertiary",
+          )}
+        >
+          {props.count}
+        </Text>
+      )}
       {props.disclosure ? (
         <SymbolView
           name="chevron.down"
@@ -250,6 +267,7 @@ function ThreadListV2Section(props: {
           style={{ transform: [{ rotate: props.disclosure.expanded ? "180deg" : "0deg" }] }}
         />
       ) : null}
+      {props.accessory}
     </>
   );
 
@@ -331,7 +349,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
 
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
-  readonly hiddenCount: number;
+  readonly hiddenCount: number | null;
   /** Older settled threads are loading, or their last read failed. */
   readonly state?: "loading" | "failed";
   readonly onPress: () => void;
@@ -341,14 +359,18 @@ export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(pro
       ? "Loading"
       : props.state === "failed"
         ? "Could not load older threads. Retry"
-        : `Show more (${props.hiddenCount} settled hidden)`;
+        : props.hiddenCount === null
+          ? "Show more"
+          : `Show more (${props.hiddenCount} settled hidden)`;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        props.state === undefined
-          ? `Show ${Math.min(props.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`
-          : label
+        props.state !== undefined
+          ? label
+          : props.hiddenCount === null
+            ? "Show more settled threads"
+            : `Show ${Math.min(props.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`
       }
       disabled={props.state === "loading"}
       onPress={props.onPress}
@@ -704,6 +726,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly searchMatch?: EnvironmentThreadSearchMatch;
   readonly searchQuery?: string;
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
+  /** Drawn where the project icon goes, for lists that show their own icon instead. */
+  readonly leading?: ReactNode;
+  /** Menu items a list adds; their ids start with `extra:` and go to `onExtraMenuAction`. */
+  readonly extraMenuActions?: readonly MenuAction[];
+  readonly onExtraMenuAction?: (thread: EnvironmentThreadShell, event: string) => void;
+  /** Titles for T3's own pin items, for lists that have a pin of their own. */
+  readonly pinMenuTitles?: { readonly pin: string; readonly unpin: string };
 }) {
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const titleTypography = useScaledTextRole("body");
@@ -734,6 +763,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onUnpinThread,
     onSetThreadAutoSettle,
     onMoveThread,
+    onExtraMenuAction,
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
@@ -906,11 +936,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       props.pinningSupported
         ? [
             thread.pinnedAt != null
-              ? { id: "unpin", title: "Unpin", image: "pin.slash" }
-              : { id: "pin", title: "Pin", image: "pin" },
+              ? { id: "unpin", title: props.pinMenuTitles?.unpin ?? "Unpin", image: "pin.slash" }
+              : { id: "pin", title: props.pinMenuTitles?.pin ?? "Pin", image: "pin" },
           ]
         : [],
-    [props.pinningSupported, thread.pinnedAt],
+    [props.pinningSupported, props.pinMenuTitles, thread.pinnedAt],
   );
   const autoSettleMenuItems = useMemo<MenuAction[]>(
     () =>
@@ -961,6 +991,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const menuActions = useMemo<MenuAction[]>(() => {
     const nested = Platform.OS === "ios";
     const direct: MenuAction[] = [
+      ...(props.extraMenuActions ?? []),
       ...(thread.branch
         ? [
             {
@@ -1034,6 +1065,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     autoSettleMenuItems,
     canUnsettle,
     pinMenuItems,
+    props.extraMenuActions,
     props.settlementSupported,
     reorderMenuItems,
     snoozePresetActions,
@@ -1044,6 +1076,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   ]);
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
+      if (nativeEvent.event.startsWith("extra:")) {
+        onExtraMenuAction?.(thread, nativeEvent.event);
+        return;
+      }
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
       if (nativeEvent.event === "settle") handleSettle();
       if (nativeEvent.event === "unsettle") handleUnsettle();
@@ -1092,6 +1128,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }
     },
     [
+      onExtraMenuAction,
       onNewThreadOnBranch,
       thread,
       handleArchive,
@@ -1173,11 +1210,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
       : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
-  const titleTextInset = props.project ? projectIconSize + 8 : 0;
+  const titleTextInset = props.leading || props.project ? projectIconSize + 8 : 0;
   const cardContent = (
     <>
       <View className="flex-row items-start gap-2">
-        {props.project ? (
+        {props.leading ? (
+          <View
+            className="items-center justify-center"
+            style={{ height: titleLineHeight, width: projectIconSize }}
+          >
+            {props.leading}
+          </View>
+        ) : props.project ? (
           <View className="justify-center" style={{ height: titleLineHeight }}>
             <ProjectFavicon
               environmentId={thread.environmentId}
@@ -1497,7 +1541,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             sidebarPane && "px-3",
           )}
         >
-          {props.project ? (
+          {props.leading ? (
+            <View
+              className="items-center justify-center opacity-40"
+              style={{ width: projectIconSize }}
+            >
+              {props.leading}
+            </View>
+          ) : props.project ? (
             <View className="opacity-40">
               <ProjectFavicon
                 environmentId={thread.environmentId}
