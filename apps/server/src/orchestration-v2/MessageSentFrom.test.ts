@@ -81,7 +81,7 @@ describe("sentFromConnection and sentFromLine", () => {
     {
       sender: "t3 thread send",
       fields: { createdBy: "agent" as const, creationSource: "mcp" as const },
-      line: "[T3] Automatic message from an agent or script using T3's tools (t3 thread send). No human sent this message.",
+      line: "[T3] Automatic message from an agent or script using T3's tools. No human sent this message.",
     },
     {
       sender: "a restart",

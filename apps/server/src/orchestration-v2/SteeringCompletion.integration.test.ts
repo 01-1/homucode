@@ -3220,10 +3220,7 @@ it.effect("starts a restart that stops the running turn ahead of an older held q
           started: [
             timestamped("first"),
             ...["second", "do this instead"].map((text) =>
-              timestampedBy(
-                text,
-                automaticLine("an agent or script using T3's tools (t3 thread send)"),
-              ),
+              timestampedBy(text, automaticLine("an agent or script using T3's tools")),
             ),
           ],
         },

@@ -115,7 +115,7 @@ export function messageSource(message: MessageSourceFields): MessageSource {
   if (message.creationSource === "mcp") {
     return {
       kind: "automatic",
-      sender: "an agent or script using T3's tools (t3 thread send)",
+      sender: "an agent or script using T3's tools",
       label: "Agent or script",
     };
   }
