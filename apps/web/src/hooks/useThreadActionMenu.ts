@@ -62,7 +62,6 @@ import {
   isThreadFolderMenuId,
   runThreadFolderMenuAction,
 } from "./threadFolderMenu";
-import { readMadoHomuContext, startMadoHomuThreadOnBranch } from "../madohomu";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
@@ -339,15 +338,6 @@ export function useThreadActionMenu(input: {
           return;
         }
         case "new-thread-on-branch": {
-          if (readMadoHomuContext(router)?.environmentId === threadRef.environmentId) {
-            const started = await startMadoHomuThreadOnBranch(router, {
-              environmentId: threadRef.environmentId,
-              branch: thread.branch,
-              worktreePath: thread.worktreePath,
-            });
-            if (!started) toastManager.add({ type: "error", title: "Could not create thread" });
-            return;
-          }
           const result = await settlePromise(() =>
             handleNewThread(scopeProjectRef(threadRef.environmentId, thread.projectId), {
               branch: thread.branch,

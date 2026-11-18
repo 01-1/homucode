@@ -93,7 +93,8 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
   const navigate = useNavigate();
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the shown thread into the URL, so the live list reordering cannot swap the open chat.
   useEffect(() => {
-    if (selectedId === null || search.threadId === selectedId) return;
+    // Only a bare URL: a named thread hidden by a filter must stay named.
+    if (selectedId === null || search.threadId !== undefined) return;
     void navigate({
       to: "/madohomu",
       search: (prev) => ({ ...prev, threadId: selectedId }),
@@ -161,7 +162,7 @@ function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) 
           <p className="text-xs text-muted-foreground">
             No agent is set up yet, so MadoHomu cannot start a thread.
           </p>
-          <Button variant="outline" size="sm" render={<Link to="/settings/providers" />}>
+          <Button variant="outline" size="sm" render={<Link to="/settings/providers" search={{ environmentId }} />}>
             Open provider settings
           </Button>
         </>

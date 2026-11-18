@@ -80,10 +80,6 @@ export async function createMadoHomuThread(
   environmentId: EnvironmentId,
   title: string = MADOHOMU_NEW_THREAD_TITLE,
   icon: string | null = null,
-  checkout: { branch: string | null; worktreePath: string | null } = {
-    branch: null,
-    worktreePath: null,
-  },
 ): Promise<ThreadId | null> {
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
   if (!config?.settings.madohomuEnabled) return null;
@@ -107,8 +103,8 @@ export async function createMadoHomuThread(
       modelSelection,
       runtimeMode: madohomuRuntimeMode(config.settings, project),
       interactionMode: "default",
-      branch: checkout.branch,
-      worktreePath: checkout.worktreePath,
+      branch: null,
+      worktreePath: null,
     },
   });
   if (created._tag !== "Success") return null;
@@ -121,29 +117,6 @@ export async function createMadoHomuThread(
 
 // One New thread at a time: a second press while one is being made would miss it and make another.
 let startingThread: Promise<boolean> | null = null;
-
-/**
- * "New thread on <branch>" inside MadoHomu: a pinned thread on that branch and worktree, opened
- * in MadoHomu, instead of T3 Code's draft (which would land in Scratch). False outside MadoHomu.
- */
-export async function startMadoHomuThreadOnBranch(
-  router: AnyRouter,
-  source: {
-    readonly environmentId: EnvironmentId;
-    readonly branch: string | null;
-    readonly worktreePath: string | null;
-  },
-): Promise<boolean> {
-  const context = readMadoHomuContext(router);
-  if (!context || context.environmentId !== source.environmentId) return false;
-  const threadId = await createMadoHomuThread(context.environmentId, undefined, null, source);
-  if (!threadId) return false;
-  await router.navigate({
-    to: "/madohomu",
-    search: { environmentId: context.environmentId, threadId },
-  });
-  return true;
-}
 
 export function startMadoHomuThread(router: AnyRouter): Promise<boolean> {
   startingThread ??= startThread(router).finally(() => {

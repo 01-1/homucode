@@ -1391,15 +1391,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       topStatus?.icon === "done" &&
                       props.leadingIcon !== undefined ? (
                       // MadoHomu rows leave the title its room: Done is the icon alone.
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={<span className={cn("inline-flex", topStatus.className)} />}
-                        >
-                          <TopStatusIcon icon="done" className="size-3" />
-                          <span className="sr-only">{topStatus.label}</span>
-                        </TooltipTrigger>
-                        <TooltipPopup side="top">{topStatus.label}</TooltipPopup>
-                      </Tooltip>
+                      <span className={cn("inline-flex", topStatus.className)}>
+                        <TopStatusIcon icon="done" className="size-3" />
+                        <span className="sr-only">{topStatus.label}</span>
+                      </span>
                     ) : inFolder && topStatus ? (
                       // Folder rows have no status line, so the status takes the time slot.
                       <span
