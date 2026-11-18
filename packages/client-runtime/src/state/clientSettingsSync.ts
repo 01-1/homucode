@@ -160,8 +160,152 @@ export function syncedSettingLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function formatSyncedSettingValue(value: unknown): string {
+function syncedItemLabel(item: unknown): string {
+  if (typeof item === "string") return item || "empty";
+  if (item && typeof item === "object") {
+    const record = item as Record<string, unknown>;
+    for (const field of ["model", "name", "label", "title", "id"]) {
+      const value = record[field];
+      if (typeof value === "string" && value) return value;
+    }
+  }
+  return stableJson(item);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** The first field that differs between two values, as "path: value" for each side. */
+function firstDifference(left: unknown, right: unknown, path = ""): [string, string] | null {
+  if (syncedValueEquals(left, right)) return null;
+  if (isPlainRecord(left) && isPlainRecord(right)) {
+    for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+      const found = firstDifference(left[key], right[key], path ? `${path}.${key}` : key);
+      if (found) return found;
+    }
+  }
+  const prefix = path ? `${path}: ` : "";
+  if (typeof left === "string" && typeof right === "string") {
+    // Long strings can share a long prefix; start the excerpt just before they part.
+    let index = 0;
+    while (index < left.length && left[index] === right[index]) index++;
+    const from = Math.max(0, index - 10);
+    const excerpt = (text: string) => (from > 0 ? "..." : "") + shorten(text.slice(from), 40);
+    return [`${prefix}${excerpt(left)}`, `${prefix}${excerpt(right)}`];
+  }
+  return [`${prefix}${describeScalar(left)}`, `${prefix}${describeScalar(right)}`];
+}
+
+function shorten(text: string, max = 60): string {
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function describeScalar(value: unknown): string {
   if (value === undefined || value === null) return "not set";
-  const text = typeof value === "string" ? value || "empty" : JSON.stringify(value);
-  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+  if (typeof value === "boolean") return value ? "on" : "off";
+  if (typeof value === "string") return shorten(value || "empty");
+  return shorten(stableJson(value));
+}
+
+function countLabel(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+/** Some synced settings (the theme library, light and dark themes) are stored as JSON text. */
+function decodeForDisplay(value: unknown): unknown {
+  if (typeof value !== "string" || !/^\s*[[{]/.test(value)) return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+const LISTED_ITEMS = 4;
+
+function listLabels(labels: ReadonlyArray<string>): string {
+  const shown = labels.slice(0, LISTED_ITEMS).join(", ");
+  return labels.length > LISTED_ITEMS ? `${shown} +${labels.length - LISTED_ITEMS} more` : shown;
+}
+
+function describeLists(
+  local: ReadonlyArray<unknown>,
+  remote: ReadonlyArray<unknown>,
+): { readonly local: string; readonly remote: string } {
+  const localKeys = local.map(stableJson);
+  const remoteKeys = remote.map(stableJson);
+  const onlyIn = (items: ReadonlyArray<unknown>, keys: string[], other: string[]) =>
+    items.filter((_, index) => !other.includes(keys[index]!));
+  const localOnly = onlyIn(local, localKeys, remoteKeys);
+  const remoteOnly = onlyIn(remote, remoteKeys, localKeys);
+  if (localOnly.length === 0 && remoteOnly.length === 0) {
+    // Same items in another order: show each side's order from the first position that differs.
+    const start = Math.max(
+      0,
+      localKeys.findIndex((key, index) => key !== remoteKeys[index]),
+    );
+    const differing = firstDifference(local[start], remote[start]);
+    const order = (items: ReadonlyArray<unknown>, first: string | undefined) => {
+      const labels = items.slice(start).map(syncedItemLabel);
+      if (first !== undefined && labels[0] !== undefined) labels[0] = `${labels[0]} (${first})`;
+      return `${countLabel(items.length, "item")}, from #${start + 1}: ${listLabels(labels)}`;
+    };
+    // Equal labels at the first differing position need the field that tells them apart.
+    const tell = syncedItemLabel(local[start]) === syncedItemLabel(remote[start]);
+    return {
+      local: order(local, tell ? differing?.[0] : undefined),
+      remote: order(remote, tell ? differing?.[1] : undefined),
+    };
+  }
+  // An item edited in place shows on both sides under one label; name the field that changed.
+  const remoteByLabel = new Map(remoteOnly.map((item) => [syncedItemLabel(item), item]));
+  const localByLabel = new Map(localOnly.map((item) => [syncedItemLabel(item), item]));
+  const side = (
+    items: ReadonlyArray<unknown>,
+    extra: ReadonlyArray<unknown>,
+    counterpart: ReadonlyMap<string, unknown>,
+    pick: 0 | 1,
+  ) => {
+    const count = countLabel(items.length, "item");
+    if (extra.length === 0) return count;
+    const labels = extra.map((item) => {
+      const label = syncedItemLabel(item);
+      if (!counterpart.has(label)) return label;
+      const other = counterpart.get(label);
+      const differing = pick === 0 ? firstDifference(item, other) : firstDifference(other, item);
+      return differing ? `${label} (${differing[pick]})` : label;
+    });
+    return `${count}, incl. ${listLabels(labels)}`;
+  };
+  return {
+    local: side(local, localOnly, remoteByLabel, 0),
+    remote: side(remote, remoteOnly, localByLabel, 1),
+  };
+}
+
+/**
+ * Human-readable sides of a conflict. Lists and objects name what differs instead of dumping
+ * JSON, since both sides usually share a long common prefix.
+ */
+export function describeSyncedSettingConflict(conflict: ClientSettingsSyncConflict): {
+  readonly local: string;
+  readonly remote: string;
+} {
+  const local = decodeForDisplay(conflict.local);
+  const remote = decodeForDisplay(conflict.remote);
+  if (Array.isArray(local) && Array.isArray(remote)) return describeLists(local, remote);
+  if (isPlainRecord(local) && isPlainRecord(remote)) {
+    const differing = [...new Set([...Object.keys(local), ...Object.keys(remote)])].filter(
+      (key) => !syncedValueEquals(local[key], remote[key]),
+    );
+    const describeSide = (side: Record<string, unknown>) =>
+      shorten(
+        differing
+          .map((key) => `${syncedSettingLabel(key)}: ${describeScalar(side[key])}`)
+          .join(", "),
+      );
+    return { local: describeSide(local), remote: describeSide(remote) };
+  }
+  return { local: describeScalar(local), remote: describeScalar(remote) };
 }
