@@ -25,6 +25,7 @@ export function usePendingTaskListActions(
           ? {
               environmentId: String(pendingTask.environmentId),
               threadId: String(pendingTask.message.threadId),
+              ...(pendingTask.creation.madohomu ? { madohomu: true } : {}),
             }
           : {
               draft: {

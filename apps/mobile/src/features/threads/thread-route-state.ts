@@ -1,4 +1,4 @@
-import type { ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 export type NewTaskDraftRouteParams = {
   readonly requestId?: string;
@@ -31,8 +31,18 @@ export function submittedThreadParams(environmentId: string, threadId: string) {
   return { draft: undefined, environmentId, threadId };
 }
 
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+export function madohomuDraftRouteOrigin(draft: NewTaskDraftRouteParams | undefined) {
+  if (draft?.madohomu !== true) return undefined;
+  const environmentId = first(draft.environmentId);
+  const projectId = first(draft.projectId);
+  return environmentId && projectId
+    ? { environmentId: EnvironmentId.make(environmentId), projectId: ProjectId.make(projectId) }
+    : undefined;
+}
+
 export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
-  const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
   return JSON.stringify([
     draft.requestId,
     first(draft.draftId),
@@ -41,6 +51,7 @@ export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
     draft.branch ?? null,
     draft.worktreePath ?? null,
     first(draft.incomingShareId),
+    draft.madohomu === true,
   ]);
 }
 

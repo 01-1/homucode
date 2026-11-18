@@ -550,7 +550,9 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
-  const inMadoHomu = isMadoHomuThreadRoute(params, selectedThread?.projectId);
+  const inMadoHomu =
+    isMadoHomuThreadRoute(params, selectedThread?.projectId) ||
+    selectedThreadCreation?.message.creation?.madohomu === true;
   const headerSubtitle = [
     inMadoHomu ? null : (selectedThreadProject?.title ?? null),
     selectedEnvironmentConnection?.environmentLabel ?? null,
@@ -853,7 +855,7 @@ function ThreadRouteContent(
     }
     // Open recovery by draft id or the sheet creates an empty draft and strands restored content.
     try {
-      await recoverFailedThreadDraft(creation);
+      await recoverFailedThreadDraft(creation, inMadoHomu);
     } catch (error) {
       Dialog.alert(
         "Could not restore draft",

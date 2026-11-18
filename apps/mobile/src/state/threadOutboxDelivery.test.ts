@@ -152,7 +152,16 @@ import { scopedThreadKey } from "../lib/scopedEntities";
 import { appAtomRegistry } from "./atom-registry";
 import { pendingThreadCreationOutcomesAtom } from "./pending-thread-creation";
 import { clearThreadComposerError, threadComposerErrorsAtom } from "./thread-composer-error";
-import type { QueuedThreadMessage } from "./thread-outbox-model";
+import {
+  decodeQueuedThreadMessage,
+  encodeQueuedThreadMessage,
+  type QueuedThreadMessage,
+} from "./thread-outbox-model";
+import { buildPendingNewTasks } from "./pending-new-tasks-model";
+import {
+  INITIAL_NEW_TASK_FLOW_STATE,
+  resolveRouteDraft,
+} from "../features/threads/new-task-flow-state";
 import * as composerDrafts from "./use-composer-drafts";
 import { recoverFailedThreadDraft } from "./recover-failed-thread-draft";
 import { editingQueuedMessageIdsAtom } from "./use-thread-outbox";
@@ -756,6 +765,79 @@ describe("thread outbox recovery rollback", () => {
         `${message.environmentId}:${message.threadId}`
       ],
     ).toEqual({ kind: "failed", message, reason: "rejected by server" });
+  });
+
+  it("reopens a rejected MadoHomu branch draft from Unsent after a restart", async () => {
+    const queued: QueuedThreadMessage = {
+      ...queuedMessage({ messageId: "madohomu-branch-restore", text: "new task text" }),
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+      creation: {
+        projectId: ProjectId.make("madohomu-project"),
+        workspaceMode: "local",
+        branch: "feature",
+        worktreePath: "/worktrees/feature",
+        madohomu: true,
+      },
+    };
+    const message = decodeQueuedThreadMessage(
+      JSON.parse(JSON.stringify(encodeQueuedThreadMessage(queued))),
+    );
+    expect(message).toEqual(queued);
+    await harness.manager.enqueue(message);
+    await expect(restoreRejectedQueuedMessage(message, "rejected by server")).resolves.toBe(
+      "restored",
+    );
+    expect(remainingMessages()).toEqual([]);
+    composerDrafts.setComposerDraftText(
+      `${message.environmentId}:${message.threadId}`,
+      "Keep my setup edits",
+    );
+    await recoverFailedThreadDraft(message);
+
+    appAtomRegistry.set(composerDrafts.composerDraftsAtom, {});
+    composerDrafts.resetComposerDraftsLoadState();
+    await composerDrafts.waitForComposerDraftsLoaded();
+    const [unsent] = buildPendingNewTasks({
+      queuedMessages: [],
+      drafts: appAtomRegistry.get(composerDrafts.composerDraftsAtom),
+      sendGate: {
+        connectedEnvironmentIds: new Set(),
+        operableEnvironmentIds: new Set(),
+        shellStatuses: new Map(),
+        retryingMessageIds: {},
+      },
+    });
+    if (unsent?.kind !== "draft") throw new Error("Expected the recovered draft in Unsent");
+    expect(unsent.draft.text).toBe("new task text\n\nKeep my setup edits");
+    expect(unsent.draft.workspaceSelection).toMatchObject({
+      branch: "feature",
+      worktreePath: "/worktrees/feature",
+    });
+    expect(unsent.draft.project).toMatchObject({
+      environmentId: queued.environmentId,
+      projectId: queued.creation!.projectId,
+      madohomu: true,
+    });
+    const other = { environmentId: EnvironmentId.make("other"), projectId: unsent.projectId };
+    await expect(composerDrafts.retargetSavedNewTaskDraft(unsent.draftKey, other)).resolves.toBe(
+      "locked",
+    );
+    expect(composerDrafts.getComposerDraftSnapshot(unsent.draftKey).project).toEqual(
+      unsent.draft.project,
+    );
+    expect(
+      resolveRouteDraft({
+        flow: INITIAL_NEW_TASK_FLOW_STATE,
+        routeDraftId: unsent.draftKey,
+        draftsLoaded: true,
+        stamp: unsent.draft.project,
+        projects: [{ environmentId: other.environmentId, id: other.projectId }],
+        stampedEnvironmentLoading: false,
+      }),
+    ).toMatchObject({
+      kind: "open",
+      flow: { environmentId: queued.environmentId, draftKey: unsent.draftKey },
+    });
   });
 
   it("does not record a creation outcome for a rejected follow-up message", async () => {

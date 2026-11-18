@@ -7,14 +7,49 @@ import {
   flushComposerDrafts,
   getComposerDraftSnapshot,
   mergeComposerDraftContent,
+  updateComposerDraftSettings,
+  waitForComposerDraftsLoaded,
 } from "./use-composer-drafts";
 
-export async function recoverFailedThreadDraft(message: QueuedThreadMessage): Promise<void> {
+export function stampRecoveryDraftProject(
+  message: QueuedThreadMessage,
+  draftKey: string,
+  legacyMadoHomu = false,
+): void {
+  if (!message.creation) return;
+  const project = getComposerDraftSnapshot(draftKey).project;
+  // A re-open may follow an edit to the already-restored draft.
+  if (project?.madohomu === true || (project && !message.creation.madohomu && !legacyMadoHomu)) {
+    return;
+  }
+  updateComposerDraftSettings(draftKey, {
+    project: {
+      environmentId: message.environmentId,
+      projectId: message.creation.projectId,
+      createdAt: project?.createdAt ?? message.createdAt,
+      ...(message.creation.madohomu || legacyMadoHomu ? { madohomu: true } : {}),
+    },
+  });
+}
+
+export async function recoverFailedThreadDraft(
+  message: QueuedThreadMessage,
+  legacyMadoHomu = false,
+): Promise<void> {
+  await waitForComposerDraftsLoaded();
   const sourceKey = scopedThreadKey(message.environmentId, message.threadId);
   const targetKey = restoredNewTaskDraftKey(message.messageId);
   const source = getComposerDraftSnapshot(sourceKey);
-  if (source.text.length === 0 && source.attachments.length === 0) return;
+  if (source.text.length === 0 && source.attachments.length === 0) {
+    if (legacyMadoHomu || message.creation?.madohomu) {
+      // A previous app version may have restored the content without the MadoHomu flag.
+      stampRecoveryDraftProject(message, targetKey, legacyMadoHomu);
+      await flushComposerDrafts();
+    }
+    return;
+  }
 
+  stampRecoveryDraftProject(message, targetKey, legacyMadoHomu);
   await mergeComposerDraftContent(targetKey, {
     text: source.text,
     context: source.context,

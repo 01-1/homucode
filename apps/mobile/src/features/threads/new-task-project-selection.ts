@@ -162,9 +162,12 @@ type ProjectRef = { readonly environmentId: string; readonly projectId: string }
 
 export function madohomuDraftSendBlockReason(
   origin: Partial<ProjectRef> | undefined,
-  selected: Pick<EnvironmentProject, "environmentId" | "id">,
+  selected: Pick<EnvironmentProject, "environmentId" | "id"> | undefined,
   settings: Pick<ServerConfig["settings"], "madohomuEnabled" | "madohomuProjectId"> | undefined,
 ): string | null {
+  if (!selected) {
+    return "Reconnect to the original machine or restore the MadoHomu project, then try again.";
+  }
   if (origin?.environmentId !== selected.environmentId || origin.projectId !== selected.id) {
     return "Switch this draft back to the machine and project where you opened it, then try again.";
   }
