@@ -1,4 +1,4 @@
-import { type RefObject, startTransition, useState } from "react";
+import { type RefObject, useState } from "react";
 import { Pressable, TextInput, type TextInputInstance, View } from "react-native";
 
 import { SymbolView } from "./AppSymbol";
@@ -25,8 +25,8 @@ export function SearchField({
   onChangeText,
 }: SearchFieldProps) {
   const { scale, mediumIconSize } = useAndroidControlSizing();
-  // The field owns its text and reports changes as a transition, so a slow parent render
-  // can't push a stale value back into the native input and eat keystrokes.
+  // The field owns its text, so a parent that applies changes late (in a transition) can't
+  // push a stale value back into the native input and eat keystrokes.
   const [state, setState] = useState<SearchFieldTextState>({ text: value, pending: [] });
   const [reportedValue, setReportedValue] = useState(value);
   if (value !== reportedValue) {
@@ -36,7 +36,7 @@ export function SearchField({
   const text = state.text;
   const changeText = (next: string) => {
     setState((current) => ({ text: next, pending: [...current.pending, next] }));
-    startTransition(() => onChangeText(next));
+    onChangeText(next);
   };
   return (
     <View
