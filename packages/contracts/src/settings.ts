@@ -1588,6 +1588,10 @@ export const ServerSettings = Schema.Struct({
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   bareStopWaitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   claudeSteersSurviveStop: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** A turn a restart cut while it waited on an approval, question or secret resumes and asks again. */
+  reaskPendingRequestsAfterRestart: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   /** A model or effort change restarts the running turn on it, and the turn carries on by itself. */
   applyModelChangeNow: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   messageSentFromEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -2107,6 +2111,7 @@ export const ServerSettingsPatch = Schema.Struct({
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   bareStopWaitEnabled: Schema.optionalKey(Schema.Boolean),
   claudeSteersSurviveStop: Schema.optionalKey(Schema.Boolean),
+  reaskPendingRequestsAfterRestart: Schema.optionalKey(Schema.Boolean),
   applyModelChangeNow: Schema.optionalKey(Schema.Boolean),
   messageSentFromEnabled: Schema.optionalKey(Schema.Boolean),
   stopThreadSubagents: Schema.optionalKey(Schema.Boolean),
