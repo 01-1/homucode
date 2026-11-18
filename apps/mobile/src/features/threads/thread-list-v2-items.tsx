@@ -210,6 +210,8 @@ export function ThreadListV2Section(props: {
   };
   /** Sits right after the label, outside its text, so a long label truncates before it. */
   readonly badge?: ReactNode;
+  /** A quiet number at the end of the rule, before the disclosure. */
+  readonly count?: number;
   readonly accessory?: ReactNode;
 }) {
   const snoozed = props.tone === "snoozed";
@@ -240,6 +242,16 @@ export function ThreadListV2Section(props: {
           snoozed ? "bg-primary/20" : sidebarPane ? "bg-drawer-border" : "bg-border",
         )}
       />
+      {props.count === undefined ? null : (
+        <Text
+          className={cn(
+            "text-xs tabular-nums",
+            sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-tertiary",
+          )}
+        >
+          {props.count}
+        </Text>
+      )}
       {props.disclosure ? (
         <SymbolView
           name="chevron.down"

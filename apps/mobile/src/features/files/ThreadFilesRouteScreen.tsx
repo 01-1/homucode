@@ -365,6 +365,8 @@ type ThreadFilesRouteScreenProps = StaticScreenProps<{
   readonly threadId?: string;
   readonly cwd?: string;
   readonly projectName?: string;
+  /** Opened from MadoHomu, which never names its project. */
+  readonly madohomu?: boolean;
 }>;
 
 type ThreadFileRouteScreenProps = StaticScreenProps<{
@@ -384,6 +386,7 @@ function useThreadFilesWorkspace(params: {
   readonly cwd?: string | string[];
   readonly projectName?: string | string[];
   readonly path?: string | string[];
+  readonly madohomu?: boolean;
 }) {
   const routeEnvironmentId = firstRouteParam(params.environmentId);
   const routeThreadId = firstRouteParam(params.threadId);
@@ -404,7 +407,8 @@ function useThreadFilesWorkspace(params: {
   return {
     cwd: routeCwd ?? selectedThreadCwd ?? project?.workspaceRoot ?? null,
     environmentId,
-    projectName: routeProjectName ?? project?.title ?? "Files",
+    projectName:
+      (params.madohomu === true ? null : (routeProjectName ?? project?.title)) ?? "Files",
     relativePath: normalizeRoutePath(params.path),
     selectedThread,
     threadId,
@@ -468,6 +472,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
   const { cwd, environmentId, projectName, selectedThread, threadId } = useThreadFilesWorkspace(
     props.route.params,
   );
+  const madohomu = props.route.params.madohomu === true;
   const hasFileInspector = fileInspector.supported && threadId !== null;
   const fileAccessSession = useEnvironmentQuery(
     environmentId !== null ? environmentSession.sessionStateAtom(environmentId) : null,
@@ -495,6 +500,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
         StackActions.replace("Thread", {
           environmentId: String(environmentId),
           threadId: String(threadId),
+          ...(madohomu ? { madohomu } : {}),
         }),
       );
     }
@@ -508,6 +514,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
       environmentId: String(environmentId),
       ...(threadId === null ? { cwd, projectName } : { threadId: String(threadId) }),
       path: path.split("/").filter((segment) => segment.length > 0),
+      ...(madohomu ? { madohomu } : {}),
     };
     if (threadId === null) {
       navigation.navigate("NewTaskFile", params);
@@ -624,8 +631,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   const targetLine = normalizeRouteLine(firstRouteParam(params.line));
   const workspace = useThreadFilesWorkspace(props.route.params);
   const { cwd, environmentId, relativePath, selectedThread, threadId } = workspace;
+  const { projectName } = workspace;
   const madohomu = params.madohomu === true;
-  const projectName = madohomu ? "Files" : workspace.projectName;
   const fileAccessSession = useEnvironmentQuery(
     environmentId !== null ? environmentSession.sessionStateAtom(environmentId) : null,
   );
@@ -776,6 +783,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
           ...(cwd === null ? {} : { cwd }),
           projectName,
           path: segments,
+          ...(madohomu ? { madohomu } : {}),
         }),
       );
       return;

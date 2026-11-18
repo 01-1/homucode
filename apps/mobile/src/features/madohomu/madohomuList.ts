@@ -70,10 +70,10 @@ export type MadoHomuListRow =
 const COLLAPSED_BY_DEFAULT: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed", "settled"]);
 const ALWAYS_SHOWN: ReadonlySet<MadoHomuGroupKind> = new Set(["pinned", "custom"]);
 
-/** Whether a thread, or a subagent its row speaks for, waits on an approval or a question. */
+/** Whether a thread's row shows it waiting on the user: an approval, a question or a guest. */
 function madohomuNeedsUser(thread: EnvironmentThreadShell): boolean {
   const status = resolveThreadListV2Status(thread);
-  return status === "approval" || status === "input";
+  return status === "approval" || status === "input" || status === "request";
 }
 
 export function buildMadoHomuListRows(input: {
@@ -133,7 +133,8 @@ export function buildMadoHomuListRows(input: {
         thread,
         variant: group.kind === "settled" ? ("slim" as const) : ("card" as const),
         snoozed: group.kind === "snoozed",
-        pinned: thread.pinnedAt != null,
+        // MadoHomu's own pin is its section; T3 Code's pin glyph would read as that.
+        pinned: false,
         wokeAt:
           group.kind === "settled" ? null : resolveThreadListV2WokeAt(thread, { now: input.now }),
         isLast: index === shown.length - 1,

@@ -3,6 +3,8 @@ import { AddProjectSourceScreen } from "./AddProjectScreen";
 
 type AddProjectSourceRouteParams = {
   readonly environmentId?: string | string[];
+  /** Opened from MadoHomu, which stays on its own environment. */
+  readonly lockEnvironment?: boolean;
 };
 
 export function AddProjectSourceRoute({

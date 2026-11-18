@@ -326,14 +326,24 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     return withInspectorHeader(<OpeningThreadLoadingScreen />);
   }
 
-  if (
-    routeName === "Thread" &&
-    !props.inspectorPresentation &&
-    threadRouteOpensDraft({
-      connectionState: routeConnectionState,
-      detailStatus: selectedThreadDetailState.status,
-    })
-  ) {
+  const opensDraft = threadRouteOpensDraft({
+    connectionState: routeConnectionState,
+    detailStatus: selectedThreadDetailState.status,
+  });
+
+  // MadoHomu is locked to one project, so a draft for the environment's first project is wrong.
+  if (opensDraft && params.madohomu === true) {
+    return withInspectorHeader(
+      <ThreadUnavailableScreen
+        actionLabel="Back to MadoHomu"
+        onAction={() =>
+          navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))
+        }
+      />,
+    );
+  }
+
+  if (routeName === "Thread" && !props.inspectorPresentation && opensDraft) {
     return <UnavailableThreadDraftRedirect environmentId={environmentId} />;
   }
 

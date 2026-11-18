@@ -449,7 +449,10 @@ function useEnvironmentOptions(
   })();
 }
 
-function useSelectedEnvironment(requestedEnvironmentId: EnvironmentId | null): {
+function useSelectedEnvironment(
+  requestedEnvironmentId: EnvironmentId | null,
+  lockEnvironment: boolean,
+): {
   readonly environmentOptions: ReadonlyArray<EnvironmentOption>;
   readonly selectedEnvironment: EnvironmentOption | null;
   readonly setSelectedEnvironmentId: (environmentId: EnvironmentId) => void;
@@ -460,7 +463,10 @@ function useSelectedEnvironment(requestedEnvironmentId: EnvironmentId | null): {
     setPreviousRequest(requestedEnvironmentId);
     setSelectedEnvironmentId(requestedEnvironmentId);
   }
-  const environmentOptions = useEnvironmentOptions(selectedEnvironmentId);
+  const allEnvironmentOptions = useEnvironmentOptions(selectedEnvironmentId);
+  const environmentOptions = lockEnvironment
+    ? allEnvironmentOptions.filter((option) => option.environmentId === requestedEnvironmentId)
+    : allEnvironmentOptions;
   const selectedEnvironment =
     environmentOptions.find((environment) => environment.environmentId === selectedEnvironmentId) ??
     environmentOptions.find((environment) =>
@@ -549,10 +555,17 @@ function SourceControlRow(props: {
   );
 }
 
-export function AddProjectSourceScreen(props: { readonly environmentId?: string | string[] }) {
+export function AddProjectSourceScreen(props: {
+  readonly environmentId?: string | string[];
+  readonly lockEnvironment?: boolean;
+}) {
   const navigation = useNavigation();
+  const lockEnvironment = props.lockEnvironment === true;
   const { environmentOptions, selectedEnvironment, setSelectedEnvironmentId } =
-    useSelectedEnvironment(stringParam(props.environmentId) as EnvironmentId | null);
+    useSelectedEnvironment(
+      stringParam(props.environmentId) as EnvironmentId | null,
+      lockEnvironment,
+    );
   const canWriteSourceControl = useEnvironmentScope(
     selectedEnvironment?.environmentId ?? null,
     AuthSourceControlWriteScope,
@@ -642,6 +655,7 @@ export function AddProjectSourceScreen(props: { readonly environmentId?: string 
                   navigation.dispatch(
                     StackActions.push("AddProjectNew", {
                       environmentId: selectedEnvironment.environmentId,
+                      ...(lockEnvironment ? { lockEnvironment } : {}),
                     }),
                   )
                 }
@@ -1097,11 +1111,17 @@ function FolderBrowser(props: {
   );
 }
 
-export function AddProjectNewScreen(props: { readonly environmentId?: string | string[] }) {
+export function AddProjectNewScreen(props: {
+  readonly environmentId?: string | string[];
+  readonly lockEnvironment?: boolean;
+}) {
   const openNewTaskDraft = useOpenNewTaskDraft();
   const navigation = useNavigation();
   const environmentOptions = useEnvironmentOptions().filter(
-    (option) => option.newProjectsRoot !== null,
+    (option) =>
+      option.newProjectsRoot !== null &&
+      (props.lockEnvironment !== true ||
+        option.environmentId === stringParam(props.environmentId)),
   );
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(
     () => stringParam(props.environmentId) as EnvironmentId | null,
