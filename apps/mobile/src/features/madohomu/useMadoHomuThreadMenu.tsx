@@ -12,7 +12,7 @@ import type { AppBarMenu, AppBarMenuItem } from "../../components/ui/AppBar.type
 import * as Dialog from "../../components/ui/Dialog";
 import { useThreadShell } from "../../state/entities";
 import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
-import type { useMadoHomuActions } from "./useMadoHomuActions";
+import type { useMadoHomuFiling } from "./useMadoHomuActions";
 
 export function promptSectionName(
   title: string,
@@ -42,7 +42,7 @@ interface MadoHomuManualPlace {
  */
 export function useMadoHomuThreadMenu(input: {
   readonly environmentId: EnvironmentId;
-  readonly actions: ReturnType<typeof useMadoHomuActions>;
+  readonly actions: ReturnType<typeof useMadoHomuFiling>;
   readonly canEdit: boolean;
   readonly onReorder?: () => void;
   readonly onStep?: (threadId: ThreadId, direction: "up" | "down") => void;

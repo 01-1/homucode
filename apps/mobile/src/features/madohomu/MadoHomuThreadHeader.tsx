@@ -7,7 +7,7 @@ import type { ComponentProps } from "react";
 
 import { useEnvironmentScope } from "../../state/session";
 import { ThreadHeader } from "../threads/ThreadHeader";
-import { useMadoHomuActions } from "./useMadoHomuActions";
+import { useMadoHomuFiling } from "./useMadoHomuActions";
 import { useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
 
 /** The thread header of a thread opened from MadoHomu, with its Move to and Edit… menu. */
@@ -18,7 +18,7 @@ export function MadoHomuThreadHeader(
   },
 ) {
   const { environmentId, threadId, ...header } = props;
-  const actions = useMadoHomuActions(environmentId);
+  const actions = useMadoHomuFiling(environmentId);
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const threadMenu = useMadoHomuThreadMenu({
     environmentId,

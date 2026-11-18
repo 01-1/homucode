@@ -15,6 +15,13 @@ export function madohomuLinkFlag(
   target: { readonly environmentId: string; readonly threadId: string },
 ): { readonly madohomu?: true } {
   if (madohomuRouteFlag(state).madohomu !== true) return {};
+  const source = state?.routes
+    .slice(0, state.index + 1)
+    .findLast((route) => route.name === "Thread")?.params as
+    | { readonly environmentId?: unknown }
+    | undefined;
+  // MadoHomu is one project in one environment.
+  if (source?.environmentId !== target.environmentId) return {};
   const environmentId = EnvironmentId.make(target.environmentId);
   const settings = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId))?.settings;
   const shell = appAtomRegistry.get(
