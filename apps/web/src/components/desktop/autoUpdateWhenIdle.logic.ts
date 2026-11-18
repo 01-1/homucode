@@ -26,8 +26,13 @@ type AutoUpdateBridge = Pick<
   "getUpdateState" | "downloadUpdate" | "installUpdate" | "getSystemIdleSeconds"
 >;
 
-const humanWaitMs = async (bridge: AutoUpdateBridge) =>
-  Math.max(0, AUTO_UPDATE_IDLE_MS - (await bridge.getSystemIdleSeconds()) * 1000);
+async function humanWaitMs(bridge: AutoUpdateBridge) {
+  try {
+    return Math.max(0, AUTO_UPDATE_IDLE_MS - (await bridge.getSystemIdleSeconds()) * 1000);
+  } catch {
+    return AUTO_UPDATE_IDLE_MS;
+  }
+}
 
 /**
  * Downloads the update if needed, then installs it while agents and the human are still idle.
@@ -42,22 +47,23 @@ export async function runAutoUpdate(input: {
   const { bridge, isIdle, attempted } = input;
   const state = await bridge.getUpdateState();
   const version = autoUpdateVersion(state);
-  if (version === null || attempted.has(version) || !isIdle()) return "skipped";
+  if (version === null || attempted.has(version)) return "skipped";
   const wait = await humanWaitMs(bridge);
   if (wait > 0) return { retryInMs: wait };
+  if (!isIdle()) return "skipped";
   attempted.add(version);
   if (resolveDesktopUpdateButtonAction(state) === "download") {
     const download = await bridge.downloadUpdate();
     if (!download.completed) return "skipped";
   }
-  if (!isIdle()) {
-    attempted.delete(version);
-    return "skipped";
-  }
   const waitAfterDownload = await humanWaitMs(bridge);
   if (waitAfterDownload > 0) {
     attempted.delete(version);
     return { retryInMs: waitAfterDownload };
+  }
+  if (!isIdle()) {
+    attempted.delete(version);
+    return "skipped";
   }
   return (await bridge.installUpdate(version)).accepted ? "installed" : "skipped";
 }

@@ -80,6 +80,29 @@ it("waits for five minutes without keyboard or mouse input, before and after the
   expect(attempted.size).toBe(0);
 });
 
+it("does not install when an agent starts while input is being read", async () => {
+  const fake = bridge(downloaded);
+  const attempted = new Set<string>();
+  let idle = true;
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(600).mockImplementationOnce(async () => {
+    idle = false;
+    return 600;
+  });
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => idle })).toBe("skipped");
+  expect(fake.installUpdate).not.toHaveBeenCalled();
+  expect(attempted.size).toBe(0);
+});
+
+it("retries later instead of giving up when input can't be read", async () => {
+  const fake = bridge(downloaded);
+  const attempted = new Set<string>();
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(600).mockRejectedValueOnce(new Error("ipc"));
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 300_000,
+  });
+  expect(attempted.size).toBe(0);
+});
+
 it("leaves a build that restarted without applying to a manual retry", () => {
   expect(autoUpdateVersion(downloaded)).toBe("1.1.0");
   expect(autoUpdateVersion({ ...downloaded, notAppliedVersion: "1.1.0" })).toBeNull();

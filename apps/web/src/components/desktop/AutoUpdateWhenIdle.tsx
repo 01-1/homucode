@@ -53,7 +53,9 @@ export function AutoUpdateWhenIdle() {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the idle timer and desktop updater live outside React.
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!idle || version === null || attempted.has(version) || !bridge) return;
+    // No `attempted` check here: a run that hands its version back after the updater's own
+    // downloading state stopped this effect is picked up by the next timer.
+    if (!idle || version === null || !bridge) return;
     // Only work, opting out or unmounting cancel an install; the updater's own downloading state does not.
     const period = idlePeriod.current;
     let stopped = false;
