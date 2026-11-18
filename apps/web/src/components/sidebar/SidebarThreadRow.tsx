@@ -1926,6 +1926,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
           branchMismatch={branchMismatch}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
+          statusNote={null}
         />
       </Tooltip>
     </li>
