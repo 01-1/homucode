@@ -157,7 +157,8 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
     val first = !launchSeen
     launchSeen = true
     val store = store
-    if (!first || store == null) return
+    val mainActivity = activity.javaClass.simpleName == "MainActivity"
+    if (!first || store == null || !mainActivity) return
     val header = pictureFor(activity, savedInstanceState, store) ?: return
     val starting = Launch(activity, header)
     launch = starting
@@ -188,7 +189,6 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
     savedInstanceState: Bundle?,
     store: LaunchSnapshotStore
   ): LaunchSnapshotHeader? {
-    if (activity.javaClass.simpleName != "MainActivity") return null
     val intent = activity.intent
     val plain = isPlainLauncherStart(
       restored = savedInstanceState != null,
