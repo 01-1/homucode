@@ -85,8 +85,8 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
               {prompt.conflicts.map((conflict) => {
                 const localId = `${descriptionId}-${conflict.key}-local`;
                 const remoteId = `${descriptionId}-${conflict.key}-remote`;
-                const local = formatSyncedSettingValue(conflict.local);
-                const remote = formatSyncedSettingValue(conflict.remote);
+                const local = formatSyncedSettingValue(conflict.key, conflict.local);
+                const remote = formatSyncedSettingValue(conflict.key, conflict.remote);
                 const localPreview = syncedSettingValuePreview(local);
                 const remotePreview = syncedSettingValuePreview(remote);
                 const isLong = localPreview !== null || remotePreview !== null;

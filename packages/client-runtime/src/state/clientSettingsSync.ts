@@ -160,18 +160,21 @@ export function syncedSettingLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** The whole value, never shortened. JSON text (the theme library, light and dark themes) is shown parsed. */
-export function formatSyncedSettingValue(value: unknown): string {
-  if (value === undefined || value === null) return "not set";
+/** Synced settings stored as JSON text, shown parsed. */
+const JSON_TEXT_SETTING_KEYS = new Set(["customThemes", "themeHalves"]);
+
+/** The whole value, never shortened. */
+export function formatSyncedSettingValue(key: string, value: unknown): string {
+  if (value === undefined) return "not set";
   let shown: unknown = value;
-  if (typeof value === "string" && /^\s*[[{]/.test(value)) {
+  if (typeof value === "string" && JSON_TEXT_SETTING_KEYS.has(key)) {
     try {
       shown = JSON.parse(value) as unknown;
     } catch {
       shown = value;
     }
   }
-  if (typeof shown === "string") return shown || "empty";
+  if (typeof shown === "string") return shown === "" ? '""' : shown;
   return JSON.stringify(shown, null, 2);
 }
 

@@ -103,12 +103,20 @@ describe("synced client setting values", () => {
       provider: "claudeAgent",
       model: `claude-model-${index}`,
     }));
-    expect(formatSyncedSettingValue(favorites)).toBe(JSON.stringify(favorites, null, 2));
+    expect(formatSyncedSettingValue("favorites", favorites)).toBe(
+      JSON.stringify(favorites, null, 2),
+    );
     const themes = [{ id: "lavender", css: "x".repeat(200) }];
-    expect(formatSyncedSettingValue(JSON.stringify(themes))).toBe(JSON.stringify(themes, null, 2));
-    expect(formatSyncedSettingValue("lavender-darker")).toBe("lavender-darker");
+    expect(formatSyncedSettingValue("customThemes", JSON.stringify(themes))).toBe(
+      JSON.stringify(themes, null, 2),
+    );
+    expect(formatSyncedSettingValue("theme", "lavender-darker")).toBe("lavender-darker");
+    expect(formatSyncedSettingValue("buildPath", "[ 1 ]")).toBe("[ 1 ]");
+    expect(formatSyncedSettingValue("buildPath", "")).toBe('""');
+    expect(formatSyncedSettingValue("theme", null)).toBe("null");
+    expect(formatSyncedSettingValue("theme", undefined)).toBe("not set");
     expect(syncedSettingValuePreview("a\nb")).toBeNull();
-    expect(syncedSettingValuePreview(formatSyncedSettingValue(favorites))).toBe(
+    expect(syncedSettingValuePreview(formatSyncedSettingValue("favorites", favorites))).toBe(
       JSON.stringify(favorites, null, 2).split("\n").slice(0, 8).join("\n"),
     );
   });
