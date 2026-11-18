@@ -65,7 +65,7 @@ import { deliverContextHandoffs, withInlineContext } from "./ContextHandoffDeliv
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import { unsentManualContinuationSource } from "./manualContinuation.ts";
+import { manualContinuationSource } from "./manualContinuation.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import {
   ContextHandoffBackgroundWorkError,
@@ -512,14 +512,16 @@ export const layer: Layer.Layer<
       }
       const manualResume =
         run.manualContinuationOfRunId !== undefined && attempt.reason !== "steering_restart";
-      const resumeSource = manualResume
-        ? unsentManualContinuationSource(run, projection)
-        : undefined;
+      const resumeSource = manualResume ? manualContinuationSource(run, projection) : undefined;
       const unsentResumeMessage =
-        resumeSource !== undefined
-          ? projection.messages.find((source) => source.id === resumeSource.userMessageId)
+        resumeSource?.accepted === false
+          ? projection.messages.find((source) => source.id === resumeSource.run.userMessageId)
           : undefined;
       const providerMessage = unsentResumeMessage ?? message;
+      const manualResumePrompt =
+        manualResume && unsentResumeMessage === undefined && message.createdBy === "user"
+          ? "[T3] The human selected Resume. Continue where you left off. This supersedes any earlier stop or wait request for this thread."
+          : undefined;
       const settleStartFailure = Effect.fn("ProviderTurnStartService.settleStartFailure")(
         function* (failed: {
           readonly signal: string;
@@ -863,14 +865,16 @@ export const layer: Layer.Layer<
       });
       let effectiveHandoffs = handoffs;
       let resumeFellBack = false;
-      const userText = withSentFromLine(
-        projectComposerContextForProvider({
-          text: providerMessage.text,
-          records: providerMessage.context?.records ?? [],
-        }),
-        providerMessage,
-        madohomuSettings.messageSentFromEnabled,
-      );
+      const userText =
+        manualResumePrompt ??
+        withSentFromLine(
+          projectComposerContextForProvider({
+            text: providerMessage.text,
+            records: providerMessage.context?.records ?? [],
+          }),
+          providerMessage,
+          madohomuSettings.messageSentFromEnabled,
+        );
       // Native goal commands go verbatim; handoff history waits a turn.
       const goalDriver =
         session.driver === "codex" ||
@@ -1561,7 +1565,14 @@ export const layer: Layer.Layer<
         legacyInputRunIds,
         budget,
       } = handoffContext;
-      if (manualResume && unsentResumeMessage === undefined && session.resumeTurn === undefined) {
+      // Native resume has no prompt. A different or replaced conversation needs the user's instruction after its history.
+      const resumeFromHistory =
+        manualResumePrompt !== undefined &&
+        (resumeFellBack ||
+          (resumeSource !== undefined && resumeSource.run.providerThreadId !== providerThread.id));
+      const resumeNatively =
+        manualResume && unsentResumeMessage === undefined && !resumeFromHistory;
+      if (resumeNatively && session.resumeTurn === undefined) {
         yield* settleStartFailure({
           signal: "resume-unsupported",
           title: "Native resume is unavailable",
@@ -1871,7 +1882,7 @@ export const layer: Layer.Layer<
               .filter((turn) => turn.providerThreadId === providerThread.id)
               .map((turn) => turn.ordinal),
           ) + 1,
-        resume: manualResume && unsentResumeMessage === undefined,
+        resume: resumeNatively,
         nativeThreadHasTurns:
           nativeInputRunIds.size > 0 ||
           (legacyInputRunIds.size > 0 &&

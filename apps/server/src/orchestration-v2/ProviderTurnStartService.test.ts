@@ -2308,6 +2308,39 @@ effectIt.effect("refuses unsupported resume instead of manufacturing a user prom
   }),
 );
 
+effectIt.effect(
+  "retries an interrupted handoff with a prompt when the provider has no native resume",
+  () =>
+    Effect.gen(function* () {
+      const harness = makeLocalCommandHarness({
+        text: "",
+        manualContinuation: true,
+        nativeResumeUnsupported: true,
+        sideChat: {
+          contextRun: "current",
+          unsentResume: true,
+          repeatedResume: true,
+          acceptedResume: true,
+        },
+      });
+      const projection = harness.projection();
+      const previousProviderThreadId = projection.providerTurns[0]!.providerThreadId;
+      harness.setProjection({
+        ...projection,
+        runs: projection.runs.map((run) =>
+          run.id === "stopped-run" ? { ...run, providerThreadId: previousProviderThreadId } : run,
+        ),
+      });
+
+      yield* harness.start;
+
+      expect(harness.startTurn).toHaveBeenCalledOnce();
+      expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain(
+        "User message:\n[T3] The human selected Resume.",
+      );
+    }),
+);
+
 effectIt.effect.each([
   {
     driver: "codex",
@@ -2433,13 +2466,14 @@ effectIt.effect.each([
           turn.message.text.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, ""),
         ),
       ).toEqual([
-        // A bare native resume carries no prompt, so it has no sender line either.
-        context === "" && !resendsOriginal
-          ? ""
-          : withInlineContext(
-              context,
-              sentByUnknownHuman(resendsOriginal ? "Original request" : ""),
-            ),
+        withInlineContext(
+          context,
+          resendsOriginal
+            ? sentByUnknownHuman("Original request")
+            : context === ""
+              ? ""
+              : "[T3] The human selected Resume. Continue where you left off. This supersedes any earlier stop or wait request for this thread.",
+        ),
       ]);
       expect(harness.startTurn.mock.calls[0]?.[0].resume === true).toBe(
         context === "" && !resendsOriginal,

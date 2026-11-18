@@ -19,6 +19,7 @@ import {
   ProviderSessionId,
   ProviderThreadId,
   ProviderTurnId,
+  type RunId,
   ScheduledTaskId,
   ThreadId,
   TurnItemId,
@@ -126,6 +127,7 @@ function makeTestAdapter(input: {
   readonly failInjectionOnce?: Ref.Ref<boolean>;
   readonly nativeThreadGeneration?: Ref.Ref<number>;
   readonly failResume?: boolean;
+  readonly supportsManualResume?: boolean;
   readonly failResumeOnce?: Ref.Ref<boolean>;
   readonly initialContextUsage?: OrchestrationV2ProviderThread["contextUsage"];
   readonly getModelContextWindow?: (selection: ModelSelection) => number | undefined;
@@ -274,6 +276,12 @@ function makeTestAdapter(input: {
                     ),
                   ),
               }),
+          ...(input.supportsManualResume
+            ? {
+                resumeTurn: (turnInput: ProviderAdapter.ProviderAdapterV2ResumeTurnInput) =>
+                  runtime.startTurn(ProviderAdapter.resumeTurnInput(turnInput)),
+              }
+            : {}),
           compactThread: (turnInput) => runtime.startTurn(turnInput),
           startTurn: (turnInput) =>
             Effect.gen(function* () {
@@ -1776,15 +1784,17 @@ describe("orchestration v2 provider switching", () => {
         ["interrupted", true, false, true],
         ["cancelled", false, false, false],
         ["cancelled", true, true, false],
+        ["interrupted", false, true, false, true],
+        ["interrupted", false, false, true, true],
       ] as const
     ).map(
-      ([status, queued, returning, native]) =>
+      ([status, queued, returning, native, manualResume]) =>
         [
-          `${status} context ${queued ? "through the queue" : "immediately"} to ${returning ? "a returning" : "a new"} provider via ${native ? "native history" : "text"}`,
-          { status, queued, returning, native },
+          `${status} context${manualResume ? " on manual resume" : ""} ${queued ? "through the queue" : "immediately"} to ${returning ? "a returning" : "a new"} provider via ${native ? "native history" : "text"}`,
+          { status, queued, returning, native, manualResume },
         ] as const,
     ),
-  )("hands off %s", ([, { status, queued, returning, native }]) =>
+  )("hands off %s", ([, { status, queued, returning, native, manualResume }]) =>
     Effect.gen(function* () {
       const cwd = yield* checkpointWorkspace(`handoff-${status}-${queued}-${returning}`);
       const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
@@ -1795,7 +1805,12 @@ describe("orchestration v2 provider switching", () => {
       const sourceSelection = returning ? CLAUDE_MODEL_SELECTION : CODEX_MODEL_SELECTION;
       const targetSelection = returning ? CODEX_MODEL_SELECTION : CLAUDE_MODEL_SELECTION;
       const originalPrompt = "Keep the release marker violet and preserve the existing API.";
-      const partialResponse = "I checked the API and found the release configuration.";
+      const partialResponse = manualResume
+        ? "The human stopped the run. I will wait for them to ask me to resume."
+        : "I checked the API and found the release configuration.";
+      const nextPrompt = manualResume
+        ? "[T3] The human selected Resume. Continue where you left off. This supersedes any earlier stop or wait request for this thread."
+        : "Continue";
       const layerRegistry = ProviderAdapterRegistry.layerFromAdapters(
         (
           [
@@ -1810,6 +1825,7 @@ describe("orchestration v2 provider switching", () => {
             modelSelection,
             responseByRunOrdinal: { [sourceOrdinal]: partialResponse },
             capturedTurns,
+            supportsManualResume: manualResume === true,
             ...(native && modelSelection.instanceId === targetSelection.instanceId
               ? { injectedHistory }
               : {}),
@@ -1849,6 +1865,7 @@ describe("orchestration v2 provider switching", () => {
           text: string,
           modelSelection: ModelSelection,
           queue = false,
+          manualContinuationOfRunId?: RunId,
         ) =>
           orchestrator.dispatch({
             type: "message.dispatch",
@@ -1860,6 +1877,7 @@ describe("orchestration v2 provider switching", () => {
             text,
             attachments: [],
             modelSelection,
+            ...(manualContinuationOfRunId === undefined ? {} : { manualContinuationOfRunId }),
             dispatchMode: { type: queue ? "queue_after_active" : "start_immediately" },
           });
         yield* orchestrator.dispatch({
@@ -1883,7 +1901,7 @@ describe("orchestration v2 provider switching", () => {
         yield* dispatch("source", originalPrompt, sourceSelection);
         yield* Deferred.await(started);
         if (queued) {
-          yield* dispatch("target", "Continue", targetSelection, true);
+          yield* dispatch("target", nextPrompt, targetSelection, true);
           assert.equal(
             (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)?.status,
             "queued",
@@ -1892,11 +1910,23 @@ describe("orchestration v2 provider switching", () => {
         yield* Deferred.succeed(release, undefined);
         yield* waitForRun(sourceOrdinal, status);
         if (!queued) {
-          yield* dispatch("target", "Continue", targetSelection);
+          const source = (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)!;
+          yield* dispatch(
+            "target",
+            manualResume ? "" : nextPrompt,
+            targetSelection,
+            false,
+            manualResume ? source.id : undefined,
+          );
         }
         yield* waitForRun(sourceOrdinal + 1, "completed");
         const projection = yield* orchestrator.getThreadProjection(threadId);
         const targetRun = projection.runs.at(-1)!;
+        if (manualResume) {
+          const message = projection.messages.find((row) => row.id === targetRun.userMessageId);
+          assert.equal(message?.text, "");
+          assert.equal(message?.notification?.summary, "Resumed thread");
+        }
         const handoff = projection.contextHandoffs.find(
           (candidate) => candidate.id === targetRun.contextHandoffId,
         );
@@ -1916,16 +1946,20 @@ describe("orchestration v2 provider switching", () => {
         assert.include(deliveredHistory, partialResponse);
         assert.include(deliveredHistory, `run-status=${status}`);
         if (native) {
-          assert.equal(
-            delivered.text,
-            timestamped("Continue", yield* orchestrator.getThreadProjection(threadId)),
-          );
+          if (manualResume) {
+            assert.equal(delivered.text.replace(/^\S+: /, ""), nextPrompt);
+          } else {
+            assert.equal(delivered.text, timestamped(nextPrompt, projection));
+          }
           assert.notInclude(deliveredHistory, '"text":"Continue"');
           assert.include(deliveredHistory, '"role":"assistant"');
           assert.include(deliveredHistory, '"role":"user"');
           assert.equal(handoff?.delivery?.status, "injected");
         } else {
-          assert.include(delivered.text, "User message:\nContinue");
+          assert.include(delivered.text, `User message:\n${nextPrompt}`);
+          if (manualResume) {
+            assert.notInclude(delivered.text, "No human sent this message.");
+          }
           assert.equal(handoff?.delivery?.status, "inline");
         }
         assert.notInclude(deliveredHistory, "Earlier successful request.");
