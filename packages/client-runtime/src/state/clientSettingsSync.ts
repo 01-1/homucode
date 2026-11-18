@@ -160,19 +160,33 @@ export function syncedSettingLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function syncedItemLabel(item: unknown, qualify: boolean): string {
+function syncedItemLabel(item: unknown): string {
   if (typeof item === "string") return item || "empty";
   if (item && typeof item === "object") {
     const record = item as Record<string, unknown>;
     for (const field of ["model", "name", "label", "title", "id"]) {
       const value = record[field];
-      if (typeof value !== "string" || !value) continue;
-      return qualify && typeof record.provider === "string"
-        ? `${value} (${record.provider})`
-        : value;
+      if (typeof value === "string" && value) return value;
     }
   }
   return stableJson(item);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** The first field that differs between two values, as "path: value" for each side. */
+function firstDifference(left: unknown, right: unknown, path = ""): [string, string] | null {
+  if (syncedValueEquals(left, right)) return null;
+  if (isPlainRecord(left) && isPlainRecord(right)) {
+    for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+      const found = firstDifference(left[key], right[key], path ? `${path}.${key}` : key);
+      if (found) return found;
+    }
+  }
+  const prefix = path ? `${path}: ` : "";
+  return [`${prefix}${describeScalar(left)}`, `${prefix}${describeScalar(right)}`];
 }
 
 function shorten(text: string, max = 60): string {
@@ -200,6 +214,13 @@ function decodeForDisplay(value: unknown): unknown {
   }
 }
 
+const LISTED_ITEMS = 4;
+
+function listLabels(labels: ReadonlyArray<string>): string {
+  const shown = labels.slice(0, LISTED_ITEMS).join(", ");
+  return labels.length > LISTED_ITEMS ? `${shown} +${labels.length - LISTED_ITEMS} more` : shown;
+}
+
 function describeLists(
   local: ReadonlyArray<unknown>,
   remote: ReadonlyArray<unknown>,
@@ -216,25 +237,43 @@ function describeLists(
       0,
       localKeys.findIndex((key, index) => key !== remoteKeys[index]),
     );
-    const order = (items: ReadonlyArray<unknown>) =>
-      `${countLabel(items.length, "item")}, from #${start + 1}: ${shorten(
-        items
-          .slice(start)
-          .map((item) => syncedItemLabel(item, true))
-          .join(", "),
-        48,
-      )}`;
-    return { local: order(local), remote: order(remote) };
+    const differing = firstDifference(local[start], remote[start]);
+    const order = (items: ReadonlyArray<unknown>, first: string | undefined) => {
+      const labels = items.slice(start).map(syncedItemLabel);
+      if (first !== undefined && labels[0] !== undefined) labels[0] = `${labels[0]} (${first})`;
+      return `${countLabel(items.length, "item")}, from #${start + 1}: ${listLabels(labels)}`;
+    };
+    // Equal labels at the first differing position need the field that tells them apart.
+    const tell = syncedItemLabel(local[start]) === syncedItemLabel(remote[start]);
+    return {
+      local: order(local, tell ? differing?.[0] : undefined),
+      remote: order(remote, tell ? differing?.[1] : undefined),
+    };
   }
-  const plainRemote = new Set(remoteOnly.map((item) => syncedItemLabel(item, false)));
-  const qualify = localOnly.some((item) => plainRemote.has(syncedItemLabel(item, false)));
-  const side = (items: ReadonlyArray<unknown>, extra: ReadonlyArray<unknown>) => {
+  // An item edited in place shows on both sides under one label; name the field that changed.
+  const remoteByLabel = new Map(remoteOnly.map((item) => [syncedItemLabel(item), item]));
+  const localByLabel = new Map(localOnly.map((item) => [syncedItemLabel(item), item]));
+  const side = (
+    items: ReadonlyArray<unknown>,
+    extra: ReadonlyArray<unknown>,
+    counterpart: ReadonlyMap<string, unknown>,
+    pick: 0 | 1,
+  ) => {
     const count = countLabel(items.length, "item");
     if (extra.length === 0) return count;
-    const labels = extra.map((item) => syncedItemLabel(item, qualify)).join(", ");
-    return `${count}, incl. ${shorten(labels, 48)}`;
+    const labels = extra.map((item) => {
+      const label = syncedItemLabel(item);
+      if (!counterpart.has(label)) return label;
+      const other = counterpart.get(label);
+      const differing = pick === 0 ? firstDifference(item, other) : firstDifference(other, item);
+      return differing ? `${label} (${differing[pick]})` : label;
+    });
+    return `${count}, incl. ${listLabels(labels)}`;
   };
-  return { local: side(local, localOnly), remote: side(remote, remoteOnly) };
+  return {
+    local: side(local, localOnly, remoteByLabel, 0),
+    remote: side(remote, remoteOnly, localByLabel, 1),
+  };
 }
 
 /**
@@ -248,9 +287,7 @@ export function describeSyncedSettingConflict(conflict: ClientSettingsSyncConfli
   const local = decodeForDisplay(conflict.local);
   const remote = decodeForDisplay(conflict.remote);
   if (Array.isArray(local) && Array.isArray(remote)) return describeLists(local, remote);
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    !!value && typeof value === "object" && !Array.isArray(value);
-  if (isRecord(local) && isRecord(remote)) {
+  if (isPlainRecord(local) && isPlainRecord(remote)) {
     const differing = [...new Set([...Object.keys(local), ...Object.keys(remote)])].filter(
       (key) => !syncedValueEquals(local[key], remote[key]),
     );

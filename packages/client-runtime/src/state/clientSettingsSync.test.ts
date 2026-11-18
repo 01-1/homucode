@@ -115,7 +115,20 @@ describe("synced client setting values", () => {
         local: [{ provider: "claudeAgent", model: "m" }],
         remote: [{ provider: "claudeWork", model: "m" }],
       }),
-    ).toEqual({ local: "1 item, incl. m (claudeAgent)", remote: "1 item, incl. m (claudeWork)" });
+    ).toEqual({
+      local: "1 item, incl. m (provider: claudeAgent)",
+      remote: "1 item, incl. m (provider: claudeWork)",
+    });
+    expect(
+      describeSyncedSettingConflict({
+        key: "customThemes",
+        local: JSON.stringify([{ id: "lav", colors: { accent: "#a" } }]),
+        remote: JSON.stringify([{ id: "lav", colors: { accent: "#b" } }]),
+      }),
+    ).toEqual({
+      local: "1 item, incl. lav (colors.accent: #a)",
+      remote: "1 item, incl. lav (colors.accent: #b)",
+    });
     expect(
       describeSyncedSettingConflict({
         key: "customThemes",
