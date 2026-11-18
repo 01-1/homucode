@@ -13,7 +13,8 @@ EXPO_TOKEN_FILE=${EXPO_TOKEN_FILE:-$HOME/credentials/expo/token}
 ref=${1:-origin/main}
 [[ $ref == origin/* ]] && git -C "$repo" fetch -q origin "${ref#origin/}"
 rev=$(git -C "$repo" rev-parse --verify "$ref^{commit}")
-work=${WORK:-$HOME/hold/homu-android}/${rev:0:10}-$VARIANT$([[ $MODE == ota ]] && echo -ota); mkdir -p "$work"; cd "$work"
+suffix=$VARIANT; [[ $MODE == apk ]] || suffix+=-$MODE
+work=${WORK:-$HOME/hold/homu-android}/${rev:0:10}-$suffix; mkdir -p "$work"; cd "$work"
 git -C "$repo" archive --format=tar.gz -o "$work/source.tar.gz" "$rev"
 B=("${T3_BUILD_BOAT_CLI:-boat}" --no-update); R=/home/user/t3-preview
 "${B[@]}" new --personal --type xlarge --no-env --no-snapshots --ttl 10800 --name "homucode-android-$MODE-${rev:0:10}" > box-create.json
