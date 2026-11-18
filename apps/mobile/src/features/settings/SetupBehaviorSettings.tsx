@@ -268,7 +268,6 @@ export function MobileExtraSettings({
         }
       />
       <Text>Device names</Text>
-      <MobileThisDeviceName />
       <MobileDeviceNames environmentId={environmentId} />
     </SettingsSection>
   );

@@ -1006,11 +1006,27 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "claude-steer-recovery",
-    title: "Claude steers survive Stop",
+    title: "Resend unread steers after Stop",
     to: "/settings/homucode",
     scope: "environment",
     environmentOnly: true,
-    searchTerms: ["resume held steer"],
+    searchTerms: ["Claude steers survive Stop", "resume held steer"],
+  },
+  {
+    id: "reask-after-restart",
+    title: "Ask again after a restart",
+    to: "/settings/homucode",
+    scope: "environment-defaults",
+    environmentOnly: true,
+    searchTerms: ["resume pending approval question secret"],
+  },
+  {
+    id: "auto-update-when-idle",
+    title: "Update when agents are idle",
+    to: "/settings/homucode",
+    scope: "environment-defaults",
+    environmentOnly: true,
+    searchTerms: ["automatic app provider updates"],
   },
   {
     id: "apply-model-change-now",
@@ -1022,11 +1038,11 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "sent-from",
-    title: "Message attribution",
+    title: "Tell agents who sent each message",
     to: "/settings/homucode",
     scope: "environment",
     environmentOnly: true,
-    searchTerms: ["sent from device"],
+    searchTerms: ["message attribution", "sent from device"],
   },
   {
     id: "thread-only-stop",

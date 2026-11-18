@@ -88,7 +88,15 @@ describe("searchSettings", () => {
   });
 
   it("finds moved settings on the HomuCode page", () => {
-    for (const query of ["HomuCode", "Quick model", "Device names", "App scripts", "Building T3"]) {
+    for (const query of [
+      "HomuCode",
+      "Quick model",
+      "Device names",
+      "App scripts",
+      "Building T3",
+      "Ask again after a restart",
+      "Update when agents are idle",
+    ]) {
       expect(searchSettings(query)[0]?.to).toBe("/settings/homucode");
     }
   });

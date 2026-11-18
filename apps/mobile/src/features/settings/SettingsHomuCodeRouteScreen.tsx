@@ -10,7 +10,11 @@ import {
   updateMobilePreferencesAtom,
 } from "../../state/preferences";
 import { MobileAgentMemorySettings } from "./MobileAgentMemorySettings";
-import { MobileBuildVisibility, MobileExtraSettings } from "./SetupBehaviorSettings";
+import {
+  MobileBuildVisibility,
+  MobileExtraSettings,
+  MobileThisDeviceName,
+} from "./SetupBehaviorSettings";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -35,7 +39,8 @@ export function SettingsHomuCodeRouteScreen() {
         contentContainerClassName="gap-5 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
-        <SettingsSection title="Faster phone launch">
+        <SettingsSection title="This phone">
+          <MobileThisDeviceName />
           <ListToggleRow
             label="Faster phone launch"
             description="Connect using the last signed-in account before sign-in loads. Applies next launch."
