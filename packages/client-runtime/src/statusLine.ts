@@ -178,7 +178,8 @@ export function formatStatusLineTokens(tokens: number): string {
 export function formatStatusLineSpan(ms: number): string {
   const minutes = Math.max(0, Math.floor(ms / 60_000));
   const pad = (value: number) => String(value).padStart(2, "0");
-  if (minutes >= 1440) return `${Math.floor(minutes / 1440)}d${pad(Math.floor((minutes % 1440) / 60))}h`;
+  if (minutes >= 1440)
+    return `${Math.floor(minutes / 1440)}d${pad(Math.floor((minutes % 1440) / 60))}h`;
   if (minutes >= 60) return `${Math.floor(minutes / 60)}h${pad(minutes % 60)}m`;
   return `${minutes}m`;
 }

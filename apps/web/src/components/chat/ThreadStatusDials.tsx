@@ -36,11 +36,15 @@ function EffortBars(props: { readonly effort: string }) {
   const level = props.effort.startsWith("ultra") ? 5 : EFFORT_LEVELS.indexOf(props.effort) + 1;
   if (level === 0) return null;
   return (
-    <span role="img" aria-label={`${props.effort} effort`} className="flex shrink-0 items-end gap-px">
+    <span
+      role="img"
+      aria-label={`${props.effort} effort`}
+      className="flex shrink-0 items-end gap-px"
+    >
       {EFFORT_BAR_HEIGHTS.map((height, index) => (
         <span
           key={height}
-          className={`w-[3px] rounded-[1px] ${height} ${index < level ? "bg-ring" : "bg-ring/25"}`}
+          className={`w-[3px] rounded-xs ${height} ${index < level ? "bg-ring" : "bg-ring/25"}`}
         />
       ))}
     </span>
@@ -63,7 +67,15 @@ function Dial(props: {
       style={{ color: gaugeColor(percent) }}
     >
       <svg viewBox="0 0 26 26" className="size-[26px]" aria-hidden>
-        <circle cx="13" cy="13" r="10.5" fill="none" stroke="currentColor" strokeOpacity="0.22" strokeWidth="3" />
+        <circle
+          cx="13"
+          cy="13"
+          r="10.5"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.22"
+          strokeWidth="3"
+        />
         {percent === 0 ? null : (
           <circle
             cx="13"
@@ -83,15 +95,15 @@ function Dial(props: {
           y="13.4"
           textAnchor="middle"
           dominantBaseline="central"
-          className={`fill-foreground font-semibold ${percent === 100 ? "text-[8px]" : "text-[9.5px]"}`}
+          className={`fill-foreground font-semibold ${percent === 100 ? "text-4xs" : "text-3xs"}`}
         >
           {percent}
         </text>
       </svg>
-      <span className="grid leading-[1.15] @max-[30rem]/dials:hidden">
-        <span className="font-medium text-[11px] text-foreground">{props.name}</span>
+      <span className="grid @max-[30rem]/dials:hidden">
+        <span className="font-medium text-2xs/3.5 text-foreground">{props.name}</span>
         {props.detail === null ? null : (
-          <span className="text-[10px] text-muted-foreground">{props.detail}</span>
+          <span className="text-3xs/3 text-muted-foreground">{props.detail}</span>
         )}
       </span>
     </span>
@@ -204,7 +216,7 @@ function Fact(props: {
 }) {
   return (
     <div className="grid min-w-0 content-start gap-0.5">
-      <span className="text-[11px] text-muted-foreground">{props.name}</span>
+      <span className="text-2xs text-muted-foreground">{props.name}</span>
       <span className="truncate font-medium">{props.children}</span>
       {props.percent === undefined ? null : (
         <span
@@ -212,7 +224,10 @@ function Fact(props: {
           className="mt-0.5 h-1 overflow-hidden rounded-full bg-current/20"
           style={{ color: gaugeColor(props.percent) }}
         >
-          <span className="block h-full rounded-full bg-current" style={{ width: `${props.percent}%` }} />
+          <span
+            className="block h-full rounded-full bg-current"
+            style={{ width: `${props.percent}%` }}
+          />
         </span>
       )}
     </div>
