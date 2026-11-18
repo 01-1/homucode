@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
 import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
 import { isElectron } from "../../env";
@@ -26,19 +26,46 @@ const WORKING_PLACEMENT_LABELS = {
 
 export function MadoHomuSettings() {
   const { target, targets, scope } = useSettingsScope();
+  const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   if (scope.kind === "project" || scope.kind === "checkout") return null;
-  if (targets.length > 1)
-    return (
-      <SettingsSection id="madohomu" title="MadoHomu">
-        <p className="p-4 text-sm text-muted-foreground">
-          Choose an environment above to configure MadoHomu.
-        </p>
-      </SettingsSection>
-    );
-  return target ? <EnvironmentMadoHomuSettings environmentId={target.environmentId} /> : null;
+  const selected = targets.find((candidate) => candidate.environmentId === selectedId) ?? target;
+  if (!selected) return null;
+  const environmentPicker =
+    targets.length > 1 ? (
+      <SettingsRow
+        title="Environment"
+        control={
+          <Select value={selected.environmentId} onValueChange={setSelectedId}>
+            <SelectTrigger aria-label="MadoHomu environment" size="sm">
+              <SelectValue>{selected.label}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              {targets.map(({ environmentId, label }) => (
+                <SelectItem key={environmentId} value={environmentId}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+      />
+    ) : null;
+  return (
+    <EnvironmentMadoHomuSettings
+      key={selected.environmentId}
+      environmentId={selected.environmentId}
+      environmentPicker={environmentPicker}
+    />
+  );
 }
 
-function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: EnvironmentId }) {
+function EnvironmentMadoHomuSettings({
+  environmentId,
+  environmentPicker,
+}: {
+  environmentId: EnvironmentId;
+  environmentPicker: ReactNode;
+}) {
   const actions = useMadoHomuActions(environmentId);
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,6 +87,7 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
   };
   return (
     <SettingsSection id="madohomu" title="MadoHomu">
+      {environmentPicker}
       <SettingsRow
         {...searchableSetting("madohomu-enabled")}
         description="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
