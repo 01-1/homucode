@@ -15,6 +15,7 @@ import {
   AuthOrchestrationOperateScope,
   EnvironmentId,
   isListedThreadLineage,
+  type ScopedProjectRef,
   type ThreadId,
 } from "@t3tools/contracts";
 import { type ReactNode, useMemo, useRef, useState } from "react";
@@ -65,6 +66,7 @@ import { MadoHomuIcon } from "./MadoHomuIcon";
 import { MadoHomuProjectPicker } from "./MadoHomuProjectPicker";
 import { MadoHomuReorderList, type MadoHomuReorderThread } from "./MadoHomuReorderList";
 import { useMadoHomuActions } from "./useMadoHomuActions";
+import { useMadoHomuProjectSelection } from "./useMadoHomuDestination";
 import { promptSectionName, useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
 
 export function MadoHomuRouteScreen(props: StaticScreenProps<{ readonly environmentId: string }>) {
@@ -103,6 +105,7 @@ function reorderSectionsOf(
 
 function MadoHomuWorkspace({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const actions = useMadoHomuActions(environmentId);
+  const projectSelection = useMadoHomuProjectSelection(environmentId);
   const listActions = useThreadListActions();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -118,6 +121,28 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const settledLimit =
     settledPage.projectId === projectId ? settledPage.limit : THREAD_LIST_V2_SETTLED_INITIAL_COUNT;
   const [choosingProject, setChoosingProject] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
+  const pendingProject = useRef(false);
+  const changeProject = async (project: ScopedProjectRef | null) => {
+    if (pendingProject.current) return;
+    pendingProject.current = true;
+    setSavingProject(true);
+    try {
+      const success = project
+        ? await projectSelection.changeProject(project)
+        : await actions.save({ madohomuProjectId: null });
+      if (!success) return;
+      setChoosingProject(false);
+      if (project && project.environmentId !== environmentId && navigation.isFocused()) {
+        navigation.dispatch(
+          StackActions.replace("MadoHomu", { environmentId: project.environmentId }),
+        );
+      }
+    } finally {
+      pendingProject.current = false;
+      setSavingProject(false);
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [reordering, setReordering] = useState(false);
   // A drop shows at once and holds until the next settings arrive from the server.
@@ -527,7 +552,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                             id: "project",
                             title: "Change project…",
                             icon: "folder",
-                            disabled: !actions.canWrite,
+                            disabled:
+                              projectSelection.eligible.length === 0 ||
+                              projectSelection.isSelecting ||
+                              savingProject,
                             onPress: () => {
                               openSwipeableRef.current?.close();
                               setChoosingProject(true);
@@ -589,8 +617,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           <MadoHomuProjectPicker
             environmentId={environmentId}
             projectId={settings.madohomuProjectId}
-            disabled={!actions.canWrite}
-            onChange={(madohomuProjectId) => void actions.save({ madohomuProjectId })}
+            environments={projectSelection.eligible}
+            disabled={savingProject || projectSelection.isSelecting}
+            canClear={actions.canWrite}
+            onChange={(project) => void changeProject(project)}
           />
         </ScrollView>
       ) : reorderMode ? (
@@ -639,7 +669,11 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         </View>
       )}
       {settings.madohomuEnabled && choosingProject ? (
-        <Sheet title="Change project" onClose={() => setChoosingProject(false)}>
+        <Sheet
+          title="Change project"
+          dismissDisabled={savingProject}
+          onClose={() => setChoosingProject(false)}
+        >
           <ScrollView
             contentInsetAdjustmentBehavior="automatic"
             contentContainerClassName="gap-4 p-5 pb-12"
@@ -647,12 +681,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             <MadoHomuProjectPicker
               environmentId={environmentId}
               projectId={settings.madohomuProjectId}
-              disabled={!actions.canWrite}
-              allowClear={false}
-              onChange={(madohomuProjectId) => {
-                setChoosingProject(false);
-                void actions.save({ madohomuProjectId });
-              }}
+              environments={projectSelection.eligible}
+              disabled={savingProject || projectSelection.isSelecting}
+              canClear={false}
+              onChange={(project) => void changeProject(project)}
             />
           </ScrollView>
         </Sheet>

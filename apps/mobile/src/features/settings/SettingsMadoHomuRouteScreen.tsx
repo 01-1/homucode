@@ -10,6 +10,10 @@ import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
+import {
+  useMadoHomuDestination,
+  useMadoHomuProjectSelection,
+} from "../madohomu/useMadoHomuDestination";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
@@ -50,7 +54,14 @@ const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
 
 export function SettingsMadoHomuRouteScreen() {
   const menu = useSettingsEnvironmentMenu();
-  const { selectedTargets, selectedProjectKey } = useSettingsEnvironmentFilter();
+  const { selectedTargets, selectedIds, selectedProjectKey, selectAll } =
+    useSettingsEnvironmentFilter();
+  const { destination } = useMadoHomuDestination();
+  const selectedDestination =
+    selectedIds === null
+      ? selectedTargets.find((target) => target.environmentId === destination.environmentId)
+      : undefined;
+  const settingsTargets = selectedDestination ? [selectedDestination] : selectedTargets;
   const insets = useSafeAreaInsets();
   return (
     <SettingsScreen title="MadoHomu" menus={[menu]}>
@@ -64,16 +75,17 @@ export function SettingsMadoHomuRouteScreen() {
           <Text className="text-base text-foreground-muted">
             Choose an environment in the filter to configure MadoHomu.
           </Text>
-        ) : selectedTargets.length === 0 ? (
+        ) : settingsTargets.length === 0 ? (
           <Text className="text-base text-foreground-muted">
             Connect to an environment to configure MadoHomu.
           </Text>
         ) : (
-          selectedTargets.map((target) => (
+          settingsTargets.map((target) => (
             <EnvironmentMadoHomuSettings
               key={target.environmentId}
               environmentId={target.environmentId}
               label={target.label}
+              onSwitchEnvironment={selectAll}
             />
           ))
         )}
@@ -85,8 +97,10 @@ export function SettingsMadoHomuRouteScreen() {
 function EnvironmentMadoHomuSettings(props: {
   readonly environmentId: EnvironmentId;
   readonly label: string;
+  readonly onSwitchEnvironment: () => void;
 }) {
   const actions = useMadoHomuActions(props.environmentId);
+  const projectSelection = useMadoHomuProjectSelection(props.environmentId);
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -119,18 +133,29 @@ function EnvironmentMadoHomuSettings(props: {
         label="Enable MadoHomu"
         subtitle="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
         value={actions.settings.madohomuEnabled}
-        disabled={busy || !actions.canWrite}
+        disabled={busy || projectSelection.isSelecting || !actions.canWrite}
         onValueChange={(madohomuEnabled) => void run(() => actions.save({ madohomuEnabled }))}
+      />
+      <Text className="px-4 pt-3 text-sm text-foreground-muted">MadoHomu project</Text>
+      <MadoHomuProjectPicker
+        environmentId={props.environmentId}
+        projectId={actions.settings.madohomuProjectId}
+        environments={projectSelection.eligible}
+        disabled={busy || projectSelection.isSelecting}
+        canClear={actions.canWrite}
+        onChange={(project) =>
+          void run(async () => {
+            if (!project) return actions.save({ madohomuProjectId: null });
+            const saved = await projectSelection.changeProject(project);
+            if (saved && project.environmentId !== props.environmentId) {
+              props.onSwitchEnvironment();
+            }
+            return saved;
+          })
+        }
       />
       {actions.settings.madohomuEnabled ? (
         <>
-          <Text className="px-4 pt-3 text-sm text-foreground-muted">MadoHomu project</Text>
-          <MadoHomuProjectPicker
-            environmentId={props.environmentId}
-            projectId={actions.settings.madohomuProjectId}
-            disabled={busy || !actions.canWrite}
-            onChange={(madohomuProjectId) => void run(() => actions.save({ madohomuProjectId }))}
-          />
           <Text className="px-4 pt-3 text-sm text-foreground-muted">
             Show MadoHomu threads in T3 Code
           </Text>
