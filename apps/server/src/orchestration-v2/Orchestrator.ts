@@ -12018,6 +12018,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           commandType: command.type,
           cause: "Automatic promotion requires the queued message's auto-steer opt-in.",
         });
+      const { turnItems: runningCompactions } = yield* projectionStore
+        .getThreadRecords(command.threadId, ["turnItems"], {
+          turnItemTypes: ["compaction"],
+          turnItemStatuses: ["running"],
+        })
+        .pipe(mapDispatchError(command));
+      if (
+        resolveMessageDispatchIntent(
+          { ...projection, turnItems: runningCompactions },
+          { type: "start_immediately" },
+          "auto",
+        ).type !== "steer_active"
+      )
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Automatic promotion waits until the active turn can take a steer.",
+        });
     }
     const queuedRootNode =
       queuedRun.rootNodeId === null
