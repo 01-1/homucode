@@ -520,6 +520,10 @@ export const layer: Layer.Layer<
           ? projection.messages.find((source) => source.id === resumeSource.userMessageId)
           : undefined;
       const providerMessage = unsentResumeMessage ?? message;
+      const manualResumePrompt =
+        manualResume && unsentResumeMessage === undefined && message.createdBy === "user"
+          ? "[T3] The human selected Resume. Continue where you left off. This supersedes any earlier stop or wait request for this thread."
+          : undefined;
       const settleStartFailure = Effect.fn("ProviderTurnStartService.settleStartFailure")(
         function* (failed: {
           readonly signal: string;
@@ -863,14 +867,16 @@ export const layer: Layer.Layer<
       });
       let effectiveHandoffs = handoffs;
       let resumeFellBack = false;
-      const userText = withSentFromLine(
-        projectComposerContextForProvider({
-          text: providerMessage.text,
-          records: providerMessage.context?.records ?? [],
-        }),
-        providerMessage,
-        madohomuSettings.messageSentFromEnabled,
-      );
+      const userText =
+        manualResumePrompt ??
+        withSentFromLine(
+          projectComposerContextForProvider({
+            text: providerMessage.text,
+            records: providerMessage.context?.records ?? [],
+          }),
+          providerMessage,
+          madohomuSettings.messageSentFromEnabled,
+        );
       // Native goal commands go verbatim; handoff history waits a turn.
       const goalDriver =
         session.driver === "codex" ||
@@ -1561,7 +1567,18 @@ export const layer: Layer.Layer<
         legacyInputRunIds,
         budget,
       } = handoffContext;
-      if (manualResume && unsentResumeMessage === undefined && session.resumeTurn === undefined) {
+      // Native resume has no prompt. A different or replaced conversation needs the user's instruction after its history.
+      const resumeFromHistory =
+        manualResumePrompt !== undefined &&
+        (resumeFellBack ||
+          projection.runs.some(
+            (source) =>
+              source.id === run.manualContinuationOfRunId &&
+              source.providerThreadId !== providerThread.id,
+          ));
+      const resumeNatively =
+        manualResume && unsentResumeMessage === undefined && !resumeFromHistory;
+      if (resumeNatively && session.resumeTurn === undefined) {
         yield* settleStartFailure({
           signal: "resume-unsupported",
           title: "Native resume is unavailable",
@@ -1871,7 +1888,7 @@ export const layer: Layer.Layer<
               .filter((turn) => turn.providerThreadId === providerThread.id)
               .map((turn) => turn.ordinal),
           ) + 1,
-        resume: manualResume && unsentResumeMessage === undefined,
+        resume: resumeNatively,
         nativeThreadHasTurns:
           nativeInputRunIds.size > 0 ||
           (legacyInputRunIds.size > 0 &&

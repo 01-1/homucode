@@ -2433,13 +2433,14 @@ effectIt.effect.each([
           turn.message.text.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, ""),
         ),
       ).toEqual([
-        // A bare native resume carries no prompt, so it has no sender line either.
-        context === "" && !resendsOriginal
-          ? ""
-          : withInlineContext(
-              context,
-              sentByUnknownHuman(resendsOriginal ? "Original request" : ""),
-            ),
+        withInlineContext(
+          context,
+          resendsOriginal
+            ? sentByUnknownHuman("Original request")
+            : context === ""
+              ? ""
+              : "[T3] The human selected Resume. Continue where you left off. This supersedes any earlier stop or wait request for this thread.",
+        ),
       ]);
       expect(harness.startTurn.mock.calls[0]?.[0].resume === true).toBe(
         context === "" && !resendsOriginal,
