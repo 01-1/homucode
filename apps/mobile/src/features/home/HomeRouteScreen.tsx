@@ -7,7 +7,7 @@ import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import { Platform } from "react-native";
 
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -71,7 +71,8 @@ function ReadyHomeRouteScreen() {
       ? primarySidebarSearchQuery
       : (workspace?.state.tabs.threads.query ?? localSearchQuery);
   const setSearchQuery = (query: string) => {
-    if (Platform.OS === "android") setPrimarySidebarSearchQuery(query);
+    // The query re-renders the whole workspace; a transition keeps the search field responsive.
+    if (Platform.OS === "android") startTransition(() => setPrimarySidebarSearchQuery(query));
     else if (workspace) workspace.dispatch({ type: "query", query, tab: "threads" });
     else setLocalSearchQuery(query);
   };
