@@ -1,10 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   DndContext,
+  DragOverlay,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -51,6 +53,11 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
 import { cn, isMacPlatform, randomUUID } from "../../lib/utils";
+import {
+  buildMultiSelectFolderMenuItems,
+  isThreadFolderMenuId,
+  runThreadFolderMenuAction,
+} from "../../hooks/threadFolderMenu";
 import { readLocalApi } from "../../localApi";
 import { useServerConfigs } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
@@ -61,6 +68,7 @@ import { canShareWithGuestAtom } from "../chat/guestShareAvailability";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { sidebarProviderEntriesAtom } from "../Sidebar";
 import {
+  buildBulkTitleRegenerationContextMenuItem,
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   resolveSidebarSweepKeys,
@@ -89,6 +97,8 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "../ui/sidebar";
+import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
+import { titleRegenerationToast } from "../threadTitleRegenerationToast";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MadoHomuIcon } from "./MadoHomuIcon";
@@ -114,6 +124,7 @@ const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Ma
 const POINTER_SENSOR_OPTIONS = { distance: 6, onAttach: () => {}, onFinish: () => {} };
 const SWEEP_DRAG_DISTANCE = 6;
 const DND_MODIFIERS = [restrictToVerticalAxis, restrictToFirstScrollableAncestor];
+const OVERLAY_MODIFIERS = [restrictToVerticalAxis];
 // Scratch stays newest first, so its rows drag out without making room for each other.
 const NO_SORTING = () => null;
 const SECTION_DROP_PREFIX = "madohomu-section:";
@@ -188,6 +199,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const renamingSection = useMadoHomuRenamingSection((s) => s.id);
   const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
   const [dragging, setDragging] = useState<ThreadId | null>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
   const serverConfigs = useServerConfigs();
   const configLoaded = serverConfigs.has(environmentId);
@@ -207,6 +219,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     deleteThread,
   } = useThreadActions();
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  const regenerateThreadTitle = useOrchestrationCommand(threadEnvironment.regenerateTitle, {
     reportFailure: false,
   });
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -317,6 +332,23 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       configLoaded && selected.every((t) => canSnooze(t, { now: snoozeNow.toISOString() }));
     const presets = resolveSnoozePresets(snoozeNow, timestampFormat, environmentId);
     const pinned = selected.filter((t) => isMadoHomuThreadPinned(settings.madohomuThreads[t.id]));
+    const regeneratable = configLoaded ? selected.filter((t) => t.titleRegeneration == null) : [];
+    const titleItem = buildBulkTitleRegenerationContextMenuItem({
+      supportedCount: configLoaded ? count : 0,
+      actionableCount: regeneratable.length,
+    });
+    const selectedIds = selected.map((t) => t.id);
+    const folderItems = buildMultiSelectFolderMenuItems({
+      environmentId,
+      threadIds: selectedIds,
+      canOperate: configLoaded,
+    }).map((item) =>
+      item.id === "folder"
+        ? { ...item, label: MADOHOMU_THREAD_MENU_LABELS.folder }
+        : item.id === "folder:new-from-selection"
+          ? { ...item, label: `New T3 Code folder from selection (${count})` }
+          : item,
+    );
     const clicked = await settlePromise(() =>
       api.contextMenu.show(
         [
@@ -357,6 +389,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               },
             ],
           },
+          ...(titleItem ? [titleItem] : []),
+          ...folderItems,
           { id: "mark-unread", label: `Mark unread (${count})` },
           { id: "delete", label: `Delete (${count})`, destructive: true, separatorBefore: true },
         ],
@@ -366,7 +400,18 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     if (clicked._tag === "Failure" || clicked.value === null) return;
     const choice = clicked.value;
     clearSelection();
-    if (choice === "settle") {
+    if (isThreadFolderMenuId(choice)) {
+      runThreadFolderMenuAction(choice, { environmentId, threadIds: selectedIds });
+    } else if (choice === "regenerate-title") {
+      const toast = titleRegenerationToast(
+        await Promise.all(
+          regeneratable.map((t) =>
+            regenerateThreadTitle({ environmentId, input: { threadId: t.id } }),
+          ),
+        ),
+      );
+      if (toast) toastManager.add(toast);
+    } else if (choice === "settle") {
       for (const t of settling) handleSettle(scopeThreadRef(t.environmentId, t.id));
     } else if (choice.startsWith("snooze:")) {
       const preset =
@@ -444,10 +489,11 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           ...extras,
           items: [
             ...extras.items,
-            { id: MENU_UP, label: "Move up", disabled: !canEdit || index <= 0 },
+            { id: MENU_UP, label: "Move up", icon: "arrow-up", disabled: !canEdit || index <= 0 },
             {
               id: MENU_DOWN,
               label: "Move down",
+              icon: "arrow-down",
               disabled: !canEdit || index >= group.threads.length - 1,
             },
           ],
@@ -597,15 +643,23 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const sensors = useSensors(useSensor(SidebarPointerSensor, POINTER_SENSOR_OPTIONS));
   const handleDragStart = ({ active }: DragStartEvent) =>
     setDragging(String(active.id) as ThreadId);
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+  const dropGroupOf = (overId: string) =>
+    overId.startsWith(SECTION_DROP_PREFIX)
+      ? groups.find((g) => g.id === overId.slice(SECTION_DROP_PREFIX.length))
+      : groupOf(overId);
+  const handleDragOver = ({ over }: DragOverEvent) =>
+    setDragOverGroup(over ? (dropGroupOf(String(over.id))?.id ?? null) : null);
+  const endDrag = () => {
     setDragging(null);
+    setDragOverGroup(null);
+  };
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    endDrag();
     if (!over || active.id === over.id || !canEdit) return;
     const moved = String(active.id) as ThreadId;
     const overId = String(over.id);
     const onSection = overId.startsWith(SECTION_DROP_PREFIX);
-    const target = onSection
-      ? groups.find((g) => g.id === overId.slice(SECTION_DROP_PREFIX.length))
-      : groupOf(overId);
+    const target = dropGroupOf(overId);
     const source = groupOf(moved);
     if (!target || !source) return;
     if (target.kind === "scratch" || target.kind === "working") {
@@ -629,6 +683,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   };
   const draggingGroup = dragging === null ? undefined : groupOf(dragging);
   const draggingPinned = draggingGroup !== undefined && isManual(draggingGroup);
+  // The section a drop would change: another manual section, or Working/Scratch for a pinned row.
+  const isDropTarget = (group: Group) =>
+    draggingGroup !== undefined &&
+    dragOverGroup === group.id &&
+    group.id !== draggingGroup.id &&
+    (isManual(group) ||
+      ((group.kind === "scratch" || group.kind === "working") && draggingPinned));
+  const draggingThread = dragging === null ? undefined : threads.find((t) => t.id === dragging);
 
   const row = (group: Group, thread: SidebarThreadSummary) => {
     const isActive = selectedId === thread.id;
@@ -657,6 +719,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         isPinned={thread.pinnedAt != null}
         dropVerb={null}
         dragOverPinned={false}
+        folderTintClassName={dragging === thread.id ? "opacity-40" : undefined}
         sweepAction={sweep?.keys.has(key) ? sweep.action : null}
         snoozeWakeLabelText={
           group.kind === "snoozed" && thread.snoozedUntil != null
@@ -706,6 +769,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         key={group.id}
         group={group}
         droppable={group.kind !== "snoozed" && group.kind !== "settled"}
+        highlighted={isDropTarget(group)}
         header={header}
         empty={isExpanded(group) && group.threads.length === 0 ? empty : null}
       >
@@ -757,7 +821,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               <MenuSub>
                 <MenuSubTrigger disabled={!actions.canWrite}>Change project…</MenuSubTrigger>
                 <MenuSubPopup>
-                  <MadoHomuProjectMenuItems environmentId={environmentId} />
+                  <MadoHomuProjectMenuItems environmentId={environmentId} onChosen={closeSheet} />
                 </MenuSubPopup>
               </MenuSub>
               <MenuItem
@@ -806,8 +870,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               sensors={sensors}
               modifiers={DND_MODIFIERS}
               onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
-              onDragCancel={() => setDragging(null)}
+              onDragCancel={endDrag}
             >
               <SortableContext items={manualIds} strategy={verticalListSortingStrategy}>
                 {manualGroups.map((group) => {
@@ -875,6 +940,18 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                   (g) => (g.kind === "snoozed" || g.kind === "settled") && g.threads.length > 0,
                 )
                 .map((group) => section(group, heading(group)))}
+              <DragOverlay modifiers={OVERLAY_MODIFIERS} dropAnimation={null}>
+                {draggingThread ? (
+                  <DraggedRow
+                    title={draggingThread.title}
+                    icon={settings.madohomuThreads[draggingThread.id]?.icon ?? null}
+                    color={madohomuIconColor(
+                      draggingThread.id,
+                      settings.madohomuThreads[draggingThread.id]?.color,
+                    )}
+                  />
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </nav>
         )}
@@ -932,6 +1009,7 @@ function SectionHeading({
   onToggle,
   actions,
   onContextMenu,
+  autoFocus,
 }: {
   id: string;
   title: string;
@@ -940,12 +1018,14 @@ function SectionHeading({
   onToggle: () => void;
   actions?: ReactNode;
   onContextMenu?: (event: MouseEvent) => void;
+  autoFocus?: boolean;
 }) {
   return (
     <div className="group/section flex items-center gap-1" onContextMenu={onContextMenu}>
       <button
         type="button"
         id={id}
+        autoFocus={autoFocus}
         aria-expanded={expanded}
         className="flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={onToggle}
@@ -962,21 +1042,41 @@ function SectionHeading({
   );
 }
 
+/** What follows the pointer while a row is dragged, so it can leave its own section. */
+function DraggedRow({
+  title,
+  icon,
+  color,
+}: {
+  title: string;
+  icon: string | null;
+  color: string;
+}) {
+  return (
+    <div className="flex h-full cursor-grabbing items-center gap-2 rounded-md bg-sidebar-row-active px-2 text-sm text-sidebar-foreground shadow-lg">
+      <MadoHomuIcon icon={icon} color={color} />
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+    </div>
+  );
+}
+
 /** A section with its heading and rows; the whole section is the drop target. */
 function SectionBlock({
   group,
   header,
   children,
   droppable,
+  highlighted,
   empty,
 }: {
   group: Group;
   header: ReactNode;
   children: ReactNode;
   droppable: boolean;
+  highlighted: boolean;
   empty: string | null;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: `${SECTION_DROP_PREFIX}${group.id}`,
     disabled: !droppable,
   });
@@ -984,7 +1084,7 @@ function SectionBlock({
     <section
       ref={setNodeRef}
       aria-labelledby={`madohomu-section-${group.id}`}
-      className={cn("flex flex-col gap-0.5 rounded-md", isOver && "bg-sidebar-row-hover/60")}
+      className={cn("flex flex-col gap-0.5 rounded-md", highlighted && "bg-sidebar-row-hover/60")}
       data-madohomu-section={group.kind}
     >
       {header}
@@ -1019,14 +1119,19 @@ function CustomSectionHeader({
   onMenu: (position: { x: number; y: number }) => void;
 }) {
   const settledRef = useRef(false);
+  // Enter and Escape remove the focused input; focus its heading instead of letting the
+  // workspace hand focus back to the open thread's row, which would open that row's tooltip.
+  const [focusHeading, setFocusHeading] = useState(false);
   if (renaming) {
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.nativeEvent.isComposing) return;
       if (event.key === "Enter") {
         settledRef.current = true;
+        setFocusHeading(true);
         onRename(event.currentTarget.value);
       } else if (event.key === "Escape") {
         settledRef.current = true;
+        setFocusHeading(true);
         onCancelRename();
       }
     };
@@ -1039,6 +1144,7 @@ function CustomSectionHeader({
         maxLength={MADOHOMU_SECTION_NAME_MAX_LENGTH}
         onFocus={(event) => {
           settledRef.current = false;
+          setFocusHeading(false);
           event.currentTarget.select();
         }}
         onKeyDown={handleKeyDown}
@@ -1056,6 +1162,7 @@ function CustomSectionHeader({
       count={count}
       expanded={expanded}
       onToggle={onToggle}
+      autoFocus={focusHeading}
       onContextMenu={(event) => {
         event.preventDefault();
         onMenu({ x: event.clientX, y: event.clientY });

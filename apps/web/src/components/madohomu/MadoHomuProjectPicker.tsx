@@ -20,7 +20,7 @@ import { useMadoHomuActions } from "./useMadoHomuActions";
  * Opens T3 Code's own add-project flow (new folder, existing folder, clone) and makes
  * the project it ends on MadoHomu's project, instead of opening a thread in it.
  */
-function useNewMadoHomuProject(environmentId: EnvironmentId) {
+function useNewMadoHomuProject(environmentId: EnvironmentId, onChosen?: () => void) {
   const { changeProject } = useMadoHomuActions(environmentId);
   return () =>
     openCommandPalette({
@@ -36,6 +36,7 @@ function useNewMadoHomuProject(environmentId: EnvironmentId) {
           return;
         }
         void changeProject(project.projectId);
+        onChosen?.();
       },
     });
 }
@@ -69,9 +70,15 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
 }
 
 /** "New project…", the project list and "Clear project": the picker's menu, reused by the sidebar. */
-export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: EnvironmentId }) {
+export function MadoHomuProjectMenuItems({
+  environmentId,
+  onChosen,
+}: {
+  environmentId: EnvironmentId;
+  onChosen?: () => void;
+}) {
   const actions = useMadoHomuActions(environmentId);
-  const newProject = useNewMadoHomuProject(environmentId);
+  const newProject = useNewMadoHomuProject(environmentId, onChosen);
   const projects = useProjects().filter(
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
@@ -87,7 +94,9 @@ export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: Env
         value={current?.id ?? ""}
         onValueChange={(value) => {
           const project = projects.find((p) => p.id === value);
-          if (project) void actions.changeProject(project.id);
+          if (!project) return;
+          void actions.changeProject(project.id);
+          onChosen?.();
         }}
       >
         {projects.map((p) => (
@@ -99,7 +108,14 @@ export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: Env
       {actions.settings.madohomuProjectId !== null && (
         <>
           <MenuSeparator />
-          <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>
+          <MenuItem
+            onClick={() => {
+              void actions.changeProject(null);
+              onChosen?.();
+            }}
+          >
+            Clear project
+          </MenuItem>
         </>
       )}
     </>
