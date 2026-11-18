@@ -127,7 +127,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     if (pendingProject.current) return;
     pendingProject.current = true;
     setSavingProject(true);
-    try {
+    await (async () => {
       const success = project
         ? await projectSelection.changeProject(project)
         : await actions.save({ madohomuProjectId: null });
@@ -138,10 +138,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           StackActions.replace("MadoHomu", { environmentId: project.environmentId }),
         );
       }
-    } finally {
+    })().finally(() => {
       pendingProject.current = false;
       setSavingProject(false);
-    }
+    });
   };
   const [busy, setBusy] = useState(false);
   const [reordering, setReordering] = useState(false);

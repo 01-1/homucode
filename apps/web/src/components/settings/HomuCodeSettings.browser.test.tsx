@@ -49,3 +49,21 @@ it("keeps device preferences usable when the linked environment is unavailable",
     .element(page.getByRole("switch", { name: "Show Building T3 settings" }))
     .not.toBeInTheDocument();
 });
+
+it("takes an offline MadoHomu settings search to the reconnect guidance", async () => {
+  using _environment = installFakeEnvironment([]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({
+      initialEntries: ["/settings/homucode?machine=removed#madohomu-working-placement"],
+    }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, { router: false });
+
+  await expect.element(page.getByText("Reconnect removed to configure MadoHomu.")).toBeVisible();
+  await expect.poll(() => router.state.location.hash).toBe("");
+});
