@@ -6,15 +6,17 @@ On mobile, use Settings → MadoHomu to enable it, choose its project and config
 
 MadoHomu is one thread list in sections, and threads use your normal chat and composer.
 
-- **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them. On mobile, tap Reorder in the app bar first, or use Move up and Move down in the thread menu.
-- **Your own sections** sit below Pinned. Add one with the + on the Pinned heading, or with Move to → New section in a thread's menu, then move pinned threads into it. Deleting a section returns its threads to Pinned.
+- **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them. On mobile, choose Reorder in the gear menu or a thread's menu first, or use Move up and Move down in the thread menu.
+- **Your own sections** sit below Pinned. Add one with New section in the gear menu, the + on the Pinned heading (web and desktop), or Move to → New section in a thread's menu. A thread moved into a section goes to its end. Deleting a section returns its threads to Pinned.
 - **Scratch** holds every other thread in the project, such as ones made in T3 Code or by agents, and any you move there, newest first by when you last wrote in each, as in the T3 Code list. It shows its first 10 threads and a Show more row; a thread that needs your approval or an answer always shows. Drag a thread onto Pinned or a section to pin it, or use Move to in its menu.
-- **Working** shows Scratch threads while they are working and do not need you. "Working threads" in MadoHomu settings can put them at the top of Scratch or leave them in place instead. Pinned threads never move.
-- **Snoozed** and **Settled** hold threads from any section while they are snoozed or settled.
+- **Working** shows Scratch threads while they are working and nothing waits on you. "Working threads" in MadoHomu settings can put them at the top of Scratch or leave them in place instead. Pinned threads never move.
+- **Snoozed** and **Settled** hold threads from any section while they are snoozed or settled, newest first by when you last wrote in each.
 
-Every section folds from its heading. A folded section that holds threads waiting on you shows how many.
+Every section folds from its heading. A folded section that holds threads waiting on you (an approval, a question or a guest's request) shows how many.
 
-The thread menu (right-click or the row's … button, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt, and Move to. Inside MadoHomu, T3 Code's own pin and folders are labelled "Pin in T3 Code" and "Move to T3 Code folder". Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn.
+On web and desktop, the thread keyboard shortcuts move through MadoHomu's rows, and links to threads in the project open inside MadoHomu.
+
+The thread menu (right-click or the row's … button, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt, and Move to. On mobile, the open thread's header menu has Move to and Edit too. New thread on a branch, started from a MadoHomu thread, files the new thread in Pinned. Inside MadoHomu, T3 Code's own pin and folders are labelled "Pin in T3 Code" and "Move to T3 Code folder". Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn.
 
 MadoHomu's threads are hidden from the T3 Code thread list. To see them there too, set "Show MadoHomu threads in T3 Code" in MadoHomu settings to Scratch only or All. Search and links still open hidden threads.
 
