@@ -46,6 +46,8 @@ export function useThreadListV2ShelfPreferences() {
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
+    keepWatchingPullRequests:
+      loaded && preferencesResult.value.sidebarKeepWatchingPullRequests === true,
     workingShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,

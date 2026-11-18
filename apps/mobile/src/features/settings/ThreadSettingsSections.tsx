@@ -20,6 +20,7 @@ import { useEnvironments } from "../../state/environments";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -208,6 +209,17 @@ export function WorkingSectionSettings() {
           label="Working section"
           value={workingShelfEnabled}
           onValueChange={(value) => savePreferences({ workingShelfEnabled: value })}
+        />
+        <SettingsSwitchRow
+          icon={PullRequestGlyph.pullRequest}
+          label="Keep watched pull requests in Working"
+          subtitle="Keep threads in Working after their pull request checks finish."
+          disabled={!workingShelfEnabled}
+          value={
+            AsyncResult.isSuccess(preferences) &&
+            preferences.value.sidebarKeepWatchingPullRequests === true
+          }
+          onValueChange={(value) => savePreferences({ sidebarKeepWatchingPullRequests: value })}
         />
       </SettingsSection>
       <Text className="px-2 text-sm text-foreground-muted">

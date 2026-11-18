@@ -18,6 +18,8 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Threads and subagents
 
+- **Keep watched pull requests in Working.** Turn this on in Settings → General to keep a thread in Working after its PR checks finish. It applies across providers on web, desktop and mobile, and is off by default.
+
 - **Full access command approvals.** Codex and Claude threads, including delegated threads, no longer pause for native tool approvals in Full access. If a provider still requires confirmation for a command, HomuCode refuses it automatically and gives the agent the reason. Codex can call HomuCode’s built-in MCP tools in Full access without a second approval prompt from Codex. HomuCode still checks each tool’s permissions.
 
 - **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.

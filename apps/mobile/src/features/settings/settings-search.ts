@@ -92,6 +92,7 @@ const SETTINGS_SEARCH_TERMS = {
     "organization",
     "sidebar",
     "working section",
+    "watched pull requests",
     "new threads",
     "last project",
   ],

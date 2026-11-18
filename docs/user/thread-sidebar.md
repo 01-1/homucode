@@ -168,6 +168,9 @@ thread there. A thread returns to the top of the active list when it finishes, f
 an approval or answer. The Working section lists the thread you last sent work to first.
 Pinned threads stay in the pinned section.
 
+To keep threads watching a pull request in **Working** after their checks finish, turn on
+**Settings → General → Keep watched pull requests in Working**. The option is off by default.
+
 The Working section is on by default. Turn it off with **Settings → General → Working section** on web and desktop,
 or **Settings → General → Working section** on iOS and Android. Each device keeps its own
 choice.

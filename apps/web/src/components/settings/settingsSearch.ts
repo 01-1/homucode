@@ -517,6 +517,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "watched-pull-requests-in-working",
+    title: "Keep watched pull requests in Working",
+    to: "/settings/general",
+    searchTerms: ["pr watch monitor checks inbox sidebar working section"],
+  },
+  {
     id: "thread-folder-style",
     title: "Folder style",
     to: "/settings/homucode",
