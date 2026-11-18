@@ -972,22 +972,7 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
-export const UsageLimitSourceConfig = Schema.Struct({
-  kind: Schema.Literal("cliproxy"),
-  label: Schema.optional(TrimmedNonEmptyString),
-  url: TrimmedNonEmptyString,
-  managementKey: SettingsSecretValue.pipe(
-    Schema.withDecodingDefault(Effect.succeed("")),
-    secretSetting,
-  ),
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-});
-export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
-
-export const TextGeneratorKind = Schema.Literals(["openaiCompatible", "anthropic"]);
-export type TextGeneratorKind = typeof TextGeneratorKind.Type;
-
-const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
+const HttpBaseUrl = TrimmedNonEmptyString.check(
   Schema.isMaxLength(2048),
   Schema.makeFilter((value) => {
     try {
@@ -1005,11 +990,27 @@ const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
   }),
 );
 
+export const UsageLimitSourceConfig = Schema.Struct({
+  kind: Schema.Literal("cliproxy"),
+  label: Schema.optional(TrimmedNonEmptyString),
+  url: TrimmedNonEmptyString,
+  providerRoute: Schema.optional(HttpBaseUrl),
+  managementKey: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
+export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
+
+export const TextGeneratorKind = Schema.Literals(["openaiCompatible", "anthropic"]);
+export type TextGeneratorKind = typeof TextGeneratorKind.Type;
+
 /** A model API that only generates text. Its key shares the id namespace with provider instances. */
 export const TextGeneratorConfig = Schema.Struct({
   kind: TextGeneratorKind,
   label: Schema.optional(TrimmedNonEmptyString),
-  baseUrl: TextGeneratorBaseUrl,
+  baseUrl: HttpBaseUrl,
   apiKey: SettingsSecretValue.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });

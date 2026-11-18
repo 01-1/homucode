@@ -90,6 +90,8 @@ export const UsageLimitSourceSnapshot = Schema.Struct({
   origin: Schema.optional(TrimmedNonEmptyString),
   /** Origin and base path of the hub, which tell apart hubs served from one origin. */
   endpoint: Schema.optional(TrimmedNonEmptyString),
+  /** Exact Claude provider route for the status line when it differs from the polling endpoint. */
+  providerRoute: Schema.optional(TrimmedNonEmptyString),
   checkedAt: IsoDateTime,
   accounts: ForwardCompatibleArray(UsageLimitSourceAccount),
   error: Schema.optional(TrimmedNonEmptyString),

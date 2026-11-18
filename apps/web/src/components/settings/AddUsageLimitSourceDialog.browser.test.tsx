@@ -31,14 +31,19 @@ describe("AddUsageLimitSourceDialog", () => {
       />,
     );
 
-    await userEvent.type(page.getByLabelText("Hub URL"), "https://hub.example.ts.net:8318");
+    await userEvent.fill(page.getByLabelText("Hub URL"), "http://127.0.0.1:8838");
+    await userEvent.fill(
+      page.getByLabelText("Claude provider route (optional)"),
+      "http://127.0.0.1:8318",
+    );
     await userEvent.type(page.getByLabelText("Management key"), "secret-key{Enter}");
 
     expect(updateSettings).toHaveBeenCalledOnce();
     expect(updateSettings).toHaveBeenCalledWith({
       usageLimitSources: {
-        "cliproxy-hub.example.ts.net-8318": expect.objectContaining({
-          url: "https://hub.example.ts.net:8318",
+        "cliproxy-127.0.0.1-8838": expect.objectContaining({
+          url: "http://127.0.0.1:8838",
+          providerRoute: "http://127.0.0.1:8318",
           managementKey: "secret-key",
         }),
       },

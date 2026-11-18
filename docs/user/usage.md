@@ -176,6 +176,11 @@ using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the
 environment that will connect to the hub and enter its URL and management key.
 
+If the Claude quota source and Claude Code use different URLs, set **Claude provider route** to the provider's
+gateway base URL, including any path prefix. The status line uses that route to match the
+source, and the server still polls the hub URL. To update an existing source, add it again
+with the same hub URL and key. Clear **Claude provider route** to match by the hub URL again.
+
 The hub's Codex, Claude, xAI (shown as Grok) and Antigravity accounts appear under **Usage → Limits**;
 accounts for other providers are not read. Codex accounts show banked reset credits; select an
 account and choose **Use reset** to redeem one. Claude limits come from quota headers the
