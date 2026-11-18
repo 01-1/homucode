@@ -948,6 +948,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
         StackActions.replace("Thread", {
           environmentId: String(environmentId),
           threadId: String(threadId),
+          ...(madohomu ? { madohomu } : {}),
         }),
       );
     }
