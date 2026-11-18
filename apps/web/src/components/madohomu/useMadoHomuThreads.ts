@@ -65,7 +65,7 @@ export function useMadoHomuSelection(environmentId: EnvironmentId) {
     detail: useThreadProjection(detailRef),
     detailStatus: useThreadStatus(detailRef),
     shellStatus: useEnvironmentShellStatus(environmentId),
-    created: useAtomValue(madohomuCreatedThreadIdsAtom),
+    created: useAtomValue(madohomuCreatedThreadIdsAtom).ids,
   });
   const selection = resolveMadoHomuSelection({
     namedId: search.threadId,
