@@ -373,6 +373,7 @@ export function layerWithRegistry<Error>(
         }),
         layerStores,
         layerEventSinkProvided,
+        layerServerSettings,
         IdAllocator.layer,
         ThreadCommandExecutor.layer,
         GitVcsDriver.layer.pipe(

@@ -71,6 +71,7 @@ const SETTINGS_SEARCH_TERMS = {
     "extra features",
     "delegation",
     "subagents",
+    "subagents inherit parent pin",
     "work assistance",
     "device names",
     "phone name",

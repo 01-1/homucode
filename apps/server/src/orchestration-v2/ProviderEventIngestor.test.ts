@@ -24,6 +24,7 @@ import {
   RunAttemptId,
   RunId,
   RuntimeRequestId,
+  ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -48,6 +49,7 @@ import * as EventStore from "./EventStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
@@ -80,12 +82,14 @@ const layerGit = GitVcsDriver.layer.pipe(
 const layerEmptyInstances = Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
   getInstance: () => Effect.undefined,
 });
+const layerServerSettings = ServerSettings.layerTest();
 const makeLayerTest = <E>(
   ingestorEventSink: Layer.Layer<EventSink.EventSinkV2, E>,
   instances = layerEmptyInstances,
 ) =>
   Layer.mergeAll(
     instances,
+    layerServerSettings,
     layerTestDatabase,
     layerTestStores,
     layerTestEventSink,
@@ -98,6 +102,7 @@ const makeLayerTest = <E>(
           instances,
           layerTestStores,
           ingestorEventSink,
+          layerServerSettings,
           IdAllocator.layer,
           ThreadCommandExecutor.layer,
           layerGit,
@@ -2206,6 +2211,82 @@ layer("ProviderEventIngestorV2", (it) => {
         assert.equal(stored.length, 1);
         assert.equal(gitReads, 1);
       }),
+  );
+
+  it.effect("inherits device pins only for new native subagents when enabled", () =>
+    Effect.gen(function* () {
+      const parentCreatedAt = yield* DateTime.now;
+      const now = DateTime.add(parentCreatedAt, { seconds: 1 });
+      const sink = yield* EventSink.EventSinkV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const settings = yield* ServerSettings.ServerSettingsService;
+      const ingestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const root = yield* threadCreatedEvent(parentCreatedAt);
+      if (root.type !== "thread.created") throw new Error("Expected thread fixture");
+      const phone = { pinnedAt: DateTime.formatIso(parentCreatedAt), orderKey: "a0" };
+      yield* sink.write({
+        events: [
+          {
+            ...root,
+            payload: {
+              ...root.payload,
+              pinnedAt: parentCreatedAt,
+              legacyPin: null,
+              devicePins: { phone },
+            },
+          },
+        ],
+      });
+      const providerSessionId = yield* ids.allocate.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+        threadId: root.threadId,
+      });
+      const ingest = (suffix: string, title = suffix) => {
+        const id = ThreadId.make(`thread:pin-inheritance:${suffix}`);
+        return ingestor
+          .ingestNormalized({
+            providerSessionId,
+            providerInstanceId: modelSelection.instanceId,
+            threadId: root.threadId,
+            event: {
+              type: "app_thread.created",
+              driver: CODEX_DRIVER,
+              appThread: {
+                ...root.payload,
+                id,
+                title,
+                createdAt: now,
+                updatedAt: now,
+                pinnedAt: null,
+                legacyPin: null,
+                devicePins: {},
+                lineage: {
+                  parentThreadId: root.threadId,
+                  rootThreadId: root.threadId,
+                  relationshipToParent: "subagent",
+                },
+              },
+            },
+          })
+          .pipe(Effect.andThen(projections.getThread(id)));
+      };
+      const initial = yield* ingest("off");
+      assert.isNull(initial.pinnedAt);
+      assert.deepEqual(initial.devicePins, {});
+
+      yield* Effect.acquireRelease(
+        settings.updateSettings({ subagentsInheritParentPin: true }),
+        () => settings.updateSettings({ subagentsInheritParentPin: false }).pipe(Effect.orDie),
+      );
+      const inherited = yield* ingest("on");
+      assert.deepEqual(inherited.pinnedAt, now);
+      assert.isNull(inherited.legacyPin);
+      assert.deepEqual(inherited.devicePins, {
+        phone: { pinnedAt: DateTime.formatIso(now), orderKey: null },
+      });
+      assert.isNull((yield* ingest("off", "Updated title")).pinnedAt);
+    }),
   );
 
   it.effect("updates provider child metadata without recreating its saved thread", () =>
