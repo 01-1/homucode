@@ -65,7 +65,7 @@ import { deliverContextHandoffs, withInlineContext } from "./ContextHandoffDeliv
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import { unsentManualContinuationSource } from "./manualContinuation.ts";
+import { manualContinuationSource } from "./manualContinuation.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import {
   ContextHandoffBackgroundWorkError,
@@ -512,12 +512,10 @@ export const layer: Layer.Layer<
       }
       const manualResume =
         run.manualContinuationOfRunId !== undefined && attempt.reason !== "steering_restart";
-      const resumeSource = manualResume
-        ? unsentManualContinuationSource(run, projection)
-        : undefined;
+      const resumeSource = manualResume ? manualContinuationSource(run, projection) : undefined;
       const unsentResumeMessage =
-        resumeSource !== undefined
-          ? projection.messages.find((source) => source.id === resumeSource.userMessageId)
+        resumeSource?.accepted === false
+          ? projection.messages.find((source) => source.id === resumeSource.run.userMessageId)
           : undefined;
       const providerMessage = unsentResumeMessage ?? message;
       const manualResumePrompt =
@@ -1571,11 +1569,7 @@ export const layer: Layer.Layer<
       const resumeFromHistory =
         manualResumePrompt !== undefined &&
         (resumeFellBack ||
-          projection.runs.some(
-            (source) =>
-              source.id === run.manualContinuationOfRunId &&
-              source.providerThreadId !== providerThread.id,
-          ));
+          (resumeSource !== undefined && resumeSource.run.providerThreadId !== providerThread.id));
       const resumeNatively =
         manualResume && unsentResumeMessage === undefined && !resumeFromHistory;
       if (resumeNatively && session.resumeTurn === undefined) {

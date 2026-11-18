@@ -1,6 +1,6 @@
 import type { OrchestrationV2Run, OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 
-export function unsentManualContinuationSource(
+export function manualContinuationSource(
   run: OrchestrationV2Run | undefined,
   projection: Pick<OrchestrationV2ThreadProjection, "runs" | "attempts" | "providerTurns">,
 ) {
@@ -26,9 +26,9 @@ export function unsentManualContinuationSource(
     const accepted = latestAttempt(sourceId, (attempt) => acceptedAttempts.has(attempt.id));
     // An accepted attempt delivered everything before it; only a later steering restart's message is unsent.
     const restarted = latestAttempt(sourceId, (attempt) => attempt.reason === "steering_restart");
-    if (restarted > accepted) return source;
-    if (accepted > 0) return undefined;
-    if (source.manualContinuationOfRunId === undefined) return source;
+    if (accepted > 0 && restarted <= accepted) return { run: source, accepted: true };
+    if (restarted > accepted || source.manualContinuationOfRunId === undefined)
+      return { run: source, accepted: false };
     sourceId = source.manualContinuationOfRunId;
   }
   return undefined;
