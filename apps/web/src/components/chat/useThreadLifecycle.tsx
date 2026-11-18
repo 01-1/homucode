@@ -3,6 +3,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import type { Dispatch } from "react";
 import type { ComposerThreadTarget } from "../../composerDraftStore";
 import type { ComposerHandleRef } from "../../composerHandleContext";
+import { openThreadInMadoHomu } from "../../madohomu";
 import {
   isThreadWokeUnseen,
   branchMismatchKey,
@@ -507,6 +508,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     }
     const routeRef = resolveThreadOpenRoute(threadRef, shell);
     if (scopedThreadKey(routeRef) === routeThreadKey) return;
+    if (openThreadInMadoHomu(router, routeRef)) return;
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(routeRef),

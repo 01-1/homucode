@@ -141,13 +141,32 @@ export function madohomuListedThreads<T extends Pick<EnvironmentThreadShell, "id
   );
 }
 
-/** The thread MadoHomu shows: the one the URL names if it is listed, else the first row. */
-export function selectMadoHomuThread<T extends { readonly id: ThreadId }>(
-  groups: ReadonlyArray<MadoHomuGroup<T>>,
-  openThreadId: ThreadId | null | undefined,
-): T | null {
-  const rows = groups.flatMap((group) => group.threads);
-  return rows.find((thread) => thread.id === openThreadId) ?? rows[0] ?? null;
+/**
+ * The thread MadoHomu shows. A named thread still in the project stays open whatever the list's
+ * filtering hides, and one not loaded yet is `loading`. Only one known to be gone (deleted,
+ * archived, moved, or absent once the list has loaded) falls back to the first row, with
+ * `replace` set so the URL follows; so does a URL that names no thread.
+ */
+export function resolveMadoHomuSelection(input: {
+  readonly namedId: ThreadId | null | undefined;
+  readonly named: {
+    readonly projectId: ProjectId;
+    readonly deletedAt?: unknown;
+    readonly archivedAt: unknown;
+  } | null;
+  readonly projectId: ProjectId | null;
+  readonly listLoaded: boolean;
+  readonly firstId: ThreadId | null;
+}): { readonly threadId: ThreadId | null; readonly loading: boolean; readonly replace: boolean } {
+  const { namedId, named, firstId, listLoaded } = input;
+  const fallback = { threadId: firstId, loading: firstId === null && !listLoaded, replace: true };
+  if (!namedId) return fallback;
+  if (named === null) {
+    return listLoaded ? fallback : { threadId: null, loading: true, replace: false };
+  }
+  const gone =
+    named.deletedAt != null || named.archivedAt != null || named.projectId !== input.projectId;
+  return gone ? fallback : { threadId: namedId, loading: false, replace: false };
 }
 
 /** The title MadoHomu's "New thread" gives the threads it makes. */

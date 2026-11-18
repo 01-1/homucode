@@ -48,6 +48,7 @@ import {
   EllipsisIcon,
   PlusIcon,
   SettingsIcon,
+  ShieldQuestionIcon,
   SquarePenIcon,
 } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
@@ -55,6 +56,7 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
+import { useThreadNavigationShortcuts } from "../../hooks/useThreadNavigationShortcuts";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
 import { cn, isMacPlatform, randomUUID } from "../../lib/utils";
 import {
@@ -256,6 +258,24 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     closeSheet();
     void navigate({ to: "/madohomu", search: { environmentId, threadId } });
   };
+  const selectedRef = selectedId ? scopeThreadRef(environmentId, selectedId) : null;
+  const jumpLabels = useThreadNavigationShortcuts({
+    orderedThreadKeys: orderedKeys,
+    // A selected thread with no visible row traverses like no selection.
+    currentThreadKey:
+      selectedRef && orderedKeys.includes(scopedThreadKey(selectedRef))
+        ? scopedThreadKey(selectedRef)
+        : null,
+    routeThreadRef: selectedRef,
+    onNavigate: (key) => {
+      const ref = parseScopedThreadKey(key);
+      if (!ref || !threads.some((t) => t.id === ref.threadId)) return false;
+      clearSelection();
+      setSelectionAnchor(key);
+      open(ref.threadId);
+      return true;
+    },
+  });
   const startRename = (threadRef: ScopedThreadRef) => {
     const thread = threads.find((t) => t.id === threadRef.threadId);
     if (thread) setRenaming({ id: thread.id, title: thread.title });
@@ -352,6 +372,16 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       actionableCount: regeneratable.length,
     });
     const selectedIds = selected.map((t) => t.id);
+    const codePinned = configLoaded ? selected.filter((t) => t.pinnedAt != null) : [];
+    // The place all the selected threads share, if they share one: a section id, null for
+    // Pinned, or "scratch".
+    const placeOf = (t: SidebarThreadSummary) => {
+      const entry = settings.madohomuThreads[t.id];
+      if (!isMadoHomuThreadPinned(entry)) return "scratch";
+      return settings.madohomuSections.find((s) => s.id === entry?.section)?.id ?? null;
+    };
+    const firstPlace = placeOf(selected[0]!);
+    const sharedPlace = selected.every((t) => placeOf(t) === firstPlace) ? firstPlace : undefined;
     const folderItems = buildMultiSelectFolderMenuItems({
       environmentId,
       threadIds: selectedIds,
@@ -366,6 +396,15 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const clicked = await settlePromise(() =>
       api.contextMenu.show(
         [
+          ...(codePinned.length > 0
+            ? [
+                {
+                  id: "unpin",
+                  label: `${MADOHOMU_THREAD_MENU_LABELS.unpin} (${codePinned.length})`,
+                  disabled: !canOperate,
+                },
+              ]
+            : []),
           {
             id: "settle",
             label: `Settle (${count})`,
@@ -394,13 +433,19 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             icon: "folder" as const,
             disabled: !canEdit,
             children: [
-              { id: "move:", label: "Pinned" },
-              ...settings.madohomuSections.map((s) => ({ id: `move:${s.id}`, label: s.name })),
+              { id: "move:", label: "Pinned", checked: sharedPlace === null },
+              ...settings.madohomuSections.map((s) => ({
+                id: `move:${s.id}`,
+                label: s.name,
+                checked: sharedPlace === s.id,
+              })),
               {
                 id: "move-scratch",
                 label: MADOHOMU_SCRATCH_LABEL,
+                checked: sharedPlace === "scratch",
                 disabled: pinned.length === 0,
               },
+              { id: "move-new-section", label: "New section…", separatorBefore: true },
             ],
           },
           ...(titleItem ? [titleItem] : []),
@@ -444,19 +489,26 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           pinned.map((t) => [t.id, actions.threadEntry(t.id, { pinned: false })]),
         ),
       });
-    } else if (choice.startsWith("move:")) {
-      const section = choice.slice("move:".length) || null;
-      const ids = new Set(selected.map((t) => t.id));
+    } else if (choice === "unpin") {
+      if (!canOperate) return;
+      for (const t of codePinned) handleUnpin(scopeThreadRef(t.environmentId, t.id));
+    } else if (choice.startsWith("move:") || choice === "move-new-section") {
+      const created =
+        choice === "move-new-section" ? { id: randomUUID(), name: "New section" } : null;
+      const section = created?.id ?? (choice.slice("move:".length) || null);
+      const ids = new Set(selectedIds);
       // The selection goes last, in its own order.
-      void actions.save({
+      const saved = await actions.save({
+        ...(created ? { madohomuSections: [...settings.madohomuSections, created] } : {}),
         madohomuThreadOrder: [
           ...threadMenu.savedOrder().filter((id) => !ids.has(id)),
-          ...selected.map((t) => t.id),
+          ...selectedIds,
         ],
         madohomuThreads: Object.fromEntries(
           selected.map((t) => [t.id, actions.threadEntry(t.id, { pinned: true, section })]),
         ),
       });
+      if (saved && created) setRenamingSection(created.id);
     } else if (choice === "mark-unread") {
       for (const ref of refs) markThreadUnread(ref);
     } else if (choice === "delete") {
@@ -586,14 +638,13 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
 
   const saveSections = (sections: ReadonlyArray<MadoHomuSection>) =>
     actions.save({ madohomuSections: [...sections] });
-  const addingSectionRef = useRef(false);
-  const addSection = async () => {
-    if (addingSectionRef.current) return;
-    addingSectionRef.current = true;
-    const created = { id: randomUUID(), name: "New section" };
-    const saved = await saveSections([...settings.madohomuSections, created]);
-    addingSectionRef.current = false;
-    if (saved) setRenamingSection(created.id);
+  // A new section stays local until its name is committed, so Escape leaves nothing behind.
+  const [draftSectionId, setDraftSectionId] = useState<string | null>(null);
+  const addSection = () => setDraftSectionId((current) => current ?? randomUUID());
+  const commitDraftSection = (id: string, name: string) => {
+    setDraftSectionId(null);
+    const trimmed = name.trim().slice(0, MADOHOMU_SECTION_NAME_MAX_LENGTH);
+    if (trimmed) void saveSections([...settings.madohomuSections, { id, name: trimmed }]);
   };
   const renameSection = (id: string, name: string) => {
     setRenamingSection(null);
@@ -630,10 +681,11 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       api.contextMenu.show(
         [
           { id: "rename", label: "Rename section", icon: "pencil", disabled: !canEdit },
-          { id: "up", label: "Move up", disabled: !canEdit || index <= 0 },
+          { id: "up", label: "Move up", icon: "arrow-up", disabled: !canEdit || index <= 0 },
           {
             id: "down",
             label: "Move down",
+            icon: "arrow-down",
             disabled: !canEdit || index >= settings.madohomuSections.length - 1,
           },
           {
@@ -752,7 +804,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         isActive={isActive}
         isRouteThread={isActive}
         readOpensPullRequestsInRightPanel={readOpensPullRequestsInRightPanel}
-        jumpLabel={null}
+        jumpLabel={jumpLabels.get(key) ?? null}
         currentEnvironmentId={environmentId}
         environmentLabel={null}
         environmentMachine="server"
@@ -931,7 +983,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                     heading(
                       group,
                       canEdit ? (
-                        <HeadingButton label="Add section" onClick={() => void addSection()}>
+                        <HeadingButton label="Add section" onClick={addSection}>
                           <PlusIcon aria-hidden className="size-3.5" />
                         </HeadingButton>
                       ) : null,
@@ -939,6 +991,21 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                     madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: canEdit }),
                   );
                 })}
+                {draftSectionId !== null ? (
+                  <CustomSectionHeader
+                    key={draftSectionId}
+                    section={{ id: draftSectionId, name: "" }}
+                    count={0}
+                    attention={0}
+                    expanded
+                    onToggle={() => {}}
+                    renaming
+                    canEdit={canEdit}
+                    onRename={(name) => commitDraftSection(draftSectionId, name)}
+                    onCancelRename={() => setDraftSectionId(null)}
+                    onMenu={() => {}}
+                  />
+                ) : null}
               </SortableContext>
               <SortableContext
                 items={groups
@@ -1072,11 +1139,12 @@ function SectionHeading({
               <button
                 type="button"
                 aria-label={`${attention} need you. Expand ${title}`}
-                className="rounded-full bg-warning/15 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="inline-flex items-center gap-0.5 rounded-full bg-warning/25 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={onToggle}
               />
             }
           >
+            <ShieldQuestionIcon aria-hidden className="size-3 shrink-0" />
             {attention}
           </TooltipTrigger>
           <TooltipPopup side="top">{attention} need you</TooltipPopup>
@@ -1180,6 +1248,7 @@ function CustomSectionHeader({
         id={`madohomu-section-${section.id}`}
         autoFocus
         defaultValue={section.name}
+        placeholder="New section"
         aria-label="Section name"
         maxLength={MADOHOMU_SECTION_NAME_MAX_LENGTH}
         onFocus={(event) => {

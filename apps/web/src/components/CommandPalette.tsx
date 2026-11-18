@@ -1,4 +1,4 @@
-import { madohomuDestinationEnvironmentIdAtom } from "../madohomu";
+import { madohomuDestinationEnvironmentIdAtom, openThreadInMadoHomu } from "../madohomu";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -56,7 +56,7 @@ import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   BugIcon,
@@ -418,6 +418,7 @@ function OpenCommandPaletteDialog(props: {
   readonly initialContext: CommandPaletteReturnContext | undefined;
 }) {
   const navigate = useNavigate();
+  const router = useRouter();
   const madohomuEnvironmentId = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { openChildSearch, setOpen } = props;
@@ -1888,10 +1889,12 @@ function OpenCommandPaletteDialog(props: {
             query: linkedThreadSearch.query,
             icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
             runThread: async (thread) => {
-              await navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-              });
+              const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+              await (openThreadInMadoHomu(router, threadRef) ??
+                navigate({
+                  to: "/$environmentId/$threadId",
+                  params: buildThreadRouteParams(threadRef),
+                }));
             },
           })
         : allThreadItems,
