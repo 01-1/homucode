@@ -22,6 +22,7 @@ import {
   MADOHOMU_SCRATCH_PAGE,
   madohomuEmptyPinnedText,
   madohomuIconColor,
+  moveMadoHomuThreadsLast,
   pageMadoHomuRows,
   type MadoHomuGroup,
 } from "@t3tools/client-runtime/madohomu";
@@ -58,7 +59,7 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
 import { useThreadNavigationShortcuts } from "../../hooks/useThreadNavigationShortcuts";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
-import { cn, isMacPlatform, randomUUID } from "../../lib/utils";
+import { cn, isMacPlatform } from "../../lib/utils";
 import {
   buildMultiSelectFolderMenuItems,
   isThreadFolderMenuId,
@@ -125,10 +126,10 @@ const SETTLED_EXPANDED_KEY = "t3code:madohomu:settled-expanded";
 const COLLAPSED_KEY = "t3code:madohomu:collapsed-sections";
 const COLLAPSED_SCHEMA = Schema.Record(Schema.String, Schema.Boolean);
 const NO_COLLAPSED: { readonly [id: string]: boolean } = {};
-/** A row whose status label asks for the user: an approval or a question. */
+/** A row whose status label asks for the user: an approval, a question or a waiting guest. */
 const needsUser = (thread: SidebarThreadSummary) => {
   const status = resolveSidebarThreadStatus(thread);
-  return status === "approval" || status === "input";
+  return status === "approval" || status === "input" || status === "request";
 };
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 // useSensor memoizes on its options, so they live outside render.
@@ -210,6 +211,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const [renaming, setRenaming] = useState<{ id: ThreadId; title: string } | null>(null);
   const renamingSection = useMadoHomuRenamingSection((s) => s.id);
   const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
+  const draftSection = useMadoHomuRenamingSection((s) => s.draft);
+  const startDraftSection = useMadoHomuRenamingSection((s) => s.startDraft);
+  const clearDraftSection = useMadoHomuRenamingSection((s) => s.clearDraft);
   const [dragging, setDragging] = useState<ThreadId | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
@@ -253,6 +257,24 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     return page.shown;
   };
   const orderedKeys = groups.flatMap((g) => shownThreads(g).map(threadKey));
+  // Every row in the order the sidebar renders them, folded or paged ones included.
+  const renderedIds = groups.flatMap((g) => g.threads.map((t) => t.id));
+  /**
+   * Saves `ids` into `section` (null is Pinned) at its end, in the order their rows show, with
+   * `sections` when the move also adds one.
+   */
+  const moveThreads = (
+    ids: ReadonlyArray<ThreadId>,
+    section: string | null,
+    sections?: ReadonlyArray<MadoHomuSection>,
+  ) =>
+    actions.save({
+      ...(sections ? { madohomuSections: [...sections] } : {}),
+      madohomuThreadOrder: moveMadoHomuThreadsLast(threadMenu.savedOrder(), renderedIds, ids),
+      madohomuThreads: Object.fromEntries(
+        ids.map((id) => [id, actions.threadEntry(id, { pinned: true, section })]),
+      ),
+    });
 
   const open = (threadId: ThreadId) => {
     closeSheet();
@@ -492,23 +514,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     } else if (choice === "unpin") {
       if (!canOperate) return;
       for (const t of codePinned) handleUnpin(scopeThreadRef(t.environmentId, t.id));
-    } else if (choice.startsWith("move:") || choice === "move-new-section") {
-      const created =
-        choice === "move-new-section" ? { id: randomUUID(), name: "New section" } : null;
-      const section = created?.id ?? (choice.slice("move:".length) || null);
-      const ids = new Set(selectedIds);
-      // The selection goes last, in its own order.
-      const saved = await actions.save({
-        ...(created ? { madohomuSections: [...settings.madohomuSections, created] } : {}),
-        madohomuThreadOrder: [
-          ...threadMenu.savedOrder().filter((id) => !ids.has(id)),
-          ...selectedIds,
-        ],
-        madohomuThreads: Object.fromEntries(
-          selected.map((t) => [t.id, actions.threadEntry(t.id, { pinned: true, section })]),
-        ),
-      });
-      if (saved && created) setRenamingSection(created.id);
+    } else if (choice === "move-new-section") {
+      startDraftSection(selectedIds);
+    } else if (choice.startsWith("move:")) {
+      const section = choice.slice("move:".length) || null;
+      // Already all there: nothing to do, as in the single-thread menu.
+      if (section !== sharedPlace) void moveThreads(selectedIds, section);
     } else if (choice === "mark-unread") {
       for (const ref of refs) markThreadUnread(ref);
     } else if (choice === "delete") {
@@ -638,13 +649,18 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
 
   const saveSections = (sections: ReadonlyArray<MadoHomuSection>) =>
     actions.save({ madohomuSections: [...sections] });
-  // A new section stays local until its name is committed, so Escape leaves nothing behind.
-  const [draftSectionId, setDraftSectionId] = useState<string | null>(null);
-  const addSection = () => setDraftSectionId((current) => current ?? randomUUID());
-  const commitDraftSection = (id: string, name: string) => {
-    setDraftSectionId(null);
+  // A new section stays a draft until its name is committed (see useMadoHomuRenamingSection).
+  const addSection = () => {
+    if (draftSection === null) startDraftSection([]);
+  };
+  const commitDraftSection = (name: string) => {
+    const draft = draftSection;
+    clearDraftSection();
     const trimmed = name.trim().slice(0, MADOHOMU_SECTION_NAME_MAX_LENGTH);
-    if (trimmed) void saveSections([...settings.madohomuSections, { id, name: trimmed }]);
+    if (!trimmed || !draft) return;
+    const sections = [...settings.madohomuSections, { id: draft.id, name: trimmed }];
+    if (draft.threadIds.length === 0) void saveSections(sections);
+    else void moveThreads(draft.threadIds, draft.id, sections);
   };
   const renameSection = (id: string, name: string) => {
     setRenamingSection(null);
@@ -706,7 +722,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       moveSection(section.id, clicked.value === "up" ? -1 : 1);
     else if (clicked.value === "delete") {
       const confirmed = await settlePromise(() =>
-        api.dialogs.confirm(`Delete section "${section.name}"? Its threads move back to Pinned.`),
+        api.dialogs.confirm(`Delete section "${section.name}"? Its threads move back to Pinned.`, {
+          variant: "destructive",
+        }),
       );
       if (confirmed._tag === "Success" && confirmed.value) void deleteSection(section.id);
     }
@@ -789,7 +807,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         settlementSupported={configLoaded}
         snoozeSupported={configLoaded}
         pinningSupported={configLoaded}
-        isPinned={thread.pinnedAt != null}
+        // The T3 Code pin is in the menu; a row glyph would read as MadoHomu's own pin.
+        isPinned={false}
         dropVerb={null}
         dragOverPinned={false}
         folderTintClassName={dragging === thread.id ? "opacity-40" : undefined}
@@ -991,18 +1010,18 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                     madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: canEdit }),
                   );
                 })}
-                {draftSectionId !== null ? (
+                {draftSection !== null ? (
                   <CustomSectionHeader
-                    key={draftSectionId}
-                    section={{ id: draftSectionId, name: "" }}
+                    key={draftSection.id}
+                    section={{ id: draftSection.id, name: "" }}
                     count={0}
                     attention={0}
                     expanded
                     onToggle={() => {}}
                     renaming
                     canEdit={canEdit}
-                    onRename={(name) => commitDraftSection(draftSectionId, name)}
-                    onCancelRename={() => setDraftSectionId(null)}
+                    onRename={commitDraftSection}
+                    onCancelRename={clearDraftSection}
                     onMenu={() => {}}
                   />
                 ) : null}

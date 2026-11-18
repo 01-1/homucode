@@ -508,7 +508,10 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     }
     const routeRef = resolveThreadOpenRoute(threadRef, shell);
     if (scopedThreadKey(routeRef) === routeThreadKey) return;
-    if (openThreadInMadoHomu(router, routeRef)) return;
+    // Linked threads (parent, subagent) share their project, which stands in for a missing shell.
+    const linkedProjectId =
+      threadEnvironmentId === environmentId ? (activeThread?.projectId ?? null) : null;
+    if (openThreadInMadoHomu(router, routeRef, linkedProjectId)) return;
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(routeRef),

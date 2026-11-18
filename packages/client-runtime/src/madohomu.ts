@@ -125,6 +125,25 @@ export function reorderMadoHomuThreads(
 }
 
 /**
+ * The new `madohomuThreadOrder` after moving `moved` to the end, keeping the order `shownOrder`
+ * (the rows as the sidebar renders them) gives them. Threads without a row keep their own order.
+ */
+export function moveMadoHomuThreadsLast(
+  savedOrder: ReadonlyArray<ThreadId>,
+  shownOrder: ReadonlyArray<ThreadId>,
+  moved: ReadonlyArray<ThreadId>,
+): ThreadId[] {
+  const movedSet = new Set(moved);
+  const shown = shownOrder.filter((id) => movedSet.has(id));
+  const shownSet = new Set(shown);
+  return [
+    ...savedOrder.filter((id) => !movedSet.has(id)),
+    ...shown,
+    ...moved.filter((id) => !shownSet.has(id)),
+  ];
+}
+
+/**
  * The project threads MadoHomu lists. Subagents report to their parent, so only ones the user
  * filed get a row, as in T3 Code, plus the open thread so it always has its row.
  */

@@ -15,7 +15,7 @@ import type {
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, type ProjectId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "./rpc/atomRegistry";
@@ -164,14 +164,25 @@ export function readMadoHomuContext(router: AnyRouter) {
 
 /**
  * Opens a thread inside MadoHomu when MadoHomu is the current view and the thread is in its
- * project; null when it is not, so the caller takes the normal route.
+ * project; null when it is not, so the caller takes the normal route. The shell list can leave
+ * a thread out (an idle subagent), so its loaded detail, then `knownProjectId` (what the link
+ * knows), stand in for the shell.
  */
-export function openThreadInMadoHomu(router: AnyRouter, threadRef: ScopedThreadRef) {
+export function openThreadInMadoHomu(
+  router: AnyRouter,
+  threadRef: ScopedThreadRef,
+  knownProjectId: ProjectId | null = null,
+) {
   const context = readMadoHomuContext(router);
   if (context?.environmentId !== threadRef.environmentId) return null;
   const shell = appAtomRegistry.get(environmentThreadShells.threadShellAtom(threadRef));
-  if (shell?.projectId !== context.project.id || shell.archivedAt !== null) return null;
-  if (shell.deletedAt !== null) return null;
+  const detail = shell
+    ? null
+    : appAtomRegistry.get(environmentThreadDetails.threadAtom(threadRef))?.projection.thread;
+  const known =
+    shell ?? detail ?? { projectId: knownProjectId, archivedAt: null, deletedAt: null };
+  if (known.projectId !== context.project.id || known.archivedAt !== null) return null;
+  if (known.deletedAt != null) return null;
   return router.navigate({
     to: "/madohomu",
     search: { environmentId: threadRef.environmentId, threadId: threadRef.threadId },

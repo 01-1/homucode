@@ -25,11 +25,24 @@ const MENU_NEW_SECTION = "madohomu:new-section";
 const MENU_SCRATCH = "madohomu:scratch";
 const MENU_SECTION_PREFIX = "madohomu:section:";
 
-/** The section whose name the sidebar is editing; "New section…" in any menu starts one. */
+/**
+ * The section whose name the sidebar is editing, and the new section being named. A new section
+ * ("+" or "New section…" in any menu) stays a draft until its name is committed; only then are
+ * it and the threads moving into it saved, so Escape leaves nothing behind.
+ */
 export const useMadoHomuRenamingSection = create<{
   id: string | null;
   set: (id: string | null) => void;
-}>((set) => ({ id: null, set: (id) => set({ id }) }));
+  draft: { readonly id: string; readonly threadIds: ReadonlyArray<ThreadId> } | null;
+  startDraft: (threadIds: ReadonlyArray<ThreadId>) => void;
+  clearDraft: () => void;
+}>((set) => ({
+  id: null,
+  set: (id) => set({ id }),
+  draft: null,
+  startDraft: (threadIds) => set({ draft: { id: randomUUID(), threadIds } }),
+  clearDraft: () => set({ draft: null }),
+}));
 
 /**
  * MadoHomu's own thread menu items ("Move to" and "Edit…") and the editor they open. The sidebar
@@ -41,7 +54,7 @@ export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
   const { threads, groups } = useMadoHomuThreads(environmentId);
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canEdit = canOperate && actions.canWrite;
-  const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
+  const startDraftSection = useMadoHomuRenamingSection((s) => s.startDraft);
   const [editing, setEditing] = useState<ThreadId | null>(null);
   const manualIds = groups
     .filter((g) => g.kind === "pinned" || g.kind === "custom")
@@ -89,20 +102,8 @@ export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
         if (id === MENU_EDIT) setEditing(threadId);
         else if (id === MENU_SCRATCH) {
           if (pinned) void actions.patchThread(threadId, { pinned: false });
-        } else if (id === MENU_NEW_SECTION) {
-          const created = { id: randomUUID(), name: "New section" };
-          void actions
-            .save({
-              madohomuSections: [...settings.madohomuSections, created],
-              madohomuThreadOrder: reorderMadoHomuThreads(savedOrder(), threadId, null),
-              madohomuThreads: {
-                [threadId]: actions.threadEntry(threadId, { pinned: true, section: created.id }),
-              },
-            })
-            .then((saved) => {
-              if (saved) setRenamingSection(created.id);
-            });
-        } else if (id.startsWith(MENU_SECTION_PREFIX)) {
+        } else if (id === MENU_NEW_SECTION) startDraftSection([threadId]);
+        else if (id.startsWith(MENU_SECTION_PREFIX)) {
           const target = id.slice(MENU_SECTION_PREFIX.length) || null;
           if (!pinned || target !== section) void fileThread(threadId, target, null);
         }

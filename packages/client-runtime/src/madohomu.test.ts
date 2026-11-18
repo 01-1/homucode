@@ -16,6 +16,7 @@ import {
   isMadoHomuThreadShownInCode,
   filterMadoHomuCodeThreads,
   reorderMadoHomuThreads,
+  moveMadoHomuThreadsLast,
   findMadoHomuMorningBriefThread,
   findUntouchedMadoHomuThread,
   madohomuListedThreads,
@@ -337,6 +338,19 @@ describe("MadoHomu sections", () => {
     ];
     expect(reorderMadoHomuThreads([a, b, c], c, a)).toEqual([c, a, b]);
     expect(reorderMadoHomuThreads([a, b, c], a, null)).toEqual([b, c, a]);
+  });
+
+  it("moves a selection last in the order its rows are shown", () => {
+    const [a, b, c, d, e] = [
+      ThreadId.make("a"),
+      ThreadId.make("b"),
+      ThreadId.make("c"),
+      ThreadId.make("d"),
+      ThreadId.make("e"),
+    ];
+    // Shown d, b (d's row is first on screen), selected as [b, d] from the thread list; e has
+    // no row yet and stays after them.
+    expect(moveMadoHomuThreadsLast([a, b, c], [d, a, b, c], [b, e, d])).toEqual([a, c, d, b, e]);
   });
 
   it("hides the MadoHomu project from T3 Code unless the setting shows it", () => {
