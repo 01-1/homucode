@@ -222,9 +222,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const settledThreads = groups.find((g) => g.kind === "settled")?.threads ?? [];
   const listedSettledThreads = settledThreads.filter(olderSettled.isListed);
   useOlderSettledShelfGrowth(olderSettled, listedSettledThreads);
-  const unloadedSettledCount = olderSettled.canLoadMore
-    ? olderSettled.unloadedCount(projectShells)
-    : 0;
+  const missingSettled = olderSettled.unloadedCount(projectShells);
+  const historyUnavailable =
+    missingSettled > 0 &&
+    !olderSettled.canLoadMore &&
+    olderSettled.environments.get(environmentId)?.pages.reads.length === 0;
+  const unloadedSettledCount = olderSettled.canLoadMore || historyUnavailable ? missingSettled : 0;
   const settledCount = settledThreads.length + unloadedSettledCount;
   const unknownSettledMatches = hidingTags && unloadedSettledCount > 0;
   const settledHeadingCount = unknownSettledMatches ? `${settledThreads.length}+` : settledCount;
@@ -927,7 +930,10 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             </button>
           </li>
         ) : null}
-        {group.kind === "settled" && isExpanded(group) && (moreSettled > 0 || settledPaging) ? (
+        {group.kind === "settled" &&
+        isExpanded(group) &&
+        ((historyUnavailable ? listedSettledThreads.length > shown.length : moreSettled > 0) ||
+          settledPaging) ? (
           <li className="list-none">
             <button
               type="button"
@@ -950,8 +956,13 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                   ? "Could not load older threads. Retry"
                   : unknownSettledMatches
                     ? "Show more"
-                    : `Show ${Math.min(moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
+                    : `Show ${Math.min(historyUnavailable ? listedSettledThreads.length - shown.length : moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
             </button>
+          </li>
+        ) : null}
+        {group.kind === "settled" && isExpanded(group) && historyUnavailable ? (
+          <li className="list-none px-2 text-xs text-muted-foreground">
+            Reconnect to load older threads.
           </li>
         ) : null}
       </SectionBlock>
