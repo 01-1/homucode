@@ -5,6 +5,9 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type RefObject,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
 
 import { cn } from "~/lib/utils";
@@ -12,9 +15,15 @@ import { Button } from "../ui/button";
 import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
+/** Marks the search's menus and results, so using them keeps the search controls shown. */
+const SIDEBAR_SEARCH_ATTRIBUTE = "data-sidebar-search";
+export const SIDEBAR_SEARCH_PROPS = { [SIDEBAR_SEARCH_ATTRIBUTE]: "" };
+
 export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
   projectScope: ReactNode;
+  /** Replaces the project scope and the new project and thread buttons while searching. */
+  searchControls: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
   newThreadDisabled: boolean;
@@ -25,7 +34,10 @@ export interface SidebarThreadHeaderProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onSearchKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
+  /** A query or a list filter replaces the thread list. */
   isSearching: boolean;
+  /** A query or any search filter is set. */
+  canClearSearch: boolean;
   searchResultCount: number;
   activeSearchResultIndex: number;
   onClearSearch: () => void;
@@ -34,6 +46,7 @@ export interface SidebarThreadHeaderProps {
 export function SidebarThreadHeader({
   hasProjects,
   projectScope,
+  searchControls,
   onNewProject,
   onNewThread,
   newThreadDisabled,
@@ -45,6 +58,7 @@ export function SidebarThreadHeader({
   onSearchQueryChange,
   onSearchKeyDown,
   isSearching,
+  canClearSearch,
   searchResultCount,
   activeSearchResultIndex,
   onClearSearch,
@@ -55,9 +69,47 @@ export function SidebarThreadHeader({
   const newThreadLabel = newThreadShortcutLabel
     ? `New thread (${newThreadShortcutLabel})`
     : "New thread";
+  // Focusing the field shows the search controls until a press or focus lands outside them.
+  // Blur cannot decide that: Safari does not focus a pressed button, so a press on Filter
+  // would read as leaving and swap the button away under the pointer.
+  const [engaged, setEngaged] = useState(false);
+  const searchMode = engaged || isSearching;
+  const rowRef = useRef<HTMLDivElement>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- presses and focus outside the header and its portaled menus never reach React handlers here
+  useEffect(() => {
+    if (!engaged) return;
+    const leave = (event: Event) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (rowRef.current?.contains(target) ||
+          (target instanceof Element && target.closest(`[${SIDEBAR_SEARCH_ATTRIBUTE}]`)))
+      ) {
+        return;
+      }
+      setEngaged(false);
+    };
+    document.addEventListener("pointerdown", leave, true);
+    document.addEventListener("focusin", leave, true);
+    return () => {
+      document.removeEventListener("pointerdown", leave, true);
+      document.removeEventListener("focusin", leave, true);
+    };
+  }, [engaged]);
+
+  // Using the controls while filters alone keep them shown engages search too, so
+  // clearing the last filter from the menu does not swap the menu away under it.
+  const engageWhileSearching = () => {
+    if (searchMode && !engaged) setEngaged(true);
+  };
 
   return (
-    <div className="flex items-center gap-1">
+    <div
+      ref={rowRef}
+      className="flex items-center gap-1"
+      onPointerDownCapture={engageWhileSearching}
+      onFocusCapture={engageWhileSearching}
+    >
       <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-within:bg-sidebar-row-hover focus-within:text-sidebar-foreground focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring/70">
         <SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />
         <SidebarInput
@@ -66,7 +118,23 @@ export function SidebarThreadHeader({
           type="search"
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
-          onKeyDown={onSearchKeyDown}
+          onFocus={() => setEngaged(true)}
+          // Picking a result keeps focus here, so a press must engage a field already focused.
+          onPointerDown={() => setEngaged(true)}
+          onKeyDown={(event) => {
+            onSearchKeyDown(event);
+            // With nothing left to clear, Escape leaves search.
+            if (
+              event.key === "Escape" &&
+              !event.defaultPrevented &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229 &&
+              !canClearSearch
+            ) {
+              setEngaged(false);
+              event.currentTarget.blur();
+            }
+          }}
           placeholder="Search"
           aria-label="Search threads"
           role="combobox"
@@ -80,7 +148,7 @@ export function SidebarThreadHeader({
           }
           className="min-w-0 flex-1"
         />
-        {isSearching ? (
+        {canClearSearch ? (
           <Button
             type="button"
             size="icon-micro"
@@ -97,34 +165,42 @@ export function SidebarThreadHeader({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center">
-        {hasProjects ? (
+        {searchMode ? (
+          searchControls
+        ) : (
           <>
-            {projectScope}
-            <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
-              <FolderPlusIcon />
+            {hasProjects ? (
+              <>
+                {projectScope}
+                <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
+                  <FolderPlusIcon />
+                </SidebarHeaderIconButton>
+              </>
+            ) : null}
+            <SidebarHeaderIconButton
+              label="New thread"
+              tooltip={
+                showNewThreadInProjectHint ? (
+                  <span className="flex flex-col gap-0.5">
+                    <span>{newThreadLabel}</span>
+                    <span className="text-muted-foreground">
+                      New thread in current project: Shift+click
+                      {newThreadInProjectShortcutLabel
+                        ? ` (${newThreadInProjectShortcutLabel})`
+                        : ""}
+                    </span>
+                  </span>
+                ) : (
+                  newThreadLabel
+                )
+              }
+              disabled={newThreadDisabled}
+              onClick={onNewThread}
+            >
+              <SquarePenIcon />
             </SidebarHeaderIconButton>
           </>
-        ) : null}
-        <SidebarHeaderIconButton
-          label="New thread"
-          tooltip={
-            showNewThreadInProjectHint ? (
-              <span className="flex flex-col gap-0.5">
-                <span>{newThreadLabel}</span>
-                <span className="text-muted-foreground">
-                  New thread in current project: Shift+click
-                  {newThreadInProjectShortcutLabel ? ` (${newThreadInProjectShortcutLabel})` : ""}
-                </span>
-              </span>
-            ) : (
-              newThreadLabel
-            )
-          }
-          disabled={newThreadDisabled}
-          onClick={onNewThread}
-        >
-          <SquarePenIcon />
-        </SidebarHeaderIconButton>
+        )}
       </div>
     </div>
   );
