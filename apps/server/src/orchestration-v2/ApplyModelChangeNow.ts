@@ -26,28 +26,48 @@ export const applyModelSelectionNow = Effect.fn("ApplyModelChangeNow.applyModelS
   function* (input: {
     readonly effectId: string;
     readonly threadId: ThreadId;
-    readonly runId: RunId;
+    readonly restartRunId?: RunId;
     readonly providerSessionId: ProviderSessionId;
     readonly providerThreadId: ProviderThreadId;
     readonly modelSelection: ModelSelection;
   }) {
     const turnControl = yield* ProviderTurnControlService.ProviderTurnControlServiceV2;
     const threads = yield* ThreadManagementService.ThreadManagementService;
-    const appliedLive = yield* turnControl
-      .applyModelSelection({
-        threadId: input.threadId,
-        providerSessionId: input.providerSessionId,
-        providerThreadId: input.providerThreadId,
-        modelSelection: input.modelSelection,
-      })
-      .pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning("orchestration-v2.live-selection-failed", { cause }).pipe(
-            Effect.as(false),
-          ),
+    const apply = turnControl.applyModelSelection({
+      threadId: input.threadId,
+      ...(input.restartRunId === undefined ? {} : { expectedRunId: input.restartRunId }),
+      providerSessionId: input.providerSessionId,
+      providerThreadId: input.providerThreadId,
+      modelSelection: input.modelSelection,
+    });
+    // A replacement message must see a live change that the old attempt has just accepted.
+    const appliedLive = yield* threads.withMessageIntake(
+      input.threadId,
+      (input.restartRunId === undefined
+        ? apply
+        : apply.pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("orchestration-v2.live-selection-failed", { cause }).pipe(
+                Effect.as(undefined),
+              ),
+            ),
+          )
+      ).pipe(
+        Effect.tap((applied) =>
+          applied === undefined
+            ? Effect.void
+            : threads.dispatch({
+                type: "run.live-model-selection.record",
+                commandId: CommandId.make(`command:live-model-selection:${input.effectId}`),
+                threadId: input.threadId,
+                ...applied,
+                modelSelection: input.modelSelection,
+              }),
         ),
-      );
-    if (appliedLive) return;
+      ),
+    );
+    if (appliedLive !== undefined) return;
+    if (input.restartRunId === undefined) return;
     const text = selectionRestartPrompt(input.modelSelection);
     yield* threads.dispatch({
       type: "message.dispatch",
@@ -63,8 +83,8 @@ export const applyModelSelectionNow = Effect.fn("ApplyModelChangeNow.applyModelS
       },
       attachments: [],
       modelSelection: input.modelSelection,
-      selectionRestartOfRunId: input.runId,
-      dispatchMode: { type: "restart_active", targetRunId: input.runId },
+      selectionRestartOfRunId: input.restartRunId,
+      dispatchMode: { type: "restart_active", targetRunId: input.restartRunId },
       createdBy: "agent",
       creationSource: "server",
     });

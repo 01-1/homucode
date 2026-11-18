@@ -397,6 +397,7 @@ export interface ThreadManagementServiceShape {
   readonly ensureLegacyTranscript: (
     threadId: ThreadId,
   ) => Effect.Effect<void, LegacyV1ThreadImporter.LegacyV1ThreadImportError>;
+  readonly withMessageIntake: Orchestrator.OrchestratorV2["Service"]["withMessageIntake"];
   readonly dispatch: (
     command: OrchestrationV2ServerCommand,
   ) => Effect.Effect<
@@ -1690,6 +1691,7 @@ const make = Effect.gen(function* () {
         Effect.andThen(orchestrator.searchThread(input)),
       );
     }),
+    withMessageIntake: orchestrator.withMessageIntake,
     dispatch,
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {

@@ -2424,26 +2424,40 @@ function renderFeedEntry(
     );
   }
 
-  return (
-    <ThreadWorkLog
-      activities={entry.activities}
-      continuesWorkLog={entry.continuesWorkLog}
+  const item = entry.activities[0]?.projectedItem.item;
+  const modelSwitch =
+    item?.type === "notification" || item?.type === "system_notice" ? item.modelSwitch : undefined;
+  const switchDivider = modelSwitch ? (
+    <ThreadModelSwitchDivider
       environmentId={props.environmentId}
-      workspaceRoot={props.workspaceRoot}
-      anchorKey={entry.id}
-      copiedRowId={props.copiedRowId}
-      expandedRows={props.expandedWorkRows}
-      rowSizing={props.workRowSizing}
-      scrollPositions={props.workGroupScrollPositions}
-      iconSubtleColor={iconSubtleColor}
-      edgeFadeColor={props.screenColor}
-      themeAppearance={props.themeAppearance}
-      onCopyRow={props.onCopyWorkRow}
-      onToggleRow={props.onToggleWorkRow}
-      renderImage={props.renderViewedImage}
-      renderReasoning={props.renderReasoning}
-      onPressPreview={props.onPressPreview}
+      modelSwitch={modelSwitch}
+      iconColor={iconSubtleColor}
     />
+  ) : null;
+  if (item?.type === "system_notice" && modelSwitch) return switchDivider;
+  return (
+    <>
+      {switchDivider}
+      <ThreadWorkLog
+        activities={entry.activities}
+        continuesWorkLog={entry.continuesWorkLog}
+        environmentId={props.environmentId}
+        workspaceRoot={props.workspaceRoot}
+        anchorKey={entry.id}
+        copiedRowId={props.copiedRowId}
+        expandedRows={props.expandedWorkRows}
+        rowSizing={props.workRowSizing}
+        scrollPositions={props.workGroupScrollPositions}
+        iconSubtleColor={iconSubtleColor}
+        edgeFadeColor={props.screenColor}
+        themeAppearance={props.themeAppearance}
+        onCopyRow={props.onCopyWorkRow}
+        onToggleRow={props.onToggleWorkRow}
+        renderImage={props.renderViewedImage}
+        renderReasoning={props.renderReasoning}
+        onPressPreview={props.onPressPreview}
+      />
+    </>
   );
 }
 
