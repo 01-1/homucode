@@ -7,6 +7,7 @@ import {
   reserveStatusLineText,
   splitStatusLineItems,
   stampStatusLineInput,
+  statusLineInputModelName,
   type StatusLineColorRole,
   statusLineColorRole,
   type StatusLineInputSource,
@@ -36,6 +37,8 @@ const RETRY_MS = 2_000;
 type StatusLineResult = {
   readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
   readonly error: string | null;
+  /** The name the script was given, to write out where the line shortens it. */
+  readonly modelName: string | null;
 };
 
 // The runner sits in the chat view, which has its input; the top bar reads the result from here.
@@ -78,18 +81,33 @@ function segmentStyle(segment: AnsiSegment): CSSProperties | undefined {
 
 const PERCENT_PATTERN = /(\d+(?:\.\d+)?)%/g;
 
-/** A percentage as `8% [bar]`. In a tight line the label moves inside the bar. */
+// Trims the label's box to its digits, so centering it centers what is seen.
+const BAR_LABEL = "col-start-1 row-start-1 hidden [text-box:trim-both_cap_alphabetic] leading-none";
+const BAR_FILL = "color-mix(in oklab, currentColor 40%, transparent)";
+
+/**
+ * A percentage as `8% [bar]`. In a tight line the label moves inside the bar, where it keeps the
+ * line's baseline. An empty bar has no baseline, so it is raised to sit centered on the digits.
+ * The fill is a background, not a positioned box, which would still paint where the line is cut.
+ */
 function Percent(props: { readonly value: string }) {
+  const filled = `${Math.min(100, Number(props.value))}%`;
   return (
     <>
       <span className="group-data-[room=tight]/status-line:hidden">{props.value}% </span>
-      <span className="relative inline-flex h-3 w-6 overflow-hidden rounded-xs bg-current/15 align-[-2px] group-data-[room=tight]/status-line:w-9">
+      <span
+        className="inline-grid h-4 w-8 place-items-center rounded-xs bg-current/15 align-[calc((1cap-1rem)/2)] group-data-[room=tight]/status-line:w-auto group-data-[room=tight]/status-line:px-1.5 group-data-[room=tight]/status-line:align-baseline"
+        style={{
+          backgroundImage: `linear-gradient(90deg, ${BAR_FILL} ${filled}, transparent ${filled})`,
+        }}
+      >
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 bg-current/40"
-          style={{ width: `${Math.min(100, Number(props.value))}%` }}
-        />
-        <span className="relative hidden w-full text-center leading-3 group-data-[room=tight]/status-line:block">
+          className={`invisible ${BAR_LABEL} group-data-[room=tight]/status-line:block`}
+        >
+          100%
+        </span>
+        <span className={`${BAR_LABEL} group-data-[room=tight]/status-line:block`}>
           {props.value}%
         </span>
       </span>
@@ -107,15 +125,16 @@ function SegmentText(props: { readonly text: string }) {
 }
 
 /**
- * Styled text. A line with room writes abbreviated labels out. `reserved` draws each changing
- * value at its usual widest instead, which is how an item measures the room to hold.
+ * Styled text. A line with room writes abbreviated labels and the model name out. `reserved` gives
+ * each changing value its room instead, which is how an item measures the room to hold.
  */
 function Segments(props: {
   readonly line: ReadonlyArray<AnsiSegment>;
+  readonly modelName?: string | null;
   readonly reserved?: boolean;
 }) {
   return props.line.map((segment, segmentIndex) => {
-    const expanded = expandStatusLineLabel(segment);
+    const expanded = expandStatusLineLabel(segment, props.modelName);
     return (
       <span
         // oxlint-disable-next-line react/no-array-index-key -- segments have no identity beyond order
@@ -137,38 +156,80 @@ function Segments(props: {
 
 // The gap after an item grows with the room the line has.
 const ITEM_GAP =
-  "pe-1.5 group-data-[room=normal]/status-line:pe-3 group-data-[room=wide]/status-line:pe-5";
+  "pe-1.5 group-data-[room=normal]/status-line:pe-2.5 group-data-[room=wide]/status-line:pe-3.5";
+
+// Indexed by drop level: what hides an item dropped at that level, and what shows a separator.
+const DROPPED = [
+  "",
+  "group-data-[drop=1]/status-line:hidden group-data-[drop=2]/status-line:hidden group-data-[drop=3]/status-line:hidden",
+  "group-data-[drop=2]/status-line:hidden group-data-[drop=3]/status-line:hidden",
+  "group-data-[drop=3]/status-line:hidden",
+];
+const SHOWN = [
+  "group-data-[drop=0]/status-line:inline",
+  "group-data-[drop=1]/status-line:inline",
+  "group-data-[drop=2]/status-line:inline",
+  "group-data-[drop=3]/status-line:inline",
+];
+
+/** The separator after an item, which depends on what the line has dropped. */
+function Separator(props: { readonly item: StatusLineItem }) {
+  const { separators } = props.item;
+  return [...new Set(separators)].map((separator, index) =>
+    separator.length === 0 ? null : (
+      <span
+        // oxlint-disable-next-line react/no-array-index-key -- separators have no identity beyond order
+        key={index}
+        className={`hidden ${SHOWN.filter((_, level) => separators[level] === separator).join(" ")}`}
+      >
+        <Segments line={separator} />
+      </span>
+    ),
+  );
+}
 
 /**
- * One item in a slot of fixed width: an invisible copy with its values at their widest shares the
- * slot, so the items after it stay put while this one's value changes.
+ * One item in a slot of fixed width: an invisible copy with room for its values to change shares
+ * the slot, so the items after it stay put while this one's value changes.
  */
-function StatusLineSlot(props: { readonly item: StatusLineItem; readonly beforeClock: boolean }) {
+function StatusLineSlot(props: {
+  readonly item: StatusLineItem;
+  readonly beforeClock: boolean;
+  readonly modelName: string | null;
+}) {
   return (
     <span
       data-status-line-item={props.beforeClock ? "before-clock" : "after-clock"}
-      className={`inline-grid ${ITEM_GAP}`}
+      className={`inline-grid ${ITEM_GAP} ${DROPPED[props.item.dropAt]}`}
     >
       <span className="col-start-1 row-start-1">
-        <Segments line={props.item.segments} />
+        <Segments line={props.item.segments} modelName={props.modelName} />
+        <Separator item={props.item} />
       </span>
       <span aria-hidden className="invisible col-start-1 row-start-1">
-        <Segments line={props.item.segments} reserved />
+        <Segments line={props.item.segments} modelName={props.modelName} reserved />
+        <Separator item={props.item} />
       </span>
     </span>
   );
 }
 
-// From roomiest to tightest: labels written out or short, and how much room the gaps take.
+// From roomiest to tightest: labels written out or short, how much room the gaps take, how many
+// low-priority items are dropped, and whether the directory may shorten. Tight also moves
+// percentages inside their bars.
 const FITS = [
-  ["long", "wide"],
-  ["long", "normal"],
-  ["short", "normal"],
-  ["short", "tight"],
+  ["long", "wide", 0, false],
+  ["long", "normal", 0, false],
+  ["short", "normal", 0, false],
+  ["short", "normal", 1, false],
+  ["short", "normal", 2, false],
+  ["short", "normal", 2, true],
+  ["short", "tight", 2, true],
+  ["short", "tight", 3, true],
 ] as const;
 
-// What a shortened directory keeps: room for `~/…`.
-const DIRECTORY_FLOOR_PX = 32;
+// What a shortened directory keeps: room for a name or two.
+const DIRECTORY_FLOOR_PX = 72;
 
 function itemsWidth(row: HTMLElement, kinds: ReadonlyArray<string>): number {
   const selector = kinds.map((kind) => `[data-status-line-item="${kind}"]`).join(",");
@@ -184,36 +245,40 @@ function keepBodyFont(element: HTMLElement | null | undefined) {
   if (element.style.fontFamily !== fontFamily) element.style.fontFamily = fontFamily;
 }
 
-// Picks the roomiest fit the whole line has room for; the tightest also moves percentages inside
-// their bars. Past that the directory shortens to its floor and the tail is cut, and the clock
-// stays only while everything before it in the line still fits. DOM attributes, so no re-render.
+// Picks the roomiest fit the whole line has room for. Past the last one the tail is cut, and the
+// clock stays only while everything before it in the line still fits. DOM attributes, so no
+// re-render.
 function fitRow(row: HTMLElement) {
   // The row's effect runs before its parent's, so the font is set here, ahead of measuring.
   keepBodyFont(row.parentElement);
   row.dataset.clock = "shown";
   // A pixel short of the edge, so rounding never clips the last item.
   const space = row.getBoundingClientRect().width - 1;
-  let directoryFloor = 0;
-  for (const [labels, room] of FITS) {
+  for (const [labels, room, drop, shorten] of FITS) {
     row.dataset.labels = labels;
     row.dataset.room = room;
+    row.dataset.drop = String(drop);
     const directory = itemsWidth(row, ["directory"]);
-    directoryFloor = Math.min(directory, DIRECTORY_FLOOR_PX);
-    row.style.setProperty("--status-line-directory-floor", `${directoryFloor}px`);
-    if (directory + itemsWidth(row, ["before-clock", "after-clock", "clock"]) <= space) return;
+    const floor = Math.min(directory, DIRECTORY_FLOOR_PX);
+    row.style.setProperty("--status-line-directory-floor", `${floor}px`);
+    const rest = itemsWidth(row, ["before-clock", "after-clock", "clock"]);
+    if ((shorten ? floor : directory) + rest <= space) return;
   }
   // The cut tail ends in an ellipsis, which needs up to 1em beside the items before the clock.
   const ellipsis = Number.parseFloat(getComputedStyle(row).fontSize);
-  if (directoryFloor + itemsWidth(row, ["before-clock", "clock"]) + ellipsis > space) {
+  if (itemsWidth(row, ["directory", "before-clock", "clock"]) + ellipsis > space) {
     row.dataset.clock = "hidden";
   }
 }
 
 /**
- * The status line on one row: the directory, which shortens first, then each item in its slot,
- * then the clock at the right edge.
+ * The status line on one row: the directory, which shortens before anything is cut, then each item
+ * in its slot, then the clock at the right edge.
  */
-function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>> }) {
+function StatusLineRow(props: {
+  readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
+  readonly modelName: string | null;
+}) {
   const rowRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-measures each new line to fit it
   useLayoutEffect(() => {
@@ -232,20 +297,35 @@ function StatusLineRow(props: { readonly lines: ReadonlyArray<ReadonlyArray<Ansi
   return (
     <div
       ref={rowRef}
-      className="group/status-line flex min-w-0 overflow-hidden whitespace-pre tabular-nums"
+      className="group/status-line flex min-w-0 items-baseline overflow-hidden whitespace-pre tabular-nums"
     >
       {directory === null ? null : (
-        <div className="min-w-(--status-line-directory-floor) shrink-[9999] overflow-hidden text-ellipsis">
-          <span data-status-line-item="directory" className={ITEM_GAP}>
-            <Segments line={directory.segments} />
-          </span>
-        </div>
+        <>
+          <div
+            className={`min-w-(--status-line-directory-floor) shrink-[9999] overflow-hidden text-ellipsis ${DROPPED[directory.dropAt]}`}
+          >
+            <span data-status-line-item="directory">
+              <Segments line={directory.segments} />
+            </span>
+          </div>
+          <div
+            data-status-line-item="before-clock"
+            className={`shrink-0 ${ITEM_GAP} ${DROPPED[directory.dropAt]}`}
+          >
+            <Separator item={directory} />
+          </div>
+        </>
       )}
       <div className="min-w-0 overflow-hidden text-ellipsis">
         {items.map((item, index) =>
           item === directory || item === clock ? null : (
             // oxlint-disable-next-line react/no-array-index-key -- items have no identity beyond order
-            <StatusLineSlot key={index} item={item} beforeClock={index < clockIndex} />
+            <StatusLineSlot
+              key={index}
+              item={item}
+              beforeClock={index < clockIndex}
+              modelName={props.modelName}
+            />
           ),
         )}
       </div>
@@ -281,6 +361,7 @@ export function ThreadStatusLineRunner(props: {
   const inputKey = JSON.stringify(
     buildStatusLineInput({ ...props.source, nowMs: Date.parse(`${nowMinute}:00Z`) }),
   );
+  const modelName = statusLineInputModelName(props.source);
   const resultAtom = statusLineResultAtom(props.statusLineKey);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- runs the server's status line command
@@ -308,6 +389,7 @@ export function ThreadStatusLineRunner(props: {
           registry.set(resultAtom, {
             lines: parseAnsiLines(response.value.text),
             error: response.value.error ?? null,
+            modelName,
           });
         } else if (quickRetries > 0) {
           quickRetries = quickRetries - 1;
@@ -321,7 +403,7 @@ export function ThreadStatusLineRunner(props: {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [enabled, inputKey, createdAt, environmentId, resultAtom, registry]);
+  }, [enabled, inputKey, modelName, createdAt, environmentId, resultAtom, registry]);
 
   return null;
 }
@@ -348,7 +430,7 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
       {failed ? (
         <div className="truncate">Status line failed: {result.error}</div>
       ) : (
-        <StatusLineRow lines={result.lines} />
+        <StatusLineRow lines={result.lines} modelName={result.modelName} />
       )}
       {expanded && !failed ? (
         <div
@@ -359,7 +441,7 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
           {result.lines.map((line, lineIndex) => (
             // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
             <div key={lineIndex} className="whitespace-pre-wrap break-words">
-              <Segments line={line} />
+              <Segments line={line} modelName={result.modelName} />
             </div>
           ))}
         </div>

@@ -143,7 +143,8 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 Enable **Settings → Chat → Status line** to show a line in the top bar beside the thread
 title (under the composer on mobile). It shows the model, effort, context use, and usage
 limits, like Claude Code's status line. It refreshes when the thread changes and every 30
-seconds. Hover it to see the whole line when it is cut short.
+seconds. When the top bar is short of room, the line leaves out the version, `user@host`
+and the directory first. Hover it to see the whole line.
 
 The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
 script on the thread's machine, which needs `bash` and `jq`. To draw your own, set
