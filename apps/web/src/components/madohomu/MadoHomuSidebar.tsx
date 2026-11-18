@@ -19,7 +19,10 @@ import {
 import {
   isMadoHomuThreadPinned,
   MADOHOMU_SCRATCH_LABEL,
+  MADOHOMU_SCRATCH_PAGE,
+  madohomuEmptyPinnedText,
   madohomuIconColor,
+  pageMadoHomuRows,
   type MadoHomuGroup,
 } from "@t3tools/client-runtime/madohomu";
 import {
@@ -72,6 +75,7 @@ import { sidebarProviderEntriesAtom } from "../Sidebar";
 import {
   buildBulkTitleRegenerationContextMenuItem,
   isSidebarNestedLinkClick,
+  resolveSidebarThreadStatus,
   isTrailingDoubleClick,
   resolveSidebarSweepKeys,
   sidebarThreadKeyAtY,
@@ -119,8 +123,11 @@ const SETTLED_EXPANDED_KEY = "t3code:madohomu:settled-expanded";
 const COLLAPSED_KEY = "t3code:madohomu:collapsed-sections";
 const COLLAPSED_SCHEMA = Schema.Record(Schema.String, Schema.Boolean);
 const NO_COLLAPSED: { readonly [id: string]: boolean } = {};
-const SCRATCH_INITIAL_COUNT = 10;
-const SCRATCH_PAGE_COUNT = 25;
+/** A row whose status label asks for the user: an approval or a question. */
+const needsUser = (thread: SidebarThreadSummary) => {
+  const status = resolveSidebarThreadStatus(thread);
+  return status === "approval" || status === "input";
+};
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 // useSensor memoizes on its options, so they live outside render.
 const POINTER_SENSOR_OPTIONS = { distance: 6, onAttach: () => {}, onFinish: () => {} };
@@ -197,7 +204,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     else if (group.kind === "settled") setSettledExpanded(!settledExpanded);
     else setCollapsed((current) => ({ ...current, [group.id]: current[group.id] !== true }));
   };
-  const [scratchCount, setScratchCount] = useState(SCRATCH_INITIAL_COUNT);
+  const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
   const [renaming, setRenaming] = useState<{ id: ThreadId; title: string } | null>(null);
   const renamingSection = useMadoHomuRenamingSection((s) => s.id);
   const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
@@ -235,10 +242,13 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   /** The rows a section shows: all when open; collapsed, only the open thread, as T3 Code does. */
   const shownThreads = (group: Group) => {
     if (!isExpanded(group)) return group.threads.filter((t) => t.id === selectedId);
-    if (group.kind !== "scratch" || group.threads.length <= scratchCount) return group.threads;
-    const head = group.threads.slice(0, scratchCount);
-    const openThread = group.threads.find((t) => t.id === selectedId);
-    return openThread && !head.includes(openThread) ? [...head, openThread] : head;
+    if (group.kind !== "scratch") return group.threads;
+    const page = pageMadoHomuRows(
+      group.threads,
+      scratchCount,
+      (t) => t.id === selectedId || needsUser(t),
+    );
+    return page.shown;
   };
   const orderedKeys = groups.flatMap((g) => shownThreads(g).map(threadKey));
 
@@ -493,7 +503,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           ...extras,
           items: [
             ...extras.items,
-            { id: MENU_UP, label: "Move up", icon: "arrow-up", disabled: !canEdit || index <= 0 },
+            {
+              id: MENU_UP,
+              label: "Move up",
+              icon: "arrow-up",
+              separatorBefore: true,
+              disabled: !canEdit || index <= 0 },
             {
               id: MENU_DOWN,
               label: "Move down",
@@ -666,7 +681,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const target = dropGroupOf(overId);
     const source = groupOf(moved);
     if (!target || !source) return;
-    if (target.kind === "scratch" || target.kind === "working") {
+    // Working is a status, not a place: only Scratch unpins.
+    if (target.kind === "working") return;
+    if (target.kind === "scratch") {
       if (isManual(source)) void actions.patchThread(moved, { pinned: false });
       return;
     }
@@ -687,13 +704,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   };
   const draggingGroup = dragging === null ? undefined : groupOf(dragging);
   const draggingPinned = draggingGroup !== undefined && isManual(draggingGroup);
-  // The section a drop would change: another manual section, or Working/Scratch for a pinned row.
+  // The section a drop would change: another manual section, or Scratch for a pinned row.
   const isDropTarget = (group: Group) =>
     draggingGroup !== undefined &&
     dragOverGroup === group.id &&
     group.id !== draggingGroup.id &&
-    (isManual(group) ||
-      ((group.kind === "scratch" || group.kind === "working") && draggingPinned));
+    (isManual(group) || (group.kind === "scratch" && draggingPinned));
   const draggingThread = dragging === null ? undefined : threads.find((t) => t.id === dragging);
 
   const row = (group: Group, thread: SidebarThreadSummary) => {
@@ -724,6 +740,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         dropVerb={null}
         dragOverPinned={false}
         folderTintClassName={dragging === thread.id ? "opacity-40" : undefined}
+        neverRecede={isManual(group)}
         sweepAction={sweep?.keys.has(key) ? sweep.action : null}
         snoozeWakeLabelText={
           group.kind === "snoozed" && thread.snoozedUntil != null
@@ -783,7 +800,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             <button
               type="button"
               className={QUIET_BUTTON_CLASS}
-              onClick={() => setScratchCount((n) => n + SCRATCH_PAGE_COUNT)}
+              onClick={() => setScratchCount((n) => n + MADOHOMU_SCRATCH_PAGE)}
             >
               Show more ({more})
             </button>
@@ -792,11 +809,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       </SectionBlock>
     );
   };
+  const attention = (group: Group) =>
+    isExpanded(group) ? 0 : group.threads.filter(needsUser).length;
   const heading = (group: Group, buttons: ReactNode = null) => (
     <SectionHeading
       id={`madohomu-section-${group.id}`}
       title={group.title}
       count={group.threads.length}
+      attention={attention(group)}
       expanded={isExpanded(group)}
       onToggle={() => toggleExpanded(group)}
       actions={buttons}
@@ -840,20 +860,23 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           </Menu>
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        {enabled ? (
-          <div className="flex flex-col px-2 pb-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={newThread.creating || !project || !actions.modelSelection || !canEdit}
-              onClick={() => void newThread.createThread()}
-            >
-              <SquarePenIcon aria-hidden className="size-4" />
-              New thread
-            </Button>
-          </div>
-        ) : null}
+      <SidebarContent
+        fixedHeader={
+          enabled ? (
+            <div className="flex flex-col px-4 pb-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={newThread.creating || !project || !actions.modelSelection || !canEdit}
+                onClick={() => void newThread.createThread()}
+              >
+                <SquarePenIcon aria-hidden className="size-4" />
+                New thread
+              </Button>
+            </div>
+          ) : null
+        }
+      >
         {!enabled ? null : !project ? (
           <p className="p-3 text-xs text-muted-foreground">Choose a project to see its threads.</p>
         ) : (
@@ -890,6 +913,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                       <CustomSectionHeader
                         section={custom}
                         count={group.threads.length}
+                        attention={attention(group)}
                         expanded={isExpanded(group)}
                         onToggle={() => toggleExpanded(group)}
                         renaming={renamingSection === custom.id}
@@ -911,9 +935,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                         </HeadingButton>
                       ) : null,
                     ),
-                    threads.length === 0
-                      ? "No threads yet. Choose New thread to start one."
-                      : "Nothing pinned. Drag a thread here, or use Move to in its menu.",
+                    madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: canEdit }),
                   );
                 })}
               </SortableContext>
@@ -1009,6 +1031,7 @@ function SectionHeading({
   id,
   title,
   count,
+  attention,
   expanded,
   onToggle,
   actions,
@@ -1018,6 +1041,7 @@ function SectionHeading({
   id: string;
   title: string;
   count: number;
+  attention: number;
   expanded: boolean;
   onToggle: () => void;
   actions?: ReactNode;
@@ -1040,6 +1064,23 @@ function SectionHeading({
         />
         <span className="truncate">{title}</span>
       </button>
+      {attention > 0 ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`${attention} need you. Expand ${title}`}
+                className="rounded-full bg-warning/15 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/25 focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={onToggle}
+              />
+            }
+          >
+            {attention}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{attention} need you</TooltipPopup>
+        </Tooltip>
+      ) : null}
       {actions}
       <span className="pr-1 text-xs text-muted-foreground tabular-nums">{count}</span>
     </div>
@@ -1104,6 +1145,7 @@ function SectionBlock({
 function CustomSectionHeader({
   section,
   count,
+  attention,
   expanded,
   onToggle,
   renaming,
@@ -1114,6 +1156,7 @@ function CustomSectionHeader({
 }: {
   section: MadoHomuSection;
   count: number;
+  attention: number;
   expanded: boolean;
   onToggle: () => void;
   renaming: boolean;
@@ -1166,6 +1209,7 @@ function CustomSectionHeader({
       id={`madohomu-section-${section.id}`}
       title={section.name}
       count={count}
+      attention={attention}
       expanded={expanded}
       onToggle={onToggle}
       autoFocus={focusHeading}

@@ -561,6 +561,8 @@ type SidebarThreadRowProps = {
   sortable?: SortableThreadRowBag | undefined;
   /** Replaces the project favicon on one-line rows; a folder row with one keeps the normal inset. */
   leadingIcon?: ReactNode | undefined;
+  /** MadoHomu's Pinned and custom sections: read rows keep full-strength titles. */
+  neverRecede?: boolean | undefined;
   // Thread folder members carry the folder's tint; the last one closes the card.
   folderTintClassName?: string | undefined;
   folderCardEnd?: boolean | undefined;
@@ -751,13 +753,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const shouldRecede = shouldRecedeSidebarThread({
-    status,
-    isUnread,
-    isWoke,
-    isActive: props.isActive,
-    isSelected,
-  });
+  const shouldRecede =
+    props.neverRecede !== true &&
+    shouldRecedeSidebarThread({
+      status,
+      isUnread,
+      isWoke,
+      isActive: props.isActive,
+      isSelected,
+    });
   const topStatus =
     status === "preparing" || status === "working"
       ? {
@@ -1353,6 +1357,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                       !isWoke && "group-any-hover/sidebar-row:opacity-0",
+                      // MadoHomu rows: the "…" then sits right beside the settle tick.
+                      !isWoke &&
+                        props.leadingIcon !== undefined &&
+                        props.showActionsButton &&
+                        "group-any-hover/sidebar-row:hidden",
                     )}
                   >
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1377,6 +1386,19 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           }
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
+                      </Tooltip>
+                    ) : inFolder &&
+                      topStatus?.icon === "done" &&
+                      props.leadingIcon !== undefined ? (
+                      // MadoHomu rows leave the title its room: Done is the icon alone.
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={<span className={cn("inline-flex", topStatus.className)} />}
+                        >
+                          <TopStatusIcon icon="done" className="size-3" />
+                          <span className="sr-only">{topStatus.label}</span>
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">{topStatus.label}</TooltipPopup>
                       </Tooltip>
                     ) : inFolder && topStatus ? (
                       // Folder rows have no status line, so the status takes the time slot.

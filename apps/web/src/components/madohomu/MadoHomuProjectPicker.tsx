@@ -10,6 +10,7 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuRadioItemIndicator,
   MenuSeparator,
   MenuTrigger,
 } from "../ui/menu";
@@ -63,7 +64,7 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup align="start">
-        <MadoHomuProjectMenuItems environmentId={environmentId} />
+        <MadoHomuProjectMenuItems environmentId={environmentId} showClear />
       </MenuPopup>
     </Menu>
   );
@@ -73,9 +74,12 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
 export function MadoHomuProjectMenuItems({
   environmentId,
   onChosen,
+  showClear = false,
 }: {
   environmentId: EnvironmentId;
   onChosen?: () => void;
+  /** Settings' picker only: the gear menu leaves it out so a slip cannot empty the view. */
+  showClear?: boolean;
 }) {
   const actions = useMadoHomuActions(environmentId);
   const newProject = useNewMadoHomuProject(environmentId, onChosen);
@@ -101,11 +105,14 @@ export function MadoHomuProjectMenuItems({
       >
         {projects.map((p) => (
           <MenuRadioItem key={p.id} value={p.id} closeOnClick>
-            {p.title}
+            <span className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate">{p.title}</span>
+              <MenuRadioItemIndicator />
+            </span>
           </MenuRadioItem>
         ))}
       </MenuRadioGroup>
-      {actions.settings.madohomuProjectId !== null && (
+      {showClear && actions.settings.madohomuProjectId !== null && (
         <>
           <MenuSeparator />
           <MenuItem
