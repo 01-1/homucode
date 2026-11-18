@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
+
+import { FEATURE_OFFER_PAGES } from "./featureOfferSettings";
 import { filterSettingsSections } from "./settings-search";
 
 const SECTIONS = [
@@ -71,4 +74,16 @@ describe("filterSettingsSections", () => {
   it("drops sections that start empty", () => {
     expect(filterSettingsSections([{ rows: [] }, ...SECTIONS], "").length).toBe(SECTIONS.length);
   });
+});
+
+describe("setup-wizard offers", () => {
+  it.each(FEATURE_OFFERS.map((offer) => [offer.id, offer] as const))(
+    "%s has a Settings page that search finds by its title",
+    (id, offer) => {
+      const page = FEATURE_OFFER_PAGES[id];
+      expect(page).toBeDefined();
+      const sections = [{ rows: [{ id: page!, label: "Page" }] }];
+      expect(filterSettingsSections(sections, offer.title)).toHaveLength(1);
+    },
+  );
 });

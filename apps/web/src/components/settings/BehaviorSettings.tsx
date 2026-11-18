@@ -178,24 +178,13 @@ export function BehaviorSettingsSection() {
     targets.length === 1 && (scope.kind === "all" || scope.kind === "environment")
       ? targets[0]?.environmentId
       : undefined;
-  const rows = FEATURE_OFFERS.filter(
-    (offer) =>
-      offer.page === 2 &&
-      offer.setting &&
-      ![
-        "preferNativeSubagents",
-        "threadTitleIdPrefix",
-        "threadTitleIncludeProjectName",
-        "buildToolsSettingsVisible",
-      ].includes(offer.setting),
-  );
   return (
     <>
       <SettingsSection title="Extra features">
-        {rows.map((offer) => {
-          const key = offer.setting!;
-          if (key === "connectDeviceLongSessions" || key === "claudeHoldBackgroundCommands")
-            return null;
+        {FEATURE_OFFERS.map((offer) => {
+          const id = FEATURE_OFFER_SETTINGS[offer.id];
+          const key = offer.setting;
+          if (offer.page !== 2 || !key || id !== offer.id) return null;
           return (
             <SettingsRow
               key={offer.id}

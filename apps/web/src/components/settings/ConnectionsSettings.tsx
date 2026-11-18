@@ -1301,7 +1301,6 @@ function ConnectionsSettingsContent({
                 environmentId={accessEnvironmentId}
                 canReadRelay={canReadRelay}
                 canManageRelay={canManageRelay}
-                connectDeviceLongSessions={accessServerConfig?.settings.connectDeviceLongSessions}
                 connectDeviceApproval={
                   accessServerConfig?.settings.requireConnectDeviceApproval === undefined
                     ? null
@@ -1309,6 +1308,23 @@ function ConnectionsSettingsContent({
                         required: accessServerConfig.settings.requireConnectDeviceApproval,
                         canManage: canWriteAccess,
                       }
+                }
+              />
+            ) : null}
+            {accessServerConfig?.settings.connectDeviceLongSessions !== undefined ? (
+              <SettingsRow
+                {...searchableSetting("connect-device-long-sessions")}
+                description="Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device here to end its access."
+                managed={managedCapabilityDenial(accessServerConfig.managedPolicy, "connect")}
+                control={
+                  <Switch
+                    aria-label="Stay signed in for 30 days"
+                    checked={accessServerConfig.settings.connectDeviceLongSessions}
+                    disabled={!canWriteAccess}
+                    onCheckedChange={(enabled) =>
+                      updateAccessSettings({ connectDeviceLongSessions: enabled })
+                    }
+                  />
                 }
               />
             ) : null}

@@ -1,6 +1,8 @@
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { foldSearchQuery, rankSearchItems, scoreSearchTerms } from "@t3tools/shared/paletteSearch";
 
 import type { SettingsPageTarget } from "./components/settings-page-targets";
+import { FEATURE_OFFER_PAGES } from "./featureOfferSettings";
 
 /** What each page holds besides its row's label, so search finds a setting by its own name. */
 const SETTINGS_SEARCH_TERMS = {
@@ -114,6 +116,8 @@ const SETTINGS_SEARCH_TERMS = {
     "usage limits",
     "auto-resume",
     "thread behavior",
+    "phone name",
+    "device names",
   ],
   SettingsFollowUp: ["follow-ups", "queue", "steer", "while the agent is running"],
   SettingsArchive: ["archive", "archived", "restore", "unarchive"],
@@ -164,7 +168,15 @@ const SETTINGS_SEARCH_TERMS = {
   ],
 } satisfies Partial<Record<SettingsPageTarget | "account", readonly string[]>>;
 const termsById: ReadonlyMap<string, readonly string[]> = new Map(
-  Object.entries(SETTINGS_SEARCH_TERMS),
+  Object.entries(SETTINGS_SEARCH_TERMS).map(([id, terms]) => [
+    id,
+    [
+      ...terms,
+      ...FEATURE_OFFERS.filter((offer) => FEATURE_OFFER_PAGES[offer.id] === id).map(
+        (offer) => offer.title,
+      ),
+    ],
+  ]),
 );
 
 export interface SettingsSearchRow {

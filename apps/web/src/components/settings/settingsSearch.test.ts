@@ -4,10 +4,12 @@ import {
   makeProviderSettingsSchema,
   SourceControlProviderKind,
 } from "@t3tools/contracts";
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { UNKNOWN_SOURCE_CONTROL_CLIENT } from "@t3tools/client-runtime/source-control-clients";
 import * as Schema from "effect/Schema";
 
 import {
+  FEATURE_OFFER_SETTINGS,
   filterAvailableSettingsSearchItems,
   getSettingsSearchTargetScope,
   getThreadAutoSettlementSearchAvailability,
@@ -155,6 +157,7 @@ describe("searchSettings", () => {
       "review-guide-instructions",
       "source-control-writing-style",
       "t3-connect",
+      "connect-device-long-sessions",
       "hold-webhooks-while-offline",
       "tailscale-https",
       "wsl-backend",
@@ -164,6 +167,22 @@ describe("searchSettings", () => {
       "linked-environments",
     ]);
     expect(available.map((item) => item.id).filter((id) => gatedIds.has(id))).toEqual([]);
+  });
+
+  it("finds the T3 Connect session setting before the environment links a tunnel", () => {
+    const available = filterAvailableSettingsSearchItems({
+      hasCloudPublicConfig: false,
+      hasEnvironment: true,
+      hasProviderSettingsEnvironment: false,
+      canManageLocalBackend: false,
+      isWslSettingsRowVisible: false,
+      hasThreadAutoSettlement: false,
+      managedTunnelActive: false,
+    });
+    expect(searchSettings("stay signed in for 30 days", available)[0]).toMatchObject({
+      id: "connect-device-long-sessions",
+      to: "/settings/access",
+    });
   });
 
   it("finds linked environments on a remote host without local maintenance access", () => {
@@ -242,6 +261,15 @@ describe("searchSettings", () => {
       expect(searchSettings(title)[0]?.id, title).toBe(id);
     }
   });
+
+  it.each(FEATURE_OFFERS.filter((offer) => offer.platform !== "mobile"))(
+    "finds the Settings row for $id by its setup title",
+    (offer) => {
+      const row = FEATURE_OFFER_SETTINGS[offer.id];
+      expect(row).toBeDefined();
+      expect(searchSettings(offer.title).map((item) => item.id)).toContain(row);
+    },
+  );
 
   it("keeps catalog result ids unique", () => {
     const ids = SETTINGS_SEARCH_ITEMS.map((item) => item.id);

@@ -22,6 +22,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
+import { FEATURE_OFFER_PAGES } from "./featureOfferSettings";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 
 function MobileWorkAssistancePicker({
@@ -185,6 +186,11 @@ export function MobileExtraSettings({
   const query = useEnvironmentQuery(
     serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
+  const canSetLongSessions = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
   if (!settings) return null;
   return (
     <SettingsSection title={`Extra features · ${label}`}>
@@ -204,7 +210,11 @@ export function MobileExtraSettings({
                   ? "Stop stops only this thread"
                   : offer.title
             }
-            subtitle={offer.description}
+            subtitle={
+              key === "claudeHoldBackgroundCommands"
+                ? "Keep Claude threads working until background commands finish or the agent releases them."
+                : offer.description
+            }
             value={settings[key] === (offer.enabledValue ?? true)}
             disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, key)}
             onValueChange={(checked) =>

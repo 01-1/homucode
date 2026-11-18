@@ -4,6 +4,7 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import {
   sourceControlClients,
   type SourceControlDefinition,
@@ -877,6 +878,76 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["enter return command ctrl multiline prompt new line composer"],
   },
   {
+    id: "bare-stop-wait",
+    title: "Stop or wait jumps the queue",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["stop wait message interrupt first queue bare"],
+  },
+  {
+    id: "claude-steer-recovery",
+    title: "Resend unread steers after Stop",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["claude steer stop lost message resend tool"],
+  },
+  {
+    id: "reask-after-restart",
+    title: "Ask again after a restart",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["restart approval question secret pending request resume"],
+  },
+  {
+    id: "apply-model-change-now",
+    title: "Apply model and effort changes now",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["model effort change restart turn working thread"],
+  },
+  {
+    id: "sent-from",
+    title: "Tell agents which device sent a message",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["sent from device [T3] message footer"],
+  },
+  {
+    id: "thread-only-stop",
+    title: "Stop behavior",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["stop subagents shift-click background stop /stopall thread only"],
+  },
+  {
+    id: "background-git",
+    title: "Background Git",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["git status fetch refresh background T3CODE_BACKGROUND_GIT"],
+  },
+  {
+    id: "auto-update-when-idle",
+    title: "Update when agents are idle",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["automatic app update install idle agents providers"],
+  },
+  {
+    id: "device-names",
+    title: "Device names",
+    to: "/settings/threads",
+    scope: "environment",
+    searchTerms: ["name this device sent from phone laptop browser"],
+  },
+  {
+    id: "show-building-t3",
+    title: "Show Building T3 settings",
+    to: "/settings/general",
+    scope: "environment",
+    searchTerms: ["building t3 cloud builds android apk appimage load build"],
+  },
+  {
     id: "claude-hold-background-commands",
     title: "Keep Claude threads working while background commands run",
     to: "/settings/homucode",
@@ -1562,10 +1633,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "connect-device-long-sessions",
     title: "Stay signed in for 30 days",
     to: "/settings/access",
-    targetId: "connections-environment",
     searchTerms: ["t3 connect devices sessions pass token expiry reconnect cloud round trip"],
-    cloudOnly: true,
-    managedTunnelOnly: true,
+    environmentOnly: true,
   },
   {
     id: "connect-device-approval",
@@ -1663,6 +1732,35 @@ export const SETTINGS_SEARCH_ITEMS = [
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
+
+/**
+ * The Settings row for each setup-wizard offer, so every offer can be changed later. Extra-features
+ * offers mapped to their own id are rows in Threads → Extra features.
+ */
+export const FEATURE_OFFER_SETTINGS: Readonly<Partial<Record<string, SettingsSearchItemId>>> = {
+  madohomu: "madohomu-enabled",
+  "quick-model": "quick-model",
+  "settings-sync": "settings-sync",
+  "status-line": "status-line",
+  subagents: "prefer-native-subagents",
+  "bare-stop-wait": "bare-stop-wait",
+  "claude-steer-recovery": "claude-steer-recovery",
+  "reask-after-restart": "reask-after-restart",
+  "apply-model-change-now": "apply-model-change-now",
+  "sent-from": "sent-from",
+  "project-in-title": "thread-title-project-name",
+  "title-id-prefix": "thread-title-id-prefix",
+  "thread-only-stop": "thread-only-stop",
+  "background-git": "background-git",
+  "auto-update-when-idle": "auto-update-when-idle",
+  "building-t3": "show-building-t3",
+  "connect-long-sessions": "connect-device-long-sessions",
+  "claude-hold-background-commands": "claude-hold-background-commands",
+};
+
+const FEATURE_OFFER_TITLES: ReadonlyMap<string | undefined, string> = new Map(
+  FEATURE_OFFERS.map((offer) => [FEATURE_OFFER_SETTINGS[offer.id], offer.title] as const),
+);
 
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
@@ -1868,6 +1966,7 @@ export function searchSettings(
         normalizeSearchText(translate(item.title)),
         normalizeSearchText(translate(SETTINGS_SECTION_LABELS[item.to])),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
+        normalizeSearchText(FEATURE_OFFER_TITLES.get(item.id) ?? ""),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];
 
