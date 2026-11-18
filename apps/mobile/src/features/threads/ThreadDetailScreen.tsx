@@ -516,6 +516,8 @@ function ThreadDetailBody(
   const toolCallVisibility = AsyncResult.isSuccess(preferences)
     ? (preferences.value.toolCallVisibility ?? "showAll")
     : "showAll";
+  const showMessageSenderLabels =
+    AsyncResult.isSuccess(preferences) && preferences.value.showMessageSenderLabels === true;
   const queuedCount = useThreadQueuedCount(props.selectedThreadDetailRef);
   const turnSubagents = useThreadTurnSubagents(props.selectedThreadDetailRef);
   const agentsSegment = resolveSubagentPillSegment(turnSubagents);
@@ -1480,6 +1482,7 @@ function ThreadDetailBody(
               <ColumnWidth width={columnWidth}>
                 <ThreadFeed
                   toolCallVisibility={toolCallVisibility}
+                  showMessageSenderLabels={showMessageSenderLabels}
                   environmentId={props.environmentId}
                   threadId={props.selectedThread.id}
                   detailRef={props.selectedThreadDetailRef}

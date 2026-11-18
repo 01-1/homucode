@@ -75,6 +75,8 @@ const SETTINGS_SEARCH_TERMS = {
     "settings sync",
     "sync devices",
     "faster phone launch",
+    "show message sender labels",
+    "hide sender line sent from device",
     "building t3",
     "cloud build",
     "android apk",

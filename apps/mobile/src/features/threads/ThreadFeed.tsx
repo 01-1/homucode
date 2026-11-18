@@ -326,6 +326,7 @@ export interface ThreadFeedHistoryControls {
 
 export interface ThreadFeedProps {
   readonly toolCallVisibility?: ToolCallVisibility;
+  readonly showMessageSenderLabels?: boolean;
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
   readonly setupWorkingStartedAt?: string | null;
   readonly preparingWorktree?: boolean;
@@ -1499,9 +1500,18 @@ function OpenSenderThreadButton(props: {
   );
 }
 
+function MessageSenderLabel({ label }: { readonly label: string }) {
+  return (
+    <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
+      {label}
+    </Text>
+  );
+}
+
 /** Automation prompts are long, repeated runbooks; a folded bubble keeps them out of the way. */
 function ThreadAutomationMessageRow(props: {
   readonly environmentId: EnvironmentId;
+  readonly showMessageSenderLabels: boolean;
   readonly text: string;
   readonly context?: OrchestrationMessageContext;
   readonly scheduledTaskId: ScheduledTaskId | undefined;
@@ -1529,9 +1539,9 @@ function ThreadAutomationMessageRow(props: {
 
   return (
     <View className="mb-5 items-end">
-      <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-        Automatic · Scheduled task
-      </Text>
+      {props.showMessageSenderLabels ? (
+        <MessageSenderLabel label="Automatic · Scheduled task" />
+      ) : null}
       <View
         className="min-w-0 rounded-[20px]"
         style={{
@@ -1722,6 +1732,7 @@ function renderFeedEntry(
     | "workspaceRoot"
   > & {
     readonly formatMessageTime: (input: string) => string;
+    readonly showMessageSenderLabels: boolean;
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly workRowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
@@ -2015,6 +2026,7 @@ function renderFeedEntry(
       return (
         <ThreadAutomationMessageRow
           environmentId={props.environmentId}
+          showMessageSenderLabels={props.showMessageSenderLabels}
           text={presentation.text}
           context={message.context}
           scheduledTaskId={presentation.scheduledTaskId}
@@ -2092,9 +2104,9 @@ function renderFeedEntry(
           className={cn("items-end", props.userMessageGrouping.groupedWithNext ? "mb-1" : "mb-5")}
           {...(enterAnimated ? { entering: FadeInDown.duration(220) } : {})}
         >
-          <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-            {messageSourceLabel(message)}
-          </Text>
+          {props.showMessageSenderLabels ? (
+            <MessageSenderLabel label={messageSourceLabel(message)} />
+          ) : null}
           {presentation.guestName !== undefined ? (
             <GuestMessageName name={presentation.guestName} />
           ) : null}
@@ -3401,6 +3413,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // Include turn completion so unchanged message rows reveal their footer and spacing
   // even when the final message update arrives before the turn settles.
   const listAppearanceData = {
+    showMessageSenderLabels: props.showMessageSenderLabels,
     disclosureLayout,
     reduceMotion,
     formatMessageTime,
@@ -3815,6 +3828,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             />
           ) : null}
           {renderFeedEntry(info, {
+            showMessageSenderLabels: props.showMessageSenderLabels === true,
             userMessageGrouping: info.item.userMessageGrouping,
             formatMessageTime,
             environmentId: props.environmentId,
