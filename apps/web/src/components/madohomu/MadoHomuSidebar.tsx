@@ -14,6 +14,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import {
   parseScopedThreadKey,
   scopedThreadKey,
+  scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import {
@@ -68,13 +69,14 @@ import {
 } from "../../hooks/threadFolderMenu";
 import { readLocalApi } from "../../localApi";
 import { madohomuNeedsUser as needsUser } from "../../madohomu";
-import { useServerConfigs } from "../../state/entities";
+import { useServerConfigs, useThreadShellsForProjectRefs } from "../../state/entities";
 import {
   SETTLED_TAIL_INITIAL_COUNT,
   SETTLED_TAIL_PAGE_COUNT,
   useOlderSettledShelf,
   useOlderSettledShelfGrowth,
 } from "../../state/olderSettledShelf";
+import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -207,15 +209,26 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   }
   const settledVisibleCount =
     settledTail.scopeKey === settledScopeKey ? settledTail.count : SETTLED_TAIL_INITIAL_COUNT;
+  const projectShells = useThreadShellsForProjectRefs(
+    project ? [scopeProjectRef(environmentId, project.id)] : [],
+  );
+  const hidingTags = useAtomValue(serverEnvironment.hiddenThreadTagsAtom(environmentId)) !== null;
   const olderSettled = useOlderSettledShelf({
     scopes: project ? [{ environmentId, projectIds: [project.id] }] : [],
     expanded: settings.madohomuEnabled && settledExpanded,
     visibleCount: settledVisibleCount,
+    keepThread: selectedId === null ? null : scopeThreadRef(environmentId, selectedId),
   });
   const settledThreads = groups.find((g) => g.kind === "settled")?.threads ?? [];
   const listedSettledThreads = settledThreads.filter(olderSettled.isListed);
   useOlderSettledShelfGrowth(olderSettled, listedSettledThreads);
-  const settledCount = settledThreads.length + olderSettled.unloadedCount(threads);
+  const unloadedSettledCount = olderSettled.canLoadMore
+    ? olderSettled.unloadedCount(projectShells)
+    : 0;
+  const settledCount = settledThreads.length + unloadedSettledCount;
+  const unknownSettledMatches = hidingTags && unloadedSettledCount > 0;
+  const settledHeadingCount = unknownSettledMatches ? `${settledThreads.length}+` : settledCount;
+  const settledPaging = olderSettled.loading || olderSettled.failed;
   const [collapsed, setCollapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, COLLAPSED_SCHEMA);
   const isExpanded = (group: Group) =>
     group.kind === "snoozed"
@@ -914,7 +927,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             </button>
           </li>
         ) : null}
-        {isExpanded(group) && moreSettled > 0 ? (
+        {group.kind === "settled" && isExpanded(group) && (moreSettled > 0 || settledPaging) ? (
           <li className="list-none">
             <button
               type="button"
@@ -935,7 +948,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 ? "Loading"
                 : olderSettled.failed
                   ? "Could not load older threads. Retry"
-                  : `Show ${Math.min(moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
+                  : unknownSettledMatches
+                    ? "Show more"
+                    : `Show ${Math.min(moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
             </button>
           </li>
         ) : null}
@@ -948,7 +963,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     <SectionHeading
       id={`madohomu-section-${group.id}`}
       title={group.title}
-      count={group.kind === "settled" ? settledCount : group.threads.length}
+      count={group.kind === "settled" ? settledHeadingCount : group.threads.length}
       attention={attention(group)}
       expanded={isExpanded(group)}
       onToggle={() => toggleExpanded(group)}
@@ -1120,7 +1135,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 .filter(
                   (g) =>
                     (g.kind === "snoozed" && g.threads.length > 0) ||
-                    (g.kind === "settled" && settledCount > 0),
+                    (g.kind === "settled" && (settledCount > 0 || settledPaging)),
                 )
                 .map((group) => section(group, heading(group)))}
               <DragOverlay modifiers={OVERLAY_MODIFIERS} dropAnimation={null}>
@@ -1197,7 +1212,7 @@ function SectionHeading({
 }: {
   id: string;
   title: string;
-  count: number;
+  count: number | string;
   attention: number;
   expanded: boolean;
   onToggle: () => void;

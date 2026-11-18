@@ -6,9 +6,11 @@ import {
   sortOlderSettledScopes,
   unloadedOlderSettledCount,
   wantedOlderSettledPages,
+  type OlderSettledPages,
   type OlderSettledScope,
 } from "@t3tools/client-runtime/state/threads";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
 import { useEffect, useState } from "react";
 
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -18,6 +20,58 @@ export const SETTLED_TAIL_INITIAL_COUNT = 10;
 export const SETTLED_TAIL_PAGE_COUNT = 25;
 
 const NO_PAGES: ReadonlyMap<EnvironmentId, number> = new Map();
+
+function findSettledRow(
+  scopeKey: string,
+  ref: ScopedThreadRef | null,
+  reads: OlderSettledPages["reads"] | undefined,
+) {
+  if (ref === null || reads === undefined) return null;
+  for (const { threads, snapshotSequence } of reads) {
+    const thread = threads.find((row) => row.id === ref.threadId);
+    if (thread !== undefined) {
+      return { scopeKey, environmentId: ref.environmentId, snapshotSequence, thread };
+    }
+  }
+  return null;
+}
+
+function useRetainedSettledRow(
+  scopeKey: string,
+  ref: ScopedThreadRef | null,
+  reads: OlderSettledPages["reads"] | undefined,
+) {
+  const loaded = findSettledRow(scopeKey, ref, reads);
+  const [retained, setRetained] = useState(loaded);
+  const sameRoute =
+    ref !== null &&
+    retained?.scopeKey === scopeKey &&
+    retained.environmentId === ref.environmentId &&
+    retained.thread.id === ref.threadId;
+  if (loaded !== null) {
+    if (
+      !sameRoute ||
+      retained.thread !== loaded.thread ||
+      retained.snapshotSequence !== loaded.snapshotSequence
+    ) {
+      setRetained(loaded);
+    }
+  } else if (retained !== null && !sameRoute) {
+    setRetained(null);
+  }
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the open row in the shell registry when the shelf releases its pages
+  useEffect(() => {
+    if (retained === null) return;
+    const { environmentId, snapshotSequence, thread } = retained;
+    return threadFamilies.mountRows(
+      appAtomRegistry,
+      environmentId,
+      `older-settled:open:${thread.id}:${snapshotSequence}`,
+      Atom.make([{ snapshotSequence, threads: [thread] }]),
+    );
+  }, [retained]);
+}
 
 /**
  * The Settled shelf for one scope when shells leave older settled threads out: which rows it may
@@ -32,6 +86,8 @@ export function useOlderSettledShelf(input: {
   readonly visibleCount: number;
   /** Drops the pages read so far when collapsed, so opening again starts from the cut. */
   readonly forgetWhenCollapsed?: boolean;
+  /** Retains the open row if releasing the pages would remove it from the shell. */
+  readonly keepThread?: ScopedThreadRef | null;
 }) {
   const scopes = sortOlderSettledScopes(input.scopes);
   const scopeKey = JSON.stringify(scopes);
@@ -46,6 +102,11 @@ export function useOlderSettledShelf(input: {
   }));
   const shelfKey = JSON.stringify(shelfScopes);
   const shelf = useAtomValue(olderSettledThreads.shelfAtom(shelfScopes));
+  useRetainedSettledRow(
+    scopeKey,
+    input.keepThread ?? null,
+    input.keepThread ? shelf.get(input.keepThread.environmentId)?.pages.reads : undefined,
+  );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mounts the requested older settled pages into the thread family registry while shown
   useEffect(() => {
     const releases = (JSON.parse(shelfKey) as typeof shelfScopes).flatMap(({ scope, pages }) =>
@@ -67,7 +128,8 @@ export function useOlderSettledShelf(input: {
 
   const olderOf = (environmentId: EnvironmentId) => shelf.get(environmentId)?.older ?? null;
   const pagesOf = (environmentId: EnvironmentId) => shelf.get(environmentId)?.pages;
-  const frontier = settledShelfFrontier([...shelf.values()]);
+  const environments = [...shelf.values()];
+  const frontier = settledShelfFrontier(environments);
   const loaded = shelfScopes.filter(({ pages }) => pages > 0);
   return {
     environments: shelf,
@@ -75,6 +137,7 @@ export function useOlderSettledShelf(input: {
     pages,
     grow: (next: ReadonlyMap<EnvironmentId, number>) => setRequested({ scopeKey, pages: next }),
     isListed: (thread: EnvironmentThreadShell) => isListedSettledThread(thread.source, frontier),
+    canLoadMore: environments.some(({ older, pages }) => older !== null && pages.frontier !== null),
     /** Older settled threads in scope that are not local; add it to the local Settled rows. */
     unloadedCount: (threads: ReadonlyArray<EnvironmentThreadShell>) =>
       unloadedOlderSettledCount({ olderSettled: olderOf, scopes, threads }),
