@@ -1733,7 +1733,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     { runtimeMode: "full-access", turnIdKind: "present", kind: "browser" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "external" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "launch" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "other-direct-tool" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate-wrong-server" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate-no-session" },
     { runtimeMode: "auto-accept-edits", turnIdKind: "null", kind: "browser" },
     { runtimeMode: "auto-accept-edits", turnIdKind: "present", kind: "delegate" },
   ] as const)(
@@ -1744,20 +1747,32 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const nativeTurnId = "mcp-approval-turn";
         const prompt = "Read the dashboard in Chrome.";
         const scenario = `mcp-approval-${turnIdKind}-${kind}`;
-        const directTool = kind === "delegate" || kind === "other-direct-tool";
-        const serverName = directTool
-          ? "t3-code-direct"
-          : kind === "browser"
-            ? "browser"
-            : "deployment";
+        const serverName = {
+          browser: "browser",
+          external: "deployment",
+          delegate: "t3-code-direct",
+          launch: "t3-code",
+          "other-direct-tool": "t3-code-direct",
+          "delegate-wrong-server": "t3-code",
+          "delegate-no-session": "t3-code-direct",
+        }[kind];
+        const toolName =
+          kind === "browser" || kind === "external"
+            ? undefined
+            : kind === "launch"
+              ? "t3_thread_launch"
+              : kind === "other-direct-tool"
+                ? "t3_thread_wait"
+                : "delegate_task";
         const message =
           kind === "browser"
             ? "Allow ChatGPT to use Google Chrome?"
-            : directTool
-              ? "Allow the t3-code-direct MCP server to run a tool?"
-              : "Deploy to production?";
-        const refused = kind === "external" || kind === "other-direct-tool";
-        if (directTool) {
+            : toolName === undefined
+              ? "Deploy to production?"
+              : `Allow the ${serverName} MCP server to run tool "${toolName}"?`;
+        const refused = kind !== "browser" && kind !== "delegate" && kind !== "launch";
+        const hasT3Mcp = toolName !== undefined && kind !== "delegate-no-session";
+        if (hasT3Mcp) {
           yield* (yield* McpProviderSessions.McpProviderSessions).set({
             environmentId: EnvironmentId.make("environment-codex-mcp"),
             threadId: ThreadId.make(`thread-${scenario}`),
@@ -1773,7 +1788,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           codexInput: [{ type: "text", text: prompt }],
           runtimePolicy: { ...CODEX_TEST_RUNTIME_POLICY, runtimeMode },
           modelSelection: CODEX_TEST_MODEL_SELECTION,
-          hasT3Mcp: directTool,
+          hasT3Mcp,
         });
         const pending = yield* Queue.unbounded<OrchestrationV2RuntimeRequest>();
         const harness = yield* makeCodexReplayHarness(
@@ -1805,11 +1820,11 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                     serverName,
                     mode: "form",
                     message,
-                    ...(directTool
+                    ...(toolName !== undefined
                       ? {
                           _meta: {
                             codex_approval_kind: "mcp_tool_call",
-                            tool_name: kind === "delegate" ? "delegate_task" : "t3_thread_wait",
+                            tool_name: toolName,
                           },
                         }
                       : {}),

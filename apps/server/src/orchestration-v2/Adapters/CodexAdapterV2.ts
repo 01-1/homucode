@@ -1523,20 +1523,27 @@ export const CODEX_THREAD_CONFIG = {
 
 // request_secret can wait an hour; keep Codex's MCP timeout above that.
 const CODEX_T3_MCP_TOOL_TIMEOUT_SEC = 65 * 60;
+const CODEX_T3_MCP_SERVER = "t3-code";
 // Holds T3 tools Codex must call directly, never from Code Mode. Calls arrive as
 // `t3-code-direct.<tool>`; t3McpToolPresentation.ts must keep resolving that form.
 const CODEX_T3_DIRECT_MCP_SERVER = "t3-code-direct";
 const CODEX_DIRECT_ONLY_T3_TOOLS = ["t3_thread_wait", "delegate_task"];
-const isCodexDelegateTaskApproval = Schema.is(
+const isCodexThreadStartApprovalMetadata = Schema.is(
   Schema.Struct({
-    mode: Schema.Literal("form"),
-    serverName: Schema.Literal(CODEX_T3_DIRECT_MCP_SERVER),
-    _meta: Schema.Struct({
-      codex_approval_kind: Schema.Literal("mcp_tool_call"),
-      tool_name: Schema.Literal("delegate_task"),
-    }),
+    codex_approval_kind: Schema.Literal("mcp_tool_call"),
+    tool_name: Schema.Literals(["delegate_task", "t3_thread_launch"]),
   }),
 );
+
+function isCodexThreadStartApproval(payload: CodexSchema.McpServerElicitationRequestParams) {
+  if (payload.mode !== "form" || !isCodexThreadStartApprovalMetadata(payload._meta)) {
+    return false;
+  }
+  return (
+    payload.serverName ===
+    (payload._meta.tool_name === "delegate_task" ? CODEX_T3_DIRECT_MCP_SERVER : CODEX_T3_MCP_SERVER)
+  );
+}
 
 function codexThreadRuntimeParams(input: {
   readonly threadId: ThreadId | null;
@@ -1570,7 +1577,10 @@ function codexThreadRuntimeParams(input: {
         ? {}
         : {
             // Override only T3's servers so launch-argument MCP servers survive.
-            "mcp_servers.t3-code": { ...t3Server, disabled_tools: CODEX_DIRECT_ONLY_T3_TOOLS },
+            [`mcp_servers.${CODEX_T3_MCP_SERVER}`]: {
+              ...t3Server,
+              disabled_tools: CODEX_DIRECT_ONLY_T3_TOOLS,
+            },
             // Code Mode runs a blocking wait or delegate wait as a nested call, and the model
             // keeps polling it. A second, direct-only registration makes it a plain tool call.
             [`mcp_servers.${CODEX_T3_DIRECT_MCP_SERVER}`]: {
@@ -6251,9 +6261,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   content: { approval: "once" },
                 } satisfies CodexSchema.McpServerElicitationRequestResponse;
               }
-              // The authenticated T3 endpoint enforces the caller's delegation permissions.
+              // The T3 endpoint checks the caller's permissions before starting any thread.
               if (
-                isCodexDelegateTaskApproval(payload) &&
+                isCodexThreadStartApproval(payload) &&
                 (yield* mcpSessions.read(context.input.threadId)) !== undefined
               ) {
                 return {
