@@ -7,6 +7,8 @@ import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
+import { useEnvironments } from "../../state/environments";
+import { isConnectedWithConfig } from "./scopedSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -27,13 +29,26 @@ const WORKING_PLACEMENT_LABELS = {
 } as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
 
 export function MadoHomuSettings() {
-  const { target, targets, scope } = useSettingsScope();
+  const { target, scope } = useSettingsScope();
+  const { environments } = useEnvironments();
+  const targets = environments.filter(isConnectedWithConfig);
   const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   if (scope.kind === "project" || scope.kind === "checkout") return null;
+  const preferredId =
+    selectedId ?? (scope.kind === "environment" ? scope.environmentId : destination);
   const selected =
-    targets.find((candidate) => candidate.environmentId === (selectedId ?? destination)) ?? target;
-  if (!selected) return null;
+    targets.find((candidate) => candidate.environmentId === preferredId) ??
+    targets.find((candidate) => candidate.environmentId === target?.environmentId) ??
+    targets[0];
+  if (!selected)
+    return (
+      <SettingsSection id="madohomu" title="MadoHomu">
+        <p className="p-4 text-sm text-muted-foreground">
+          Connect an environment to configure MadoHomu.
+        </p>
+      </SettingsSection>
+    );
   const environmentPicker =
     targets.length > 1 ? (
       <SettingsRow
