@@ -10,7 +10,10 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
-import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import {
+  threadCanChangeProjectDirectory,
+  threadRuntimeCanArchive,
+} from "@t3tools/client-runtime/state/models";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -1120,6 +1123,20 @@ export function useThreadActions() {
       if (threadOperationFailure(target)) return;
       const name = await requestNewProjectMove();
       if (name === null) return;
+      const thread = readThreadShell(target);
+      if (thread === null || !threadCanChangeProjectDirectory(thread)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not move to a new project",
+            description:
+              thread === null
+                ? "This thread is unavailable."
+                : "The thread still has work in progress. Finish or stop it first.",
+          }),
+        );
+        return;
+      }
       const created = await createNewProject({
         environmentId: target.environmentId,
         input: { name },

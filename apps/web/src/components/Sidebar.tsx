@@ -79,6 +79,7 @@ import {
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
+  threadCanChangeProjectDirectory,
   threadRuntimeCanArchive,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
@@ -3419,6 +3420,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              projectDirectoryChangeBlocked: !threadCanChangeProjectDirectory(thread),
               moveProjectOptions: [...projectByKey.values()]
                 .filter(
                   (project) =>
