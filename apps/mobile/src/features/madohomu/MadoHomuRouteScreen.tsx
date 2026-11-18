@@ -510,25 +510,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         {...(reorderMode
           ? { confirm: { label: "Done", onPress: () => setReordering(false) } }
           : {})}
-        actions={
-          !reorderMode && settings.madohomuEnabled && actions.project && canEdit
-            ? [
-                {
-                  icon: "line.3.horizontal" as const,
-                  accessibilityLabel: "Reorder pinned threads",
-                  onPress: () => {
-                    openSwipeableRef.current?.close();
-                    setReordering(true);
-                  },
-                },
-                {
-                  icon: "folder.badge.plus" as const,
-                  accessibilityLabel: "New section",
-                  onPress: addSection,
-                },
-              ]
-            : []
-        }
         menus={
           reorderMode
             ? []
@@ -548,6 +529,25 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                               openSwipeableRef.current?.close();
                               setChoosingProject(true);
                             },
+                          },
+                        ]
+                      : []),
+                    ...(settings.madohomuEnabled && actions.project && canEdit
+                      ? [
+                          {
+                            id: "reorder",
+                            title: "Reorder…",
+                            icon: "arrow.up.arrow.down",
+                            onPress: () => {
+                              openSwipeableRef.current?.close();
+                              setReordering(true);
+                            },
+                          },
+                          {
+                            id: "new-section",
+                            title: "New section…",
+                            icon: "folder.badge.plus",
+                            onPress: addSection,
                           },
                         ]
                       : []),
