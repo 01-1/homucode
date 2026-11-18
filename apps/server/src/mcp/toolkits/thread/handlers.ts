@@ -14,9 +14,10 @@ import {
   type OrchestrationV2Command,
 } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
-import { topOfPinnedRunOrderKey } from "@t3tools/shared/pinOrderKey";
+import { pinOrderKeyBetween, topOfPinnedRunOrderKey } from "@t3tools/shared/pinOrderKey";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -76,6 +77,50 @@ const topOfPinnedRunKey = Effect.fn("mcp.topOfPinnedRunKey")(function* (
   if (index === null) return undefined;
   const pinnedKeys = index.flatMap((entry) => (entry.pinnedAt == null ? [] : [entry.pinOrderKey]));
   return topOfPinnedRunOrderKey(pinnedKeys) ?? undefined;
+});
+
+/** Key that places a pinned thread just above `beforeThreadId`, or last when null. */
+const pinReorderKey = Effect.fn("mcp.pinReorderKey")(function* (
+  threads: Pick<ThreadManagement.ThreadManagementService["Service"], "listActiveShellIndex">,
+  threadId: ThreadId,
+  beforeThreadId: ThreadId | null,
+) {
+  const index = yield* threads.listActiveShellIndex().pipe(Effect.mapError(unavailable));
+  const pinned = index.filter((entry) => entry.pinnedAt != null);
+  if (!pinned.some((entry) => entry.id === threadId)) {
+    return yield* new OrchestratorMcpFailure({
+      code: "invalid_request",
+      message: "Only a pinned thread can be reordered. Pin it first.",
+    });
+  }
+  const keys = pinned
+    .filter((entry) => entry.id !== threadId)
+    .map((entry) => ({ id: entry.id, key: entry.pinOrderKey ?? null }))
+    .toSorted((left, right) =>
+      left.key === null || right.key === null
+        ? Number(left.key === null) - Number(right.key === null)
+        : left.key.localeCompare(right.key),
+    );
+  const at = beforeThreadId === null ? keys.length : keys.findIndex((e) => e.id === beforeThreadId);
+  if (at === -1) {
+    return yield* new OrchestratorMcpFailure({
+      code: "invalid_request",
+      message: "`beforeThreadId` is not a pinned thread.",
+    });
+  }
+  const before = at === 0 ? null : keys[at - 1]!.key;
+  const after = at === keys.length ? null : keys[at]!.key;
+  const orderKey =
+    (at > 0 && before === null) || (at < keys.length && after === null)
+      ? null
+      : pinOrderKeyBetween(before, after);
+  if (orderKey === null) {
+    return yield* new OrchestratorMcpFailure({
+      code: "invalid_request",
+      message: "That position has no stored order yet. Drag it once in the sidebar, then retry.",
+    });
+  }
+  return orderKey;
 });
 
 const readQuestion = Effect.fn("mcp.readQuestion")(function* (input: {
@@ -429,7 +474,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
   ),
   t3_pending_request: McpToolAccess.either(
-    (input) => input.action !== "respond",
+    (input) => input.action === "list" || input.action === "read",
     McpToolAccess.reads((input) =>
       Effect.gen(function* () {
         if (input.action === "list") {
@@ -448,19 +493,23 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     writesThread((input) =>
       Effect.gen(function* () {
         const requestId = yield* required(input.requestId, "requestId");
-        const answers = yield* required(input.answers, "answers");
+        const answers =
+          input.action === "dismiss" ? undefined : yield* required(input.answers, "answers");
         const { threads, projection } = yield* readQuestion({
           threadId: input.threadId,
           requestId,
         });
+        const common = {
+          threadId: projection.thread.id,
+          commandId: yield* newCommandId(),
+          requestId,
+        };
         const result = yield* threads
-          .dispatch({
-            type: "runtime-request.respond",
-            threadId: projection.thread.id,
-            commandId: yield* newCommandId(),
-            requestId,
-            answers,
-          })
+          .dispatch(
+            answers === undefined
+              ? { ...common, type: "thread.user-input.dismiss" }
+              : { ...common, type: "runtime-request.respond", answers },
+          )
           .pipe(Effect.mapError(dispatchFailure));
         return { sequence: result.sequence };
       }),
@@ -504,8 +553,17 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
     writesThread((input) =>
       Effect.gen(function* () {
+        if (input.action === "resume") {
+          return yield* dispatch(input.threadId, (common) => ({ ...common, type: "queue.resume" }));
+        }
         const runId = yield* required(input.queuedRunId, "queuedRunId");
         switch (input.action) {
+          case "start":
+            return yield* dispatch(input.threadId, (common) => ({
+              ...common,
+              type: "queued-run.start",
+              runId,
+            }));
           case "edit": {
             const text = yield* required(input.text, "text");
             return yield* dispatch(input.threadId, (common) => ({
@@ -586,8 +644,55 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
             .settleThread({ ...common, byOwnAgent: caller?.id === projection.thread.id })
             .pipe(Effect.mapError(dispatchFailure));
         }
+        if (input.action === "stop_session") {
+          const { projection: sessions } = yield* readThread(projection.thread.id, [
+            "providerSessions",
+          ]);
+          let sequence = 0;
+          for (const session of sessions.providerSessions) {
+            sequence = (yield* threads
+              .dispatch({
+                ...common,
+                commandId: yield* newCommandId(),
+                type: "provider-session.detach",
+                providerSessionId: session.id,
+                reason: "client-requested",
+              })
+              .pipe(Effect.mapError(dispatchFailure))).sequence;
+          }
+          return { sequence };
+        }
         let command: OrchestrationV2Command;
         switch (input.action) {
+          case "mark_read":
+            command = {
+              ...common,
+              type: "thread.visit",
+              visitedAt: DateTime.formatIso(yield* DateTime.now),
+            };
+            break;
+          case "auto_settle_on":
+          case "auto_settle_off":
+            command = {
+              ...common,
+              type: "thread.auto-settle.set",
+              enabled: input.action === "auto_settle_on",
+            };
+            break;
+          case "close_guest_share":
+            command = { ...common, type: "thread.guest-share.close" };
+            break;
+          case "reorder_pin":
+            command = {
+              ...common,
+              type: "thread.pin.reorder",
+              orderKey: yield* pinReorderKey(
+                threads,
+                projection.thread.id,
+                yield* required(input.beforeThreadId, "beforeThreadId"),
+              ),
+            };
+            break;
           case "snooze":
             if (input.snoozedUntil === undefined) {
               return yield* new OrchestratorMcpFailure({

@@ -1205,11 +1205,116 @@ const pendingRespondCommand = Command.make("respond", {
     ).pipe(reportThreadErrors),
   ),
 );
+const pendingDismissCommand = Command.make("dismiss", {
+  ...pendingFlags,
+  request: requestArgument,
+}).pipe(
+  Command.withHandler((flags) =>
+    withThreadTools(
+      flags,
+      Effect.fn("cli.pendingRequest.dismiss")(function* (tools) {
+        const threadId = yield* decodeThreadId(flags.thread);
+        const requestId = yield* decodeRuntimeRequestId(flags.request);
+        const result = yield* tools.call(
+          "t3_pending_request",
+          { action: "dismiss", threadId, requestId },
+          OrchestrationV2DispatchCommandResult,
+        );
+        yield* printJson(result);
+      }),
+    ).pipe(reportThreadErrors),
+  ),
+);
+const ORGANIZE_ACTIONS = [
+  "pin",
+  "unpin",
+  "reorder-pin",
+  "snooze",
+  "unsnooze",
+  "settle",
+  "unsettle",
+  "archive",
+  "unarchive",
+  "mark-read",
+  "mark-unread",
+  "move-project",
+  "move-under",
+  "move-to-root",
+  "auto-settle-on",
+  "auto-settle-off",
+  "stop-session",
+  "close-guest-share",
+] as const;
+
+const threadOrganizeCommand = Command.make("organize", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  action: Argument.Literals("action", ORGANIZE_ACTIONS),
+  project: Flag.String("project").pipe(
+    Flag.withDescription("move-project: destination project id or a path inside it."),
+    Flag.optional,
+  ),
+  parent: Flag.String("parent").pipe(
+    Flag.withDescription("move-under: the new parent thread id."),
+    Flag.optional,
+  ),
+  before: Flag.String("before").pipe(
+    Flag.withDescription("reorder-pin: the pinned thread to go above. Omit to go last."),
+    Flag.optional,
+  ),
+  until: Flag.String("until").pipe(
+    Flag.withDescription("snooze: ISO time to wake the thread."),
+    Flag.optional,
+  ),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription(
+    "Pin, snooze, settle, archive, mark read or unread, move a thread to another project or parent, and other thread menu actions.",
+  ),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      const parentThreadId = Option.isSome(flags.parent)
+        ? yield* decodeThreadId(flags.parent.value)
+        : undefined;
+      const beforeThreadId = Option.isSome(flags.before)
+        ? yield* decodeThreadId(flags.before.value)
+        : null;
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.organize")(function* (tools) {
+          const projectId = Option.isSome(flags.project)
+            ? (yield* resolveProject(tools, flags.project.value)).id
+            : undefined;
+          const result = yield* tools.call(
+            "t3_thread_organize",
+            {
+              threadId,
+              action: flags.action.replaceAll("-", "_"),
+              ...(projectId === undefined ? {} : { projectId }),
+              ...(parentThreadId === undefined ? {} : { parentThreadId }),
+              ...(flags.action === "reorder-pin" ? { beforeThreadId } : {}),
+              ...(Option.isSome(flags.until) ? { snoozedUntil: flags.until.value } : {}),
+            },
+            Schema.Unknown,
+          );
+          yield* flags.json ? printJson(result) : Console.log("ok");
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 export const pendingRequestCommand = Command.make("pending-request").pipe(
   Command.withDescription(
     "Read and answer pending user questions. Secret cards and approvals stay in T3.",
   ),
-  Command.withSubcommands([pendingListCommand, pendingReadCommand, pendingRespondCommand]),
+  Command.withSubcommands([
+    pendingListCommand,
+    pendingReadCommand,
+    pendingRespondCommand,
+    pendingDismissCommand,
+  ]),
 );
 
 const threadActivityCommand = Command.make("activity", {
@@ -1289,5 +1394,6 @@ export const threadCommand = Command.make("thread").pipe(
     threadSendCommand,
     threadShowCommand,
     threadConfigureCommand,
+    threadOrganizeCommand,
   ]),
 );

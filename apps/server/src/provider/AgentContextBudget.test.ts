@@ -25,6 +25,13 @@ import { ProviderAdapterRegistryV2 } from "../orchestration-v2/ProviderAdapterRe
 import { ThreadLaunchService } from "../orchestration-v2/ThreadLaunchService.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { ThreadSearch } from "../orchestration-v2/ThreadSearch.ts";
+import { CheckpointDiffQuery } from "../checkpointing/CheckpointDiffQuery.ts";
+import { Keybindings } from "../keybindings.ts";
+import { AgentSessionImporter } from "../project/AgentSessionImporter.ts";
+import { AgentSessionScanner } from "../project/AgentSessionScanner.ts";
+import { ScratchThreadPromotion } from "../project/ScratchThreadPromotion.ts";
+import { WorktreeSetupTracker } from "../project/WorktreeSetupTracker.ts";
+import { UsageService } from "../usage/UsageService.ts";
 import { PeerForwarding } from "../peer/PeerForwarding.ts";
 import { PeerLinkRequests } from "../peer/PeerLinkRequests.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
@@ -52,7 +59,14 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 
 // Registration only stores tool definitions, so the handlers' services are never called.
 const toolHandlerServices = Layer.mergeAll(
+  Layer.mock(AgentSessionImporter)({}),
+  Layer.mock(AgentSessionScanner)({}),
   Layer.mock(AssetSigner)({}),
+  Layer.mock(CheckpointDiffQuery)({}),
+  Layer.mock(Keybindings)({}),
+  Layer.mock(ScratchThreadPromotion)({}),
+  Layer.mock(UsageService)({}),
+  Layer.mock(WorktreeSetupTracker)({}),
   Layer.mock(DeviceService)({}),
   Layer.mock(DocumentText)({}),
   Layer.mock(EnvironmentThemeService)({}),

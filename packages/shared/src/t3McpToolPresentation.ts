@@ -37,9 +37,17 @@ export type T3McpToolSummaryAction =
   | "queue-cancel"
   | "queue-reorder"
   | "queue-steer"
+  | "queue-start"
   | "question-list"
   | "question-read"
   | "question-respond"
+  | "question-dismiss"
+  | "session-import"
+  | "thread-diff"
+  | "keybinding-update"
+  | "usage-read"
+  | "project-from-thread"
+  | "worktree-setup"
   | "secret-request"
   | "worktree-handoff"
   | "worktree-list"
@@ -310,6 +318,8 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Steer with", "Steering with", "Requested steering with", "a queued message"],
     "queue-steer",
   ),
+  t3_queue_start: tool(["Start", "Starting", "Started", "a queued message"], "queue-start"),
+  t3_queue_resume: tool(["Resume", "Resuming", "Resumed", "the queue"], "queue-start"),
   t3_pending_request_list: tool(
     ["List", "Listing", "Listed", "pending questions"],
     "question-list",
@@ -318,6 +328,29 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_pending_request_respond: tool(
     ["Answer", "Answering", "Answered", "pending questions"],
     "question-respond",
+  ),
+  t3_pending_request_dismiss: tool(
+    ["Dismiss", "Dismissing", "Dismissed", "a pending question"],
+    "question-dismiss",
+  ),
+  t3_session_import: tool(["Import", "Importing", "Imported", "agent sessions"], "session-import"),
+  t3_thread_diff: tool(["Read", "Reading", "Read", "a thread diff"], "thread-diff"),
+  t3_keybinding: tool(
+    ["Change", "Changing", "Changed", "a keyboard shortcut"],
+    "keybinding-update",
+  ),
+  t3_usage_read: tool(["Read", "Reading", "Read", "usage"], "usage-read"),
+  t3_project_from_thread: tool(
+    ["Create", "Creating", "Created", "a project from a thread"],
+    "project-from-thread",
+  ),
+  t3_worktree_setup_cancel: tool(
+    ["Cancel", "Canceling", "Canceled", "worktree setup"],
+    "worktree-setup",
+  ),
+  t3_worktree_setup_retry: tool(
+    ["Retry", "Retrying", "Retried", "worktree setup"],
+    "worktree-setup",
   ),
   t3_thread_configuration: tool(
     ["Read", "Reading", "Read", "thread configuration"],
@@ -455,6 +488,7 @@ const ACTION_TOOLS: Readonly<Record<string, (action: string) => string | undefin
   preview_act: (action) => `preview_${action}`,
   t3_queue: (action) => `t3_queue_${action}`,
   t3_pending_request: (action) => `t3_pending_request_${action}`,
+  t3_worktree_setup: (action) => `t3_worktree_setup_${action}`,
   t3_thread_transfer: (action) =>
     ({ fork: "t3_thread_fork", merge_back: "t3_thread_merge_back", status: "t3_thread_transfers" })[
       action

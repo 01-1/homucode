@@ -95,3 +95,65 @@ it.effect("refuses a preferences update when the caller's turn ends while it wai
     );
   }),
 );
+
+it.effect("applies allowlisted settings and refuses invalid or other ones", () =>
+  Effect.gen(function* () {
+    const patches = yield* Ref.make<ReadonlyArray<unknown>>([]);
+    const layerDependencies = Layer.mergeAll(
+      ThreadCommandExecutor.layer,
+      Layer.succeed(McpInvocationContext.McpInvocationContext, {
+        environmentId,
+        requestNamespace: "provider:preferences",
+        thread: {
+          threadId,
+          providerSessionId: "provider:preferences",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+        },
+        client: undefined,
+        capabilities: new Set(["orchestration" as const]),
+        issuedAt: 0,
+      }),
+      Layer.mock(ThreadManagement.ThreadManagementService)({
+        getThreadShell: () => Effect.succeed(liveThreadShell(threadId)),
+      }),
+      Layer.mock(Environment.ServerEnvironment)({
+        getDescriptor: Effect.succeed({
+          environmentId,
+          label: "Test",
+          platform: { os: "linux", arch: "x64" },
+          serverVersion: "0.0.0",
+          capabilities: { repositoryIdentity: false },
+        }),
+      }),
+      Layer.mock(Settings.ServerSettingsService)({
+        getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+        updateSettings: (patch) =>
+          Ref.update(patches, (all) => [...all, patch]).pipe(Effect.as(DEFAULT_SERVER_SETTINGS)),
+      }),
+    );
+    yield* Effect.gen(function* () {
+      const toolkit = yield* EnvironmentToolkit;
+      const update = (params: Record<string, unknown>) =>
+        toolkit
+          .handle("t3_environment_preferences_update", params as never)
+          .pipe(Stream.unwrap, Stream.runCollect, Effect.result);
+
+      yield* update({ settings: { branchNamePrefix: "homu", sidebarAutoSettleOnMerge: false } });
+      expect(yield* Ref.get(patches)).toMatchObject([
+        { branchNamePrefix: "homu", sidebarAutoSettleOnMerge: false },
+      ]);
+
+      const invalid = yield* update({ settings: { sidebarAutoSettleOnMerge: "yes" } });
+      expect(JSON.stringify(invalid)).toContain("Invalid settings");
+      const outside = yield* update({ settings: { secretProviders: [] } });
+      expect(JSON.stringify(outside)).toContain("Agents cannot change secretProviders");
+      expect(yield* Ref.get(patches)).toHaveLength(1);
+    }).pipe(
+      Effect.provide(
+        McpToolAccess.HandlersLayer.layer(EnvironmentHandlers.layer).pipe(
+          Layer.provideMerge(layerDependencies),
+        ),
+      ),
+    );
+  }),
+);
