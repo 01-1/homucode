@@ -27,7 +27,7 @@ import {
   useState,
 } from "react";
 
-import { useNowMinute } from "../../hooks/useNowMinute";
+import { useNowMinuteMs } from "../../hooks/useNowMinute";
 import { observeResize } from "~/lib/observeResize";
 import { serverEnvironment } from "../../state/server";
 import { StatusDialCard, StatusDialStrip } from "./ThreadStatusDials";
@@ -375,8 +375,7 @@ export function ThreadStatusLineRunner(props: {
   );
   const registry = useContext(RegistryContext);
   // Limits are read on the minute so the key, and with it the command, only changes on new data.
-  const nowMinute = useNowMinute();
-  const source = { ...props.source, nowMs: Date.parse(`${nowMinute}:00Z`) };
+  const source = { ...props.source, nowMs: useNowMinuteMs() };
   // Only the mode in use reads the thread's state; the other key stays empty.
   const inputKey = custom ? JSON.stringify(buildStatusLineInput(source)) : "";
   const statsKey = custom ? "" : JSON.stringify(buildStatusLineStats(source));
@@ -450,21 +449,31 @@ export function ThreadStatusLineRunner(props: {
 const PANEL =
   "absolute top-full z-50 rounded-md rounded-t-none border border-t-0 bg-popover text-popover-foreground shadow-lg before:absolute before:inset-x-0 before:bottom-full before:h-6";
 
-/** The status line in the thread's top bar. On hover or focus it opens in full under the bar. */
+/** The status line in the thread's top bar. On hover or keyboard focus it opens in full under the bar. */
 export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }) {
   const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
-  // Where the line starts in the top bar while its panel is open, which is where the dials' card starts.
-  const [openAt, setOpenAt] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the theme's font from the page
-  useLayoutEffect(() => keepBodyFont(containerRef.current));
   if (result === null) return null;
   const drawn = "stats" in result;
   if (!drawn && result.lines.length === 0 && result.error === null) return null;
+  // Keyed by what is drawn, so an open panel does not carry over when that changes.
+  return <HeaderStatusLine key={drawn ? "dials" : "text"} result={result} />;
+}
+
+function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
+  const { result } = props;
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  // Where the line starts in the top bar, which is where the dials' card starts.
+  const [left, setLeft] = useState(0);
+  const nowMs = useNowMinuteMs();
+  const containerRef = useRef<HTMLDivElement>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the theme's font from the page
+  useLayoutEffect(() => keepBodyFont(containerRef.current));
+  const drawn = "stats" in result;
   const failed = !drawn && result.lines.length === 0;
-  const open = (line: HTMLElement) => {
+  const measure = (line: HTMLElement) => {
     const bar = line.offsetParent?.getBoundingClientRect().left ?? 0;
-    setOpenAt(line.getBoundingClientRect().left - bar);
+    setLeft(line.getBoundingClientRect().left - bar);
   };
   // Not positioned itself, so the panel is placed against the whole top bar and opens below it.
   // No-drag, or Electron's title bar drag region swallows the hover.
@@ -475,24 +484,37 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
       tabIndex={0}
       aria-label="Status line"
       className="min-w-0 flex-1 rounded-sm text-muted-foreground text-xs outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      onMouseEnter={(event) => open(event.currentTarget)}
-      onMouseLeave={() => setOpenAt(null)}
-      onFocus={(event) => open(event.currentTarget)}
-      onBlur={() => setOpenAt(null)}
+      onMouseEnter={(event) => {
+        measure(event.currentTarget);
+        setHovered(true);
+      }}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={(event) => {
+        // A click focuses it too, and must not pin the panel open.
+        if (!event.currentTarget.matches(":focus-visible")) return;
+        measure(event.currentTarget);
+        setFocused(true);
+      }}
+      onBlur={() => setFocused(false)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        setHovered(false);
+        event.currentTarget.blur();
+      }}
     >
       {drawn ? (
-        <StatusDialStrip stats={result.stats} createdAt={result.createdAt} />
+        <StatusDialStrip stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
       ) : failed ? (
         <div className="truncate">Status line failed: {result.error}</div>
       ) : (
         <StatusLineRow lines={result.lines} modelName={result.modelName} />
       )}
-      {openAt === null || failed ? null : drawn ? (
+      {failed || !(hovered || focused) ? null : drawn ? (
         <div
           className={`${PANEL} w-3xl px-4 py-3`}
-          style={{ left: openAt, maxWidth: `calc(100% - ${openAt}px)` }}
+          style={{ left, maxWidth: `calc(100% - ${left}px - 0.75rem)` }}
         >
-          <StatusDialCard stats={result.stats} createdAt={result.createdAt} />
+          <StatusDialCard stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
         </div>
       ) : (
         <div

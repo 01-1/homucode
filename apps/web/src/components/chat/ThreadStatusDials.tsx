@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useNowMinute } from "../../hooks/useNowMinute";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { formatShortTimestamp } from "../../timestampFormat";
 
@@ -26,11 +25,9 @@ const EFFORT_BAR_HEIGHTS = ["h-1", "h-1.5", "h-2", "h-2.5", "h-3"];
 const CONTEXT_ALERTS = [70, 90] as const;
 const LIMIT_ALERTS = [50, 80] as const;
 
-function useNowMs(): number {
-  return Date.parse(`${useNowMinute()}:00Z`);
-}
+type Alerts = readonly [warnAt: number, errorAt: number];
 
-function gaugeColor(percent: number, [warnAt, errorAt]: readonly [number, number]): string {
+function gaugeColor(percent: number, [warnAt, errorAt]: Alerts): string {
   if (percent >= errorAt) return "var(--destructive)";
   return percent >= warnAt ? "var(--warning-foreground)" : "var(--success-foreground)";
 }
@@ -69,14 +66,16 @@ function Effort(props: { readonly effort: string }) {
   );
 }
 
-function Ring(props: { readonly percent: number }) {
+// At the error level the disc fills too, since a theme's error color can sit close to its accent.
+function Ring(props: { readonly percent: number; readonly alarm: boolean }) {
   return (
     <svg viewBox="0 0 26 26" className="size-[26px] shrink-0" aria-hidden>
       <circle
         cx="13"
         cy="13"
         r="10.5"
-        fill="none"
+        fill={props.alarm ? "currentColor" : "none"}
+        fillOpacity="0.3"
         stroke="currentColor"
         strokeOpacity="0.22"
         strokeWidth="3"
@@ -110,23 +109,22 @@ function Ring(props: { readonly percent: number }) {
 
 /** A ring filled to `percent` with the number inside, then what it measures and a detail. */
 function Dial(props: {
-  readonly percent: number | null;
-  readonly alerts: readonly [number, number];
+  readonly percent: number;
+  readonly alerts: Alerts;
   readonly name: string;
   readonly detail: ReactNode;
   readonly label: string;
   readonly className?: string;
 }) {
-  const percent =
-    props.percent === null ? null : Math.max(0, Math.min(100, Math.round(props.percent)));
+  const percent = Math.max(0, Math.min(100, Math.round(props.percent)));
   return (
     <span
       role="img"
       aria-label={props.label}
       className={`flex shrink-0 items-center gap-1.5 ${props.className ?? ""}`}
-      style={percent === null ? undefined : { color: gaugeColor(percent, props.alerts) }}
+      style={{ color: gaugeColor(percent, props.alerts) }}
     >
-      {percent === null ? null : <Ring percent={percent} />}
+      <Ring percent={percent} alarm={percent >= props.alerts[1]} />
       <span className="grid @max-[20rem]/dials:hidden">
         <span className="font-medium text-2xs/3.5 text-foreground">{props.name}</span>
         {props.detail === null ? null : (
@@ -147,6 +145,8 @@ function LimitDial(props: {
   readonly className: string;
 }) {
   const left = resetsIn(props.limit, props.nowMs);
+  // Past its reset time the number is the old window's, so it stops calling for attention.
+  const stale = left === null && props.limit.resetsAtMs !== null;
   return (
     <Dial
       percent={props.limit.usedPercent}
@@ -161,7 +161,7 @@ function LimitDial(props: {
         )
       }
       label={`${props.title} ${props.limit.usedPercent}% used${left === null ? "" : `, resets in ${left}`}`}
-      className={props.className}
+      className={`${props.className} ${stale ? "opacity-50" : ""}`}
     />
   );
 }
@@ -190,30 +190,37 @@ function Stat(props: {
 export function StatusDialStrip(props: {
   readonly stats: StatusLineStats;
   readonly createdAt: string | null;
+  readonly nowMs: number;
 }) {
-  const { stats } = props;
-  const nowMs = useNowMs();
+  const { stats, nowMs } = props;
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const uptime = uptimeText(props.createdAt, nowMs);
+  const context = stats.contextTokens === null ? null : formatStatusLineTokens(stats.contextTokens);
   return (
     <div className="@container/dials">
       <div className="flex items-center gap-3.5 overflow-hidden whitespace-nowrap tabular-nums">
         {stats.modelName === null ? null : (
-          <span className="flex shrink-0 items-center gap-1.5 font-medium text-foreground @max-[9rem]/dials:hidden">
-            <span className="max-w-40 truncate @max-[16rem]/dials:hidden">{stats.modelName}</span>
+          <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground @max-[16rem]/dials:hidden">
+            <span className="max-w-40 truncate">{stats.modelName}</span>
             {stats.effort === null ? null : <Effort effort={stats.effort} />}
             {stats.fastMode ? (
               <ZapIcon aria-label="Fast mode" className="size-3.5 shrink-0 fill-ring text-ring" />
             ) : null}
           </span>
         )}
-        {stats.contextTokens === null ? null : (
+        {context === null ? null : stats.contextPercent === null ? (
+          // No known maximum, so no ring: the count stands in for it.
+          <Stat label={`Context ${context} tokens`} className="@max-[20rem]/dials:hidden">
+            <span className="font-medium text-foreground">{context}</span>
+            context
+          </Stat>
+        ) : (
           <Dial
             percent={stats.contextPercent}
             alerts={CONTEXT_ALERTS}
             name="context"
-            detail={formatStatusLineTokens(stats.contextTokens)}
-            label={`Context ${stats.contextPercent === null ? "" : `${stats.contextPercent}% used, `}${stats.contextTokens} tokens`}
+            detail={context}
+            label={`Context ${stats.contextPercent}% used, ${context} tokens`}
           />
         )}
         {stats.fiveHour === null ? null : (
@@ -234,12 +241,14 @@ export function StatusDialStrip(props: {
             className="@max-[6.5rem]/dials:hidden"
           />
         )}
-        <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[33rem]/dials:hidden" />
         {uptime === null ? null : (
-          <Stat label={`Uptime ${uptime}`} className="@max-[33rem]/dials:hidden">
-            <TimerIcon />
-            {uptime}
-          </Stat>
+          <>
+            <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[33rem]/dials:hidden" />
+            <Stat label={`Uptime ${uptime}`} className="@max-[33rem]/dials:hidden">
+              <TimerIcon />
+              {uptime}
+            </Stat>
+          </>
         )}
         {stats.cachePercent === null ? null : (
           <Stat label={`Cache hits ${stats.cachePercent}%`} className="@max-[41rem]/dials:hidden">
@@ -268,13 +277,13 @@ export function StatusDialStrip(props: {
 
 function Fact(props: {
   readonly name: string;
-  readonly meter?: { readonly percent: number; readonly alerts: readonly [number, number] };
+  readonly meter?: { readonly percent: number; readonly alerts: Alerts };
   readonly children: ReactNode;
 }) {
   return (
     <div className="grid min-w-0 content-start gap-0.5">
       <span className="text-2xs text-muted-foreground">{props.name}</span>
-      <span className="truncate font-medium">{props.children}</span>
+      <span className="break-words font-medium">{props.children}</span>
       {props.meter === undefined ? null : (
         <span
           aria-hidden
@@ -308,15 +317,14 @@ function LimitFact(props: {
 export function StatusDialCard(props: {
   readonly stats: StatusLineStats;
   readonly createdAt: string | null;
+  readonly nowMs: number;
 }) {
-  const { stats } = props;
-  const nowMs = useNowMs();
+  const { stats, nowMs } = props;
   const uptime = uptimeText(props.createdAt, nowMs);
   const model = [stats.modelName, stats.effort, stats.fastMode ? "fast" : null].filter(Boolean);
   return (
     <div className="grid gap-3 tabular-nums">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-6 gap-y-3">
-        {model.length === 0 ? null : <Fact name="Model">{model.join(" · ")}</Fact>}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] gap-x-6 gap-y-3">
         {stats.contextTokens === null ? null : (
           <Fact
             name="Context"
@@ -338,13 +346,14 @@ export function StatusDialCard(props: {
           <LimitFact name="Weekly limit" limit={stats.weekly} nowMs={nowMs} />
         )}
         {uptime === null ? null : <Fact name="Uptime">{uptime}</Fact>}
-        {stats.cachePercent === null ? null : <Fact name="Cache hits">{stats.cachePercent}%</Fact>}
         {stats.inputTokens === null ? null : (
           <Fact name="Tokens">
             {formatStatusLineTokens(stats.inputTokens)} in ·{" "}
             {formatStatusLineTokens(stats.outputTokens ?? 0)} out
+            {stats.cachePercent === null ? null : ` · ${stats.cachePercent}% cached`}
           </Fact>
         )}
+        {model.length === 0 ? null : <Fact name="Model">{model.join(" · ")}</Fact>}
       </div>
       {stats.cwd === null && stats.version === null ? null : (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
