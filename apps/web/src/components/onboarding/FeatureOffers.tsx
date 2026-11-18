@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import {
   FEATURE_OFFERS,
   enabledFeatureOffers,
@@ -200,13 +200,6 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
           ) : (
             <BuildToolsSetup environmentId={environmentId} />
           )}
-          {selected.has("quick-model") && step < pages.length ? (
-            <p className="mt-3 text-sm">
-              <Link to="/settings/threads" hash="quick-model">
-                Quick model settings
-              </Link>
-            </p>
-          ) : null}
         </DialogPanel>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => void save(false)}>
