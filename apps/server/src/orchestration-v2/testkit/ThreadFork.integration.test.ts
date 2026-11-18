@@ -20,7 +20,10 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { ClaudeOrchestratorReplayHarness } from "../Adapters/ClaudeAdapterV2.testkit.ts";
 import { CodexOrchestratorReplayHarness } from "../Adapters/CodexAdapterV2.testkit.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import {
   THREAD_FORK_NATIVE_PRIOR_TURN_ALPHA_PROMPT,
@@ -116,6 +119,7 @@ function readTranscript(transcriptPath: string) {
           ]
         : metadataStringArray(transcript, "prompts"),
       DateTime.makeUnsafe(0),
+      UNKNOWN_DEVICE_HUMAN_LINE,
     );
   });
 }

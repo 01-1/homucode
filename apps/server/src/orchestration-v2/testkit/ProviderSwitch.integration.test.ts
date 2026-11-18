@@ -65,6 +65,7 @@ import {
   GROK_MODEL_SELECTION,
 } from "./fixtures/shared.ts";
 import * as ProviderReplayHarness from "./ProviderReplayHarness.ts";
+import { UNKNOWN_DEVICE_HUMAN_LINE } from "./ReplayMessageTimestamps.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
@@ -80,7 +81,12 @@ function timestamped(text: string, projection: OrchestrationV2ThreadProjection) 
   const local = DateTime.formatIso(
     DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
   ).slice(0, 19);
-  return `${local}: ${text}`;
+  return `${local}: ${text}\n\n${UNKNOWN_DEVICE_HUMAN_LINE}`;
+}
+
+// The prompt as typed: T3 appends its sender line (see `messageSourceLine`) after it.
+function withoutSourceLine(text: string) {
+  return text.replace(/\n\n\[T3\] (?:Sent from|Automatic message from)[^\n]*$/, "");
 }
 
 const threadId = ThreadId.make("thread:provider-switch");
@@ -3442,7 +3448,7 @@ describe("orchestration v2 provider switching", () => {
           const projection = yield* orchestrator.getThreadProjection(freshThreadId);
           const turns = yield* Ref.get(capturedTurns);
           const turnFor = (name: string) =>
-            turns.find((turn) => turn.text.endsWith(`Prompt ${name}`))!;
+            turns.find((turn) => withoutSourceLine(turn.text).endsWith(`Prompt ${name}`))!;
 
           const freshRun = projection.runs.find(
             (run) => run.userMessageId === `message:fresh-context:${key}:beta`,
@@ -3556,7 +3562,7 @@ describe("orchestration v2 provider switching", () => {
           yield* waitForIdle(threadId);
           const turns = yield* Ref.get(capturedTurns);
           const turnFor = (name: string) =>
-            turns.find((turn) => turn.text.endsWith(`Scheduled ${name}`));
+            turns.find((turn) => withoutSourceLine(turn.text).endsWith(`Scheduled ${name}`));
           assert.isDefined(turnFor("second"));
           assert.notEqual(turnFor("second")!.nativeThreadId, turnFor("first")!.nativeThreadId);
           // Closing the busy session would end its background work.
@@ -3685,7 +3691,8 @@ describe("orchestration v2 provider switching", () => {
           yield* waitForIdle(threadId);
         }
         const turns = yield* Ref.get(capturedTurns);
-        const turnFor = (name: string) => turns.find((turn) => turn.text.endsWith(name));
+        const turnFor = (name: string) =>
+          turns.find((turn) => withoutSourceLine(turn.text).endsWith(name));
         assert.notEqual(
           turnFor("scheduled")!.nativeThreadId,
           turnFor("user-first")!.nativeThreadId,
@@ -3797,7 +3804,7 @@ describe("orchestration v2 provider switching", () => {
         yield* worker.drain();
         const turns = yield* Ref.get(capturedTurns);
         const turnFor = (name: string) =>
-          turns.find((turn) => turn.text.endsWith(`Prompt ${name}`))!;
+          turns.find((turn) => withoutSourceLine(turn.text).endsWith(`Prompt ${name}`))!;
 
         assert.notEqual(turnFor("gamma").providerThreadId, turnFor("zero").providerThreadId);
         assert.notEqual(turnFor("delta").providerThreadId, turnFor("gamma").providerThreadId);
@@ -4722,7 +4729,7 @@ describe("orchestration v2 provider switching", () => {
 
           const turns = yield* Ref.get(capturedTurns);
           const turnFor = (name: string) =>
-            turns.find((turn) => turn.text.endsWith(`Prompt ${name}`))!.text;
+            turns.find((turn) => withoutSourceLine(turn.text).endsWith(`Prompt ${name}`))!.text;
           const switched = turnFor("fork-codex");
           // The switched provider gets the conversation the fork shows, oldest first.
           assert.include(switched, "Prompt source");

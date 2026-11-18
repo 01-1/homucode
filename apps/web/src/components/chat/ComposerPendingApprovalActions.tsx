@@ -50,6 +50,7 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
     <>
       {primaryOptions.map((option) => {
         const buttonProps = {
+          "data-unprompted": true,
           disabled: disabled || isResponding || !canRespond,
           "aria-description": option.warning,
           onClick: () => {

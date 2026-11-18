@@ -27,7 +27,10 @@ import {
   runOrchestratorV2ProviderReplayScenario,
   type OrchestratorV2ProviderReplayHarness,
 } from "./ProviderReplayHarness.ts";
-import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 
 // Each driver's fixtures run from its own <Provider>ReplayFixtures.integration.test.ts,
@@ -139,6 +142,7 @@ const runFixtureProvider = Effect.fn("runOrchestratorReplayFixture")(function* <
         timestampedTranscript,
         [step.text],
         DateTime.makeUnsafe(elapsedMillis),
+        UNKNOWN_DEVICE_HUMAN_LINE,
       );
     }
   }

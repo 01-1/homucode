@@ -1,3 +1,4 @@
+import { messageSourceLabel } from "@t3tools/shared/messageSource";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
@@ -513,9 +514,11 @@ function QueuedMessage(props: {
 
   return (
     <>
-      {attribution === "t3code" ? (
-        <p className="me-1 text-2xs text-muted-foreground/70">Sent by T3 Code</p>
-      ) : null}
+      {props.message === undefined ? null : (
+        <p className="me-1 text-2xs text-muted-foreground/70">
+          {messageSourceLabel(props.message)}
+        </p>
+      )}
       {presentation?.guestName === undefined ? null : (
         <GuestMessageName name={presentation.guestName} />
       )}

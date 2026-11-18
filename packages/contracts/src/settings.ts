@@ -1602,7 +1602,7 @@ export const ServerSettings = Schema.Struct({
   /** Off refuses new autoreviewers and pauses attached ones: no new batches, no findings. */
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   bareStopWaitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  claudeSteersSurviveStop: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  claudeSteersSurviveStop: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** A turn a restart cut while it waited on an approval, question or secret resumes and asks again. */
   reaskPendingRequestsAfterRestart: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),

@@ -1,11 +1,11 @@
 import { CommandId, MessageId, ScheduledTaskId, ThreadId } from "@t3tools/contracts";
+import { messageSourceLine as sentFromLine } from "@t3tools/shared/messageSource";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   launchInitialMessage,
   parseDeviceNameRules,
   sentFromConnection,
-  sentFromLine,
   withConnectionSentFrom,
   withDeviceName,
   withoutNonUserSentFrom,
@@ -16,6 +16,7 @@ const userMessage = (props: Readonly<Record<string, unknown>>) => {
   const sentFrom = sentFromConnection(props);
   return {
     createdBy: "user" as const,
+    creationSource: "mobile" as const,
     context: { version: 1 as const, records: [], ...(sentFrom ? { sentFrom } : {}) },
   };
 };
@@ -31,47 +32,95 @@ describe("sentFromConnection and sentFromLine", () => {
         deviceModel: "iPhone 16 Pro",
         connectionMethod: "relay",
       },
-      line: "[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro, via relay)",
+      line: "[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro, via relay). A human sent this message.",
     },
     {
       client: "mobile without a model",
       props: { surface: "mobile", clientOs: "Android", clientDeviceType: "phone" },
-      line: "[T3] Sent from: T3 mobile (Android, phone)",
+      line: "[T3] Sent from: T3 mobile (Android, phone). A human sent this message.",
     },
     {
       client: "desktop",
       props: { surface: "desktop", clientOs: "Linux", connectionMethod: "direct" },
-      line: "[T3] Sent from: T3 desktop (Linux)",
+      line: "[T3] Sent from: T3 desktop (Linux). A human sent this message.",
     },
     {
       client: "web",
       props: { surface: "web", clientOs: "macOS", clientBrowser: "Safari" },
-      line: "[T3] Sent from: T3 web (macOS, Safari)",
+      line: "[T3] Sent from: T3 web (macOS, Safari). A human sent this message.",
     },
     {
       // A field the schema refuses is dropped; the rest stays.
       client: "desktop with an odd os",
       props: { surface: "desktop", clientOs: "BeOS", deviceModel: "x".repeat(200) },
-      line: "[T3] Sent from: T3 desktop",
+      line: "[T3] Sent from: T3 desktop. A human sent this message.",
     },
   ])("records and renders $client", ({ props, line }) => {
     expect(sentFromLine(userMessage(props))).toBe(line);
   });
 
-  it("degrades to nothing for a client that named no surface", () => {
+  it("still marks a human message from a client that named no surface", () => {
     expect(sentFromConnection({})).toBeUndefined();
     expect(sentFromConnection({ surface: "toaster", clientOs: "Linux" })).toBeUndefined();
-    expect(sentFromLine(userMessage({}))).toBe("");
-    expect(withSentFromLine("Hello", userMessage({}))).toBe("Hello");
+    expect(sentFromLine(userMessage({}))).toBe(
+      "[T3] Sent from: unknown device. A human sent this message.",
+    );
   });
 
-  it("adds nothing for agents, scheduled tasks, or slash commands", () => {
+  it.each([
+    {
+      sender: "a scheduled task",
+      fields: { scheduledTaskId: ScheduledTaskId.make("task") },
+      line: "[T3] Automatic message from a scheduled task. No human sent this message.",
+    },
+    {
+      sender: "another agent",
+      fields: { createdBy: "agent" as const, senderThreadId: ThreadId.make("parent") },
+      line: "[T3] Automatic message from the agent in thread parent. No human sent this message.",
+    },
+    {
+      sender: "t3 thread send",
+      fields: { createdBy: "agent" as const, creationSource: "mcp" as const },
+      line: "[T3] Automatic message from an agent or script using T3's tools. No human sent this message.",
+    },
+    {
+      sender: "a restart",
+      fields: {
+        createdBy: "agent" as const,
+        creationSource: "server" as const,
+        notification: {
+          source: { kind: "system" as const },
+          summary: "T3 Code restarted and resumed this turn",
+        },
+      },
+      line: "[T3] Automatic message from T3 Code: T3 Code restarted and resumed this turn. No human sent this message.",
+    },
+    {
+      sender: "a pull request watch",
+      fields: {
+        createdBy: "agent" as const,
+        creationSource: "server" as const,
+        notification: { source: { kind: "monitor" as const }, summary: "Checks passed" },
+      },
+      line: "[T3] Automatic message from a pull request watch: Checks passed. No human sent this message.",
+    },
+    {
+      sender: "T3 Code",
+      fields: { createdBy: "agent" as const, creationSource: "server" as const },
+      line: "[T3] Automatic message from T3 Code. No human sent this message.",
+    },
+  ])("marks a message from $sender as automatic", ({ fields, line }) => {
+    // A device a non-human message claims never makes it read as human.
+    const message = { ...userMessage({ surface: "mobile", clientOs: "iOS" }), ...fields };
+    expect(sentFromLine(message)).toBe(line);
+  });
+
+  it("appends the line unless turned off, and leaves slash commands verbatim", () => {
     const fromPhone = userMessage({ surface: "mobile", clientOs: "iOS" });
     expect(withSentFromLine("Hello", fromPhone, false)).toBe("Hello");
-    expect(withSentFromLine("Hello", fromPhone)).toBe("Hello\n\n[T3] Sent from: T3 mobile (iOS)");
-    expect(sentFromLine({ ...fromPhone, createdBy: "agent" })).toBe("");
-    expect(sentFromLine({ ...fromPhone, senderThreadId: ThreadId.make("parent") })).toBe("");
-    expect(sentFromLine({ ...fromPhone, scheduledTaskId: ScheduledTaskId.make("task") })).toBe("");
+    expect(withSentFromLine("Hello", fromPhone)).toBe(
+      "Hello\n\n[T3] Sent from: T3 mobile (iOS). A human sent this message.",
+    );
     expect(withSentFromLine("/goal ship it", fromPhone)).toBe("/goal ship it");
   });
 });
@@ -207,8 +256,9 @@ describe("device names", () => {
       }),
       rules,
     );
-    expect(
-      sentFromLine({ createdBy: "user", context: { version: 1, records: [], sentFrom } }),
-    ).toBe("[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay)");
+    const context = { version: 1 as const, records: [], sentFrom };
+    expect(sentFromLine({ createdBy: "user", context })).toBe(
+      "[T3] Sent from: my-phone (T3 mobile, Android, Pixel 9, via relay). A human sent this message.",
+    );
   });
 });

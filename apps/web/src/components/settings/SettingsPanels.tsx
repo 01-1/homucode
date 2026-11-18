@@ -1300,7 +1300,7 @@ export function ChatSettingsPanel() {
           serverScoped
           settingKeys={["statusLineEnabled"]}
           {...searchableSetting("status-line")}
-          description="Show a line in the top bar with the model, context, and usage limits, like Claude Code's status line."
+          description="Show the model, context, and usage limits in the top bar."
           resetAction={
             settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled ? (
               <SettingResetButton
@@ -1324,7 +1324,7 @@ export function ChatSettingsPanel() {
           serverScoped
           settingKeys={["statusLineCommand"]}
           {...searchableSetting("status-line-command")}
-          description="A command that reads Claude Code's status line JSON on stdin and prints the line. Leave empty for the built-in 01-1/statusline script, which needs bash and jq."
+          description="A command that reads Claude Code's status line JSON on stdin and prints a line of text, shown in place of the dials. Leave empty for the built-in status line."
           resetAction={
             settings.statusLineCommand !== DEFAULT_UNIFIED_SETTINGS.statusLineCommand ? (
               <SettingResetButton

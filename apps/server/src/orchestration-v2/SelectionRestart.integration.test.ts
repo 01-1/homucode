@@ -35,6 +35,10 @@ import { timestampedPrompt } from "./testkit/ReplayMessageTimestamps.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
+// A human's prompt as the provider reads it, with the sender line T3 appends.
+const sentByHuman = (prompt: string) =>
+  `${prompt}\n\n[T3] Sent from: unknown device. A human sent this message.`;
+
 const driver = ProviderDriverKind.make("codex");
 const providerInstanceId = ProviderInstanceId.make("codex-restart-test");
 const initialSelection = {
@@ -1205,7 +1209,7 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
           messages,
           second.messages
             .filter((message) => message.role === "user")
-            .map((message) => timestampedPrompt(message.text, message.createdAt)),
+            .map((message) => sentByHuman(timestampedPrompt(message.text, message.createdAt))),
         );
         assert.equal((yield* Ref.get(state)).closedSessionCount, mode === "pooled" ? 0 : 1);
         if (mode === "pooled") {
@@ -1233,7 +1237,7 @@ it.live.each(["active", "idle", "selection-command", "pooled", "separate-home"] 
           messages,
           third.messages
             .filter((message) => message.role === "user")
-            .map((message) => timestampedPrompt(message.text, message.createdAt)),
+            .map((message) => sentByHuman(timestampedPrompt(message.text, message.createdAt))),
         );
       }).pipe(Effect.provide(ProviderReplayHarness.layerWithRegistry({ name }, layerRegistry)));
     }),

@@ -4,13 +4,17 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
 import {
   buildStatusLineInput,
+  buildStatusLineStats,
   expandStatusLineLabel,
+  formatStatusLineSpan,
+  formatStatusLineTokens,
   parseAnsiLines,
   stampStatusLineInput,
   statusLineColorRole,
   statusLineModelName,
   reserveStatusLineText,
   splitStatusLineItems,
+  type StatusLineInputSource,
   type StatusLineItem,
 } from "./statusLine.ts";
 
@@ -273,65 +277,67 @@ const context: ContextWindowSnapshot = {
 };
 
 describe("buildStatusLineInput", () => {
-  it("maps a thread onto Claude Code's status line fields", () => {
-    const input = stampStatusLineInput(
-      buildStatusLineInput({
-        threadId: "thread-1",
-        cwd: "/home/vi/code",
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("claudeAgent"),
-          model: "claude-opus-5-5",
-          options: [
-            { id: "effort", value: "high" },
-            { id: "fastMode", value: false },
-          ],
-        },
-        providers: [
+  const source: StatusLineInputSource = {
+    threadId: "thread-1",
+    cwd: "/home/vi/code",
+    modelSelection: {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-opus-5-5",
+      options: [
+        { id: "effort", value: "high" },
+        { id: "fastMode", value: false },
+      ],
+    },
+    providers: [
+      {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        driver: ProviderDriverKind.make("claudeAgent"),
+        status: "ready",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        checkedAt: "2026-11-16T00:00:00.000Z",
+        version: "2.1.311",
+        models: [
           {
-            instanceId: ProviderInstanceId.make("claudeAgent"),
-            driver: ProviderDriverKind.make("claudeAgent"),
-            status: "ready",
-            enabled: true,
-            installed: true,
-            auth: { status: "authenticated" },
-            checkedAt: "2026-11-16T00:00:00.000Z",
-            version: "2.1.311",
-            models: [
-              {
-                slug: "claude-opus-5-5",
-                name: "Claude Opus 5.5",
-                isCustom: false,
-                capabilities: null,
-              },
-            ],
-            slashCommands: [],
-            skills: [],
-            usageLimits: {
-              checkedAt: "2026-11-16T00:00:00.000Z",
-              windows: [
-                {
-                  id: "weekly-fable",
-                  kind: "weekly",
-                  label: "Fable",
-                  modelIds: ["claude-fable-5-2"],
-                  usedPercent: 90,
-                },
-                {
-                  id: "session",
-                  kind: "session",
-                  label: "5h",
-                  usedPercent: 47.4,
-                  resetsAt: "2026-11-16T02:01:00.000Z",
-                },
-                { id: "weekly", kind: "weekly", label: "7d", usedPercent: 43 },
-              ],
-            },
+            slug: "claude-opus-5-5",
+            name: "Claude Opus 5.5",
+            isCustom: false,
+            capabilities: null,
           },
         ],
-        usageLimitSources: [],
-        contextWindow: context,
-        nowMs: Date.parse("2026-11-16T00:48:31.000Z"),
-      }),
+        slashCommands: [],
+        skills: [],
+        usageLimits: {
+          checkedAt: "2026-11-16T00:00:00.000Z",
+          windows: [
+            {
+              id: "weekly-fable",
+              kind: "weekly",
+              label: "Fable",
+              modelIds: ["claude-fable-5-2"],
+              usedPercent: 90,
+            },
+            {
+              id: "session",
+              kind: "session",
+              label: "5h",
+              usedPercent: 47.4,
+              resetsAt: "2026-11-16T02:01:00.000Z",
+            },
+            { id: "weekly", kind: "weekly", label: "7d", usedPercent: 43 },
+          ],
+        },
+      },
+    ],
+    usageLimitSources: [],
+    contextWindow: context,
+    nowMs: Date.parse("2026-11-16T00:48:31.000Z"),
+  };
+
+  it("maps a thread onto Claude Code's status line fields", () => {
+    const input = stampStatusLineInput(
+      buildStatusLineInput(source),
       "2026-11-16T00:00:00.000Z",
       Date.parse("2026-11-16T00:48:31.000Z"),
     );
@@ -361,6 +367,49 @@ describe("buildStatusLineInput", () => {
         seven_day: { used_percentage: 43 },
       },
     });
+  });
+
+  it("gives a client the same facts to draw itself", () => {
+    expect(buildStatusLineStats(source)).toEqual({
+      modelName: "Opus 5.5",
+      effort: "high",
+      fastMode: false,
+      version: "2.1.311",
+      cwd: "/home/vi/code",
+      contextPercent: 34,
+      contextTokens: 341_000,
+      contextMaxTokens: 1_000_000,
+      fiveHour: { usedPercent: 47, resetsAtMs: Date.parse("2026-11-16T02:01:00.000Z") },
+      weekly: { usedPercent: 43, resetsAtMs: null },
+      cachePercent: 99,
+      inputTokens: 338_000,
+      outputTokens: 21_400,
+    });
+  });
+});
+
+describe("formatStatusLineTokens", () => {
+  it.each([
+    [588, "588"],
+    [1_000, "1k"],
+    [68_800, "68.8k"],
+    [99_960, "100k"],
+    [341_000, "341k"],
+    [999_600, "1M"],
+    [1_234_567, "1.2M"],
+  ])("%d is %s", (tokens, text) => {
+    expect(formatStatusLineTokens(tokens)).toBe(text);
+  });
+});
+
+describe("formatStatusLineSpan", () => {
+  it.each([
+    [59_000, "0m"],
+    [48 * 60_000, "48m"],
+    [108 * 60_000, "1h48m"],
+    [(2 * 1440 + 4 * 60 + 59) * 60_000, "2d04h"],
+  ])("%d ms is %s", (ms, text) => {
+    expect(formatStatusLineSpan(ms)).toBe(text);
   });
 });
 

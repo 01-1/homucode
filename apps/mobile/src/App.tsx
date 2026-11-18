@@ -117,6 +117,7 @@ import {
   MADOHOMU_LAUNCH_SURFACE,
   madohomuLauncherEnvironmentId,
 } from "./features/madohomu/madohomuLauncherState";
+import { holdTouches, touchesHeld } from "./lib/strayTouchGuard";
 
 import "../global.css";
 
@@ -265,6 +266,7 @@ function SplashScreenCoordinator() {
     if (!canHide || hidden.current) return;
     hidden.current = true;
     settleLaunchSplashHomeRows();
+    holdTouches();
     void SplashScreen.hide();
     handOverLaunchSnapshot();
   }, [isReady, shellCachesRead, homeRowsPending, waitEnded]);
@@ -333,7 +335,7 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
           <ConnectDeviceApprovalCoordinator />
         </>
       )}
-      <GestureHandlerRootView className="flex-1">
+      <GestureHandlerRootView className="flex-1" onStartShouldSetResponderCapture={touchesHeld}>
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
             <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />

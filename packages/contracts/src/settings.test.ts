@@ -602,7 +602,7 @@ it("decodes setup behavior defaults without opting into optional features", () =
   expect(decodeServerSettings({})).toMatchObject({
     preferNativeSubagents: false,
     bareStopWaitEnabled: false,
-    claudeSteersSurviveStop: false,
+    claudeSteersSurviveStop: true,
     reaskPendingRequestsAfterRestart: false,
     applyModelChangeNow: false,
     messageSentFromEnabled: true,
