@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
-import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
+import { EnvironmentId, type ServerSettings } from "@t3tools/contracts";
 import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
 import {
   canUpdateMadoHomuDesktopLauncherAtom,
@@ -35,37 +35,29 @@ const WORKING_PLACEMENT_LABELS = {
 } as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
 
 export function MadoHomuSettings() {
-  const { target, scope } = useSettingsScope();
+  const { target, scope, search } = useSettingsScope();
   const { environments } = useEnvironments();
-  const targets = environments.filter(isConnectedWithConfig);
   const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   if (scope.kind === "project" || scope.kind === "checkout") return null;
-  const preferredId =
-    selectedId ?? (scope.kind === "environment" ? scope.environmentId : destination);
-  const selected =
-    targets.find((candidate) => candidate.environmentId === preferredId) ??
-    targets.find((candidate) => candidate.environmentId === target?.environmentId) ??
-    targets[0];
-  if (!selected)
-    return (
-      <SettingsSection id="madohomu" title="MadoHomu">
-        <p className="p-4 text-sm text-muted-foreground">
-          Connect an environment to configure MadoHomu.
-        </p>
-      </SettingsSection>
-    );
+  const machineId =
+    selectedId ??
+    (search.machine ? EnvironmentId.make(search.machine) : destination) ??
+    target?.environmentId ??
+    environments[0]?.environmentId;
+  const selected = environments.find((candidate) => candidate.environmentId === machineId);
+  const label = selected?.label ?? machineId;
   const environmentPicker =
-    targets.length > 1 ? (
+    environments.length > 1 || (machineId && !selected && environments.length > 0) ? (
       <SettingsRow
         title="Environment"
         control={
-          <Select value={selected.environmentId} onValueChange={setSelectedId}>
+          <Select value={machineId ?? null} onValueChange={setSelectedId}>
             <SelectTrigger aria-label="MadoHomu environment" size="sm">
-              <SelectValue>{selected.label}</SelectValue>
+              <SelectValue>{label}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
-              {targets.map(({ environmentId, label }) => (
+              {environments.map(({ environmentId, label }) => (
                 <SelectItem key={environmentId} value={environmentId}>
                   {label}
                 </SelectItem>
@@ -75,6 +67,18 @@ export function MadoHomuSettings() {
         }
       />
     ) : null;
+  if (!selected || !isConnectedWithConfig(selected)) {
+    return (
+      <SettingsSection id="madohomu" title="MadoHomu">
+        {environmentPicker}
+        <p className="p-4 text-sm text-muted-foreground">
+          {label
+            ? `Reconnect ${label} to configure MadoHomu.`
+            : "Connect an environment to configure MadoHomu."}
+        </p>
+      </SettingsSection>
+    );
+  }
   return (
     <EnvironmentMadoHomuSettings
       key={selected.environmentId}
