@@ -58,6 +58,7 @@ export function UsageProviderSettings({
                   <span className="break-all">
                     CLI Proxy{source.enabled ? "" : " · Disabled"}
                     {label !== source.url ? ` · ${source.url}` : ""}
+                    {source.providerRoute ? ` · Claude provider route ${source.providerRoute}` : ""}
                   </span>
                 }
                 control={

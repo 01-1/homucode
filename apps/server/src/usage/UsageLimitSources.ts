@@ -83,6 +83,7 @@ export const make = Effect.gen(function* () {
   ) {
     const checkedAt = DateTime.formatIso(yield* DateTime.now);
     const url = URL.parse(config.url);
+    const providerRoute = config.providerRoute ? URL.parse(config.providerRoute) : null;
     const base = {
       id,
       kind: config.kind,
@@ -92,6 +93,9 @@ export const make = Effect.gen(function* () {
             origin: url.origin,
             endpoint: `${url.origin}${url.pathname.replace(/(\/management\.html)?\/*$/i, "")}`,
           }
+        : {}),
+      ...(providerRoute
+        ? { providerRoute: providerRoute.origin + providerRoute.pathname.replace(/\/+$/, "") }
         : {}),
       checkedAt,
     } as const;

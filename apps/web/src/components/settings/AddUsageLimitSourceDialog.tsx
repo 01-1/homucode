@@ -1,4 +1,10 @@
-import type { EnvironmentId, SecretReference, UnifiedSettings } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type SecretReference,
+  type UnifiedSettings,
+  UsageLimitSourceConfig,
+} from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { useId, useState } from "react";
 
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
@@ -16,6 +22,8 @@ import { Input } from "../ui/input";
 import { sourceIdFromUrl } from "./AddUsageLimitSourceDialog.logic";
 import { SecretSourceInput, useSecretSources } from "./SecretSourceInput";
 import { Label } from "../ui/label";
+
+const isProviderRoute = Schema.is(UsageLimitSourceConfig.fields.providerRoute);
 
 /** Send the management key once to server secret storage; settings retain only a redaction marker. */
 export function AddUsageLimitSourceDialog({
@@ -35,16 +43,20 @@ export function AddUsageLimitSourceDialog({
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
+  const [providerRoute, setProviderRoute] = useState("");
   const secretSources = useSecretSources(environmentId);
   const [keyDraft, setKeyDraft] = useState<string | SecretReference>("");
   const [keyValid, setKeyValid] = useState(true);
   const managementKey = typeof keyDraft === "string" ? keyDraft.trim() : keyDraft;
   const trimmedUrl = url.trim();
-  const canSave = keyValid && trimmedUrl.length > 0 && managementKey !== "";
+  const route = providerRoute.trim();
+  const routeValid = route === "" || isProviderRoute(route);
+  const canSave = keyValid && trimmedUrl.length > 0 && managementKey !== "" && routeValid;
 
   const reset = () => {
     setLabel("");
     setUrl("");
+    setProviderRoute("");
     setKeyDraft("");
     setKeyValid(true);
   };
@@ -58,6 +70,7 @@ export function AddUsageLimitSourceDialog({
           kind: "cliproxy",
           ...(label.trim() ? { label: label.trim() } : {}),
           url: trimmedUrl,
+          ...(route ? { providerRoute: route } : {}),
           managementKey,
           enabled: true,
         },
@@ -114,6 +127,22 @@ export function AddUsageLimitSourceDialog({
                 onSecretChange={(secret) => setKeyDraft(secret ?? "")}
                 onValidityChange={setKeyValid}
               />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="usage-source-provider-route">Claude provider route (optional)</Label>
+              <Input
+                id="usage-source-provider-route"
+                placeholder="Defaults to the hub URL"
+                aria-invalid={!routeValid}
+                aria-describedby="usage-source-route-help"
+                value={providerRoute}
+                onChange={(event) => setProviderRoute(event.target.value)}
+              />
+              <p id="usage-source-route-help" className="text-xs text-muted-foreground">
+                {routeValid
+                  ? "Set this when the provider connects at a different URL from the quota source."
+                  : "Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment."}
+              </p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="usage-source-label">Label (optional)</Label>
