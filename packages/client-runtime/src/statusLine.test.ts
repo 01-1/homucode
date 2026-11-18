@@ -184,6 +184,13 @@ describe("splitStatusLineItems", () => {
     ]);
   });
 
+  it("drops a version by its muted label, whatever the provider calls it", () => {
+    const [line = []] = parseAnsiLines(
+      "\u001b[38;5;8mfast \u001b[38;5;183moff\u001b[38;5;8m, v\u001b[38;5;183magy_acp_server_20260818_01_RC01",
+    );
+    expect(splitStatusLineItems(line).map((item) => item.dropAt)).toEqual([0, 1]);
+  });
+
   it("gives a clock at the end of an item no extra comma", () => {
     const line = [{ text: "up 5s [9:05], v2", color: null, ...plain }];
     expect(splitStatusLineItems(line).map(texts)).toEqual([["up 5s", ","], ["[9:05]"], ["v2"]]);
@@ -224,8 +231,8 @@ describe("reserveStatusLineText", () => {
     ["999", "000"],
     ["1.0k", "00.0k"],
     ["101.3k", "000.0k"],
-    ["+3 ", "+00 "],
-    ["-120", "-000"],
+    ["+3 ", "+3 "],
+    ["-120", "-120"],
     ["O5.5 medium", "O5.5 medium"],
     ["Opus 5.5", "Opus 5.5"],
     ["2.1.325", "2.1.325"],

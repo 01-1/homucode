@@ -395,11 +395,23 @@ interface SeparatedItem {
 const segmentsText = (segments: ReadonlyArray<AnsiSegment>) =>
   segments.map((segment) => segment.text).join("");
 
-function dropLevel(kind: StatusLineItem["kind"], text: string): StatusLineItem["dropAt"] {
+function dropLevel(
+  kind: StatusLineItem["kind"],
+  segments: ReadonlyArray<AnsiSegment>,
+): StatusLineItem["dropAt"] {
   if (kind === "directory") return 3;
   if (kind === "clock") return 0;
+  const text = segmentsText(segments);
   if (HOST_PATTERN.test(text)) return 2;
-  return VERSION_PATTERN.test(text) ? 1 : 0;
+  // The built-in script's version is a muted `v` and whatever the provider reports after it.
+  const [label] = segments;
+  const labelled =
+    segments.length > 1 &&
+    label !== undefined &&
+    label.color !== null &&
+    statusLineColorRole(label.color) === "muted" &&
+    /^v(?:ersion)?\s*$/i.test(label.text);
+  return labelled || VERSION_PATTERN.test(text) ? 1 : 0;
 }
 
 // A ` |` between two parts of the line outranks a `,` inside one.
@@ -444,11 +456,9 @@ function mutedLabelStarts(line: ReadonlyArray<AnsiSegment>, text: string): Reado
 }
 
 /**
- * Splits a line into the items a client lays out one by one: a leading `~/…` or `/…` directory,
- * the `[HH:MM:SS]` clock, and the text between `, ` and ` | ` separators, split again where a
- * muted label starts a new value. The text on either side of the clock is joined by the line's
- * own comma, when it has one. A version, `user@host` and the directory are marked to be dropped
- * first, in that order.
+ * Splits a line into the items a client lays out one by one: a leading directory, the `[HH:MM:SS]`
+ * clock, and the text between `, ` and ` | `, split again where a muted label starts a new value.
+ * The text around the clock is joined by the line's own comma, when it has one.
  */
 export function splitStatusLineItems(
   line: ReadonlyArray<AnsiSegment>,
@@ -468,8 +478,8 @@ export function splitStatusLineItems(
     const from = end - text.slice(start, end).trimStart().length;
     const to = from + text.slice(from, end).trimEnd().length;
     if (from >= to) return;
-    const dropAt = dropLevel(kind, text.slice(from, to));
-    items.push({ kind, segments: sliceSegments(line, from, to), separator, dropAt });
+    const segments = sliceSegments(line, from, to);
+    items.push({ kind, segments, separator, dropAt: dropLevel(kind, segments) });
   };
   const pushValues = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
     let from = start;
@@ -548,11 +558,13 @@ export function expandStatusLineLabel(
   modelName: string | null = null,
 ): string | null {
   if (segment.color === null || statusLineColorRole(segment.color) !== "muted") {
-    const short = modelName === null ? "" : shortModelName(modelName);
-    if (modelName === null || short === modelName.trim() || segment.text.trim() !== short) {
-      return null;
-    }
-    return segment.text.replace(short, modelName.trim());
+    if (modelName === null) return null;
+    const name = modelName.trim();
+    const short = shortModelName(name);
+    // One letter could be anything, so only a short form of two or more is taken for the model.
+    return short.length > 1 && short !== name && segment.text.trim() === short
+      ? segment.text.replace(short, name)
+      : null;
   }
   // A label can share its segment with the punctuation before it, as in `), 5h `.
   const [, before, label, after] = /^([^a-z0-9]*)(\S+)(\s*)$/i.exec(segment.text) ?? [];
@@ -560,8 +572,8 @@ export function expandStatusLineLabel(
   return expanded === undefined ? null : `${before}${expanded}${after}`;
 }
 
-// A value that changes while a thread runs: a percentage, duration, count, or signed count.
-const CHANGING_VALUE = /^(?:\d+(?:\.\d+)?%|(?:\d+[dhms]){1,2}|\d+(?:\.\d+)?[kM]|\d+|[+-]\d+)$/;
+// A value that ticks while a thread runs: a percentage, duration, or count.
+const CHANGING_VALUE = /^(?:\d+(?:\.\d+)?%|(?:\d+[dhms]){1,2}|\d+(?:\.\d+)?[kM]|\d+)$/;
 
 /**
  * The segment's text with each changing value given room: every whole number in it is held at

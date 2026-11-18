@@ -96,7 +96,7 @@ function Percent(props: { readonly value: string }) {
     <>
       <span className="group-data-[room=tight]/status-line:hidden">{props.value}% </span>
       <span
-        className="inline-grid h-4 w-8 place-items-center rounded-xs bg-current/15 align-[calc((1cap-1rem)/2)] group-data-[room=tight]/status-line:w-auto group-data-[room=tight]/status-line:px-1.5 group-data-[room=tight]/status-line:align-baseline"
+        className="inline-grid h-4 w-8 place-items-center rounded-xs bg-current/25 align-[calc((1cap-1rem)/2)] group-data-[room=tight]/status-line:w-auto group-data-[room=tight]/status-line:px-1.5 group-data-[room=tight]/status-line:align-baseline"
         style={{
           backgroundImage: `linear-gradient(90deg, ${BAR_FILL} ${filled}, transparent ${filled})`,
         }}
@@ -172,20 +172,27 @@ const SHOWN = [
   "group-data-[drop=3]/status-line:inline",
 ];
 
+// A ` |` stands between two parts of the line, so it keeps the item gap on both sides.
+const PIPE_GAP =
+  "ps-1.5 group-data-[room=normal]/status-line:ps-2.5 group-data-[room=wide]/status-line:ps-3.5";
+
 /** The separator after an item, which depends on what the line has dropped. */
 function Separator(props: { readonly item: StatusLineItem }) {
   const { separators } = props.item;
-  return [...new Set(separators)].map((separator, index) =>
-    separator.length === 0 ? null : (
+  return [...new Set(separators)].map((separator, index) => {
+    if (separator.length === 0) return null;
+    const shown = SHOWN.filter((_, level) => separators[level] === separator).join(" ");
+    const pipe = separator.some((segment) => segment.text.includes("|")) ? PIPE_GAP : "";
+    return (
       <span
         // oxlint-disable-next-line react/no-array-index-key -- separators have no identity beyond order
         key={index}
-        className={`hidden ${SHOWN.filter((_, level) => separators[level] === separator).join(" ")}`}
+        className={`hidden ${shown} ${pipe}`}
       >
         <Segments line={separator} />
       </span>
-    ),
-  );
+    );
+  });
 }
 
 /**
@@ -259,9 +266,9 @@ function fitRow(row: HTMLElement) {
     row.dataset.room = room;
     row.dataset.drop = String(drop);
     const directory = itemsWidth(row, ["directory"]);
+    const rest = itemsWidth(row, ["before-clock", "after-clock", "clock"]);
     const floor = Math.min(directory, DIRECTORY_FLOOR_PX);
     row.style.setProperty("--status-line-directory-floor", `${floor}px`);
-    const rest = itemsWidth(row, ["before-clock", "after-clock", "clock"]);
     if ((shorten ? floor : directory) + rest <= space) return;
   }
   // The cut tail ends in an ellipsis, which needs up to 1em beside the items before the clock.
@@ -319,8 +326,8 @@ function StatusLineRow(props: {
       <div className="min-w-0 overflow-hidden text-ellipsis">
         {items.map((item, index) =>
           item === directory || item === clock ? null : (
-            // oxlint-disable-next-line react/no-array-index-key -- items have no identity beyond order
             <StatusLineSlot
+              // oxlint-disable-next-line react/no-array-index-key -- items have no identity beyond order
               key={index}
               item={item}
               beforeClock={index < clockIndex}
