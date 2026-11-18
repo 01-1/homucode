@@ -27,10 +27,15 @@ export function useOlderSettledShelf(input: {
   readonly expanded: boolean;
   /** Rows the shelf shows; pages are read until it lists that many. */
   readonly visibleCount: number;
+  /** Drops the pages read so far when collapsed, so opening again starts from the cut. */
+  readonly forgetWhenCollapsed?: boolean;
 }) {
   const scopes = sortOlderSettledScopes(input.scopes);
   const scopeKey = JSON.stringify(scopes);
   const [requested, setRequested] = useState({ scopeKey, pages: NO_PAGES });
+  if (input.forgetWhenCollapsed === true && !input.expanded && requested.pages !== NO_PAGES) {
+    setRequested({ scopeKey, pages: NO_PAGES });
+  }
   const pages = requested.scopeKey === scopeKey && input.expanded ? requested.pages : NO_PAGES;
   const shelfScopes = scopes.map((scope) => ({
     scope,

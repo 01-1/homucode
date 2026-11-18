@@ -598,8 +598,12 @@ function useSidebarThreads(input: {
     scopes: olderSettledScopeList,
     expanded: searchSettledCount > 0,
     visibleCount: searchSettledCount,
+    forgetWhenCollapsed: true,
   });
-  const searchListedSettledThreads = partition.settledThreads.filter(searchSettledShelf.isListed);
+  // Rows the shelf's own pages hold are already listed in search results.
+  const searchListedSettledThreads = partition.settledThreads.filter(
+    (thread) => searchSettledShelf.isListed(thread) || olderSettledShelf.isListed(thread),
+  );
   useOlderSettledShelfGrowth(searchSettledShelf, searchListedSettledThreads);
   const settledFolderThreadCount = threadFolderBlocks
     .filter((block) => block.settled)
@@ -1293,9 +1297,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const hasThreadSearchQuery = threadSearchQuery.trim().length > 0;
   const isSearchingThreads = hasThreadSearchQuery || sidebarSearchFiltersNarrowList(searchFilters);
   const canClearThreadSearch = hasThreadSearchQuery || countSidebarSearchFilters(searchFilters) > 0;
-  // Pages a search loaded end with it, however it ends.
-  if (!isSearchingThreads && searchSettled.count !== 0)
-    setSearchSettled({ scopeKey: "", count: 0 });
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1311,6 +1312,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   });
   const projectScopeKeys = revealWidensScope ? [] : chosenProjectScopeKeys;
   const projectScopeKey = projectScopeKeys.length === 0 ? null : projectScopeKeys.join("\n");
+  // Pages a search loaded end with it, however it ends, and stay with the scope they were read for.
+  const searchSettledActive =
+    isSearchingThreads && searchSettled.scopeKey === (projectScopeKey ?? "");
+  if (!searchSettledActive && searchSettled.count !== 0) {
+    setSearchSettled({ scopeKey: "", count: 0 });
+  }
   const toggleProjectScopeKey = (key: string) =>
     setProjectScopeKeys(
       projectScopeKeys.includes(key)
@@ -1529,10 +1536,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null,
     keepEmptyFolders: (group) =>
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
-    searchSettledCount:
-      isSearchingThreads && searchSettled.scopeKey === (projectScopeKey ?? "")
-        ? searchSettled.count
-        : 0,
+    searchSettledCount: searchSettledActive ? searchSettled.count : 0,
   });
 
   const searchCandidates =
@@ -1630,10 +1634,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     searchResultsShown.key === searchResultsKey
       ? searchResultsShown.count
       : SEARCH_RESULTS_PAGE_COUNT;
-  // The highlighted row stays mounted when late matches push it past the page, and rows
-  // shown that way stay shown.
+  // A new search starts from the first page. The highlighted row stays mounted when late
+  // matches push it past the page, and rows shown that way stay shown.
   const shownSearchResultCount = Math.max(pagedSearchResultCount, highlightedResultIndex + 1);
-  if (shownSearchResultCount > pagedSearchResultCount) {
+  if (
+    searchResultsShown.key !== searchResultsKey ||
+    shownSearchResultCount > searchResultsShown.count
+  ) {
     setSearchResultsShown({ key: searchResultsKey, count: shownSearchResultCount });
   }
   const threadSearchResults = orderedSearchResults.slice(0, shownSearchResultCount);
