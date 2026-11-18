@@ -66,6 +66,7 @@ import {
   runThreadFolderMenuAction,
 } from "../../hooks/threadFolderMenu";
 import { readLocalApi } from "../../localApi";
+import { madohomuNeedsUser as needsUser } from "../../madohomu";
 import { useServerConfigs } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
@@ -78,7 +79,6 @@ import { sidebarProviderEntriesAtom } from "../Sidebar";
 import {
   buildBulkTitleRegenerationContextMenuItem,
   isSidebarNestedLinkClick,
-  resolveSidebarThreadStatus,
   isTrailingDoubleClick,
   resolveSidebarSweepKeys,
   sidebarThreadKeyAtY,
@@ -126,11 +126,6 @@ const SETTLED_EXPANDED_KEY = "t3code:madohomu:settled-expanded";
 const COLLAPSED_KEY = "t3code:madohomu:collapsed-sections";
 const COLLAPSED_SCHEMA = Schema.Record(Schema.String, Schema.Boolean);
 const NO_COLLAPSED: { readonly [id: string]: boolean } = {};
-/** A row whose status label asks for the user: an approval, a question or a waiting guest. */
-const needsUser = (thread: SidebarThreadSummary) => {
-  const status = resolveSidebarThreadStatus(thread);
-  return status === "approval" || status === "input" || status === "request";
-};
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 // useSensor memoizes on its options, so they live outside render.
 const POINTER_SENSOR_OPTIONS = { distance: 6, onAttach: () => {}, onFinish: () => {} };
@@ -914,13 +909,20 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             >
               <SettingsIcon aria-hidden className="size-4" />
             </MenuTrigger>
-            <MenuPopup align="end">
+            {/* Returning focus to the gear would blur, and so cancel, a new section's name. */}
+            <MenuPopup
+              align="end"
+              finalFocus={() => useMadoHomuRenamingSection.getState().draft === null}
+            >
               <MenuSub>
                 <MenuSubTrigger disabled={!actions.canWrite}>Change project…</MenuSubTrigger>
                 <MenuSubPopup>
                   <MadoHomuProjectMenuItems environmentId={environmentId} onChosen={closeSheet} />
                 </MenuSubPopup>
               </MenuSub>
+              <MenuItem disabled={!enabled || !project || !canEdit} onClick={addSection}>
+                New section…
+              </MenuItem>
               <MenuItem
                 onClick={() => {
                   closeSheet();
@@ -995,7 +997,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                         onCancelRename={() => setRenamingSection(null)}
                         onMenu={(position) => void openSectionMenu(custom, position)}
                       />,
-                      dragging !== null ? "Drag threads here." : null,
+                      dragging !== null
+                        ? "Drag threads here."
+                        : "Drag threads here, or use Move to in a thread's menu.",
                     );
                   }
                   return section(
