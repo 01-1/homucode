@@ -1528,22 +1528,22 @@ const CODEX_T3_MCP_SERVER = "t3-code";
 // `t3-code-direct.<tool>`; t3McpToolPresentation.ts must keep resolving that form.
 const CODEX_T3_DIRECT_MCP_SERVER = "t3-code-direct";
 const CODEX_DIRECT_ONLY_T3_TOOLS = ["t3_thread_wait", "delegate_task"];
-const isCodexThreadStartApprovalMetadata = Schema.is(
+const isCodexT3ToolApproval = Schema.is(
   Schema.Struct({
-    codex_approval_kind: Schema.Literal("mcp_tool_call"),
-    tool_name: Schema.Literals(["delegate_task", "t3_thread_launch"]),
+    mode: Schema.Literal("form"),
+    serverName: Schema.Literals([CODEX_T3_MCP_SERVER, CODEX_T3_DIRECT_MCP_SERVER]),
+    _meta: Schema.Struct({
+      codex_approval_kind: Schema.Literal("mcp_tool_call"),
+      codex_requires_user_input: Schema.optionalKey(Schema.Literal(false)),
+      tool_name: Schema.NonEmptyString,
+    }),
+    requestedSchema: Schema.Struct({
+      type: Schema.Literal("object"),
+      properties: Schema.Record(Schema.String, Schema.Never),
+      required: Schema.optionalKey(Schema.Array(Schema.Never)),
+    }),
   }),
 );
-
-function isCodexThreadStartApproval(payload: CodexSchema.McpServerElicitationRequestParams) {
-  if (payload.mode !== "form" || !isCodexThreadStartApprovalMetadata(payload._meta)) {
-    return false;
-  }
-  return (
-    payload.serverName ===
-    (payload._meta.tool_name === "delegate_task" ? CODEX_T3_DIRECT_MCP_SERVER : CODEX_T3_MCP_SERVER)
-  );
-}
 
 function codexThreadRuntimeParams(input: {
   readonly threadId: ThreadId | null;
@@ -6261,9 +6261,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   content: { approval: "once" },
                 } satisfies CodexSchema.McpServerElicitationRequestResponse;
               }
-              // The T3 endpoint checks the caller's permissions before starting any thread.
+              // The authenticated T3 endpoint checks tool permissions itself.
               if (
-                isCodexThreadStartApproval(payload) &&
+                isCodexT3ToolApproval(payload) &&
                 (yield* mcpSessions.read(context.input.threadId)) !== undefined
               ) {
                 return {

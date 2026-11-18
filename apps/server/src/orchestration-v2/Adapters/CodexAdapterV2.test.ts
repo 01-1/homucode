@@ -1734,11 +1734,15 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     { runtimeMode: "full-access", turnIdKind: "present", kind: "external" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "launch" },
-    { runtimeMode: "full-access", turnIdKind: "present", kind: "other-direct-tool" },
-    { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate-wrong-server" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "thread-read" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "thread-send" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "third-party-tool" },
     { runtimeMode: "full-access", turnIdKind: "present", kind: "delegate-no-session" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-user-input" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-custom-elicitation" },
+    { runtimeMode: "full-access", turnIdKind: "present", kind: "t3-tool-form-fields" },
     { runtimeMode: "auto-accept-edits", turnIdKind: "null", kind: "browser" },
-    { runtimeMode: "auto-accept-edits", turnIdKind: "present", kind: "delegate" },
+    { runtimeMode: "auto-accept-edits", turnIdKind: "present", kind: "thread-send" },
   ] as const)(
     "handles MCP access approvals in $runtimeMode with a $turnIdKind turn id for $kind",
     ({ runtimeMode, turnIdKind, kind }) =>
@@ -1752,26 +1756,44 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           external: "deployment",
           delegate: "t3-code-direct",
           launch: "t3-code",
-          "other-direct-tool": "t3-code-direct",
-          "delegate-wrong-server": "t3-code",
+          "thread-read": "t3-code",
+          "thread-send": "t3-code",
+          "third-party-tool": "deployment",
           "delegate-no-session": "t3-code-direct",
+          "t3-user-input": "t3-code",
+          "t3-custom-elicitation": "t3-code",
+          "t3-tool-form-fields": "t3-code",
         }[kind];
-        const toolName =
-          kind === "browser" || kind === "external"
-            ? undefined
-            : kind === "launch"
-              ? "t3_thread_launch"
-              : kind === "other-direct-tool"
-                ? "t3_thread_wait"
-                : "delegate_task";
+        const toolName = {
+          browser: undefined,
+          external: undefined,
+          delegate: "delegate_task",
+          launch: "t3_thread_launch",
+          "thread-read": "t3_thread_read",
+          "thread-send": "t3_thread_send",
+          "third-party-tool": "delegate_task",
+          "delegate-no-session": "delegate_task",
+          "t3-user-input": "t3_thread_send",
+          "t3-custom-elicitation": undefined,
+          "t3-tool-form-fields": "t3_thread_send",
+        }[kind];
         const message =
           kind === "browser"
             ? "Allow ChatGPT to use Google Chrome?"
             : toolName === undefined
-              ? "Deploy to production?"
+              ? "Confirm this request?"
               : `Allow the ${serverName} MCP server to run tool "${toolName}"?`;
-        const refused = kind !== "browser" && kind !== "delegate" && kind !== "launch";
-        const hasT3Mcp = toolName !== undefined && kind !== "delegate-no-session";
+        const refused = [
+          "external",
+          "third-party-tool",
+          "delegate-no-session",
+          "t3-user-input",
+          "t3-custom-elicitation",
+          "t3-tool-form-fields",
+        ].includes(kind);
+        const hasT3Mcp =
+          (toolName !== undefined && kind !== "delegate-no-session") ||
+          kind === "t3-custom-elicitation";
         if (hasT3Mcp) {
           yield* (yield* McpProviderSessions.McpProviderSessions).set({
             environmentId: EnvironmentId.make("environment-codex-mcp"),
@@ -1825,12 +1847,21 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                           _meta: {
                             codex_approval_kind: "mcp_tool_call",
                             tool_name: toolName,
+                            ...(kind === "t3-user-input"
+                              ? { codex_requires_user_input: true }
+                              : {}),
                           },
                         }
                       : {}),
                     requestedSchema:
                       kind !== "browser"
-                        ? { type: "object", properties: {} }
+                        ? {
+                            type: "object",
+                            properties:
+                              kind === "t3-tool-form-fields"
+                                ? { confirm: { type: "boolean" } }
+                                : {},
+                          }
                         : {
                             type: "object",
                             properties: { approval: { type: "string", enum: ["once", "always"] } },
