@@ -23,11 +23,32 @@ import { serverEnvironment } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
-import { madohomuDropPatch, type MadoHomuDrop } from "./madohomuList";
+import { madohomuDropPatch, madohomuPlacePatch, type MadoHomuDrop } from "./madohomuList";
+
+/** Settings and filing only, for screens that must not subscribe to every thread or task. */
+export function useMadoHomuFiling(environmentId: EnvironmentId) {
+  const settings = useEnvironmentServerConfig(environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS;
+  const update = useAtomCommand(serverEnvironment.updateSettings);
+  const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const save = async (patch: ServerSettingsPatch) =>
+    (await update({ environmentId, input: { patch } }))._tag === "Success";
+  const setThreadPlace = (threadId: ThreadId, place: { readonly section: string | null } | null) =>
+    save(madohomuPlacePatch(settings, threadId, place));
+  /** Makes a section and files the thread at its end, in one save. */
+  const moveToNewSection = (threadId: ThreadId, name: string) => {
+    const id = uuidv4();
+    return save({
+      madohomuSections: [...settings.madohomuSections, { id, name }],
+      ...madohomuPlacePatch(settings, threadId, { section: id }),
+    });
+  };
+  return { settings, canWrite, save, setThreadPlace, moveToNewSection };
+}
 
 export function useMadoHomuActions(environmentId: EnvironmentId) {
   const config = useEnvironmentServerConfig(environmentId);
-  const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
+  const { settings, canWrite, save, setThreadPlace, moveToNewSection } =
+    useMadoHomuFiling(environmentId);
   const projects = useProjects();
   const threads = useThreadShells();
   const project =
@@ -43,18 +64,13 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
   );
   const task =
     taskQuery.data?.tasks.find((row) => row.id === settings.madohomuMorningBriefTaskId) ?? null;
-  const update = useAtomCommand(serverEnvironment.updateSettings);
   const create = useAtomCommand(threadEnvironment.create);
   const upsert = useAtomCommand(serverEnvironment.upsertScheduledTask);
   const setEnabled = useAtomCommand(serverEnvironment.setScheduledTaskEnabled);
-  const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canSchedule = useAtomValue(
     serverEnvironment.upsertScheduledTask.permissionAtom(environmentId),
   );
-
-  const save = async (patch: ServerSettingsPatch) =>
-    (await update({ environmentId, input: { patch } }))._tag === "Success";
 
   const createThread = async (
     title: string = MADOHOMU_NEW_THREAD_TITLE,
@@ -82,19 +98,6 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
       ? threadId
       : null;
   };
-
-  const entryOf = (threadId: ThreadId) =>
-    settings.madohomuThreads[threadId] ?? { icon: null, prompt: "" };
-
-  const setThreadPlace = (threadId: ThreadId, place: { readonly section: string | null } | null) =>
-    save({
-      madohomuThreads: {
-        [threadId]:
-          place === null
-            ? { ...entryOf(threadId), pinned: false, section: null }
-            : { ...entryOf(threadId), pinned: true, section: place.section },
-      },
-    });
 
   const setThreadOrder = (madohomuThreadOrder: ThreadId[]) => save({ madohomuThreadOrder });
 
@@ -198,6 +201,7 @@ export function useMadoHomuActions(environmentId: EnvironmentId) {
     createThread,
     setMorningBrief,
     setThreadPlace,
+    moveToNewSection,
     setThreadOrder,
     dropThread,
     addSection,

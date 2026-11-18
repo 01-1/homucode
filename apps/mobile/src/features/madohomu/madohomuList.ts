@@ -1,7 +1,9 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   groupMadoHomuThreads,
+  isMadoHomuThreadPinned,
   MADOHOMU_SCRATCH_PAGE,
+  moveMadoHomuThreadsLast,
   pageMadoHomuRows,
   reorderMadoHomuThreads,
   type MadoHomuGroup,
@@ -11,6 +13,7 @@ import type {
   EnvironmentId,
   MadoHomuThreadSettings,
   ServerSettings,
+  ServerSettingsPatch,
   ThreadId,
 } from "@t3tools/contracts";
 
@@ -91,9 +94,16 @@ export function buildMadoHomuListRows(input: {
   readonly isWorking?: (thread: EnvironmentThreadShell) => boolean;
 }): MadoHomuListRow[] {
   const rows: MadoHomuListRow[] = [];
+  const { isWorking } = input;
   const groups = groupMadoHomuThreads(input.threads, input.settings, {
     now: input.now,
-    ...(input.isWorking ? { isWorking: input.isWorking } : {}),
+    // A thread waiting on the user, a guest's request included, is never "working".
+    ...(isWorking
+      ? {
+          isWorking: (thread: EnvironmentThreadShell) =>
+            !madohomuNeedsUser(thread) && isWorking(thread),
+        }
+      : {}),
   });
   for (const group of groups) {
     if (group.threads.length === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
@@ -114,10 +124,7 @@ export function buildMadoHomuListRows(input: {
     });
     if (expanded === false) continue;
     if (group.threads.length === 0) {
-      // An empty custom section shows only its heading.
-      if (group.kind === "pinned") {
-        rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
-      }
+      rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
       continue;
     }
     const { shown, more } =
@@ -256,5 +263,34 @@ export function madohomuDropPatch(
   return {
     madohomuThreadOrder: drop.order,
     madohomuThreads: { [threadId]: entry } as Record<ThreadId, MadoHomuThreadSettings>,
+  };
+}
+
+/**
+ * Files a thread in Pinned or a custom section (`null` is Scratch). A thread that changes place
+ * goes to the end of its new section, as on web.
+ */
+export function madohomuPlacePatch(
+  settings: Pick<ServerSettings, "madohomuThreads" | "madohomuThreadOrder">,
+  threadId: ThreadId,
+  place: { readonly section: string | null } | null,
+): ServerSettingsPatch {
+  const saved = settings.madohomuThreads[threadId];
+  const entry = saved ?? { icon: null, prompt: "" };
+  if (place === null) {
+    return { madohomuThreads: { [threadId]: { ...entry, pinned: false, section: null } } };
+  }
+  const unchanged = isMadoHomuThreadPinned(saved) && (entry.section ?? null) === place.section;
+  return {
+    madohomuThreads: { [threadId]: { ...entry, pinned: true, section: place.section } },
+    ...(unchanged
+      ? {}
+      : {
+          madohomuThreadOrder: moveMadoHomuThreadsLast(
+            settings.madohomuThreadOrder,
+            [threadId],
+            [threadId],
+          ),
+        }),
   };
 }

@@ -42,12 +42,20 @@ function useNewMadoHomuProject(environmentId: EnvironmentId, onChosen?: () => vo
     });
 }
 
-export function MadoHomuProjectPicker({ environmentId }: { environmentId: EnvironmentId }) {
+export function MadoHomuProjectPicker({
+  environmentId,
+  showNew = true,
+}: {
+  environmentId: EnvironmentId;
+  /** The no-project screen has its own "New project…" button above the picker. */
+  showNew?: boolean;
+}) {
   const actions = useMadoHomuActions(environmentId);
   const projects = useProjects().filter(
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
   const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
+  if (!showNew && projects.length === 0) return null;
   return (
     <Menu>
       <MenuTrigger
@@ -64,7 +72,7 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup align="start">
-        <MadoHomuProjectMenuItems environmentId={environmentId} showClear />
+        <MadoHomuProjectMenuItems environmentId={environmentId} showNew={showNew} showClear />
       </MenuPopup>
     </Menu>
   );
@@ -74,10 +82,12 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
 export function MadoHomuProjectMenuItems({
   environmentId,
   onChosen,
+  showNew = true,
   showClear = false,
 }: {
   environmentId: EnvironmentId;
   onChosen?: () => void;
+  showNew?: boolean;
   /** Settings' picker only: the gear menu leaves it out so a slip cannot empty the view. */
   showClear?: boolean;
 }) {
@@ -89,11 +99,15 @@ export function MadoHomuProjectMenuItems({
   const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
   return (
     <>
-      <MenuItem onClick={newProject}>
-        <FolderPlusIcon />
-        New project…
-      </MenuItem>
-      {projects.length > 0 && <MenuSeparator />}
+      {showNew && (
+        <>
+          <MenuItem onClick={newProject}>
+            <FolderPlusIcon />
+            New project…
+          </MenuItem>
+          {projects.length > 0 && <MenuSeparator />}
+        </>
+      )}
       <MenuRadioGroup
         value={current?.id ?? ""}
         onValueChange={(value) => {
@@ -140,7 +154,7 @@ export function MadoHomuNoProject({ environmentId }: { environmentId: Environmen
         <FolderPlusIcon />
         New project…
       </Button>
-      <MadoHomuProjectPicker environmentId={environmentId} />
+      <MadoHomuProjectPicker environmentId={environmentId} showNew={false} />
     </div>
   );
 }

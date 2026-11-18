@@ -5,7 +5,6 @@ import {
   madohomuListedThreads,
   resolveMadoHomuSelection,
 } from "@t3tools/client-runtime/madohomu";
-import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
@@ -22,6 +21,7 @@ import { useSnoozeWakeClock } from "../Sidebar.logic";
 import {
   madohomuCreatedThreadIdsAtom,
   madohomuFirstRowId,
+  madohomuIsWorking,
   madohomuNamedThread,
   startMadoHomuThread,
 } from "../../madohomu";
@@ -45,7 +45,7 @@ export function useMadoHomuThreads(environmentId: EnvironmentId) {
   const threads = madohomuListedThreads(projectThreads, settings, search.threadId);
   const clockMs = useSnoozeWakeClock(threads);
   const now = new Date(clockMs).toISOString();
-  const groups = groupMadoHomuThreads(threads, settings, { now, isWorking: isThreadWorking });
+  const groups = groupMadoHomuThreads(threads, settings, { now, isWorking: madohomuIsWorking });
   return { settings, project, threads, groups, now };
 }
 

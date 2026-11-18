@@ -758,7 +758,16 @@ export function NewTaskDraftScreen(props: {
       The shared content is no longer in the inbox. You can continue editing this task draft.
     </Text>
   ) : null;
-  const hero = flow.isScratchDraft ? (
+  // A MadoHomu draft stays in MadoHomu's project: no project or environment to switch to.
+  const lockedToMadoHomu = props.madohomu === true;
+  const hero = lockedToMadoHomu ? (
+    <View className="items-center gap-2 px-6" testID="new-task-hero">
+      <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
+        What should we build?
+      </Text>
+      {shareUnavailableNotice}
+    </View>
+  ) : flow.isScratchDraft ? (
     <View className="items-center gap-2 px-6" testID="new-task-hero">
       <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
         What should we work on?
@@ -946,7 +955,7 @@ export function NewTaskDraftScreen(props: {
           />
         </View>
       ) : null}
-      {viewportHeight < SHORT_DRAFT_VIEWPORT_HEIGHT ? contextControls : null}
+      {viewportHeight < SHORT_DRAFT_VIEWPORT_HEIGHT && !lockedToMadoHomu ? contextControls : null}
       {flow.canChooseWorkspace ? workspaceControls : null}
     </View>
   );
@@ -955,7 +964,7 @@ export function NewTaskDraftScreen(props: {
     return (
       <ThreadScreenFallback header={<AppBar title="New thread" onBack={goBack} />}>
         <View className="flex-1 justify-end gap-3 p-4">
-          {environmentControl}
+          {lockedToMadoHomu ? null : environmentControl}
           <Text className="text-foreground-muted">
             Your draft is saved on this device. Connect to an environment to choose its first model.
           </Text>

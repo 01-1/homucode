@@ -1,15 +1,12 @@
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { LegendList } from "@legendapp/list/react-native";
-import type { MenuAction } from "@react-native-menu/menu";
 import {
   findUntouchedMadoHomuThread,
   groupMadoHomuThreads,
-  MADOHOMU_SCRATCH_LABEL,
   MADOHOMU_SCRATCH_PAGE,
   madohomuEmptyPinnedText,
   madohomuIconColor,
-  isMadoHomuThreadPinned,
 } from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -17,7 +14,6 @@ import {
   AuthOrchestrationOperateScope,
   EnvironmentId,
   isListedThreadLineage,
-  MADOHOMU_SECTION_NAME_MAX_LENGTH,
   type ThreadId,
 } from "@t3tools/contracts";
 import { type ReactNode, useRef, useState } from "react";
@@ -57,8 +53,8 @@ import {
 import { MadoHomuIcon } from "./MadoHomuIcon";
 import { MadoHomuProjectPicker } from "./MadoHomuProjectPicker";
 import { MadoHomuReorderList, type MadoHomuReorderThread } from "./MadoHomuReorderList";
-import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
 import { useMadoHomuActions } from "./useMadoHomuActions";
+import { promptSectionName, useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
 
 export function MadoHomuRouteScreen(props: StaticScreenProps<{ readonly environmentId: string }>) {
   const environmentId = EnvironmentId.make(props.route.params.environmentId);
@@ -70,18 +66,6 @@ const T3_PIN_MENU_TITLES = { pin: "Pin in T3 Code", unpin: "Unpin in T3 Code" } 
 // Sections flipped from their default open state, kept while the app runs so leaving the screen
 // keeps them.
 let rememberedToggled: ReadonlySet<string> = new Set();
-
-function promptSectionName(title: string, initialValue: string, onName: (name: string) => void) {
-  Dialog.prompt({
-    title,
-    initialValue,
-    confirmText: "Save",
-    onConfirm: (value) => {
-      const name = value.trim().slice(0, MADOHOMU_SECTION_NAME_MAX_LENGTH);
-      if (name) onName(name);
-    },
-  });
-}
 
 /** Pinned and custom sections for Reorder mode, and the other sections' headers to dim. */
 function reorderSectionsOf(
@@ -113,7 +97,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const insets = useSafeAreaInsets();
   // The bar covers the top of the body on iOS, so the fixed block clears it itself.
   const barOverlap = useBarOverlap();
-  const [editing, setEditing] = useState<ThreadId | null>(null);
   const [toggled, setToggled] = useState<ReadonlySet<string>>(() => rememberedToggled);
   const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
   const [choosingProject, setChoosingProject] = useState(false);
@@ -177,7 +160,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     queuedThreadKeys,
     isWorking: isThreadWorking,
   });
-  const edited = threads.find((thread) => thread.id === editing);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId, madohomu: true }));
   const create = async () => {
@@ -246,6 +228,13 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     });
     return true;
   };
+  const threadMenu = useMadoHomuThreadMenu({
+    environmentId,
+    actions,
+    canEdit,
+    onReorder: () => setReordering(true),
+    onStep: stepThread,
+  });
   const leadingOf = (thread: EnvironmentThreadShell) => {
     const entry = settings.madohomuThreads[thread.id];
     return (
@@ -255,92 +244,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         size={18}
       />
     );
-  };
-
-  const madohomuMenu = (row: Extract<MadoHomuListRow, { type: "thread" }>): MenuAction[] => {
-    const entry = settings.madohomuThreads[row.row.item.thread.id];
-    const pinned = isMadoHomuThreadPinned(entry);
-    const filedIn = settings.madohomuSections.some((section) => section.id === entry?.section)
-      ? entry?.section
-      : null;
-    const disabled = { disabled: !canEdit };
-    const manual = row.kind === "pinned" || row.kind === "custom";
-    return [
-      {
-        id: "extra:move",
-        title: "Move to",
-        image: "folder",
-        subactions: [
-          {
-            id: "extra:section:",
-            title: "Pinned",
-            image: "pin",
-            state: pinned && filedIn === null ? "on" : "off",
-            attributes: disabled,
-          },
-          ...settings.madohomuSections.map((section): MenuAction => ({
-            id: `extra:section:${section.id}`,
-            title: section.name,
-            state: pinned && filedIn === section.id ? "on" : "off",
-            attributes: disabled,
-          })),
-          {
-            id: "extra:scratch",
-            title: MADOHOMU_SCRATCH_LABEL,
-            state: pinned ? "off" : "on",
-            attributes: disabled,
-          },
-          {
-            id: "extra:new-section",
-            title: "New section…",
-            image: "plus",
-            attributes: disabled,
-          },
-        ],
-      },
-      ...(manual
-        ? [
-            {
-              id: "extra:reorder",
-              title: "Reorder…",
-              image: "arrow.up.arrow.down",
-              attributes: disabled,
-            } satisfies MenuAction,
-            {
-              id: "extra:up",
-              title: "Move up",
-              image: "arrow.up",
-              attributes: { disabled: !canEdit || !row.canMoveUp },
-            } satisfies MenuAction,
-            {
-              id: "extra:down",
-              title: "Move down",
-              image: "arrow.down",
-              attributes: { disabled: !canEdit || !row.canMoveDown },
-            } satisfies MenuAction,
-          ]
-        : []),
-      { id: "extra:edit", title: "Edit…", image: "slider.horizontal.3", attributes: disabled },
-    ];
-  };
-  const handleMadoHomuAction = (thread: EnvironmentThreadShell, event: string) => {
-    if (!canEdit) return;
-    if (event === "extra:edit") setEditing(thread.id);
-    else if (event === "extra:reorder") setReordering(true);
-    else if (event === "extra:scratch") void actions.setThreadPlace(thread.id, null);
-    else if (event === "extra:new-section") {
-      promptSectionName("New section", "", (name) => {
-        const id = uuidv4();
-        void actions
-          .save({ madohomuSections: [...settings.madohomuSections, { id, name }] })
-          .then((saved) => (saved ? actions.setThreadPlace(thread.id, { section: id }) : false));
-      });
-    } else if (event.startsWith("extra:section:")) {
-      const section = event.slice("extra:section:".length);
-      void actions.setThreadPlace(thread.id, { section: section || null });
-    } else if (event === "extra:up" || event === "extra:down") {
-      stepThread(thread.id, event === "extra:up" ? "up" : "down");
-    }
   };
 
   const renderRow = ({ item }: { readonly item: MadoHomuListRow }) => {
@@ -447,7 +350,9 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     if (item.type === "empty") {
       return (
         <Text className="px-5 py-2 text-sm text-foreground-muted">
-          {madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: false })}
+          {item.kind === "custom"
+            ? "Use Move to in a thread's menu"
+            : madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: false })}
         </Text>
       );
     }
@@ -509,8 +414,11 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         onSwipeableClose={handleSwipeableClose}
         onSwipeableWillOpen={handleSwipeableWillOpen}
         pinMenuTitles={T3_PIN_MENU_TITLES}
-        extraMenuActions={madohomuMenu(item)}
-        onExtraMenuAction={handleMadoHomuAction}
+        extraMenuActions={threadMenu.menu(
+          thread.id,
+          item.kind === "pinned" || item.kind === "custom" ? item : null,
+        )}
+        onExtraMenuAction={(selected, event) => threadMenu.handle(selected.id, event)}
       />
     );
   };
@@ -661,14 +569,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           </ScrollView>
         </Sheet>
       ) : null}
-      {settings.madohomuEnabled && edited ? (
-        <MadoHomuThreadEditor
-          key={edited.id}
-          environmentId={environmentId}
-          thread={edited}
-          onClose={() => setEditing(null)}
-        />
-      ) : null}
+      {threadMenu.editor}
     </View>
   );
 }
