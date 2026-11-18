@@ -16,7 +16,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Threads and subagents
 
-- **Full access command approvals.** Codex and Claude threads, including delegated threads, no longer pause for native tool approvals in Full access. If a provider still requires confirmation for a command, HomuCode refuses it automatically and gives the agent the reason.
+- **Full access command approvals.** Codex and Claude threads, including delegated threads, no longer pause for native tool approvals in Full access. If a provider still requires confirmation for a command, HomuCode refuses it automatically and gives the agent the reason. Codex can start T3 subagents and top-level threads in Full access without an extra approval prompt.
 
 - **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.
 - **Move or copy to another device.** "Move to project" in the thread menus also lists the projects on every other connected device you can operate, and "Copy to project" puts a copy in any project on this device or another one. The conversation (your messages and the agent's replies, not tool activity, attachments or the worktree) is rebuilt there and handed to the agent on the first turn; it uses the thread's model if that provider is there, else that device's default. A move then archives the original, which Undo brings back, so it can't run while the thread is working; a copy leaves the original alone. Web and desktop only.
