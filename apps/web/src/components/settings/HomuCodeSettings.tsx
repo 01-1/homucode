@@ -225,7 +225,7 @@ function HomuCodeEnvironmentSettings() {
           serverScoped
           {...searchableSetting("prefer-native-subagents")}
           settingKeys={["preferNativeSubagents"]}
-          description="Use provider-native subagents for same-provider work. Off routes every subagent through T3 Code. Applies next turn; providers that load instructions at startup need a thread restart."
+          description="Use provider-native subagents for same-provider work. Off routes every subagent through Homu Code. Applies next turn; providers that load instructions at startup need a thread restart."
           control={
             <ScopedSwitch
               settingKeys={["preferNativeSubagents"]}
@@ -398,7 +398,7 @@ function HomuCodeEnvironmentSettings() {
         />
       </SettingsSection>
       <AgentMemorySettings />
-      <SettingsSection id="building-t3" title="Building T3">
+      <SettingsSection id="building-t3" title="Building Homu">
         <SettingsRow
           {...searchableSetting("show-building-t3")}
           description="Configure cloud builds, Android APK builds, and loading AppImages."
@@ -407,7 +407,7 @@ function HomuCodeEnvironmentSettings() {
           control={
             <Switch
               checked={settings.buildToolsSettingsVisible}
-              aria-label="Show Building T3 settings"
+              aria-label="Show Building Homu settings"
               onCheckedChange={(value) =>
                 updateSettings({ buildToolsSettingsVisible: Boolean(value) })
               }
@@ -430,7 +430,7 @@ function HomuCodeEnvironmentSettings() {
           (environment) => environment.serverConfig?.settings.buildToolsSettingsVisible,
         ) ? (
         <p className="text-sm text-muted-foreground">
-          Select one environment to configure Building T3.
+          Select one environment to configure Building Homu.
         </p>
       ) : null}
     </>

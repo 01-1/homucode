@@ -92,7 +92,7 @@ other action for a single message. From a hardware keyboard, `Cmd+Return`
 (`Ctrl+Shift+Return`) when Return inserts a new line. The button only offers
 Steer when the running agent supports it.
 
-**Settings → HomuCode → Extra features** has three related options. With **Stop or wait jumps
+**Settings → Homu Code → Extra features** has three related options. With **Stop or wait jumps
 the queue**, a message containing only “stop” or “wait” interrupts the current
 turn and goes ahead of queued messages. **Resend unread steers after Stop** covers a
 message you steer to Claude while it runs a tool: Claude reads it only after the tool
@@ -140,7 +140,7 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-Enable **Settings → HomuCode → Status line** to show the thread's status in the top bar beside
+Enable **Settings → Homu Code → Status line** to show the thread's status in the top bar beside
 its title. Three dials show what runs out: context use, the 5-hour limit and the weekly
 limit, each with the percentage used inside. Beside them are the model, its effort as
 signal bars, and small icons for uptime, cache hits and tokens in and out. When the top

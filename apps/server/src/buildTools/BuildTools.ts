@@ -61,7 +61,7 @@ const make = Effect.gen(function* () {
     stagedBuilds: initialStaged,
     undoneAs: null,
     phase: "idle",
-    message: "Enable a build tool and configure a T3 Code checkout to begin.",
+    message: "Enable a build tool and configure a Homu Code checkout to begin.",
     output: "",
     artifactPath: null,
     lanUrl: null,
@@ -151,7 +151,7 @@ const make = Effect.gen(function* () {
       yield* set({
         phase: "completed",
         message:
-          "Build loader started. It verifies the checksum and rolls back if T3 does not return. See ~/.local/state/t3-load-build/load.log.",
+          "Build loader started. It verifies the checksum and rolls back if Homu does not return. See ~/.local/state/t3-load-build/load.log.",
         output: result.stdout + result.stderr,
       });
       return;

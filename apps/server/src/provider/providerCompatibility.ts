@@ -81,11 +81,11 @@ export function resolveProviderCompatibility(
       : "unknown";
   const message =
     status === "broken"
-      ? "This provider version is known to be incompatible with this T3 Code release."
+      ? "This provider version is known to be incompatible with this Homu Code release."
       : status === "unsupported"
-        ? "This provider version is outside the supported range for this T3 Code release."
+        ? "This provider version is outside the supported range for this Homu Code release."
         : status === "graceful"
-          ? "This provider version has limited compatibility with this T3 Code release."
+          ? "This provider version has limited compatibility with this Homu Code release."
           : null;
   const recommendedVersion = policy.recommendedVersion ?? null;
   const recommendedRange = policy.recommendedRange ?? null;

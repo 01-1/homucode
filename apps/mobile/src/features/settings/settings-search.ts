@@ -54,7 +54,7 @@ const SETTINGS_SEARCH_TERMS = {
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
   SettingsHomuCode: [
     ...FEATURE_OFFERS.map((offer) => offer.title),
-    "T3 Code checkout",
+    "Homu Code checkout",
     "Boat CLI",
     "Cloud machine type",
     "Build output folder",
@@ -66,7 +66,7 @@ const SETTINGS_SEARCH_TERMS = {
 
     "madohomu",
     "duet",
-    "show madohomu threads in t3 code",
+    "show madohomu threads in homu code",
     "hide threads",
     "scratch",
     "focused project",
@@ -77,7 +77,7 @@ const SETTINGS_SEARCH_TERMS = {
     "faster phone launch",
     "show message sender labels",
     "hide sender line sent from device",
-    "building t3",
+    "building homu",
     "cloud build",
     "android apk",
     "appimage",

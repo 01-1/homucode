@@ -18,9 +18,10 @@ if ! grep -q T3CODE_EAS_PROJECT_ID apps/mobile/app.config.ts; then  # ref predat
   [[ $mode == apk ]]; echo "T3CODE_MOBILE_UPDATES_ENABLED=0" >> .env; updates=0
 fi
 python3 - "$app_name" <<'PY'
-import pathlib,re,sys
+import json,pathlib,re,sys
 p=pathlib.Path('apps/mobile/app.config.ts')
-s,n=re.subn(r'appName: "T3 Code[^"]*"', 'appName: '+repr(sys.argv[1]).replace("'",'"'), p.read_text())
+name = "Homu Code" if sys.argv[1] == "HomuCode" else sys.argv[1]
+s,n=re.subn(r'appName: "(?:T3|Homu) Code[^"]*"', lambda _: "appName: " + json.dumps(name), p.read_text())
 assert n==3, n
 p.write_text(s)
 PY

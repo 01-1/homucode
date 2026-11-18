@@ -75,7 +75,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     page: 2,
     title: "Resend unread steers after Stop",
     description:
-      "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, T3 sends it again for you.",
+      "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, Homu sends it again for you.",
     setting: "claudeSteersSurviveStop",
   },
   {
@@ -83,7 +83,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     page: 2,
     title: "Ask again after a restart",
     description:
-      "When T3 Code restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
+      "When Homu Code restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
     setting: "reaskPendingRequestsAfterRestart",
   },
   {
@@ -151,7 +151,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
     id: "building-t3",
     page: 2,
-    title: "Set up building T3 Code",
+    title: "Set up building Homu Code",
     description:
       "Configure cloud builds, Android APK builds and loading AppImages on the next page.",
     setting: "buildToolsSettingsVisible",

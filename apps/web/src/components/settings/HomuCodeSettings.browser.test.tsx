@@ -52,7 +52,7 @@ it("keeps device preferences usable when the linked environment is unavailable",
   await expect.element(senderLabels).toBeChecked();
 
   await expect
-    .element(page.getByRole("switch", { name: "Show Building T3 settings" }))
+    .element(page.getByRole("switch", { name: "Show Building Homu settings" }))
     .not.toBeInTheDocument();
 });
 

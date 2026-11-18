@@ -566,7 +566,7 @@ describe("MessagesTimeline messages", () => {
         ),
       );
 
-    const senderLabel = screen.getByText("Human · workstation (T3 desktop, Linux)", {
+    const senderLabel = screen.getByText("Human · workstation (Homu desktop, Linux)", {
       exact: true,
     });
     await expect.element(senderLabel).not.toBeInTheDocument();

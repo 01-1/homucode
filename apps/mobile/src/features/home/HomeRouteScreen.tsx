@@ -185,7 +185,7 @@ function ReadyHomeRouteScreen() {
     <AndroidHomeFabLayout onStartNewTask={startNewTask}>
       <>
         <WorkspaceListHeader
-          accessibilityLabel="T3 Code, Threads"
+          accessibilityLabel="Homu Code, Threads"
           onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
           search={{
             value: searchQuery,
