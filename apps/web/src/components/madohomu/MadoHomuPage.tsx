@@ -2,7 +2,7 @@ import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -93,21 +93,24 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
     search.threadId ? scopeThreadRef(environmentId, search.threadId) : null,
   );
   // A named thread a filter hides keeps its URL; one deleted, archived or moved is replaced.
-  const namedGone =
-    named === null ||
-    named.deletedAt !== null ||
-    named.archivedAt !== null ||
-    named.projectId !== project?.id;
+  const namedLeft =
+    named !== null &&
+    (named.deletedAt !== null || named.archivedAt !== null || named.projectId !== project?.id);
+  const namedId = named?.id ?? null;
+  // The last named thread that was here: one not loaded yet (just made) is not one that is gone.
+  const seenThreadId = useRef<ThreadId | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the shown thread into the URL, so the live list reordering cannot swap the open chat.
   useEffect(() => {
+    if (namedId !== null && !namedLeft) seenThreadId.current = namedId;
     if (selectedId === null || search.threadId === selectedId) return;
+    const namedGone = namedId === null ? seenThreadId.current === search.threadId : namedLeft;
     if (search.threadId !== undefined && !namedGone) return;
     void navigate({
       to: "/madohomu",
       search: (prev) => ({ ...prev, threadId: selectedId }),
       replace: true,
     });
-  }, [namedGone, navigate, search.threadId, selectedId]);
+  }, [namedId, namedLeft, navigate, search.threadId, selectedId]);
   if (!settings.madohomuEnabled)
     return (
       <MadoHomuMessage>
