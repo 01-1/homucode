@@ -111,7 +111,8 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
   fun capture(activity: Activity?, rows: String) {
     main.post {
       val store = store
-      if (activity == null || activity.javaClass.simpleName != "MainActivity" || store == null) return@post
+      if (activity == null || store == null) return@post
+      if (activity.javaClass.simpleName != "MainActivity") return@post
       // Never a picture of the picture, of the splash, or of a window that is going away.
       if (launch != null || !splashGone() || activity.isDestroyed) return@post
       val decor = activity.window.peekDecorView()
