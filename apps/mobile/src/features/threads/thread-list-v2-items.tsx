@@ -975,6 +975,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const menuActions = useMemo<MenuAction[]>(() => {
     const nested = Platform.OS === "ios";
     const direct: MenuAction[] = [
+      ...(props.extraMenuActions ?? []),
       ...(thread.branch
         ? [
             {
@@ -986,7 +987,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
       { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
       { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
-      ...(props.extraMenuActions ?? []),
     ];
     if (snoozedRow) {
       return layoutThreadListV2RowMenuActions({

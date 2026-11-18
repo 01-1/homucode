@@ -266,7 +266,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     const disabled = { disabled: !canEdit };
     const manual = row.kind === "pinned" || row.kind === "custom";
     return [
-      { id: "extra:edit", title: "Edit", image: "slider.horizontal.3", attributes: disabled },
       {
         id: "extra:move",
         title: "Move to",
@@ -315,6 +314,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             } satisfies MenuAction,
           ]
         : []),
+      { id: "extra:edit", title: "Edit…", image: "slider.horizontal.3", attributes: disabled },
     ];
   };
   const handleMadoHomuAction = (thread: EnvironmentThreadShell, event: string) => {
