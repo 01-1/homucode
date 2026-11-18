@@ -1120,8 +1120,7 @@ export function AddProjectNewScreen(props: {
   const environmentOptions = useEnvironmentOptions().filter(
     (option) =>
       option.newProjectsRoot !== null &&
-      (props.lockEnvironment !== true ||
-        option.environmentId === stringParam(props.environmentId)),
+      (props.lockEnvironment !== true || option.environmentId === stringParam(props.environmentId)),
   );
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(
     () => stringParam(props.environmentId) as EnvironmentId | null,

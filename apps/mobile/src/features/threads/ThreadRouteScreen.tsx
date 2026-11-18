@@ -336,9 +336,7 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     return withInspectorHeader(
       <ThreadUnavailableScreen
         actionLabel="Back to MadoHomu"
-        onAction={() =>
-          navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))
-        }
+        onAction={() => navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))}
       />,
     );
   }

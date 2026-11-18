@@ -347,9 +347,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     if (item.type === "section") {
       const badge =
         item.attention > 0 ? (
-          <View
-            className="shrink-0 flex-row items-center gap-0.5 rounded-full border border-warning-border bg-warning px-1.5"
-          >
+          <View className="shrink-0 flex-row items-center gap-0.5 rounded-full border border-warning-border bg-warning px-1.5">
             <SymbolView
               name="exclamationmark.shield"
               size={10}
