@@ -16,6 +16,14 @@ const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
+// Forks publish OTAs to their own EAS project; the defaults are upstream's.
+const easProjectId =
+  repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const easOwner = repoEnv.T3CODE_EAS_OWNER?.trim() || "pingdotgg";
+const easSlug = repoEnv.T3CODE_EAS_SLUG?.trim() || "t3-code";
+// EAS builds bake in their channel; local Gradle builds need it as a request header.
+const updatesChannel = repoEnv.T3CODE_MOBILE_UPDATES_CHANNEL?.trim();
+
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
@@ -234,11 +242,12 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: easSlug,
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
-  runtimeVersion: {
+  // A pinned runtime lets builds whose Gradle-time fingerprint drifts still match their OTAs.
+  runtimeVersion: repoEnv.T3CODE_MOBILE_RUNTIME_VERSION?.trim() || {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
   },
@@ -247,7 +256,8 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: `https://u.expo.dev/${easProjectId}`,
+    ...(updatesChannel ? { requestHeaders: { "expo-channel-name": updatesChannel } } : {}),
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -486,11 +496,11 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: easProjectId,
       observe: { endpointUrl: observeEndpointUrl },
     },
   },
-  owner: "pingdotgg",
+  owner: easOwner,
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
