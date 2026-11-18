@@ -1641,6 +1641,7 @@ export const ServerSettings = Schema.Struct({
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   preferNativeSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  subagentsInheritParentPin: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   claudeHoldBackgroundCommands: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -2165,6 +2166,7 @@ export const ServerSettingsPatch = Schema.Struct({
   ),
   deviceNames: Schema.optionalKey(Schema.toType(ServerSettings.fields.deviceNames)),
   preferNativeSubagents: Schema.optionalKey(Schema.Boolean),
+  subagentsInheritParentPin: Schema.optionalKey(Schema.Boolean),
   claudeHoldBackgroundCommands: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   madohomuDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),

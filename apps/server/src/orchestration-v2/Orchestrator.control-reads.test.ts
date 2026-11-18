@@ -73,21 +73,24 @@ const assistanceTarget = {
   projectId: ProjectId.make("assistance-project"),
 };
 const layerSettings = ServerSettings.layerTest({ workAssistanceTarget: assistanceTarget });
-const layerTest = Layer.mergeAll(
-  layerSettings,
-  layerDatabase,
-  ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
-  EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
-  ProviderReplayHarness.layerWithRegistry(
-    { name: "control-reads" },
-    ProviderAdapterRegistry.layerFromAdapters([adapter]),
-    {
-      databaseLayer: layerDatabase,
-      runEffectWorker: false,
-      serverSettings: { workAssistanceTarget: assistanceTarget },
-    },
-  ),
-);
+const makeLayerTest = (subagentsInheritParentPin = false) =>
+  Layer.mergeAll(
+    layerSettings,
+    layerDatabase,
+    ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
+    EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
+    ProviderReplayHarness.layerWithRegistry(
+      { name: "control-reads" },
+      ProviderAdapterRegistry.layerFromAdapters([adapter]),
+      {
+        databaseLayer: layerDatabase,
+        runEffectWorker: false,
+        serverSettings: { workAssistanceTarget: assistanceTarget, subagentsInheritParentPin },
+      },
+    ),
+  );
+
+const layerTest = makeLayerTest();
 
 it.effect.each(
   (["provider.switch", "thread.model-selection.set"] as const).flatMap((type) =>
@@ -1262,6 +1265,12 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
       createdBy: "user",
       creationSource: "web",
     });
+    yield* orchestrator.dispatch({
+      type: "thread.pin",
+      commandId: CommandId.make("pin-parent-pr"),
+      threadId: parentThreadId,
+      orderKey: "a0",
+    });
     const parent = yield* projections.getThreadProjection(parentThreadId);
     const parentRun = parent.runs[0]!;
     yield* orchestrator.dispatch({
@@ -1281,6 +1290,8 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     assert.deepEqual(updatedParent.subagents[0]!.modelSelection, modelSelection);
     const childThreadId = updatedParent.subagents[0]!.childThreadId!;
     const child = yield* projections.getThreadProjection(childThreadId);
+    assert.deepEqual(child.thread.pinnedAt, child.thread.createdAt);
+    assert.isNull(child.thread.pinOrderKey);
     assert.isNull(child.thread.linkedPullRequest);
     assert.deepEqual(child.thread.pullRequests, []);
     assert.equal(child.thread.branch, parent.thread.branch);
@@ -1307,7 +1318,7 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     const parentAfterChildLink = yield* projections.getThreadProjection(parentThreadId);
     assert.deepEqual(parentAfterChildLink.thread.linkedPullRequest, parentPullRequest);
     assert.deepEqual(parentAfterChildLink.thread.pullRequests, parent.thread.pullRequests);
-  }).pipe(Effect.provide(layerTest)),
+  }).pipe(Effect.provide(makeLayerTest(true))),
 );
 
 it.effect("wakes the parent once when its delegated task asks a question", () =>

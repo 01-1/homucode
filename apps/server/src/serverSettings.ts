@@ -262,6 +262,8 @@ export class ServerSettingsService extends Context.Service<
 
     readonly getSettings: Effect.Effect<ServerSettings, ServerSettingsError>;
 
+    readonly subagentsInheritParentPin: Effect.Effect<boolean>;
+
     readonly updateSettings: (
       patch: ServerSettingsPatch,
     ) => Effect.Effect<ServerSettings, ServerSettingsError>;
@@ -324,6 +326,9 @@ const makeTest = Effect.fn("serverSettings.makeTest")(function* (
     start: Effect.void,
     ready: Effect.void,
     getSettings,
+    subagentsInheritParentPin: Ref.get(currentSettingsRef).pipe(
+      Effect.map((settings) => settings.subagentsInheritParentPin),
+    ),
     updateSettings: (patch) =>
       updateTestSettings((currentSettings) =>
         Effect.succeed(applyServerSettingsPatch(currentSettings, patch)),
@@ -1394,6 +1399,14 @@ const make = Effect.gen(function* () {
     start,
     ready: Deferred.await(startedDeferred),
     getSettings: getMaterializedSettings,
+    subagentsInheritParentPin: getSettingsFromCache.pipe(
+      Effect.map((settings) => managed.applyLocks(settings).subagentsInheritParentPin),
+      Effect.catch((error) =>
+        Effect.logWarning("Could not read subagent pin inheritance", {
+          operation: error.operation,
+        }).pipe(Effect.as(false)),
+      ),
+    ),
     updateSettings: (patch) =>
       updateAndPersistSettings(patch, (current) =>
         ensureSecretProviderWritesAllowed(patch, settingsPath).pipe(

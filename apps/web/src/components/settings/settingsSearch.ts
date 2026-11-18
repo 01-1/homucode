@@ -884,6 +884,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["claude background bash commands working waiting hold tasks"],
   },
   {
+    id: "subagents-inherit-parent-pin",
+    title: "Subagents inherit parent pin",
+    to: "/settings/homucode",
+    scope: "environment-defaults",
+    searchTerms: ["pin pinned child threads delegation sidebar automatically"],
+  },
+  {
     id: "prefer-native-subagents",
     title: "Prefer native subagents",
     to: "/settings/homucode",
