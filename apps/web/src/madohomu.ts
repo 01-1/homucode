@@ -81,22 +81,28 @@ export function madohomuNamedThread(input: {
   const listLoaded =
     input.shellStatus === "live" &&
     !(input.namedId && input.created.has(input.namedId)) &&
-    (named !== null || input.detailStatus === "live" || input.detailStatus === "deleted");
+    (!input.namedId ||
+      named !== null ||
+      input.detailStatus === "live" ||
+      input.detailStatus === "deleted");
   return { named, listLoaded };
 }
 
-/** The first row MadoHomu falls back to; folded-away Snoozed and Settled rows are not offered. */
+/**
+ * The first row MadoHomu falls back to, preferring one outside Snoozed and Settled. A folded
+ * section still shows its open row, so a shelved fallback stays visible.
+ */
 export function madohomuFirstRowId(
   groups: ReadonlyArray<{
     readonly kind: string;
     readonly threads: ReadonlyArray<{ readonly id: ThreadId }>;
   }>,
 ) {
-  return (
-    groups
-      .filter((group) => group.kind !== "snoozed" && group.kind !== "settled")
-      .flatMap((group) => group.threads)[0]?.id ?? null
+  const rows = groups.flatMap((group) =>
+    group.threads.map((thread) => ({ id: thread.id, kind: group.kind })),
   );
+  const first = rows.find((row) => row.kind !== "snoozed" && row.kind !== "settled") ?? rows[0];
+  return first?.id ?? null;
 }
 
 export function readMadoHomuContext(router: AnyRouter) {
