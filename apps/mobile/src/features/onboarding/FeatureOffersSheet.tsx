@@ -20,6 +20,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
+import { STRAY_TOUCH_GUARD_MS, useHoldTouchesOnAppear } from "../../lib/strayTouchGuard";
 import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -87,7 +88,13 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const [savedStep, setStep] = useState(draft?.step ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settled, setSettled] = useState(false);
   const pending = useRef(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a tap outside dismisses the native sheet, which the root touch hold cannot see
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), STRAY_TOUCH_GUARD_MS);
+    return () => clearTimeout(timer);
+  }, []);
   const settings = config?.settings;
   const selected =
     chosen ??
@@ -107,6 +114,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     ...(includes("building-t3") ? ["building-t3"] : []),
   ];
   const step = Math.max(0, Math.min(savedStep, pages.length + followups.length - 1));
+  useHoldTouchesOnAppear(`feature-offers:${step}`);
   const followup = followups[step - pages.length];
   const last = step === pages.length + followups.length - 1;
   const save = async (apply: boolean) => {
@@ -171,7 +179,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     keep({ selected, step: next });
   };
   return (
-    <Sheet title={title} onClose={() => void save(false)} dismissDisabled={busy}>
+    <Sheet title={title} onClose={() => void save(false)} dismissDisabled={busy || !settled}>
       <ScrollView
         nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"

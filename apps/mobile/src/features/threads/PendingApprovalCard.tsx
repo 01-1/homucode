@@ -13,6 +13,7 @@ import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import type { PendingApproval } from "../../lib/threadActivity";
+import { useHoldTouchesOnAppear } from "../../lib/strayTouchGuard";
 
 export interface PendingApprovalCardProps {
   readonly canOperateThread: boolean;
@@ -31,6 +32,7 @@ const DEFAULT_APPROVAL_OPTIONS: ReadonlyArray<ProviderApprovalOption> = [
 ];
 
 export function PendingApprovalCard(props: PendingApprovalCardProps) {
+  useHoldTouchesOnAppear(props.approval.requestId);
   const options: ReadonlyArray<ProviderApprovalOption> =
     props.approval.options ?? DEFAULT_APPROVAL_OPTIONS;
   const warning = options.find((option) => option.warning)?.warning;

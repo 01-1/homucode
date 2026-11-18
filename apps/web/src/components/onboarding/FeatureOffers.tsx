@@ -181,7 +181,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
         if (!open) void save(false);
       }}
     >
-      <DialogPopup>
+      <DialogPopup data-unprompted>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>You can change these choices in Settings.</DialogDescription>

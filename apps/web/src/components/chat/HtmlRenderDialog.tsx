@@ -38,6 +38,7 @@ export function HtmlRenderDialog(props: {
   return (
     <Dialog open onOpenChange={(open) => !open && props.onClose()}>
       <DialogPopup
+        data-unprompted
         variant="media"
         showCloseButton={false}
         bottomStickOnMobile={false}
