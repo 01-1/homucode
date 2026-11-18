@@ -997,9 +997,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                         onCancelRename={() => setRenamingSection(null)}
                         onMenu={(position) => void openSectionMenu(custom, position)}
                       />,
-                      dragging !== null
-                        ? "Drag threads here."
-                        : "Drag threads here, or use Move to in a thread's menu.",
+                      "Drag threads here, or use Move to in a thread's menu.",
                     );
                   }
                   return section(

@@ -55,6 +55,7 @@ export function MadoHomuProjectPicker({
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
   const current = projects.find((p) => p.id === actions.settings.madohomuProjectId);
+  if (!showNew && projects.length === 0) return null;
   return (
     <Menu>
       <MenuTrigger

@@ -294,7 +294,9 @@ async function startThread(router: AnyRouter) {
   const untouched = findUntouchedMadoHomuThread(
     context.groups
       .filter((group) => group.kind === "pinned" || group.kind === "custom")
-      .flatMap((group) => group.threads),
+      .flatMap((group) => group.threads)
+      // A branch thread keeps its checkout, so plain "New thread" never reopens one.
+      .filter((thread) => thread.branch === null && thread.worktreePath === null),
     context.settings,
   );
   const threadId = untouched?.id ?? (await createMadoHomuThread(context.environmentId));
