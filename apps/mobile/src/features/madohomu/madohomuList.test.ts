@@ -92,16 +92,19 @@ describe("buildMadoHomuListRows", () => {
         ? { ...thread, hasPendingApprovals: true }
         : thread.id === a
           ? { ...thread, pendingSubagentRequest: "approval" as const }
-          : thread,
+          : thread.id === c
+            ? { ...thread, pendingGuestMessageCount: 1 }
+            : thread,
     );
     const rows = buildMadoHomuListRows({
       threads: asking,
       settings,
       now: NOW,
-      toggled: new Set(["pinned"]),
+      toggled: new Set(["pinned", "work"]),
     });
     expect(summary(rows).slice(0, 2)).toEqual(["section:pinned", "section:work"]);
     expect(rows[0]).toMatchObject({ expanded: false, attention: 2 });
+    expect(rows[1]).toMatchObject({ expanded: false, attention: 1 });
     const reorder = buildMadoHomuListRows({
       threads: asking,
       settings,
@@ -114,7 +117,7 @@ describe("buildMadoHomuListRows", () => {
   });
 
   it("pages Scratch but keeps every row that needs the user", () => {
-    const scratch = Array.from({ length: 5 }, (_, index) =>
+    const scratch = Array.from({ length: 6 }, (_, index) =>
       makeThreadShellFixture({
         id: ThreadId.make(`x${index}`),
         title: `X${index}`,
@@ -122,6 +125,7 @@ describe("buildMadoHomuListRows", () => {
         latestUserAuthoredMessageAt: `2026-06-01T0${9 - index}:00:00.000Z`,
         hasPendingUserInput: index === 4,
         pendingSubagentRequest: index === 3 ? "user_input" : null,
+        pendingGuestMessageCount: index === 5 ? 1 : 0,
       }),
     );
     const rows = buildMadoHomuListRows({
@@ -138,6 +142,7 @@ describe("buildMadoHomuListRows", () => {
       "x1",
       "x3",
       "x4",
+      "x5",
       "more:scratch",
     ]);
     expect(rows.at(-1)).toMatchObject({ type: "more", count: 1 });
