@@ -336,13 +336,9 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
     return withInspectorHeader(
       <ThreadUnavailableScreen
         actionLabel="Back to MadoHomu"
-        onAction={() => {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-            return;
-          }
-          navigation.dispatch(StackActions.replace("MadoHomu", { environmentId }));
-        }}
+        onAction={() =>
+          navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))
+        }
       />,
     );
   }

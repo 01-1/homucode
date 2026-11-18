@@ -42,12 +42,18 @@ export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
   ]);
 }
 
-/** `{ madohomu: true }` when the top route was opened from MadoHomu, to pass to routes it opens. */
+/** `{ madohomu: true }` when the nearest thread route was opened from MadoHomu. */
 export function madohomuRouteFlag(
   state:
-    | { readonly index: number; readonly routes: ReadonlyArray<{ readonly params?: object }> }
+    | {
+        readonly index: number;
+        readonly routes: ReadonlyArray<{ readonly name: string; readonly params?: object }>;
+      }
     | undefined,
 ): { readonly madohomu?: true } {
-  const params = state?.routes[state.index]?.params as { readonly madohomu?: unknown } | undefined;
+  const thread = state?.routes
+    .slice(0, state.index + 1)
+    .findLast((route) => route.name === "Thread");
+  const params = thread?.params as { readonly madohomu?: unknown } | undefined;
   return params?.madohomu === true ? { madohomu: true } : {};
 }
