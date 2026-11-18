@@ -4458,26 +4458,29 @@ it.layer(
 
     it.effect.each([
       {
-        settings: { env: { ANTHROPIC_BASE_URL: "https://hub.example.ts.net:8317" } },
+        settings: { env: { ANTHROPIC_BASE_URL: "https://hub.example.ts.net:8317/team-a/" } },
         baseUrl: "https://api.anthropic.com",
+        endpoint: "https://hub.example.ts.net:8317/team-a",
         type: "customEndpoint",
         label: "Custom API endpoint",
       },
       {
         settings: { env: { ANTHROPIC_BASE_URL: "https://api.anthropic.com" } },
         baseUrl: "https://proxy.example",
+        endpoint: undefined,
         type: "apiKey",
         label: "Claude API Key",
       },
       {
         settings: {},
         baseUrl: "https://proxy.example",
+        endpoint: "https://proxy.example",
         type: "customEndpoint",
         label: "Custom API endpoint",
       },
     ])(
       "uses the settings endpoint before the process endpoint: $type / $baseUrl",
-      ({ settings, baseUrl, type, label }) =>
+      ({ settings, baseUrl, endpoint, type, label }) =>
         Effect.gen(function* () {
           const fileSystem = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
@@ -4505,6 +4508,7 @@ it.layer(
             stateDir,
           );
           assert.strictEqual(status.status, "ready");
+          assert.strictEqual(status.auth.endpoint, endpoint);
           assert.strictEqual(status.auth.type, type);
           assert.strictEqual(status.auth.label, label);
         }).pipe(

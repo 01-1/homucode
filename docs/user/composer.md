@@ -148,6 +148,10 @@ bar is short of room, the small icons go first, then the time and the captions b
 dials. Hover the status line, or focus it with the keyboard, to see every value by name,
 with the folder and version.
 
+For providers routed through a [configured CLIProxyAPI hub](usage.md#connect-a-cliproxyapi-hub),
+the status line shows the hub's pooled usage. Each percentage uses the accounts that
+reported a current reading for that window, and the countdown shows the next reported reset.
+
 To draw your own, set **Status line command** to any shell command: it receives Claude
 Code's status line JSON on stdin and runs in the thread's folder, so a script written for
 Claude Code's `statusLine` setting works unchanged. Its output shows as a line of text in
