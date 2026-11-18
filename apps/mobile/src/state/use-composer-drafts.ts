@@ -454,6 +454,8 @@ export interface ComposerDraft {
 export interface ComposerDraftProject {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
+  /** This project stamp is the draft's original MadoHomu destination. */
+  readonly madohomu?: true;
   readonly createdAt: string;
 }
 
@@ -500,6 +502,7 @@ const ComposerDraftWorkspaceSelectionSchema = Schema.Struct({
 const ComposerDraftProjectSchema = Schema.Struct({
   environmentId: EnvironmentIdSchema,
   projectId: ProjectIdSchema,
+  madohomu: Schema.optional(Schema.Literal(true)),
   createdAt: Schema.String,
 });
 
@@ -1876,7 +1879,8 @@ export function sameComposerDraftState(a: ComposerDraft, b: ComposerDraft): bool
     a.runtimeMode === b.runtimeMode &&
     a.interactionMode === b.interactionMode &&
     a.freshContext === b.freshContext &&
-    a.workspaceSelection === b.workspaceSelection
+    a.workspaceSelection === b.workspaceSelection &&
+    a.project === b.project
   );
 }
 
@@ -2007,14 +2011,10 @@ export function removeComposerDraftsForEnvironment(
   );
 }
 
-export function createNewTaskDraft(project: {
-  readonly environmentId: EnvironmentId;
-  readonly projectId: ProjectId;
-}): string {
+export function createNewTaskDraft(project: Omit<ComposerDraftProject, "createdAt">): string {
   const draftKey = newTaskDraftKey(newDraftId());
   const stamp: ComposerDraftProject = {
-    environmentId: project.environmentId,
-    projectId: project.projectId,
+    ...project,
     createdAt: new Date().toISOString(),
   };
   updateComposerDrafts((current) => ({
@@ -2033,9 +2033,8 @@ export function retargetNewTaskDraft(
     const existing = current[draftKey];
     const stamp = existing?.project;
     if (
-      stamp !== undefined &&
-      stamp.environmentId === project.environmentId &&
-      stamp.projectId === project.projectId
+      stamp?.madohomu === true ||
+      (stamp?.environmentId === project.environmentId && stamp.projectId === project.projectId)
     ) {
       return current;
     }
@@ -2068,13 +2067,15 @@ export function retargetNewTaskDraft(
   });
 }
 
-/** Retargets a saved draft once drafts load; an absent one is not created. */
+/** Retargets a saved draft once drafts load. MadoHomu drafts keep their original project. */
 export async function retargetSavedNewTaskDraft(
   draftKey: string,
   project: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId },
-): Promise<boolean> {
+): Promise<boolean | "locked"> {
   await waitForComposerDraftsLoaded();
-  if (appAtomRegistry.get(composerDraftsAtom)[draftKey] === undefined) return false;
+  const draft = appAtomRegistry.get(composerDraftsAtom)[draftKey];
+  if (draft === undefined) return false;
+  if (draft.project?.madohomu === true) return "locked";
   retargetNewTaskDraft(draftKey, project);
   return true;
 }

@@ -254,6 +254,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       Dialog.alert("Could not change project", "Saved drafts could not be loaded. Try again.");
       return;
     }
+    if (retargeted === "locked") {
+      Dialog.alert("MadoHomu draft kept", "This draft belongs to its original MadoHomu project.");
+      return;
+    }
     const draftId = retargeted ? routeDraftId : undefined;
     selectDetail({
       name: "Thread",

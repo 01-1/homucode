@@ -38,6 +38,7 @@ const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
   projectId: ProjectId,
+  madohomu: Schema.optional(Schema.Literal(true)),
   projectTitle: Schema.optional(Schema.String),
   projectCwd: Schema.optional(Schema.String),
   workspaceMode: Schema.Literals(["local", "worktree"]),
@@ -71,6 +72,8 @@ const encodeStoredQueuedThreadMessage = Schema.encodeUnknownSync(QueuedThreadMes
 
 export interface QueuedThreadCreation {
   readonly projectId: ProjectIdType;
+  /** Locks this creation to its queued environmentId and projectId. */
+  readonly madohomu?: true;
   readonly projectTitle?: string;
   readonly projectCwd?: string;
   readonly workspaceMode: "local" | "worktree";

@@ -45,6 +45,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import {
   appendComposerDraftAttachments,
   type ComposerDraftInsertion,
+  type ComposerDraftProject,
   type ComposerDraftWorkspaceSelection,
   composerDraftsLoadedAtom,
   createNewTaskDraft,
@@ -128,6 +129,8 @@ export function branchBadgeLabel(input: {
   return null;
 }
 
+type MadoHomuDraftOrigin = Pick<ComposerDraftProject, "environmentId" | "projectId">;
+
 type NewTaskFlowContextValue = {
   readonly activeNewTask: { readonly pendingKey: string | null } | null;
   readonly projectScopes: ReadonlyArray<HomeProjectScope>;
@@ -161,6 +164,7 @@ type NewTaskFlowContextValue = {
     readonly environmentLabel: string;
   }>;
   readonly selectedProject: EnvironmentProject | null;
+  readonly madohomuOrigin: MadoHomuDraftOrigin | undefined;
   /** The machines the selected project's environment links to, whose threads it can read. */
   readonly linkedEnvironments: ReadonlyMap<EnvironmentId, string>;
   readonly isScratchDraft: boolean;
@@ -223,6 +227,7 @@ export function NewTaskFlowProvider(
     /** Identifies the draft route this flow serves; a new key starts a fresh flow. */
     flowKey?: string;
     routeDraftId?: string;
+    routeMadoHomuOrigin?: MadoHomuDraftOrigin;
   }>,
 ) {
   const projects = useProjects();
@@ -246,12 +251,33 @@ export function NewTaskFlowProvider(
   const draftsLoaded = useAtomValue(composerDraftsLoadedAtom);
   // A draft route opened from a list row, a deep link, or restored state binds
   // its draft here until the flow's first write stores the binding.
-  const routeDraft = useComposerDraft(
-    storedFlowState.draftKey === null ? (props.routeDraftId ?? null) : null,
-  );
+  const boundDraftKey = storedFlowState.draftKey ?? props.routeDraftId ?? null;
+  const boundProject = useComposerDraft(boundDraftKey).project;
+  const madohomuOrigin = boundProject?.madohomu === true ? boundProject : props.routeMadoHomuOrigin;
+  const readMadoHomuOrigin = (): MadoHomuDraftOrigin | undefined => {
+    const draftKey = readNewTaskFlowState(flowKey).draftKey ?? props.routeDraftId;
+    const stamp = draftKey === undefined ? undefined : getComposerDraftSnapshot(draftKey).project;
+    return stamp?.madohomu === true ? stamp : props.routeMadoHomuOrigin;
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- saves the original project for drafts recovered by older app versions with only a route flag
+  useEffect(() => {
+    const origin = props.routeMadoHomuOrigin;
+    if (
+      !draftsLoaded ||
+      boundDraftKey === null ||
+      !origin ||
+      !boundProject ||
+      boundProject.madohomu === true ||
+      boundProject.environmentId !== origin.environmentId ||
+      boundProject.projectId !== origin.projectId
+    ) {
+      return;
+    }
+    updateComposerDraftSettings(boundDraftKey, { project: { ...boundProject, madohomu: true } });
+  }, [boundDraftKey, boundProject, draftsLoaded, props.routeMadoHomuOrigin]);
   // Readiness of the environment the route's draft is stamped to; another
   // environment's projects loading first says nothing about it.
-  const stampedEnvironmentId = routeDraft.project?.environmentId ?? null;
+  const stampedEnvironmentId = boundProject?.environmentId ?? null;
   const connectionsReady = useConnectionsReady();
   const stampedEnvironmentConnection =
     useWorkspaceEnvironments().find(
@@ -278,12 +304,12 @@ export function NewTaskFlowProvider(
       projects,
       stampedEnvironmentLoading,
     });
-  const routeDraftResolution = resolveRoute(storedFlowState, draftsLoaded, routeDraft.project);
+  const routeDraftResolution = resolveRoute(storedFlowState, draftsLoaded, boundProject);
   const flowState =
     routeDraftResolution.kind === "open" ? routeDraftResolution.flow : storedFlowState;
   const {
     environmentId: selectedEnvironmentIdOverride,
-    projectKey: selectedProjectKey,
+    projectKey: flowProjectKey,
     draftKey: activeDraftKey,
     submitting,
     expandedProvider,
@@ -305,10 +331,14 @@ export function NewTaskFlowProvider(
   const updateFlow = (patch: Partial<NewTaskFlowState>) =>
     updateNewTaskFlowState(flowKey, { ...readFlow(), ...patch });
   const selectedEnvironmentId =
-    selectedEnvironmentIdOverride !== null &&
+    madohomuOrigin?.environmentId ??
+    (selectedEnvironmentIdOverride !== null &&
     projects.some((project) => project.environmentId === selectedEnvironmentIdOverride)
       ? selectedEnvironmentIdOverride
-      : (projects[0]?.environmentId ?? null);
+      : (projects[0]?.environmentId ?? null));
+  const selectedProjectKey = madohomuOrigin
+    ? scopedProjectKey(madohomuOrigin.environmentId, madohomuOrigin.projectId)
+    : flowProjectKey;
   const projectsForEnvironment = pipe(
     projects,
     Arr.filter((project) => project.environmentId === selectedEnvironmentId),
@@ -322,7 +352,7 @@ export function NewTaskFlowProvider(
       : (projectsForEnvironment.find(
           (project) => scopedProjectKey(project.environmentId, project.id) === selectedProjectKey,
         ) ??
-        projectsForEnvironment[0] ??
+        (madohomuOrigin ? undefined : projectsForEnvironment[0]) ??
         null);
 
   const linkedEnvironments = useLinkedEnvironments(selectedProject?.environmentId ?? null);
@@ -349,9 +379,10 @@ export function NewTaskFlowProvider(
       draftKey: createNewTaskDraft({
         environmentId: selectedProject.environmentId,
         projectId: selectedProject.id,
+        ...(madohomuOrigin ? { madohomu: true } : {}),
       }),
     });
-  }, [activeDraftKey, flowKey, selectedProject, props.active, props.routeDraftId]);
+  }, [activeDraftKey, flowKey, selectedProject, props.active, props.routeDraftId, madohomuOrigin]);
   const activePendingKey =
     props.active === false
       ? null
@@ -570,10 +601,16 @@ export function NewTaskFlowProvider(
       retargetNewTaskDraft(current, target, options);
       return current;
     }
-    return createNewTaskDraft(target);
+    return createNewTaskDraft({ ...target, ...(readMadoHomuOrigin() ? { madohomu: true } : {}) });
   };
 
   const setProject = (project: EnvironmentProject) => {
+    const origin = readMadoHomuOrigin();
+    if (
+      origin &&
+      (origin.environmentId !== project.environmentId || origin.projectId !== project.id)
+    )
+      return;
     updateFlow({
       draftKey: carryDraftContentTo(project),
       environmentId: project.environmentId,
@@ -582,6 +619,7 @@ export function NewTaskFlowProvider(
   };
 
   const selectEnvironment = (environmentId: EnvironmentId) => {
+    if (readMadoHomuOrigin()) return;
     const match = resolveEnvironmentProjectMatch(
       projects.filter((project) => project.environmentId === environmentId),
       selectedProject,
@@ -605,6 +643,7 @@ export function NewTaskFlowProvider(
   );
   const latestSwitchRef = useRef<object | null>(null);
   const switchEnvironment = async (environmentId: EnvironmentId): Promise<boolean> => {
+    if (readMadoHomuOrigin()) return false;
     if (environmentId === selectedEnvironmentId) {
       latestSwitchRef.current = null;
       setSwitchingToEnvironmentId(null);
@@ -738,6 +777,13 @@ export function NewTaskFlowProvider(
       return null;
     }
     const draft = getComposerDraftSnapshot(selectedProjectDraftKey);
+    const origin = readMadoHomuOrigin();
+    if (
+      origin &&
+      (origin.environmentId !== selectedProject.environmentId ||
+        origin.projectId !== selectedProject.id)
+    )
+      return null;
     const text = draft.text.trim();
     const draftModelSelection =
       resolveSelectableModelSelection(
@@ -777,6 +823,7 @@ export function NewTaskFlowProvider(
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       creation: {
         projectId: selectedProject.id,
+        ...(origin ? { madohomu: true } : {}),
         projectTitle: selectedProject.title,
         projectCwd: selectedProject.workspaceRoot,
         workspaceMode: mode,
@@ -886,6 +933,7 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
+    madohomuOrigin,
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

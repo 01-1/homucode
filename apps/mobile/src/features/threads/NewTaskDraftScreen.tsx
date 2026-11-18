@@ -167,6 +167,7 @@ export function NewTaskDraftScreen(props: {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
   const flow = useNewTaskFlow();
+  const lockedToMadoHomu = flow.madohomuOrigin !== undefined || props.madohomu === true;
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const goBack = useWorkspaceBackNavigation();
@@ -295,8 +296,9 @@ export function NewTaskDraftScreen(props: {
       : null;
   const pickerDraftId = unopenableRouteDraftKind === "pickProject" ? props.draftId : undefined;
   const isProjectPickerReturnActive =
-    (isReturningToProjectPicker && !requestedInitialProjectAvailable) ||
-    unopenableRouteDraftKind !== null;
+    !lockedToMadoHomu &&
+    ((isReturningToProjectPicker && !requestedInitialProjectAvailable) ||
+      unopenableRouteDraftKind !== null);
   const isIncomingShareAwaitingServerConfig = Boolean(
     incomingShare?.attachments.some((attachment) => attachment.type === "file") &&
     selectedEnvironmentServerConfig === null,
@@ -368,13 +370,11 @@ export function NewTaskDraftScreen(props: {
     isIncomingShareTransferPending || flow.submitting || isImportingContext;
   const { environments, selectedEnvironmentId, switchEnvironment, switchingToEnvironmentId } = flow;
   const cycleEnvironment = () => {
-    if (isComposerInteractionLocked) return true;
+    if (isComposerInteractionLocked || lockedToMadoHomu) return true;
     const next = nextEnvironmentId(environments, switchingToEnvironmentId ?? selectedEnvironmentId);
     if (next !== null) void switchEnvironment(next);
     return true;
   };
-  // A MadoHomu draft stays in the project and environment it opened with.
-  const lockedToMadoHomu = props.madohomu === true;
   const cycleEnvironmentCommands =
     isFocused && !lockedToMadoHomu && environments.length > 1 ? (["cycleHost"] as const) : [];
   useHardwareKeyboardCommand(cycleEnvironmentCommands, cycleEnvironment);
@@ -471,13 +471,14 @@ export function NewTaskDraftScreen(props: {
         return;
       }
 
-      if (projects.length > 0) {
+      if (!lockedToMadoHomu && projects.length > 0) {
         // oxlint-disable-next-line react/set-state-in-effect -- Route-driven project resolution starts the return-to-picker flow when no project matches.
         setIsReturningToProjectPicker(true);
       }
       return;
     }
 
+    if (lockedToMadoHomu) return;
     const selection = resolveDraftProjectSelection(
       selectedProjectKey,
       projects,
@@ -509,6 +510,7 @@ export function NewTaskDraftScreen(props: {
   }, [
     goBack,
     isFocused,
+    lockedToMadoHomu,
     projectScopes,
     projects,
     flow.draftKey,
@@ -664,13 +666,12 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
 
-    const madohomu = props.madohomu === true;
-    if (madohomu) {
+    if (lockedToMadoHomu) {
       const settings = appAtomRegistry.get(
         serverEnvironment.configValueAtom(selectedProject.environmentId),
       )?.settings;
       const blockReason = madohomuDraftSendBlockReason(
-        props.initialProjectRef,
+        flow.madohomuOrigin,
         selectedProject,
         settings,
       );
@@ -699,7 +700,7 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
     promptInputRef.current?.blur();
-    if (madohomu) {
+    if (message.creation?.madohomu) {
       void updateSettings({
         environmentId: selectedProject.environmentId,
         input: {
@@ -712,7 +713,7 @@ export function NewTaskDraftScreen(props: {
     navigation.dispatch(
       CommonActions.setParams({
         ...submittedThreadParams(String(message.environmentId), String(message.threadId)),
-        ...(madohomu ? { madohomu: true } : {}),
+        ...(message.creation?.madohomu ? { madohomu: true } : {}),
       }),
     );
     // The composer has moved to the submitted thread; a pick still converting
@@ -730,6 +731,20 @@ export function NewTaskDraftScreen(props: {
     return message.messageId;
   }
 
+  if (!selectedProject && lockedToMadoHomu) {
+    return (
+      <ThreadScreenFallback header={<AppBar title="New thread" onBack={goBack} />}>
+        <View className="flex-1 items-center justify-center gap-3 p-4">
+          <Text className="text-center text-foreground">
+            The original MadoHomu project is unavailable.
+          </Text>
+          <Text className="text-center text-foreground-muted">
+            Reconnect to its machine or restore the project to continue.
+          </Text>
+        </View>
+      </ThreadScreenFallback>
+    );
+  }
   // Keep the current surface until the local draft selection is ready. Publishing
   // an empty loading surface here flashes between two already-cached threads.
   if (!selectedProject) return null;
@@ -745,7 +760,7 @@ export function NewTaskDraftScreen(props: {
             : null
       : "Wait for shared content to finish importing.";
   const chooseProject = () => {
-    if (isComposerInteractionLocked) {
+    if (isComposerInteractionLocked || lockedToMadoHomu) {
       return;
     }
     promptInputRef.current?.blur();
@@ -753,7 +768,7 @@ export function NewTaskDraftScreen(props: {
     navigation.navigate("NewTaskProject", { incomingShareId: props.incomingShareId });
   };
   const openContextPicker = (routeName: "NewTaskBranch" | "NewTaskEnvironment") => {
-    if (isComposerInteractionLocked) {
+    if (isComposerInteractionLocked || (lockedToMadoHomu && routeName === "NewTaskEnvironment")) {
       return;
     }
     promptInputRef.current?.blur();
@@ -1015,7 +1030,7 @@ export function NewTaskDraftScreen(props: {
             thread={thread}
             project={selectedProject}
             cwd={flow.workspaceCwd}
-            madohomu={props.madohomu === true}
+            madohomu={lockedToMadoHomu}
           />
         }
         draftMode={{
