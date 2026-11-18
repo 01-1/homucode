@@ -7,7 +7,10 @@ const ASKED_FOR_MS = 1000;
 const OWN_FOCUS_MS = 100;
 
 // Marks a surface that shows up on its own (a question, an approval, an offer dialog).
+// `data-unprompted="contents"` also covers controls that later appear inside it, such as the
+// next question after an answer.
 const UNPROMPTED = "[data-unprompted]";
+const UNPROMPTED_CONTENTS = '[data-unprompted="contents"]';
 const ACTIONABLE = [
   "a[href]",
   "button",
@@ -34,16 +37,11 @@ const ACTIONABLE = [
 ].join(",");
 const TEXT_ENTRY = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
-// Touch presses arrive as pointerdown plus compatibility mouse events and click.
-const PRESS_FOLLOWUPS = [
-  "pointerup",
-  "mousedown",
-  "mouseup",
-  "click",
-  "dblclick",
-  "auxclick",
-  "contextmenu",
-];
+// Touch presses arrive as pointerdown plus touch events, compatibility mouse events and click.
+const PRESS_FOLLOWUPS = ["pointerup", "mousedown", "mouseup", "contextmenu"];
+// Keyboard activation also fires click, with detail 0; only pointer clicks belong to a press.
+const PRESS_CLICKS = ["click", "dblclick", "auxclick"];
+const PRESS_TOUCHES = ["touchstart", "touchend"];
 
 function actionableAt(target: EventTarget | null): Element | null {
   return target instanceof Element ? target.closest(ACTIONABLE) : null;
@@ -78,7 +76,7 @@ export function installStrayInputGuard(): Disposable {
   let hovered: Element | null = null;
   let hoveredChangedAt = Number.NEGATIVE_INFINITY;
   let hitTestFrame: number | null = null;
-  let swallowPressUntil = Number.NEGATIVE_INFINITY;
+  let swallowingPress = false;
   const swallowedKeys = new Set<string>();
 
   const recent = (time: number) => now() - time < STRAY_INPUT_GUARD_MS;
@@ -92,11 +90,10 @@ export function installStrayInputGuard(): Disposable {
   };
 
   const appeared = (element: Element, time: number) => {
-    // New controls inside an unprompted surface, such as the next question, are never asked for.
     const unprompted =
       element.matches(UNPROMPTED) ||
       element.querySelector(UNPROMPTED) !== null ||
-      (element.parentElement?.closest(UNPROMPTED) != null && holdsControls(element));
+      (element.parentElement?.closest(UNPROMPTED_CONTENTS) != null && holdsControls(element));
     // Typing asks for what it opens, such as the composer's suggestions, but not for focus moves.
     if (!unprompted && (asked() || now() - typedAt < ASKED_FOR_MS)) return;
     appearedAt.set(element, time);
@@ -130,7 +127,15 @@ export function installStrayInputGuard(): Disposable {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["hidden", "open", "data-open", "aria-hidden", "inert"],
+    attributeFilter: [
+      "hidden",
+      "open",
+      "data-open",
+      "aria-hidden",
+      "inert",
+      "disabled",
+      "aria-disabled",
+    ],
   });
 
   const onPointerMove = (event: PointerEvent) => {
@@ -156,16 +161,22 @@ export function installStrayInputGuard(): Disposable {
       recent(startedAt) ||
       appearedRecently(event.target) ||
       (recent(hoveredChangedAt) && actionableAt(event.target) === hovered);
+    swallowingPress = stray;
     if (stray) {
-      swallowPressUntil = now() + ASKED_FOR_MS;
       swallow(event);
       return;
     }
-    swallowPressUntil = Number.NEGATIVE_INFINITY;
     askedAt = pressedAt = now();
   };
   const onPressFollowup = (event: Event) => {
-    if (event.isTrusted && now() < swallowPressUntil) swallow(event);
+    if (event.isTrusted && swallowingPress) swallow(event);
+  };
+  const onPressClick = (event: MouseEvent) => {
+    if (event.detail > 0) onPressFollowup(event);
+  };
+  // Touch listeners on window are passive, so these can only be stopped, not prevented.
+  const onPressTouch = (event: TouchEvent) => {
+    if (event.isTrusted && swallowingPress) event.stopImmediatePropagation();
   };
   const onWheel = () => {
     askedAt = now();
@@ -173,12 +184,16 @@ export function installStrayInputGuard(): Disposable {
 
   const onFocusIn = (event: FocusEvent) => {
     const time = now();
-    if (time - pressedAt < OWN_FOCUS_MS || time - keyedAt < OWN_FOCUS_MS) return;
-    if (asked() && !appearedRecently(event.target)) return;
-    focusMovedAt = time;
+    const own = time - pressedAt < OWN_FOCUS_MS || time - keyedAt < OWN_FOCUS_MS;
+    if (appearedRecently(event.target) || (!own && !asked())) focusMovedAt = time;
+    else if (own) focusMovedAt = Number.NEGATIVE_INFINITY;
   };
   const onKeyDown = (event: KeyboardEvent) => {
     if (!event.isTrusted || event.isComposing || MODIFIER_KEYS.has(event.key)) return;
+    if (event.repeat && swallowedKeys.has(event.code)) {
+      swallow(event);
+      return;
+    }
     const textEditing = isTextEditingKey(event);
     const stray =
       recent(startedAt) || recent(focusMovedAt) || (!textEditing && recent(unpromptedAt));
@@ -202,6 +217,16 @@ export function installStrayInputGuard(): Disposable {
       type,
       onPressFollowup,
       { capture: true },
+    ]),
+    ...PRESS_CLICKS.map((type): [string, EventListener, AddEventListenerOptions] => [
+      type,
+      onPressClick as EventListener,
+      { capture: true },
+    ]),
+    ...PRESS_TOUCHES.map((type): [string, EventListener, AddEventListenerOptions] => [
+      type,
+      onPressTouch as EventListener,
+      { capture: true, passive: true },
     ]),
     ["wheel", onWheel, { capture: true, passive: true }],
     ["scroll", scheduleHitTest, { capture: true, passive: true }],

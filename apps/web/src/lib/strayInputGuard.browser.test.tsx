@@ -45,6 +45,13 @@ it("drops presses on controls that appear or move under the pointer unasked, and
   vi.advanceTimersByTime(STRAY_INPUT_GUARD_MS);
   await userEvent.click(added);
   expect(pressed.mock.calls).toEqual([["top"], ["added"]]);
+
+  // A control enabled in place by a background update is as new as one that appeared.
+  added.disabled = true;
+  settle();
+  added.disabled = false;
+  await userEvent.click(added);
+  expect(pressed.mock.calls).toEqual([["top"], ["added"]]);
 });
 
 it("takes a press at once on what the user's own press opened", async () => {
@@ -99,7 +106,7 @@ it("keeps an unprompted dialog open through an outside press or Escape just afte
   await userEvent.keyboard("{Escape}");
   expect(onOpenChange).not.toHaveBeenCalled();
 
-  vi.advanceTimersByTime(STRAY_INPUT_GUARD_MS);
+  settle();
   await userEvent.keyboard("{Escape}");
   expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything());
 });
@@ -130,6 +137,13 @@ it("drops keys after focus moves unasked, but not after the user moves it", asyn
   await userEvent.click(composer);
   await userEvent.keyboard("d");
   await expect.element(composer).toHaveValue("ad");
+
+  // Clicking back into the field you were typing in takes keys at once.
+  settle();
+  popupField.element().focus();
+  await userEvent.click(composer);
+  await userEvent.keyboard("e");
+  await expect.element(composer).toHaveValue("ade");
 });
 
 it("drops shortcut keys just after an unprompted surface appears, but not typing", async () => {

@@ -195,7 +195,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 
   return (
     <Collapsible
-      data-unprompted
+      data-unprompted="contents"
       dir={promptDirection}
       open={!isCollapsed}
       onOpenChange={(open) => {
