@@ -91,7 +91,7 @@ export function MadoHomuIconPicker({
           <button
             key={swatch}
             type="button"
-            className="size-6 rounded-full border-2 border-transparent aria-pressed:border-foreground"
+            className="size-8 rounded-full border-2 border-transparent aria-pressed:border-foreground sm:size-7"
             style={{ backgroundColor: swatch }}
             aria-label={`Icon color ${swatch}`}
             aria-pressed={color.toLowerCase() === swatch}

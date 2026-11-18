@@ -249,6 +249,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  statusNote,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -266,6 +267,8 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  /** A status the row shows as an icon alone (MadoHomu's Done), named here. */
+  statusNote: string | null;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
@@ -284,6 +287,7 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {statusNote ? <div className="text-success-foreground">{statusNote}</div> : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -561,6 +565,8 @@ type SidebarThreadRowProps = {
   sortable?: SortableThreadRowBag | undefined;
   /** Replaces the project favicon on one-line rows; a folder row with one keeps the normal inset. */
   leadingIcon?: ReactNode | undefined;
+  /** MadoHomu's Pinned and custom sections: read rows keep full-strength titles. */
+  neverRecede?: boolean | undefined;
   // Thread folder members carry the folder's tint; the last one closes the card.
   folderTintClassName?: string | undefined;
   folderCardEnd?: boolean | undefined;
@@ -751,13 +757,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const shouldRecede = shouldRecedeSidebarThread({
-    status,
-    isUnread,
-    isWoke,
-    isActive: props.isActive,
-    isSelected,
-  });
+  const shouldRecede =
+    props.neverRecede !== true &&
+    shouldRecedeSidebarThread({
+      status,
+      isUnread,
+      isWoke,
+      isActive: props.isActive,
+      isSelected,
+    });
   const topStatus =
     status === "preparing" || status === "working"
       ? {
@@ -867,6 +875,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      statusNote={
+        variant.startsWith("folder") &&
+        topStatus?.icon === "done" &&
+        props.leadingIcon !== undefined
+          ? topStatus.label
+          : null
+      }
     />
   );
 
@@ -1353,6 +1368,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                       !isWoke && "group-any-hover/sidebar-row:opacity-0",
+                      // MadoHomu rows: the "…" then sits right beside the settle tick.
+                      !isWoke &&
+                        props.leadingIcon !== undefined &&
+                        props.showActionsButton &&
+                        "group-any-hover/sidebar-row:hidden",
                     )}
                   >
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1378,6 +1398,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
+                    ) : inFolder &&
+                      topStatus?.icon === "done" &&
+                      props.leadingIcon !== undefined ? (
+                      // MadoHomu rows leave the title its room: Done is the icon alone.
+                      <span className={cn("inline-flex", topStatus.className)}>
+                        <TopStatusIcon icon="done" className="size-3" />
+                        <span className="sr-only">{topStatus.label}</span>
+                      </span>
                     ) : inFolder && topStatus ? (
                       // Folder rows have no status line, so the status takes the time slot.
                       <span

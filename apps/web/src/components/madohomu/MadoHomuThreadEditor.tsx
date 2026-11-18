@@ -67,7 +67,7 @@ export function MadoHomuThreadEditor({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Edit MadoHomu thread</DialogTitle>
+          <DialogTitle>Edit thread</DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <div className="grid gap-4">
@@ -83,14 +83,14 @@ export function MadoHomuThreadEditor({
             />
             <label className="grid gap-1 text-sm">
               Thread prompt
+              <span className="text-xs text-muted-foreground">
+                Standing instructions for this thread. The agent sees them on every turn.
+              </span>
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 maxLength={MADOHOMU_THREAD_PROMPT_MAX_LENGTH}
               />
-              <span className="text-xs text-muted-foreground">
-                Included privately with the title on every turn.
-              </span>
             </label>
           </div>
         </DialogPanel>

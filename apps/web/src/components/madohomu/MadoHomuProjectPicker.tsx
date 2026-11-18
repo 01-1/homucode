@@ -10,6 +10,7 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuRadioItemIndicator,
   MenuSeparator,
   MenuTrigger,
 } from "../ui/menu";
@@ -20,7 +21,7 @@ import { useMadoHomuActions } from "./useMadoHomuActions";
  * Opens T3 Code's own add-project flow (new folder, existing folder, clone) and makes
  * the project it ends on MadoHomu's project, instead of opening a thread in it.
  */
-function useNewMadoHomuProject(environmentId: EnvironmentId) {
+function useNewMadoHomuProject(environmentId: EnvironmentId, onChosen?: () => void) {
   const { changeProject } = useMadoHomuActions(environmentId);
   return () =>
     openCommandPalette({
@@ -36,6 +37,7 @@ function useNewMadoHomuProject(environmentId: EnvironmentId) {
           return;
         }
         void changeProject(project.projectId);
+        onChosen?.();
       },
     });
 }
@@ -62,16 +64,25 @@ export function MadoHomuProjectPicker({ environmentId }: { environmentId: Enviro
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup align="start">
-        <MadoHomuProjectMenuItems environmentId={environmentId} />
+        <MadoHomuProjectMenuItems environmentId={environmentId} showClear />
       </MenuPopup>
     </Menu>
   );
 }
 
 /** "New project…", the project list and "Clear project": the picker's menu, reused by the sidebar. */
-export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: EnvironmentId }) {
+export function MadoHomuProjectMenuItems({
+  environmentId,
+  onChosen,
+  showClear = false,
+}: {
+  environmentId: EnvironmentId;
+  onChosen?: () => void;
+  /** Settings' picker only: the gear menu leaves it out so a slip cannot empty the view. */
+  showClear?: boolean;
+}) {
   const actions = useMadoHomuActions(environmentId);
-  const newProject = useNewMadoHomuProject(environmentId);
+  const newProject = useNewMadoHomuProject(environmentId, onChosen);
   const projects = useProjects().filter(
     (p) => p.environmentId === environmentId && p.archivedAt === null,
   );
@@ -87,19 +98,31 @@ export function MadoHomuProjectMenuItems({ environmentId }: { environmentId: Env
         value={current?.id ?? ""}
         onValueChange={(value) => {
           const project = projects.find((p) => p.id === value);
-          if (project) void actions.changeProject(project.id);
+          if (!project) return;
+          void actions.changeProject(project.id);
+          onChosen?.();
         }}
       >
         {projects.map((p) => (
           <MenuRadioItem key={p.id} value={p.id} closeOnClick>
-            {p.title}
+            <span className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate">{p.title}</span>
+              <MenuRadioItemIndicator />
+            </span>
           </MenuRadioItem>
         ))}
       </MenuRadioGroup>
-      {actions.settings.madohomuProjectId !== null && (
+      {showClear && actions.settings.madohomuProjectId !== null && (
         <>
           <MenuSeparator />
-          <MenuItem onClick={() => void actions.changeProject(null)}>Clear project</MenuItem>
+          <MenuItem
+            onClick={() => {
+              void actions.changeProject(null);
+              onChosen?.();
+            }}
+          >
+            Clear project
+          </MenuItem>
         </>
       )}
     </>

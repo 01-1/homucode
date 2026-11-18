@@ -279,7 +279,8 @@ export const ChatHeader = memo(function ChatHeader({
       ref={breadcrumbContainerRef}
       className={cn(
         "group/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        rightPanelOpen ? "pr-10" : "pr-24",
+        // Clears the floating panel toggles, which are 32px wide below sm.
+        rightPanelOpen ? "pr-10" : trailingControls ? "pr-28 sm:pr-24" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
