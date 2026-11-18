@@ -79,7 +79,7 @@ const make = Effect.gen(function* () {
     launcherEnabled: false,
     environmentId: null,
   };
-  let window: Electron.BrowserWindow | null = null;
+  let window: { browser: Electron.BrowserWindow; explicitSplit: boolean } | null = null;
   let appliedLauncher: boolean | null = null;
   const entryPath = environment.path.join(
     environment.homeDirectory,
@@ -102,6 +102,10 @@ const make = Effect.gen(function* () {
     url.hash = route.pathname + route.search;
     return url.href;
   };
+  const windowEnvironmentId = (browser: Electron.BrowserWindow) => {
+    const route = browser.webContents.getURL().split("#")[1];
+    return new URLSearchParams(route?.split("?")[1]).get("environmentId");
+  };
   const report = (effect: Effect.Effect<void, DesktopMadoHomuError>) => {
     runFork(
       effect.pipe(Effect.catch((error) => Effect.logWarning("MadoHomu action failed", error))),
@@ -111,14 +115,23 @@ const make = Effect.gen(function* () {
     function* (location: Omit<DesktopMadoHomuWindowMode, "mode"> | undefined) {
       requested = true;
       if (!configured) return;
-      if (window && !window.isDestroyed()) {
-        if (location) {
+      const existing = window;
+      if (existing && !existing.browser.isDestroyed()) {
+        // Clicking a thread also adds an environment to the route. Only Split pins the window.
+        const routedEnvironment = windowEnvironmentId(existing.browser);
+        if (
+          location ||
+          (!existing.explicitSplit &&
+            routedEnvironment !== null &&
+            routedEnvironment !== settings.environmentId)
+        ) {
           yield* Effect.tryPromise({
-            try: () => window!.loadURL(madohomuUrl(location)),
+            try: () => existing.browser.loadURL(madohomuUrl(location)),
             catch: (cause) => new DesktopMadoHomuError({ operation: "open", cause }),
           });
+          existing.explicitSplit = location !== undefined;
         }
-        yield* windows.reveal(window);
+        yield* windows.reveal(existing.browser);
         requested = false;
         return;
       }
@@ -142,10 +155,10 @@ const make = Effect.gen(function* () {
         },
         { auxiliary: true, app: true },
       );
-      window = created;
+      window = { browser: created, explicitSplit: location !== undefined };
       yield* history.register(created.webContents, { surface: "madohomu" });
       created.once("closed", () => {
-        if (window === created) window = null;
+        if (window?.browser === created) window = null;
       });
       created.once("ready-to-show", () => report(windows.reveal(created)));
       created.on("page-title-updated", (event) => {
@@ -221,11 +234,9 @@ const make = Effect.gen(function* () {
       configured = true;
       if (!next.enabled && wasEnabled) {
         requested = false;
-        // A detached thread can be pinned to a machine other than the launch destination.
-        const route = window?.webContents.getURL().split("#")[1];
-        const pinned = new URLSearchParams(route?.split("?")[1]).get("environmentId");
-        if (pinned === null || pinned === next.environmentId) {
-          window?.close();
+        const pinned = window?.explicitSplit ? windowEnvironmentId(window.browser) : null;
+        if (window && (pinned === null || pinned === next.environmentId)) {
+          window.browser.close();
           window = null;
         }
       }
@@ -292,7 +303,7 @@ const make = Effect.gen(function* () {
           yield* navigateMain("code", location);
         } else {
           yield* navigateMain("madohomu", location);
-          window?.close();
+          window?.browser.close();
           window = null;
         }
       },

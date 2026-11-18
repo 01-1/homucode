@@ -46,7 +46,9 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
     expect(files.get(file)).toContain(
       "Icon=/home/user/.local/share/icons/com.t3tools.T3Code.desktop.png",
     );
-    yield* madohomu.configure({ enabled: true, launcherEnabled: false, environmentId: "local" });
+    yield* madohomu.configure({ enabled: true, launcherEnabled: true, environmentId: "remote" });
+    expect(files.has(file)).toBe(true);
+    yield* madohomu.configure({ enabled: true, launcherEnabled: false, environmentId: "remote" });
     expect(files.has(file)).toBe(false);
     yield* madohomu.configure({ enabled: true, launcherEnabled: true, environmentId: "local" });
     yield* madohomu.configure({ enabled: false, launcherEnabled: true, environmentId: "local" });
@@ -82,10 +84,11 @@ it.effect("adds and removes the Linux launcher only while both opt-ins are enabl
 });
 
 it.effect(
-  "launches on the default route and preserves an explicitly split thread across destination changes",
+  "reopens an ordinary window on the saved destination and preserves an explicitly split thread",
   () => {
     const loaded: string[] = [];
     const sent: unknown[] = [];
+    let currentUrl = "";
     let closed = 0;
     let created = 0;
     let revealed = 0;
@@ -98,9 +101,10 @@ it.effect(
       },
       loadURL: async (url: string) => {
         loaded.push(url);
+        currentUrl = url;
       },
       webContents: {
-        getURL: () => loaded.at(-1) ?? "",
+        getURL: () => currentUrl,
         on: () => undefined,
         setWindowOpenHandler: () => undefined,
       },
@@ -119,10 +123,20 @@ it.effect(
       expect(created).toBe(1);
       expect(new URL(loaded[0]!).pathname).toBe("/");
       expect(new URL(loaded[0]!).hash).toBe("#/madohomu");
+      const location = { environmentId: "local", threadId: "selected" };
+      currentUrl += "?environmentId=local&threadId=selected";
       yield* madohomu.open;
       expect(created).toBe(1);
       expect(revealed).toBe(1);
-      const location = { environmentId: "local", threadId: "selected" };
+      expect(loaded).toHaveLength(1);
+      const remoteSettings = { ...settings, environmentId: "remote" };
+      yield* madohomu.configure(remoteSettings);
+      expect(loaded).toHaveLength(1);
+      yield* madohomu.open;
+      expect(created).toBe(1);
+      expect(loaded).toHaveLength(2);
+      expect(new URL(currentUrl).hash).toBe("#/madohomu");
+
       yield* madohomu.setWindowMode({ mode: "merged", ...location });
       expect(sent).toEqual([{ view: "madohomu", ...location }]);
       expect(closed).toBe(1);
@@ -133,9 +147,12 @@ it.effect(
       );
       expect(sent.at(-1)).toEqual({ view: "code", ...location });
       const loads = loaded.length;
-      yield* madohomu.configure({ ...settings, environmentId: "remote" });
+      yield* madohomu.configure(settings);
+      yield* madohomu.configure(remoteSettings);
+      yield* madohomu.open;
       expect(loaded.length).toBe(loads);
-      yield* madohomu.configure({ ...settings, enabled: false, environmentId: "remote" });
+      expect(new URL(currentUrl).hash).toBe("#/madohomu?environmentId=local&threadId=selected");
+      yield* madohomu.configure({ ...remoteSettings, enabled: false });
       expect(closed).toBe(1);
       yield* madohomu.configure(settings);
       yield* madohomu.configure({ ...settings, enabled: false });
