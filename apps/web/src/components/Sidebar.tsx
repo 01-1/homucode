@@ -493,7 +493,7 @@ function useSidebarThreads(input: {
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
   // Keeps folders with no active threads, so a project the user filtered to or pinned can start one.
   readonly keepEmptyFolders: (group: SidebarProjectSnapshot) => boolean;
-  /** Settled rows search filters want listed; pages load for them even while the shelf is closed. */
+  /** Settled rows search filters want listed, read by a pager of their own. */
   readonly searchSettledCount: number;
 }) {
   const {
@@ -584,13 +584,23 @@ function useSidebarThreads(input: {
     settledShelfExpanded,
   });
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
+  const olderSettledScopeList = olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys);
   const olderSettledShelf = useOlderSettledShelf({
-    scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
-    expanded: settledShelfExpanded || searchSettledCount > 0,
-    visibleCount: Math.max(settledShelfExpanded ? settledVisibleCount : 0, searchSettledCount),
+    scopes: olderSettledScopeList,
+    expanded: settledShelfExpanded,
+    visibleCount: settledVisibleCount,
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
+  // Search pages older settled threads apart from the shelf, so its pages end with the
+  // search, and counts folder members, which search lists too.
+  const searchSettledShelf = useOlderSettledShelf({
+    scopes: olderSettledScopeList,
+    expanded: searchSettledCount > 0,
+    visibleCount: searchSettledCount,
+  });
+  const searchListedSettledThreads = partition.settledThreads.filter(searchSettledShelf.isListed);
+  useOlderSettledShelfGrowth(searchSettledShelf, searchListedSettledThreads);
   const settledFolderThreadCount = threadFolderBlocks
     .filter((block) => block.settled)
     .reduce((total, block) => total + block.threads.length, 0);
@@ -699,7 +709,8 @@ function useSidebarThreads(input: {
       ["settled", partition.settledThreads],
     ] as const,
     unloadedSettledCount,
-    listedSettledCount: listedSettledThreads.length,
+    searchSettledShelf,
+    searchListedSettledCount: searchListedSettledThreads.length,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1166,7 +1177,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     useState<SidebarSearchFilters>(NO_SIDEBAR_SEARCH_FILTERS);
   const [searchSort, setSearchSort] = useLocalStorage(SEARCH_SORT_KEY, "recent", SidebarSearchSort);
   // Older settled rows filters asked for; they load without opening the Settled shelf.
-  const [searchSettledCount, setSearchSettledCount] = useState(0);
+  const [searchSettled, setSearchSettled] = useState({ scopeKey: "", count: 0 });
   // Only status filters read visits; subscribing always would re-render the sidebar on each one.
   const localLastVisitedAtById = useUiStateStore((store) =>
     searchFilters.statuses.length > 0 ? store.threadLastVisitedAtById : null,
@@ -1282,6 +1293,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const hasThreadSearchQuery = threadSearchQuery.trim().length > 0;
   const isSearchingThreads = hasThreadSearchQuery || sidebarSearchFiltersNarrowList(searchFilters);
   const canClearThreadSearch = hasThreadSearchQuery || countSidebarSearchFilters(searchFilters) > 0;
+  // Pages a search loaded end with it, however it ends.
+  if (!isSearchingThreads && searchSettled.count !== 0)
+    setSearchSettled({ scopeKey: "", count: 0 });
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1471,7 +1485,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     searchableThreads,
     searchShelves,
     unloadedSettledCount,
-    listedSettledCount,
+    searchSettledShelf,
+    searchListedSettledCount,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1514,7 +1529,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null,
     keepEmptyFolders: (group) =>
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
-    searchSettledCount: isSearchingThreads ? searchSettledCount : 0,
+    searchSettledCount:
+      isSearchingThreads && searchSettled.scopeKey === (projectScopeKey ?? "")
+        ? searchSettled.count
+        : 0,
   });
 
   const searchCandidates =
@@ -1608,13 +1626,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   }
   const highlightedResultIndex =
     searchHighlightKey === null ? -1 : orderedSearchResultKeys.indexOf(searchHighlightKey);
-  // The highlighted row stays mounted when late matches push it past the page.
-  const shownSearchResultCount = Math.max(
+  const pagedSearchResultCount =
     searchResultsShown.key === searchResultsKey
       ? searchResultsShown.count
-      : SEARCH_RESULTS_PAGE_COUNT,
-    highlightedResultIndex + 1,
-  );
+      : SEARCH_RESULTS_PAGE_COUNT;
+  // The highlighted row stays mounted when late matches push it past the page, and rows
+  // shown that way stay shown.
+  const shownSearchResultCount = Math.max(pagedSearchResultCount, highlightedResultIndex + 1);
+  if (shownSearchResultCount > pagedSearchResultCount) {
+    setSearchResultsShown({ key: searchResultsKey, count: shownSearchResultCount });
+  }
   const threadSearchResults = orderedSearchResults.slice(0, shownSearchResultCount);
   const threadSearchResultKeys = orderedSearchResultKeys.slice(0, shownSearchResultCount);
   const hiddenSearchResultCount = orderedSearchResults.length - threadSearchResults.length;
@@ -1718,7 +1739,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const clearThreadSearch = () => {
     setThreadSearchQuery("");
     setSearchFilters(NO_SIDEBAR_SEARCH_FILTERS);
-    setSearchSettledCount(0);
     setSearchHighlightKey(null);
   };
   const selectThreadSearchResult = (thread: EnvironmentThreadShell) => {
@@ -4221,18 +4241,21 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               </span>
               <button
                 type="button"
-                aria-disabled={olderSettledShelf.loading}
+                aria-disabled={searchSettledShelf.loading}
                 onClick={() => {
-                  if (olderSettledShelf.loading) return;
-                  olderSettledShelf.retry();
+                  if (searchSettledShelf.loading) return;
+                  searchSettledShelf.retry();
                   // Asking past the listed rows makes the pager read the next page.
-                  setSearchSettledCount(listedSettledCount + SETTLED_TAIL_PAGE_COUNT);
+                  setSearchSettled({
+                    scopeKey: projectScopeKey ?? "",
+                    count: searchListedSettledCount + SETTLED_TAIL_PAGE_COUNT,
+                  });
                 }}
                 className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 font-medium hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
               >
-                {olderSettledShelf.loading
+                {searchSettledShelf.loading
                   ? "Loading"
-                  : olderSettledShelf.failed
+                  : searchSettledShelf.failed
                     ? "Retry"
                     : "Load more"}
               </button>
