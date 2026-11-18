@@ -1,3 +1,4 @@
+import { messageSourceLabel } from "@t3tools/shared/messageSource";
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -90,18 +91,21 @@ function QueuedRunSender(props: {
     attribution === "automation"
       ? {
           icon: "calendar.badge.clock" as const,
-          label:
-            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ?? "Automation",
+          label: `Automatic · ${
+            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ?? "Scheduled task"
+          }`,
         }
       : attribution === "agent"
         ? {
             icon: "bubble.left.and.bubble.right" as const,
-            label: senderShell?.title.trim() || linkedSender?.title.trim() || "Agent",
+            label: [
+              messageSourceLabel(props.message),
+              senderShell?.title.trim() || linkedSender?.title.trim(),
+            ]
+              .filter(Boolean)
+              .join(" · "),
           }
-        : attribution === "t3code"
-          ? { icon: null, label: "Sent by T3 Code" }
-          : null;
-  if (sender === null) return null;
+        : { icon: null, label: messageSourceLabel(props.message) };
   return (
     <View className="flex-row items-center gap-1">
       {sender.icon ? (

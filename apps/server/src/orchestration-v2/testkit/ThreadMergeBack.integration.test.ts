@@ -17,7 +17,10 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
-import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 
 import { ClaudeOrchestratorReplayHarness } from "../Adapters/ClaudeAdapterV2.testkit.ts";
 import { CodexOrchestratorReplayHarness } from "../Adapters/CodexAdapterV2.testkit.ts";
@@ -435,6 +438,7 @@ describe("orchestration V2 merge-back provider replay", () => {
             THREAD_MERGE_BACK_SIBLINGS_RECALL_PROMPT,
           ],
           DateTime.makeUnsafe(0),
+          UNKNOWN_DEVICE_HUMAN_LINE,
         );
         const cwd = yield* Effect.acquireRelease(
           Effect.promise(() => makeCheckpointWorkspace(`merge-back-siblings-${variant.driver}`)),

@@ -517,12 +517,18 @@ it.effect.each(["human", "agent", "scheduled", "coalesced", "slash"] as const)(
       const timestamp = DateTime.formatIso(
         DateTime.add(createdAt, { minutes: -sent.getTimezoneOffset() }),
       ).slice(0, 19);
+      const senderLine =
+        kind === "human"
+          ? "[T3] Sent from: unknown device. A human sent this message."
+          : kind === "agent"
+            ? "[T3] Automatic message from the agent in thread sender:timestamp. No human sent this message."
+            : kind === "scheduled"
+              ? "[T3] Automatic message from a scheduled task. No human sent this message."
+              : "[T3] Automatic message from T3 Code. No human sent this message.";
+      const expected = kind === "slash" ? text : `${timestamp}: ${text}\n\n${senderLine}`;
       assert.deepEqual(
         received.map((input) => input.message.text),
-        [
-          kind === "slash" ? text : `${timestamp}: ${text}`,
-          kind === "slash" ? text : `${timestamp}: ${text}`,
-        ],
+        [expected, expected],
       );
       assert.strictEqual(received[0]?.message.attachments, message.attachments);
       assert.equal(received[0]?.message.senderThreadId, message.senderThreadId);

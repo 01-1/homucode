@@ -58,7 +58,10 @@ import * as PeerForwarding from "../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../peer/PeerLinkRequests.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
 
-import { materializeReplayPromptTimestamps } from "../orchestration-v2/testkit/ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "../orchestration-v2/testkit/ReplayMessageTimestamps.ts";
 import { provideDeterministicTestRuntime } from "../orchestration-v2/testkit/DeterministicRuntime.ts";
 
 const layerOrchestratorToolkit = McpHttpServer.layerOrchestratorToolkit.pipe(
@@ -115,12 +118,19 @@ const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTran
     // turn is still open. This test keeps acting as that parent afterwards, and
     // replaying the exit would kill the shared process and fail the parent run.
     return materializeReplayPromptTimestamps(
-      {
-        ...transcript,
-        entries: transcript.entries.filter((entry) => entry.type !== "runtime_exit"),
-      },
-      [parentPrompt, delegatedPrompt, cancellationPrompt, queuedFollowupPrompt],
+      materializeReplayPromptTimestamps(
+        {
+          ...transcript,
+          entries: transcript.entries.filter((entry) => entry.type !== "runtime_exit"),
+        },
+        [parentPrompt],
+        DateTime.makeUnsafe(0),
+        UNKNOWN_DEVICE_HUMAN_LINE,
+      ),
+      [delegatedPrompt, cancellationPrompt, queuedFollowupPrompt],
       DateTime.makeUnsafe(0),
+      // The parent's agent sends the delegated task and its follow-ups through the MCP tools.
+      `[T3] Automatic message from the agent in thread ${parentThreadId}. No human sent this message.`,
     );
   },
   Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),

@@ -1,3 +1,4 @@
+import { messageSource, messageSourceLabel } from "@t3tools/shared/messageSource";
 import { InlineAudioPreview } from "../files/InlineAudioPreview";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import {
@@ -302,6 +303,9 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 
   return (
     <div className="group flex flex-col items-end gap-1" data-user-message-attribution="automation">
+      <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-source="automatic">
+        Automatic · Scheduled task
+      </p>
       {row.message.inputIntent === "steer" ||
       row.message.inputIntent === "promoted_queued_to_steer" ? (
         <UserMessageIntentMarker
@@ -477,6 +481,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
+  const sourceKind = messageSource(row.message).kind;
+  const sourceLabel = messageSourceLabel(row.message);
   // Messages from other agents fold to one line so the user's own messages stay easy to find.
   const folded = userMessage.attribution === "agent";
   const [expanded, setExpanded] = useState(false);
@@ -859,14 +865,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       className="group @container flex flex-col items-end gap-1"
       data-user-message-attribution={folded ? "agent" : undefined}
     >
-      {userMessage.attribution === "t3code" ? (
-        <p
-          className="me-1 text-2xs text-muted-foreground/70"
-          data-user-message-attribution="t3code"
-        >
-          Sent by T3 Code
-        </p>
-      ) : null}
+      <p
+        className="me-1 text-2xs text-muted-foreground/70"
+        data-user-message-source={sourceKind}
+        data-user-message-attribution={userMessage.attribution === "t3code" ? "t3code" : undefined}
+      >
+        {sourceLabel}
+      </p>
       {/* The row's heading already names the guest for screen readers. */}
       {userMessage.guestName !== undefined ? (
         <div aria-hidden>

@@ -105,8 +105,9 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
     id: "sent-from",
     page: 2,
-    title: "Tell agents which device sent a message",
-    description: "Append a [T3] Sent from line to your messages.",
+    title: "Tell agents who sent each message",
+    description:
+      "End every message an agent receives with a [T3] line: a human and their device, or what sent an automatic message.",
     setting: "messageSentFromEnabled",
   },
   {

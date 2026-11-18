@@ -19,7 +19,10 @@ import { assertClaudeBackgroundTaskWakeOutput } from "./fixtures/claude_backgrou
 import { subagentInput } from "./fixtures/subagent/input.ts";
 import { runOrchestratorV2Scenario } from "./OrchestratorScenario.ts";
 import * as ProviderReplayHarness from "./ProviderReplayHarness.ts";
-import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 import {
   CLAUDE_MODEL_SELECTION,
@@ -69,7 +72,12 @@ describe("Claude Agent SDK replay fixtures", () => {
       const raw = yield* readClaudeTranscriptFixture("subagent");
       const transcript = yield* ClaudeOrchestratorReplayHarness.decodeTranscript(
         materializeReplayTranscriptRuntimeInstructions(
-          materializeReplayPromptTimestamps(raw, [SUBAGENT_PROMPT], DateTime.makeUnsafe(0)),
+          materializeReplayPromptTimestamps(
+            raw,
+            [SUBAGENT_PROMPT],
+            DateTime.makeUnsafe(0),
+            UNKNOWN_DEVICE_HUMAN_LINE,
+          ),
           {
             driver: ProviderDriverKind.make("claudeAgent"),
             model: CLAUDE_MODEL_SELECTION.model,

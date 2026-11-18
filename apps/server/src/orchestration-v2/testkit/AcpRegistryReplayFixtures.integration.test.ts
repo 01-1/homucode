@@ -25,6 +25,10 @@ import {
   runReplayFixture,
 } from "./ProviderReplayFixtures.ts";
 import { layerProviderReplay } from "./ProviderReplayHarness.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 
 describe("ACP registry replay fixtures", () => {
@@ -123,10 +127,18 @@ describe("ACP registry replay fixtures", () => {
         ...materialized,
         name,
         transcript: yield* AcpRegistryOrchestratorReplayHarness.decodeTranscript(
-          materializeReplayTranscriptRuntimeInstructions(transcript, {
-            driver: ProviderDriverKind.make("acpRegistry"),
-            model: "replay-model-a",
-          }),
+          materializeReplayTranscriptRuntimeInstructions(
+            materializeReplayPromptTimestamps(
+              transcript,
+              [SIMPLE_PROMPT],
+              DateTime.makeUnsafe(0),
+              UNKNOWN_DEVICE_HUMAN_LINE,
+            ),
+            {
+              driver: ProviderDriverKind.make("acpRegistry"),
+              model: "replay-model-a",
+            },
+          ),
         ),
         runtimePolicyOverride: { cwd: yield* checkpointWorkspace(name) },
       };
