@@ -508,7 +508,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           .dispatch(
             answers === undefined
               ? { ...common, type: "thread.user-input.dismiss" }
-              : { ...common, type: "runtime-request.respond", answers },
+              : { ...common, type: "runtime-request.respond", answers, createdBy: "agent" },
           )
           .pipe(Effect.mapError(dispatchFailure));
         return { sequence: result.sequence };

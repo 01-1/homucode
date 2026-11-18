@@ -482,9 +482,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
   const userMessage = resolveUserMessagePresentation(row.message);
   const sourceKind = messageSource(row.message).kind;
-  // A run of human messages names its sender once; every automatic message names its own.
-  const sourceLabel =
-    sourceKind === "human" && row.groupedWithPrevious ? null : messageSourceLabel(row.message);
+  const sourceLabel = messageSourceLabel(row.message);
   // Messages from other agents fold to one line so the user's own messages stay easy to find.
   const folded = userMessage.attribution === "agent";
   const [expanded, setExpanded] = useState(false);
@@ -867,17 +865,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       className="group @container flex flex-col items-end gap-1"
       data-user-message-attribution={folded ? "agent" : undefined}
     >
-      {sourceLabel === null ? null : (
-        <p
-          className="me-1 text-2xs text-muted-foreground/70"
-          data-user-message-source={sourceKind}
-          data-user-message-attribution={
-            userMessage.attribution === "t3code" ? "t3code" : undefined
-          }
-        >
-          {sourceLabel}
-        </p>
-      )}
+      <p
+        className="me-1 text-2xs text-muted-foreground/70"
+        data-user-message-source={sourceKind}
+        data-user-message-attribution={userMessage.attribution === "t3code" ? "t3code" : undefined}
+      >
+        {sourceLabel}
+      </p>
       {/* The row's heading already names the guest for screen readers. */}
       {userMessage.guestName !== undefined ? (
         <div aria-hidden>

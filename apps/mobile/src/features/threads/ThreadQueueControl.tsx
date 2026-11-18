@@ -91,13 +91,19 @@ function QueuedRunSender(props: {
     attribution === "automation"
       ? {
           icon: "calendar.badge.clock" as const,
-          label:
-            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ?? "Automation",
+          label: `Automatic · ${
+            tasks.data?.tasks.find((task) => task.id === scheduledTaskId)?.title ?? "Scheduled task"
+          }`,
         }
       : attribution === "agent"
         ? {
             icon: "bubble.left.and.bubble.right" as const,
-            label: senderShell?.title.trim() || linkedSender?.title.trim() || "Agent",
+            label: [
+              messageSourceLabel(props.message),
+              senderShell?.title.trim() || linkedSender?.title.trim(),
+            ]
+              .filter(Boolean)
+              .join(" · "),
           }
         : { icon: null, label: messageSourceLabel(props.message) };
   return (
