@@ -1,6 +1,6 @@
 import { DEFAULT_UNIFIED_SETTINGS, SidebarThreadFolderStyle } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
-import { updateClientSettings } from "../../hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -35,6 +35,153 @@ const SIDEBAR_THREAD_FOLDER_STYLE_LABELS: Record<SidebarThreadFolderStyle, strin
 const isSidebarThreadFolderStyle = Schema.is(SidebarThreadFolderStyle);
 
 export function HomuCodeSettingsPanel() {
+  const { scope, connectedEnvironments } = useSettingsScope();
+  const unavailableReason =
+    scope.kind === "unavailable"
+      ? scope.message
+      : scope.kind === "environment" && connectedEnvironments.length === 0
+        ? `Reconnect ${scope.label} to change its settings.`
+        : null;
+
+  return (
+    <SettingsPageContainer searchTargetFallbacks={{ homucode: "settings-sync" }}>
+      <HomuCodeDeviceSettings />
+      {unavailableReason === null ? (
+        <HomuCodeEnvironmentSettings />
+      ) : (
+        <p className="text-sm text-muted-foreground">{unavailableReason}</p>
+      )}
+    </SettingsPageContainer>
+  );
+}
+
+function HomuCodeDeviceSettings() {
+  const settings = useClientSettings();
+  const { environments } = useEnvironments();
+  const scratchEnvironments = environments.filter(
+    (environment) => environment.entry.enabled && environment.connection.phase !== "unsupported",
+  );
+
+  return (
+    <>
+      <SettingsSection title="Settings sync">
+        <SettingsRow
+          {...searchableSetting("settings-sync")}
+          description="Keep this device's settings the same as your other devices', through connected servers. When a setting changed in two places, or on first setup, you choose which value to keep."
+          control={
+            <Switch
+              checked={settings.settingsSyncEnabled}
+              onCheckedChange={(checked) =>
+                void updateClientSettings({ settingsSyncEnabled: Boolean(checked) })
+              }
+              aria-label="Settings sync"
+            />
+          }
+        />
+      </SettingsSection>
+      <SettingsSection title="Sent messages">
+        <SettingsRow
+          {...searchableSetting("user-message-markdown")}
+          description="Off shows your sent messages as the plain text you typed."
+          resetAction={
+            settings.userMessageMarkdownEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled ? (
+              <SettingResetButton
+                label="sent message formatting"
+                onClick={() =>
+                  void updateClientSettings({
+                    userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.userMessageMarkdownEnabled}
+              onCheckedChange={(checked) =>
+                void updateClientSettings({ userMessageMarkdownEnabled: Boolean(checked) })
+              }
+              aria-label="Format sent messages as Markdown"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("user-message-plus-bullets")}
+          description="Off keeps a + at the start of a line in your sent messages as you typed it."
+          resetAction={
+            settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets ? (
+              <SettingResetButton
+                label="+ bullets"
+                onClick={() =>
+                  void updateClientSettings({
+                    userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.userMessagePlusBullets}
+              disabled={!settings.userMessageMarkdownEnabled}
+              onCheckedChange={(checked) =>
+                void updateClientSettings({ userMessagePlusBullets: Boolean(checked) })
+              }
+              aria-label="Lines starting with + become bullets"
+            />
+          }
+        />
+      </SettingsSection>
+      <SettingsSection title="Sidebar">
+        <SettingsRow
+          {...searchableSetting("thread-folder-style")}
+          description="Cards tint each folder. Tab groups color the folder name and draw a line beside its threads."
+          resetAction={
+            settings.sidebarThreadFolderStyle !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle ? (
+              <SettingResetButton
+                label="folder style"
+                onClick={() =>
+                  void updateClientSettings({
+                    sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.sidebarThreadFolderStyle}
+              onValueChange={(value) => {
+                if (isSidebarThreadFolderStyle(value)) {
+                  void updateClientSettings({ sidebarThreadFolderStyle: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Folder style">
+                <SelectValue>
+                  {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[settings.sidebarThreadFolderStyle]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {SidebarThreadFolderStyle.literals.map((style) => (
+                  <SelectItem hideIndicator key={style} value={style}>
+                    {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[style]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+      </SettingsSection>
+      <ScratchEnvironmentSettings environments={scratchEnvironments} />
+      <AppScriptsSettingsSection />
+    </>
+  );
+}
+
+function HomuCodeEnvironmentSettings() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const mixedStatusLineCommand = useScopedSettingsMixed(["statusLineCommand"]);
@@ -55,28 +202,9 @@ export function HomuCodeSettingsPanel() {
     typeof window !== "undefined" &&
     Boolean(window.desktopBridge) &&
     !primaryEnvironment?.serverConfig?.settings.buildToolsSettingsVisible;
-  const scratchEnvironments = environments.filter(
-    (environment) => environment.entry.enabled && environment.connection.phase !== "unsupported",
-  );
 
   return (
-    <SettingsPageContainer searchTargetFallbacks={{ homucode: "settings-sync" }}>
-      <SettingsSection title="Settings sync">
-        <SettingsRow
-          {...searchableSetting("settings-sync")}
-          description="Keep this device's settings the same as your other devices', through connected servers. When a setting changed in two places, or on first setup, you choose which value to keep."
-          control={
-            <Switch
-              checked={settings.settingsSyncEnabled}
-              onCheckedChange={(checked) =>
-                void updateClientSettings({ settingsSyncEnabled: Boolean(checked) })
-              }
-              aria-label="Settings sync"
-            />
-          }
-        />
-      </SettingsSection>
-
+    <>
       <MadoHomuSettings />
       <BehaviorSettingsSection />
       <SettingsSection id="subagents" title="Subagents">
@@ -240,104 +368,6 @@ export function HomuCodeSettingsPanel() {
           }
         />
       </SettingsSection>
-      <SettingsSection title="Sent messages">
-        <SettingsRow
-          {...searchableSetting("user-message-markdown")}
-          description="Off shows your sent messages as the plain text you typed."
-          resetAction={
-            settings.userMessageMarkdownEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled ? (
-              <SettingResetButton
-                label="sent message formatting"
-                onClick={() =>
-                  void updateClientSettings({
-                    userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.userMessageMarkdownEnabled}
-              onCheckedChange={(checked) =>
-                void updateClientSettings({ userMessageMarkdownEnabled: Boolean(checked) })
-              }
-              aria-label="Format sent messages as Markdown"
-            />
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("user-message-plus-bullets")}
-          description="Off keeps a + at the start of a line in your sent messages as you typed it."
-          resetAction={
-            settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets ? (
-              <SettingResetButton
-                label="+ bullets"
-                onClick={() =>
-                  void updateClientSettings({
-                    userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.userMessagePlusBullets}
-              disabled={!settings.userMessageMarkdownEnabled}
-              onCheckedChange={(checked) =>
-                void updateClientSettings({ userMessagePlusBullets: Boolean(checked) })
-              }
-              aria-label="Lines starting with + become bullets"
-            />
-          }
-        />
-      </SettingsSection>
-      <SettingsSection title="Sidebar">
-        <SettingsRow
-          {...searchableSetting("thread-folder-style")}
-          description="Cards tint each folder. Tab groups color the folder name and draw a line beside its threads."
-          resetAction={
-            settings.sidebarThreadFolderStyle !==
-            DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle ? (
-              <SettingResetButton
-                label="folder style"
-                onClick={() =>
-                  void updateClientSettings({
-                    sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Select
-              value={settings.sidebarThreadFolderStyle}
-              onValueChange={(value) => {
-                if (isSidebarThreadFolderStyle(value)) {
-                  void updateClientSettings({ sidebarThreadFolderStyle: value });
-                }
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Folder style">
-                <SelectValue>
-                  {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[settings.sidebarThreadFolderStyle]}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {SidebarThreadFolderStyle.literals.map((style) => (
-                  <SelectItem hideIndicator key={style} value={style}>
-                    {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[style]}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
-      </SettingsSection>
-      <ScratchEnvironmentSettings environments={scratchEnvironments} />
-      <AppScriptsSettingsSection />
       <AgentMemorySettings />
       <SettingsSection id="building-t3" title="Building T3">
         <SettingsRow
@@ -374,6 +404,6 @@ export function HomuCodeSettingsPanel() {
           Select one environment to configure Building T3.
         </p>
       ) : null}
-    </SettingsPageContainer>
+    </>
   );
 }
