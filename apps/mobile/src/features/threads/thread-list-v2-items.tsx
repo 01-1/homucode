@@ -210,8 +210,8 @@ export function ThreadListV2Section(props: {
   };
   /** Sits right after the label, outside its text, so a long label truncates before it. */
   readonly badge?: ReactNode;
-  /** A quiet number at the end of the rule, before the disclosure. */
-  readonly count?: number;
+  /** A quiet count at the end of the rule, before the disclosure. */
+  readonly count?: number | string;
   readonly accessory?: ReactNode;
 }) {
   const snoozed = props.tone === "snoozed";
@@ -349,7 +349,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
 
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
-  readonly hiddenCount: number;
+  readonly hiddenCount: number | null;
   /** Older settled threads are loading, or their last read failed. */
   readonly state?: "loading" | "failed";
   readonly onPress: () => void;
@@ -359,14 +359,18 @@ export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(pro
       ? "Loading"
       : props.state === "failed"
         ? "Could not load older threads. Retry"
-        : `Show more (${props.hiddenCount} settled hidden)`;
+        : props.hiddenCount === null
+          ? "Show more"
+          : `Show more (${props.hiddenCount} settled hidden)`;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        props.state === undefined
-          ? `Show ${Math.min(props.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`
-          : label
+        props.state !== undefined
+          ? label
+          : props.hiddenCount === null
+            ? "Show more settled threads"
+            : `Show ${Math.min(props.hiddenCount, THREAD_LIST_V2_SETTLED_PAGE_COUNT)} more settled threads`
       }
       disabled={props.state === "loading"}
       onPress={props.onPress}

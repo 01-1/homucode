@@ -84,7 +84,11 @@ import {
 } from "../terminal/terminalLaunchContext";
 import type { ThreadDetailScreenProps } from "./ThreadDetailScreen";
 import { ThreadScreenBinding, ThreadScreenFallback, ThreadScreenHost } from "./ThreadScreenHost";
-import { draftRouteIdentity } from "./thread-route-state";
+import {
+  draftRouteIdentity,
+  isMadoHomuThreadRoute,
+  type MadoHomuThreadRouteParams,
+} from "./thread-route-state";
 import { NewTaskDraftRouteScreen, type NewTaskDraftRouteParams } from "./NewTaskDraftRouteScreen";
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -166,15 +170,15 @@ function OpeningThreadLoadingScreen() {
   );
 }
 
-type ThreadRouteScreenRouteProps = StaticScreenProps<{
-  readonly environmentId?: string;
-  readonly threadId?: string;
-  readonly draft?: NewTaskDraftRouteParams;
-  readonly inspector?: ThreadInspectorTarget;
-  readonly prompt?: string | string[];
-  /** Opened from MadoHomu, which never names its project. */
-  readonly madohomu?: boolean;
-}>;
+type ThreadRouteScreenRouteProps = StaticScreenProps<
+  {
+    readonly environmentId?: string;
+    readonly threadId?: string;
+    readonly draft?: NewTaskDraftRouteParams;
+    readonly inspector?: ThreadInspectorTarget;
+    readonly prompt?: string | string[];
+  } & MadoHomuThreadRouteParams
+>;
 
 interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
   readonly inspectorPresentation?: ThreadInspectorPresentation;
@@ -546,8 +550,9 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
+  const inMadoHomu = isMadoHomuThreadRoute(params, selectedThread?.projectId);
   const headerSubtitle = [
-    params.madohomu === true ? null : (selectedThreadProject?.title ?? null),
+    inMadoHomu ? null : (selectedThreadProject?.title ?? null),
     selectedEnvironmentConnection?.environmentLabel ?? null,
     // A linked environment's delegated task names its parent; other linked work its origin.
     delegatedFrom !== null
@@ -609,7 +614,7 @@ function ThreadRouteContent(
       environmentId: String(selectedThread.environmentId),
       threadId: String(selectedThread.id),
       path: path.split("/").filter((segment) => segment.length > 0),
-      ...(props.route.params?.madohomu === true ? { madohomu: true } : {}),
+      ...(inMadoHomu ? { madohomu: true } : {}),
     };
     navigation.navigate("ThreadFile", params);
   };
@@ -626,9 +631,7 @@ function ThreadRouteContent(
           <ThreadFileNavigatorPane
             cwd={selectedThreadCwd}
             environmentId={selectedThread.environmentId}
-            projectName={
-              (params.madohomu === true ? null : selectedThreadProject?.title) ?? "Files"
-            }
+            projectName={(inMadoHomu ? null : selectedThreadProject?.title) ?? "Files"}
             selectedPath={null}
             onSelectFile={(path) =>
               closeInspectorSheet
@@ -1024,10 +1027,10 @@ function ThreadRouteContent(
       <>
         <ThreadScreenBinding
           header={
-            props.inspectorPresentation ? null : params.madohomu === true ? (
+            props.inspectorPresentation ? null : inMadoHomu ? (
               <MadoHomuThreadHeader
                 environmentId={selectedThread.environmentId}
-                threadId={selectedThread.id}
+                thread={selectedThread}
                 {...threadHeaderProps}
               />
             ) : (

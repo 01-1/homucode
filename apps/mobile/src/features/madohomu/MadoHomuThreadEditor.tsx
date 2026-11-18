@@ -21,9 +21,11 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { MadoHomuIcon, MADOHOMU_ICONS } from "./MadoHomuIcon";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 
+export type MadoHomuEditableThread = Pick<EnvironmentThreadShell, "id" | "title">;
+
 export function MadoHomuThreadEditor(props: {
   readonly environmentId: EnvironmentId;
-  readonly thread: EnvironmentThreadShell;
+  readonly thread: MadoHomuEditableThread;
   readonly onClose: () => void;
 }) {
   const actions = useMadoHomuActions(props.environmentId);

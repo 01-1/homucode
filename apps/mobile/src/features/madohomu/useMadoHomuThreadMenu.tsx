@@ -8,10 +8,11 @@ import {
 } from "@t3tools/contracts";
 import { useState } from "react";
 
-import type { AppBarMenu, AppBarMenuItem } from "../../components/ui/AppBar.types";
+import type { AppBarMenu } from "../../components/ui/AppBar.types";
 import * as Dialog from "../../components/ui/Dialog";
+import { appBarMenuItemsFromActions } from "../../components/ui/menuActionItems";
 import { useThreadShell } from "../../state/entities";
-import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
+import { MadoHomuThreadEditor, type MadoHomuEditableThread } from "./MadoHomuThreadEditor";
 import type { useMadoHomuFiling } from "./useMadoHomuActions";
 
 export function promptSectionName(
@@ -44,13 +45,18 @@ export function useMadoHomuThreadMenu(input: {
   readonly environmentId: EnvironmentId;
   readonly actions: ReturnType<typeof useMadoHomuFiling>;
   readonly canEdit: boolean;
+  readonly thread?: MadoHomuEditableThread;
   readonly onReorder?: () => void;
   readonly onStep?: (threadId: ThreadId, direction: "up" | "down") => void;
 }) {
   const { environmentId, actions, canEdit } = input;
   const { settings } = actions;
   const [editing, setEditing] = useState<ThreadId | null>(null);
-  const edited = useThreadShell(editing === null ? null : scopeThreadRef(environmentId, editing));
+  const headerThread = input.thread?.id === editing ? input.thread : undefined;
+  const editedShell = useThreadShell(
+    editing === null || headerThread !== undefined ? null : scopeThreadRef(environmentId, editing),
+  );
+  const edited = headerThread ?? editedShell;
 
   const menu = (threadId: ThreadId, manual: MadoHomuManualPlace | null): MenuAction[] => {
     const entry = settings.madohomuThreads[threadId];
@@ -142,31 +148,11 @@ export function useMadoHomuThreadMenu(input: {
     }
   };
 
-  const toItem = (threadId: ThreadId, action: MenuAction): AppBarMenuItem => {
-    const id = action.id ?? action.title;
-    const icon = action.image ? { icon: action.image } : {};
-    return action.subactions
-      ? {
-          id,
-          title: action.title,
-          ...icon,
-          items: action.subactions.map((sub) => toItem(threadId, sub)),
-        }
-      : {
-          id,
-          title: action.title,
-          ...icon,
-          disabled: action.attributes?.disabled === true,
-          selected: action.state === "on",
-          onPress: () => handle(threadId, id),
-        };
-  };
-
   /** The same items as an app bar menu, for the open thread's header. */
   const headerMenu = (threadId: ThreadId): AppBarMenu => ({
     title: "MadoHomu",
     icon: "folder",
-    items: menu(threadId, null).map((action) => toItem(threadId, action)),
+    items: appBarMenuItemsFromActions(menu(threadId, null), (id) => handle(threadId, id)),
   });
 
   const editor =

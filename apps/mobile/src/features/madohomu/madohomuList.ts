@@ -37,6 +37,7 @@ export interface MadoHomuSectionRow {
   readonly id: string;
   readonly title: string;
   readonly count: number;
+  readonly countIsPartial: boolean;
   /** Null where the section cannot collapse right now (manual sections in Reorder mode). */
   readonly expanded: boolean | null;
   /** Rows needing the user that a collapsed section hides; 0 when expanded. */
@@ -49,12 +50,13 @@ export interface MadoHomuEmptyRow {
   readonly kind: MadoHomuGroupKind;
 }
 
-export interface MadoHomuMoreRow {
+export type MadoHomuMoreRow = {
   readonly type: "more";
   readonly key: string;
-  readonly kind: "scratch" | "settled";
-  readonly count: number;
-}
+} & (
+  | { readonly kind: "scratch"; readonly count: number }
+  | { readonly kind: "settled"; readonly count: number | null }
+);
 
 export interface MadoHomuThreadRow {
   readonly type: "thread";
@@ -91,7 +93,11 @@ export function buildMadoHomuListRows(input: {
   readonly scratchCount?: number;
   readonly settledLimit: number;
   readonly isListedSettled: (thread: EnvironmentThreadShell) => boolean;
-  readonly unloadedSettledCount: number;
+  readonly settledHistory: {
+    /** Unfiltered history only determines whether to offer the shelf. */
+    readonly totalCount: number;
+    readonly status: "complete" | "pageable" | "unavailable";
+  };
   /** Reorder mode: Pinned and custom sections stay open so every drop target shows. */
   readonly keepManualOpen?: boolean;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
@@ -111,9 +117,12 @@ export function buildMadoHomuListRows(input: {
       : {}),
   });
   for (const group of groups) {
-    const count =
-      group.threads.length + (group.kind === "settled" ? input.unloadedSettledCount : 0);
-    if (count === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
+    const history = group.kind === "settled" ? input.settledHistory : null;
+    const count = group.threads.length;
+    const canPage = history?.status === "pageable";
+    const countIsPartial = canPage || history?.status === "unavailable";
+    if (count === 0 && !ALWAYS_SHOWN.has(group.kind) && !history?.totalCount && !countIsPartial)
+      continue;
     const manual = ALWAYS_SHOWN.has(group.kind);
     const expanded =
       manual && input.keepManualOpen
@@ -126,11 +135,12 @@ export function buildMadoHomuListRows(input: {
       id: group.id,
       title: group.title,
       count,
+      countIsPartial,
       expanded,
       attention: expanded === false ? group.threads.filter(madohomuNeedsUser).length : 0,
     });
     if (expanded === false) continue;
-    if (count === 0) {
+    if (count === 0 && !canPage) {
       rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
       continue;
     }
@@ -142,10 +152,9 @@ export function buildMadoHomuListRows(input: {
             madohomuNeedsUser,
           ).shown
         : group.kind === "settled"
-          ? sortSettledThreads(group.threads.filter(input.isListedSettled)).slice(
-              0,
-              input.settledLimit,
-            )
+          ? sortSettledThreads(
+              canPage ? group.threads.filter(input.isListedSettled) : group.threads,
+            ).slice(0, input.settledLimit)
           : group.threads;
     const items = buildThreadListV2ListItems({
       items: shown.map((thread, index) => ({
@@ -175,12 +184,19 @@ export function buildMadoHomuListRows(input: {
         canMoveDown: manual && index < items.length - 1,
       });
     });
-    if ((group.kind === "scratch" || group.kind === "settled") && shown.length < count) {
+    if (group.kind === "scratch" && shown.length < count) {
       rows.push({
         type: "more",
         key: `more:${group.id}`,
         kind: group.kind,
         count: count - shown.length,
+      });
+    } else if (group.kind === "settled" && (canPage || shown.length < count)) {
+      rows.push({
+        type: "more",
+        key: `more:${group.id}`,
+        kind: "settled",
+        count: countIsPartial ? null : count - shown.length,
       });
     }
   }
