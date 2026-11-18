@@ -46,6 +46,7 @@ const AuthFile = Schema.Struct({
   email: Schema.optional(Schema.String),
   disabled: Schema.optional(Schema.Boolean),
   project_id: Schema.optional(Schema.String),
+  quota: Schema.optional(Schema.Unknown),
   id_token: Schema.optional(
     Schema.Struct({
       chatgpt_account_id: Schema.optional(Schema.String),
@@ -70,42 +71,12 @@ const CodexUsage = Schema.Struct({
     }),
   ),
 });
-// The usage endpoint can report a window without a utilization, as the CLI's own schema allows.
-const ClaudeWindow = Schema.Struct({
-  utilization: Schema.NullOr(Schema.Number),
-  resets_at: Schema.NullOr(Schema.String),
-});
-const ClaudeUsage = Schema.Struct({
-  five_hour: Schema.optional(Schema.NullOr(ClaudeWindow)),
-  seven_day: Schema.optional(Schema.NullOr(ClaudeWindow)),
-  spend: Schema.optional(Schema.Unknown),
-  extra_usage: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        is_enabled: Schema.Boolean,
-        monthly_limit: Schema.NullOr(Schema.Number),
-        used_credits: Schema.NullOr(Schema.Number),
-        utilization: Schema.NullOr(Schema.Number),
-      }),
-    ),
-  ),
-  limits: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        kind: Schema.String,
-        percent: Schema.optional(Schema.NullOr(Schema.Number)),
-        resets_at: Schema.optional(Schema.NullOr(Schema.String)),
-        scope: Schema.optional(
-          Schema.NullOr(
-            Schema.Struct({
-              model: Schema.optional(Schema.NullOr(Schema.Struct({ display_name: Schema.String }))),
-            }),
-          ),
-        ),
-      }),
-    ),
-  ),
-});
+const decodeClaudeQuota = Schema.decodeUnknownOption(
+  Schema.Struct({
+    observed_at: Schema.optional(Schema.String),
+    signals: Schema.Record(Schema.String, Schema.String),
+  }),
+);
 const CreditList = Schema.Struct({
   credits: Schema.Array(
     Schema.Struct({
@@ -121,7 +92,6 @@ const decodeAuthFiles = Schema.decodeUnknownEffect(AuthFiles);
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeApiResponse = Schema.decodeUnknownEffect(ApiResponse);
 const decodeCreditList = Schema.decodeUnknownEffect(Schema.fromJsonString(CreditList));
-const decodeClaudeUsage = Schema.decodeUnknownEffect(Schema.fromJsonString(ClaudeUsage));
 const decodeCodexUsage = Schema.decodeUnknownEffect(Schema.fromJsonString(CodexUsage));
 const decodeGrokUsage = Schema.decodeUnknownEffect(Schema.fromJsonString(GrokUsageResponse));
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
@@ -221,6 +191,48 @@ const listedIdentity = (account: AuthFile) => ({
     : {}),
 });
 
+function claudeObservation(account: AuthFile, checkedAt: string): UsageLimitSourceAccount {
+  const quota = Option.getOrUndefined(decodeClaudeQuota(account.quota));
+  const signals = new Map(
+    Object.entries(quota?.signals ?? {}).map(([header, value]) => [header.toLowerCase(), value]),
+  );
+  const number = (key: string) => {
+    const raw = signals.get(`anthropic-ratelimit-unified-${key}`)?.trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  };
+  const window = (key: string) => {
+    const rejected = signals.get(`anthropic-ratelimit-unified-${key}-status`) === "rejected";
+    const fraction = number(`${key}-utilization`) ?? (rejected ? 1 : null);
+    if (fraction === null) return null;
+    const reset = number(`${key}-reset`);
+    const resetsAt = reset ? DateTime.make(reset * 1000) : Option.none();
+    return {
+      utilization: Math.min(1, fraction) * 100,
+      resets_at: Option.getOrNull(Option.map(resetsAt, DateTime.formatIso)),
+    };
+  };
+  const observedAt = DateTime.make(Date.parse(quota?.observed_at ?? ""));
+  const scoped = window("7d_oi");
+  const rateLimits = {
+    five_hour: window("5h"),
+    seven_day: window("7d"),
+    model_scoped: scoped ? [{ display_name: "Fable", ...scoped }] : [],
+    extra_usage: null,
+  };
+  return {
+    id: account.id,
+    driver: ProviderDriverKind.make("claudeAgent"),
+    ...listedIdentity(account),
+    plan: "Claude Subscription",
+    usageLimits: claudeUsageResponseToLimits({
+      checkedAt: Option.getOrElse(Option.map(observedAt, DateTime.formatIso), () => checkedAt),
+      response: { rate_limits_available: true, rate_limits: rateLimits },
+    }).limits,
+  };
+}
+
 const credits = Effect.fn("CliproxyApi.credits")(function* (call: HubCall) {
   const response = yield* decodeCreditList(yield* call(CREDIT_URL));
   const now = DateTime.toEpochMillis(yield* DateTime.now);
@@ -298,49 +310,6 @@ const ANTIGRAVITY_SUMMARY_URL =
 // Keyed by the auth-files `provider`; accounts of any other provider are skipped.
 const HUB_PROVIDERS = new Map<string, HubProvider>([
   ["codex", CODEX_HUB],
-  [
-    "claude",
-    {
-      driver: ProviderDriverKind.make("claudeAgent"),
-      header: () => ({
-        Authorization: "Bearer $TOKEN$",
-        "anthropic-beta": "oauth-2025-04-20",
-        // The OAuth usage endpoint can return 429 without a Claude Code user agent.
-        "User-Agent": "claude-code/2.1.273",
-      }),
-      read: Effect.fnUntraced(function* ({ account, call, checkedAt }) {
-        const usage = yield* decodeClaudeUsage(
-          yield* call("https://api.anthropic.com/api/oauth/usage"),
-        );
-        const model_scoped = (usage.limits ?? []).flatMap((limit) =>
-          limit.kind === "weekly_scoped" && limit.scope?.model && typeof limit.percent === "number"
-            ? [
-                {
-                  display_name: limit.scope.model.display_name,
-                  utilization: limit.percent,
-                  resets_at: limit.resets_at ?? null,
-                },
-              ]
-            : [],
-        );
-        const rateLimits = {
-          five_hour: usage.five_hour ?? null,
-          seven_day: usage.seven_day ?? null,
-          model_scoped,
-          spend: usage.spend,
-          extra_usage: usage.extra_usage ?? null,
-        };
-        return {
-          ...listedIdentity(account),
-          plan: "Claude Subscription",
-          usageLimits: claudeUsageResponseToLimits({
-            checkedAt,
-            response: { rate_limits_available: true, rate_limits: rateLimits },
-          }).limits,
-        };
-      }),
-    },
-  ],
   [
     "xai",
     {
@@ -494,14 +463,16 @@ export const makeCliproxyApi = Effect.gen(function* () {
           : new UsageLimitSourceError({ detail: "The hub could not list accounts." }),
       ),
     );
-    return yield* Effect.forEach(
-      accounts.flatMap((account) => {
-        const provider = HUB_PROVIDERS.get(account.provider);
-        return provider && !account.disabled ? [{ account, provider }] : [];
-      }),
-      ({ account, provider }) => readAccount(hub, account, provider),
-      { concurrency: 4 },
-    );
+    const checkedAt = DateTime.formatIso(yield* DateTime.now);
+    const reads = accounts.flatMap((account) => {
+      if (account.disabled) return [];
+      // Claude quota comes from headers recorded during Claude Code requests.
+      if (account.provider === "claude")
+        return [Effect.succeed(claudeObservation(account, checkedAt))];
+      const provider = HUB_PROVIDERS.get(account.provider);
+      return provider ? [readAccount(hub, account, provider)] : [];
+    });
+    return yield* Effect.all(reads, { concurrency: 4 });
   });
 
   const consume = Effect.fn("CliproxyApi.consume")(function* (

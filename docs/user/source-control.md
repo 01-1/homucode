@@ -341,11 +341,11 @@ it yourself, use the row menu in the **Linked pull requests** panel. In the thre
 watched pull request shows an eye; click it to stop watching.
 
 A watched thread counts as working while the pull request still has checks running, so it stays in
-the **Working** section, including after the agent pushes a fix. Once every check has finished,
-including review bots that report as checks, the thread returns to your inbox: what happens next is
-up to a person. That includes a workflow waiting for a maintainer to approve it, which runs only
-once someone does. The watch stays on and still wakes the agent on new comments, failed checks or
-conflicts, and a watched thread never auto-settles.
+the **Working** section, including after the agent pushes a fix. By default, it returns to your
+inbox once the checks finish, including review bots that report as checks, or when a workflow
+needs a maintainer's approval. To keep it in **Working** while the watch continues, turn on
+**Settings → General → Keep watched pull requests in Working**. The watch can still wake the
+agent on new comments, failed checks or conflicts, and a watched thread never auto-settles.
 
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
 out from the matching organization and repository.
@@ -364,7 +364,7 @@ even when its changes look independent. Stack actions require an environment tha
 
 ## Disable background Git
 
-Turn off **Background Git** in **Settings → Threads → Extra features** to stop automatic Git status and branch
+Turn off **Background Git** in **Settings → HomuCode → Extra features** to stop automatic Git status and branch
 subscriptions, fetch and auto-pull, PR discovery/sync/watches and auto-settlement,
 new turn checkpoints, and automatic worktree cleanup. It is on by default. Restart the host
 to apply; Settings shows its running value and any pending change. `T3CODE_BACKGROUND_GIT`

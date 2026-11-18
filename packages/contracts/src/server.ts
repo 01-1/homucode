@@ -70,7 +70,7 @@ export const ServerProviderAuth = Schema.Struct({
   subscriptionSharing: Schema.optional(Schema.Boolean),
   profileId: Schema.optional(TrimmedNonEmptyString),
   workspaceId: Schema.optional(TrimmedNonEmptyString),
-  /** Origin of the custom endpoint the instance sends its requests to. */
+  /** Origin and base path of the custom endpoint the instance sends its requests to. */
   endpoint: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;

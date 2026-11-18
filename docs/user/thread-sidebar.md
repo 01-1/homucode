@@ -168,6 +168,9 @@ thread there. A thread returns to the top of the active list when it finishes, f
 an approval or answer. The Working section lists the thread you last sent work to first.
 Pinned threads stay in the pinned section.
 
+To keep threads watching a pull request in **Working** after their checks finish, turn on
+**Settings → General → Keep watched pull requests in Working**. The option is off by default.
+
 The Working section is on by default. Turn it off with **Settings → General → Working section** on web and desktop,
 or **Settings → General → Working section** on iOS and Android. Each device keeps its own
 choice.
@@ -347,7 +350,7 @@ layouts with an inspector, its thread opens beside the parent. Maximize it to
 fill the screen; close the full-screen view to return to the parent and inspector.
 Stop ends only the current thread by default. Shift-click Stop, use background Stop,
 or send `/stopall` to stop its subagents too. To make ordinary Stop include subagents,
-change **Stop behavior** in **Settings → Threads → Extra features**.
+change **Stop behavior** in **Settings → HomuCode → Extra features**.
 Before archiving the parent, wait for its delegated tasks to finish or cancel them.
 
 Subagent threads started by the agent can't take messages; message the parent

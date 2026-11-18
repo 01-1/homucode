@@ -4,7 +4,7 @@ App scripts are small TypeScript files that drive the T3 Code window: open threa
 thread with a prompt, send a message, run any keybinding command, or show a notice. You run them
 with a keybinding, or from a terminal with `t3 app run`.
 
-They are off by default. Turn them on in **Settings → Labs → App scripts**.
+They are off by default. Turn them on in **Settings → HomuCode → App scripts**.
 
 ## The risk
 

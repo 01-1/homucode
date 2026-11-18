@@ -269,6 +269,15 @@ function hubIdentity(environmentId: EnvironmentId, source: UsageLimitSourceSnaps
   return endpoint && !local ? endpoint : `${environmentId}:${source.id}`;
 }
 
+/** Match the provider route, including any reverse-proxy path prefix. */
+export function usageLimitSourceAtEndpoint(
+  sources: UsageLimitSourceSnapshots,
+  endpoint: string,
+): UsageLimitSourceSnapshot | undefined {
+  const matches = sources.filter((source) => (source.endpoint ?? source.origin) === endpoint);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export interface LimitAccount {
   readonly key: string;
   readonly driver: ServerProvider["driver"];

@@ -236,7 +236,7 @@ jobs:
             ~/.cache/electron-builder/appimage@*/appimage-tools-runtime-*.tar.gz
             ~/.cache/electron-builder/fpm@*/fpm-*.7z
             ~/.cache/electron-builder/7zip@*/7zip-linux-*.tar.gz
-          key: electron-builder-linux-tools-${{ inputs.arch }}-${{ hashFiles('node_modules/.pnpm/app-builder-lib@*/node_modules/app-builder-lib/out/toolsets/linux.js', 'node_modules/.pnpm/app-builder-lib@*/node_modules/app-builder-lib/out/toolsets/7zip.js') }}
+          key: electron-builder-linux-tools-${{ inputs.arch }}-${{ hashFiles('apps/desktop/package.json', 'patches/app-builder-lib@*.patch') }}
 
       - name: Ensure Rosetta for macOS x64 bytecode generation
         if: inputs.platform == 'mac' && inputs.arch == 'x64'

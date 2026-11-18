@@ -46,7 +46,32 @@ config.transformer.getTransformOptions = async (...args) => {
 };
 
 const upstreamResolveRequest = config.resolver?.resolveRequest;
-config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
+// pnpm's global virtual store keeps packages outside the workspace, and Metro resolves
+// only symlink targets inside its watch folders.
+const pnpmVirtualStore = (() => {
+  try {
+    const nodeModules = path.join(workspaceRoot, "node_modules");
+    const { virtualStoreDir } = JSON.parse(
+      fs.readFileSync(path.join(nodeModules, ".modules.yaml"), "utf8"),
+    );
+    return typeof virtualStoreDir === "string" ? path.resolve(nodeModules, virtualStoreDir) : null;
+  } catch {
+    return null;
+  }
+})();
+const storeRelativePath = pnpmVirtualStore && path.relative(workspaceRoot, pnpmVirtualStore);
+const watchStore =
+  storeRelativePath &&
+  (path.isAbsolute(storeRelativePath) ||
+    storeRelativePath === ".." ||
+    storeRelativePath.startsWith(`..${path.sep}`));
+config.watchFolders = [
+  ...new Set([
+    ...(config.watchFolders ?? []),
+    workspaceRoot,
+    ...(watchStore ? [pnpmVirtualStore] : []),
+  ]),
+];
 config.resolver = {
   ...config.resolver,
   blockList: [

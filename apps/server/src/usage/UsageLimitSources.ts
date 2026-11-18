@@ -11,6 +11,7 @@ import {
   type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+import { usageLimitSourceAtEndpoint } from "@t3tools/shared/usageLimits";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -258,17 +259,14 @@ export const layerResetFallback = Layer.effect(
       resetAt: Effect.fn("UsageLimitResetFallback.resetAt")(function* (driver, endpoint, model) {
         // Only the hub at the instance's endpoint serves its turns.
         const atEndpoint = Effect.map(sources.current, (current) =>
-          current.filter((source) => source.origin === endpoint),
+          usageLimitSourceAtEndpoint(current, endpoint),
         );
-        if ((yield* atEndpoint).length === 0) return null;
+        if (!(yield* atEndpoint)) return null;
         // The pool usually ran out after the last poll, so the cached accounts still show room.
         yield* sources.refresh.pipe(Effect.timeout("5 seconds"), Effect.ignore);
-        return hubPoolResetAt(
-          yield* atEndpoint,
-          driver,
-          model,
-          DateTime.toEpochMillis(yield* DateTime.now),
-        );
+        const source = yield* atEndpoint;
+        if (!source) return null;
+        return hubPoolResetAt([source], driver, model, DateTime.toEpochMillis(yield* DateTime.now));
       }),
     };
   }),

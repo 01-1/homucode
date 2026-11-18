@@ -830,7 +830,8 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     (yield* readClaudeSettingsEnv(claudeSettings, cwd, resolvedEnvironment)).ANTHROPIC_BASE_URL ??
     resolvedEnvironment.ANTHROPIC_BASE_URL;
   const customApiEndpoint = customClaudeApiEndpointHost(baseUrl) !== undefined;
-  const endpoint = customApiEndpoint ? URL.parse(baseUrl?.trim() ?? "")?.origin : undefined;
+  const route = customApiEndpoint ? URL.parse(baseUrl?.trim() ?? "") : null;
+  const endpoint = route ? route.origin + route.pathname.replace(/\/+$/, "") : undefined;
   if (!customApiEndpoint && claudeAuthStatus(capabilities) === "unauthenticated") {
     const path = yield* Path.Path;
     const configDir = (yield* makeClaudeEnvironment(claudeSettings, resolvedEnvironment))

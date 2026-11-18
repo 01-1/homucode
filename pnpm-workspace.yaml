@@ -6,6 +6,13 @@ packages:
   - packages/*
   - scripts
 
+# Link packages from pnpm's global virtual store (<store>/links) instead of a
+# per-checkout node_modules/.pnpm. Each worktree's node_modules is then a few
+# thousand links rather than about 200,000 files. Metro needs the store in its
+# watch folders (apps/mobile/metro.config.js). Staged desktop and CLI installs
+# write their own workspace file, so packaged apps keep real files.
+virtualStoreType: global
+
 # Successor to onlyBuiltDependencies/ignoredBuiltDependencies (pnpm 11+).
 # true = allowed to run build scripts; false mirrors the pnpm 10 behavior
 # where anything outside onlyBuiltDependencies was silently not built.
@@ -171,6 +178,7 @@ overrides:
   "@effect/vitest": "catalog:"
   "@effect/vitest>vitest": "-"
   "@expo/dom-webview": 58.0.2
+  "@expo/fingerprint": 0.21.9
   expo-constants: 58.0.15
   "expo-sharing>@expo/config-plugins": 58.0.12
   "expo-sharing>@expo/config-types": 58.0.3
@@ -228,8 +236,104 @@ packageExtensions:
   "@effect/vitest@*":
     dependencies:
       vite-plus: "catalog:"
+  "@alchemy.run/test@2.0.0-beta.85":
+    dependencies:
+      vite-plus: "catalog:"
+  expo-quick-actions@*:
+    dependencies:
+      "@expo/config-plugins": 58.0.12
+  # The global virtual store has no hidden hoist folder, so a package's types
+  # see only what it declares. These packages import types they don't declare;
+  # without these entries the imports silently become `any`.
+  # scripts/check-module-resolution.ts fails on new ones.
+  # Phantom imports of packages the dependency tree already has:
+  "@react-navigation/native@*":
+    dependencies:
+      "@react-navigation/routers": "*"
+  "@react-navigation/native-stack@*":
+    dependencies:
+      "@react-navigation/core": "*"
+  "@tiptap/extension-list@*":
+    dependencies:
+      prosemirror-model: "*"
+  "@anthropic-ai/sdk@0.93.0":
+    dependencies:
+      undici-types: "7.16.0"
+      undici: "catalog:"
+  "@alchemy.run/cloudflare@2.0.0-beta.85":
+    dependencies:
+      "@cloudflare/workers-types": "4.20260604.1"
+  "@effect/sql-sqlite-do@*":
+    dependencies:
+      "@cloudflare/workers-types": "4.20260604.1"
+  "@clerk/shared@*":
+    dependencies:
+      "@zxcvbn-ts/core": "3.0.4"
+      "@zxcvbn-ts/language-common": "3.0.4"
+  playwright-core@*:
+    dependencies:
+      zod: "4.6.7"
+    peerDependencies:
+      electron: "*"
+    peerDependenciesMeta:
+      electron: { optional: true }
+  remark-parse@*:
+    dependencies:
+      vfile: "*"
+  uniwind@*:
+    dependencies:
+      "@react-native/virtualized-lists": "*"
+  expo-constants@*:
+    dependencies:
+      expo-manifests: "*"
+  expo-camera@*: &expo-modules-core
+    dependencies:
+      expo-modules-core: "*"
+  expo-file-system@*: *expo-modules-core
+  expo-image-manipulator@*: *expo-modules-core
+  expo-keep-awake@*: *expo-modules-core
+  expo-notifications@*: *expo-modules-core
+  expo-splash-screen@*: *expo-modules-core
+  expo-updates@*: *expo-modules-core
+  # Optional integrations the app itself provides; as optional peers they share
+  # the app's copy.
+  "@legendapp/list@*":
+    peerDependencies:
+      react-native-keyboard-controller: "*"
+      react-native-reanimated: "*"
+    peerDependenciesMeta:
+      react-native-keyboard-controller: { optional: true }
+      react-native-reanimated: { optional: true }
+  react-native-gesture-handler@*:
+    peerDependencies:
+      react-native-reanimated: "*"
+    peerDependenciesMeta:
+      react-native-reanimated: { optional: true }
+  react-native-reanimated@*:
+    peerDependencies:
+      react-native-svg: "*"
+    peerDependenciesMeta:
+      react-native-svg: { optional: true }
+  expo-image@*:
+    peerDependencies:
+      expo-app-metrics: "*"
+      expo-observe: "*"
+    peerDependenciesMeta:
+      expo-app-metrics: { optional: true }
+      expo-observe: { optional: true }
+  electron-updater@*:
+    peerDependencies:
+      electron: "*"
+    peerDependenciesMeta:
+      electron: { optional: true }
+  astro@*:
+    peerDependencies:
+      typescript: "*"
+    peerDependenciesMeta:
+      typescript: { optional: true }
 
 patchedDependencies:
+  "@expo/fingerprint@0.21.9": patches/@expo__fingerprint@0.21.9.patch
   react-native-image-viewing@0.2.2: patches/react-native-image-viewing@0.2.2.patch
   mdast-util-math@3.0.0: patches/mdast-util-math@3.0.0.patch
   micromark-extension-llm-math@3.1.0: patches/micromark-extension-llm-math@3.1.0.patch

@@ -9,6 +9,7 @@ import {
   ProviderSessionId,
   ProviderTurnId,
   ThreadId,
+  TurnItemId,
   OrchestrationV2DomainEvent,
 } from "@t3tools/contracts";
 import type * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -200,10 +201,25 @@ const setup = Effect.gen(function* () {
   );
   assert.isTrue(yield* (yield* Sessions.ProviderSessionManagerV2).isLive(session.id));
   assert.equal(ready.providerTurns.find((row) => row.id === turnId)?.status, "running");
-  return { engine, store, events, threadId, active, first, second, event, base };
+  return {
+    engine,
+    store,
+    events,
+    threadId,
+    active,
+    first,
+    second,
+    event,
+    base,
+    session,
+    node,
+    providerThread,
+    turnId,
+    now,
+  };
 });
 
-it.effect.each(["reordered", "head-held", "tail-held", "no-opt-in"] as const)(
+it.effect.each(["reordered", "head-held", "tail-held", "no-opt-in", "compacting"] as const)(
   "refuses automatic promotion after %s without consuming queued input",
   (scenario) =>
     Effect.gen(function* () {
@@ -230,6 +246,60 @@ it.effect.each(["reordered", "head-held", "tail-held", "no-opt-in"] as const)(
           effects: [],
         });
       }
+      // An automatic compaction on a provider whose steers would break it holds an opted-in run.
+      if (scenario === "compacting")
+        yield* f.events.writeWithEffects({
+          events: yield* Effect.forEach(
+            [
+              f.event({
+                ...f.base,
+                type: "run.updated",
+                runId: f.first.id,
+                payload: { ...f.first, autoSteer: true },
+              }),
+              f.event({
+                ...f.base,
+                type: "provider-session.updated",
+                payload: {
+                  ...f.session,
+                  capabilities: {
+                    ...CodexProviderCapabilitiesV2,
+                    turns: {
+                      ...CodexProviderCapabilitiesV2.turns,
+                      activeSteeringDuringCompaction: false,
+                    },
+                  },
+                },
+              }),
+              f.event({
+                ...f.base,
+                type: "turn-item.updated",
+                runId: f.active.id,
+                nodeId: f.node.id,
+                payload: {
+                  id: TurnItemId.make("item:auto-promotion:compaction"),
+                  threadId: f.threadId,
+                  runId: f.active.id,
+                  nodeId: f.node.id,
+                  providerThreadId: f.providerThread.id,
+                  providerTurnId: f.turnId,
+                  nativeItemRef: null,
+                  parentItemId: null,
+                  ordinal: 100,
+                  status: "running",
+                  title: null,
+                  startedAt: f.now,
+                  completedAt: null,
+                  updatedAt: f.now,
+                  type: "compaction",
+                  driver,
+                },
+              }),
+            ],
+            (value) => decodeEvent(value),
+          ),
+          effects: [],
+        });
       const before = yield* f.store.getThreadProjection(f.threadId);
       const commandId = CommandId.make(`server:auto-steer:${scenario}`);
       const result = yield* f.engine
@@ -248,7 +318,9 @@ it.effect.each(["reordered", "head-held", "tail-held", "no-opt-in"] as const)(
           ? /queue head/
           : scenario === "no-opt-in"
             ? /auto-steer opt-in/
-            : /held queue/,
+            : scenario === "compacting"
+              ? /can take a steer/
+              : /held queue/,
       );
       const after = yield* f.store.getThreadProjection(f.threadId);
       assert.deepEqual(after.runs, before.runs);
@@ -275,5 +347,47 @@ it.effect("manual promotion still consumes ordinary input without automatic opt-
       after.messages.find((message) => message.id === f.first.userMessageId)!.runId,
       f.active.id,
     );
+  }).pipe(Effect.provide(layer)),
+);
+
+it.effect("queues a new steer behind held steers, and never auto-steers a /compact", () =>
+  Effect.gen(function* () {
+    const f = yield* setup;
+    yield* f.events.writeWithEffects({
+      events: [
+        f.event({
+          ...f.base,
+          type: "run.updated",
+          runId: f.first.id,
+          payload: { ...f.first, autoSteer: true },
+        }),
+      ],
+      effects: [],
+    });
+    for (const [key, text] of [
+      ["late", "late steer"],
+      ["compact", "/compact"],
+    ] as const)
+      yield* f.engine.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`send:auto-promotion:${key}`),
+        threadId: f.threadId,
+        messageId: MessageId.make(`message:auto-promotion:${key}`),
+        text,
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        deliveryIntent: "steer",
+        createdBy: "user",
+        creationSource: "web",
+      });
+    const after = yield* f.store.getThreadProjection(f.threadId);
+    const runOf = (key: string) =>
+      after.runs.find(
+        (run) => run.userMessageId === MessageId.make(`message:auto-promotion:${key}`),
+      );
+    assert.equal(runOf("late")?.status, "queued");
+    assert.isTrue(runOf("late")?.autoSteer);
+    assert.equal(runOf("compact")?.status, "queued");
+    assert.isUndefined(runOf("compact")?.autoSteer);
   }).pipe(Effect.provide(layer)),
 );

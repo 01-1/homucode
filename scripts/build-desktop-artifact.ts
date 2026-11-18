@@ -2110,25 +2110,64 @@ const decodeNativeMarkerManifest = Schema.decodeUnknownOption(
   Schema.fromJsonString(NativeMarkerManifest),
 );
 
-const findStorePackageDirectory = Effect.fn("findStorePackageDirectory")(function* (
+const PnpmModulesManifest = Schema.Struct({
+  virtualStoreDir: Schema.optional(Schema.String),
+});
+const decodePnpmModulesManifest = Schema.decodeUnknownOption(fromYaml(PnpmModulesManifest));
+
+export const findStorePackageDirectory = Effect.fn("findStorePackageDirectory")(function* (
   repoRoot: string,
   packageName: string,
+  bundlePackagePath?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const storeDir = path.join(repoRoot, "node_modules/.pnpm");
+  const nodeModules = path.join(repoRoot, "node_modules");
   const exists = (candidate: string) =>
     fs.exists(candidate).pipe(Effect.orElseSucceed(() => false));
+  const list = (directory: string) =>
+    fs.readDirectory(directory).pipe(Effect.orElseSucceed(() => [] as string[]));
+  const manifest = yield* fs
+    .readFileString(path.join(nodeModules, ".modules.yaml"))
+    .pipe(Effect.orElseSucceed(() => ""));
+  const storeDir = path.resolve(
+    nodeModules,
+    Option.getOrUndefined(decodePnpmModulesManifest(manifest))?.virtualStoreDir ?? ".pnpm",
+  );
   if (!(yield* exists(storeDir))) return null;
 
+  if (bundlePackagePath) {
+    const candidate = path.resolve(repoRoot, "apps/server", bundlePackagePath);
+    const relative = path.relative(storeDir, candidate);
+    // The shared store may also contain versions from other checkouts.
+    if (
+      relative &&
+      !path.isAbsolute(relative) &&
+      relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      (yield* exists(candidate))
+    ) {
+      return candidate;
+    }
+  }
+
+  // Project virtual store: <name with / as +>@<version>/node_modules/<name>.
   const flattened = `${packageName.replace("/", "+")}@`;
-  const entries = yield* fs
-    .readDirectory(storeDir)
-    .pipe(Effect.orElseSucceed(() => [] as string[]));
-  for (const entry of entries) {
+  for (const entry of yield* list(storeDir)) {
     if (!entry.startsWith(flattened)) continue;
     const candidate = path.join(storeDir, entry, "node_modules", packageName);
     if (yield* exists(candidate)) return candidate;
+  }
+  // Global virtual store: <scope or @>/<name>/<version>/<hash>/node_modules/<name>.
+  const packageRoot = path.join(
+    storeDir,
+    ...(packageName.startsWith("@") ? packageName.split("/") : ["@", packageName]),
+  );
+  for (const version of yield* list(packageRoot)) {
+    for (const hash of yield* list(path.join(packageRoot, version))) {
+      const candidate = path.join(packageRoot, version, hash, "node_modules", packageName);
+      if (yield* exists(candidate)) return candidate;
+    }
   }
   return null;
 });
@@ -3738,13 +3777,15 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     );
     let totalRegions = 0;
     const inlined = new Set<string>();
-    const inlinedPackages = new Set<string>();
+    const inlinedPackagePaths = new Map<string, string>();
     for (const chunkName of chunkNames) {
       const source = yield* fs.readFileString(path.join(distDirs.serverDist, chunkName));
       const scan = findInlinedExternalPackages(source);
       totalRegions += scan.regionCount;
       for (const name of scan.inlined) inlined.add(name);
-      for (const name of scan.inlinedPackages) inlinedPackages.add(name);
+      for (const [packagePath, name] of scan.inlinedPackagePaths) {
+        inlinedPackagePaths.set(packagePath, name);
+      }
     }
     if (inlined.size > 0) {
       return yield* new InlinedExternalPackageError({
@@ -3757,16 +3798,17 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         packages: ["<no module regions found; the bundle scan needs updating>"],
       });
     }
-    const nativeInlined: string[] = [];
-    for (const name of [...inlinedPackages].sort()) {
-      const packageDir = yield* findStorePackageDirectory(repoRoot, name);
+    const nativeInlined = new Set<string>();
+    for (const [packagePath, name] of inlinedPackagePaths) {
+      const packageDir = yield* findStorePackageDirectory(repoRoot, name, packagePath);
       if (packageDir === null) continue;
-      if (yield* hasNativeLoaderMarkers(packageDir)) nativeInlined.push(name);
+      if (yield* hasNativeLoaderMarkers(packageDir)) nativeInlined.add(name);
     }
-    if (nativeInlined.length > 0) {
-      return yield* new InlinedNativePackageError({ packages: nativeInlined });
+    if (nativeInlined.size > 0) {
+      return yield* new InlinedNativePackageError({ packages: [...nativeInlined].sort() });
     }
 
+    const inlinedPackages = new Set(inlinedPackagePaths.values());
     if (!inlinedPackages.has(BUNDLE_SELF_CONTAINED_SENTINEL)) {
       return yield* new ExternalizedBundleError({
         sentinel: BUNDLE_SELF_CONTAINED_SENTINEL,

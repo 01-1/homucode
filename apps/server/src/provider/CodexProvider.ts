@@ -124,12 +124,12 @@ function routesToNativeOpenai(config: unknown): boolean {
   );
 }
 
-/** The origin of the custom endpoint Codex sends model requests to, if it uses one. */
+/** The custom gateway base URL, without the OpenAI API path or credentials. */
 export function codexCustomEndpoint(config: unknown): string | undefined {
   const baseUrl = codexRouteBaseUrl(config);
   const url = baseUrl ? URL.parse(baseUrl) : null;
   return url && /^https?:$/.test(url.protocol) && !routesToNativeOpenai(config)
-    ? url.origin
+    ? url.origin + url.pathname.replace(/\/+$/, "").replace(/\/v1$/, "")
     : undefined;
 }
 

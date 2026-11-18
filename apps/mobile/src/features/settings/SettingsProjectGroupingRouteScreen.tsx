@@ -1,5 +1,3 @@
-import { MobileBuildVisibility } from "./SetupBehaviorSettings";
-import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -11,13 +9,8 @@ import {
   mobileProjectGroupingModePatch,
   resolveMobileProjectGroupingSettings,
 } from "../../state/project-grouping";
-import {
-  mobilePreferencesAtom,
-  updateMobilePreferencesAtom,
-  mobileSettingsSyncEnabledAtom,
-} from "../../state/preferences";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
-import { ListToggleRow } from "../../components/ui/ListToggleRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { NewThreadSettingsSection, WorkingSectionSettings } from "./ThreadSettingsSections";
 
@@ -44,11 +37,9 @@ const GROUPING_OPTIONS: ReadonlyArray<{
 ];
 
 export function SettingsProjectGroupingRouteScreen() {
-  const { selectedTargets } = useSettingsEnvironmentFilter();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const settingsSyncEnabled = useAtomValue(mobileSettingsSyncEnabledAtom);
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
   const selectedMode = AsyncResult.isSuccess(preferencesResult)
     ? resolveMobileProjectGroupingSettings(preferencesResult.value).sidebarProjectGroupingMode
@@ -75,35 +66,6 @@ export function SettingsProjectGroupingRouteScreen() {
               onPress={() => savePreferences(mobileProjectGroupingModePatch(option.mode))}
             />
           ))}
-        </SettingsSection>
-        <SettingsSection title="Building T3">
-          {selectedTargets.map((target) => (
-            <MobileBuildVisibility
-              key={target.environmentId}
-              environmentId={target.environmentId}
-            />
-          ))}
-        </SettingsSection>
-        <SettingsSection title="Faster phone launch">
-          <ListToggleRow
-            label="Faster phone launch"
-            description="Connect using the last signed-in account before sign-in loads. Applies next launch."
-            value={
-              AsyncResult.isSuccess(preferencesResult) &&
-              preferencesResult.value.fasterPhoneLaunch === true
-            }
-            disabled={!preferencesReady}
-            onValueChange={(fasterPhoneLaunch) => savePreferences({ fasterPhoneLaunch })}
-          />
-        </SettingsSection>
-        <SettingsSection title="Settings sync">
-          <ListToggleRow
-            label="Sync settings"
-            description="Keep theme, chat and other settings the same as your other devices, through the server this phone first synced with."
-            value={settingsSyncEnabled}
-            disabled={!preferencesReady}
-            onValueChange={(settingsSyncEnabled) => savePreferences({ settingsSyncEnabled })}
-          />
         </SettingsSection>
         <WorkingSectionSettings />
         <NewThreadSettingsSection />

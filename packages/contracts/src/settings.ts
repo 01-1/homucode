@@ -568,6 +568,9 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   sidebarWorkingShelfEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sidebarKeepWatchingPullRequests: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   sidebarThreadFolderStyle: SidebarThreadFolderStyle.pipe(
     Schema.withDecodingDefault(Effect.succeed("cards")),
   ),
@@ -2379,6 +2382,7 @@ export const ClientSettingsPatch = Schema.Struct({
   threadDetailsUsageEnabled: Schema.optionalKey(Schema.Boolean),
   threadDetailsItems: Schema.optionalKey(Schema.Record(Schema.String, Schema.Boolean)),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarKeepWatchingPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarThreadFolderStyle: Schema.optionalKey(SidebarThreadFolderStyle),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(

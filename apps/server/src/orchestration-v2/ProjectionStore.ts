@@ -8,7 +8,7 @@ import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { makeThreadFind } from "./ThreadFind.ts";
-import { unsentManualContinuationSource } from "./manualContinuation.ts";
+import { manualContinuationSource } from "./manualContinuation.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   OrchestrationV2SearchThreadInput,
@@ -5229,11 +5229,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ORDER BY sessions.updated_at ASC, sessions.provider_session_id ASC
             `.pipe(Effect.flatMap(decodeRows(decodeProviderSessionPayload, threadId)));
             const run = runs.find((source) => source.id === runId);
-            const unsentSource = unsentManualContinuationSource(run, {
+            const resumeSource = manualContinuationSource(run, {
               runs,
               attempts,
               providerTurns,
             });
+            const unsentSource = resumeSource?.accepted === false ? resumeSource.run : undefined;
             const messageIds = [run, unsentSource].flatMap((source) =>
               source === undefined ? [] : [source.userMessageId],
             );

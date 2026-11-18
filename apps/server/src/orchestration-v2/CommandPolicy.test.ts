@@ -61,6 +61,7 @@ function dispatchProjection(
       sessionCapabilities === undefined
         ? []
         : [{ runAttemptId: activeAttemptId, status: "running" }],
+    turnItems: [],
   } as unknown as OrchestrationV2ThreadProjection;
 }
 
@@ -265,6 +266,37 @@ it.each(["/compact", " /LOGOUT "])("queues a steer sent while %s runs", (text) =
     ),
     { type: "restart_active", targetRunId: activeRunId },
   );
+});
+
+it("queues a steer during automatic compaction unless the provider keeps compacting", () => {
+  const compacting = (steersDuringCompaction: boolean) =>
+    ({
+      ...dispatchProjection(
+        capabilities((current) => ({
+          ...current,
+          turns: { ...current.turns, activeSteeringDuringCompaction: steersDuringCompaction },
+        })),
+      ),
+      turnItems: [{ type: "compaction", status: "running", runId: activeRunId }],
+    }) as unknown as OrchestrationV2ThreadProjection;
+  for (const deliveryIntent of ["auto", "steer"] as const) {
+    assert.deepEqual(
+      CommandPolicy.resolveMessageDispatchIntent(
+        compacting(false),
+        { type: "start_immediately" },
+        deliveryIntent,
+      ),
+      { type: "queue_after_active" },
+    );
+    assert.deepEqual(
+      CommandPolicy.resolveMessageDispatchIntent(
+        compacting(true),
+        { type: "start_immediately" },
+        deliveryIntent,
+      ),
+      { type: "steer_active", targetRunId: activeRunId },
+    );
+  }
 });
 
 it.each([

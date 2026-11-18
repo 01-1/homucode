@@ -502,6 +502,8 @@ const config: ExpoConfig = {
   },
   owner: easOwner,
   experiments: {
+    // tsconfig maps React to declarations that Metro cannot load at runtime.
+    tsconfigPaths: false,
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
   },

@@ -9,7 +9,11 @@ import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
 } from "@t3tools/shared/model";
-import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
+import {
+  collectLimitPools,
+  collectProviderUsageLimits,
+  usageLimitSourceAtEndpoint,
+} from "@t3tools/shared/usageLimits";
 
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
 import { REASONING_EFFORT_OPTION_IDS } from "./state/threadExecution.ts";
@@ -25,9 +29,63 @@ export interface StatusLineInputSource {
   readonly nowMs: number;
 }
 
+function hubUsageWindows(
+  provider: ServerProvider,
+  sources: UsageLimitSourceSnapshots,
+  now: number,
+): ReadonlyArray<ServerProviderUsageWindow> {
+  if (!provider.auth.endpoint) return [];
+  const hub = usageLimitSourceAtEndpoint(sources, provider.auth.endpoint);
+  if (!hub || hub.error) return [];
+  const accounts = hub.accounts.flatMap((account) =>
+    account.driver !== provider.driver || account.usageLimits.unavailable
+      ? []
+      : [
+          {
+            key: account.id,
+            driver: account.driver,
+            displayName: null,
+            email: account.email,
+            plan: account.plan,
+            accentColor: undefined,
+            environments: [],
+            sourceLabel: hub.label,
+            redeem: null,
+            limits: {
+              ...account.usageLimits,
+              windows: account.usageLimits.windows.filter(
+                (window) =>
+                  window.modelIds === undefined &&
+                  window.providerIds === undefined &&
+                  (window.resetsAt === undefined || Date.parse(window.resetsAt) > now) &&
+                  (window.kind === "session" ||
+                    (window.kind === "weekly" &&
+                      (account.driver !== "claudeAgent" || window.id === "seven_day"))),
+              ),
+            },
+          },
+        ],
+  );
+  const [pool] = collectLimitPools(accounts, now);
+  return (
+    pool?.windows.map((window) => {
+      const resetsAt = window.resets[0]?.member.window.resetsAt;
+      return {
+        id: window.id,
+        label: window.label,
+        kind: window.kind,
+        usedPercent: window.usedPercent,
+        ...(resetsAt === undefined ? {} : { resetsAt }),
+      };
+    }) ?? []
+  );
+}
+
 function usageWindows(source: StatusLineInputSource): ReadonlyArray<ServerProviderUsageWindow> {
   const instanceId = source.modelSelection?.instanceId;
-  if (instanceId === undefined) return [];
+  const provider = source.providers.find((candidate) => candidate.instanceId === instanceId);
+  if (instanceId === undefined || !provider) return [];
+  const hubWindows = hubUsageWindows(provider, source.usageLimitSources, source.nowMs);
   const providers = [...source.providers];
   const report = collectProviderUsageLimits(
     instanceId,
@@ -38,8 +96,12 @@ function usageWindows(source: StatusLineInputSource): ReadonlyArray<ServerProvid
   // Another account in the report may be a different login, so only this instance's entry counts.
   const limits =
     report?.accounts.find((entry) => entry.instanceId === instanceId)?.limits ??
-    providers.find((provider) => provider.instanceId === instanceId)?.usageLimits;
-  return limits?.unavailable === undefined ? (limits?.windows ?? []) : [];
+    provider.usageLimits;
+  const nativeWindows = limits?.unavailable === undefined ? (limits?.windows ?? []) : [];
+  return [
+    ...hubWindows,
+    ...nativeWindows.filter((window) => !hubWindows.some((hub) => hub.kind === window.kind)),
+  ];
 }
 
 function rateLimit(

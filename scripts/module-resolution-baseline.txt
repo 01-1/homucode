@@ -1,0 +1,104 @@
+# Known unresolved dependency imports reported by check:module-resolution.
+
+# Fetch type fallbacks for layouts and runtimes the server does not use. The bare undici imports resolve.
+@anthropic-ai/sdk -> ../../../../../../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> ../../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../node_modules/@types/node-fetch/index.d.ts
+@anthropic-ai/sdk -> ../../../node_modules/node-fetch
+@anthropic-ai/sdk -> ../../../node_modules/undici-types/index.d.ts
+@anthropic-ai/sdk -> ../../../node_modules/undici/index.d.ts
+@anthropic-ai/sdk -> node-fetch
+@anthropic-ai/sdk -> node-fetch.js
+
+# Optional Clerk wallet and payment integrations.
+@clerk/shared -> @base-org/account
+@clerk/shared -> @coinbase/wallet-sdk
+@clerk/shared -> @stripe/stripe-js
+
+# OpenCode's declaration reference to an unpublished re-export.
+@opencode/client -> ./generated/index
+
+# Optional plugins and tooling integrations.
+@vitejs/plugin-react -> @rolldown/plugin-babel
+@voidzero-dev/vite-plus-core -> @arethetypeswrong/core
+@voidzero-dev/vite-plus-core -> @vitejs/devtools/cli-commands
+@voidzero-dev/vite-plus-core -> @vitejs/devtools/config
+@voidzero-dev/vite-plus-core -> @vue/language-core
+@voidzero-dev/vite-plus-core -> less
+@voidzero-dev/vite-plus-core -> publint
+@voidzero-dev/vite-plus-core -> publint/utils
+@voidzero-dev/vite-plus-core -> sass
+@voidzero-dev/vite-plus-core -> sass-embedded
+@voidzero-dev/vite-plus-core -> stylus
+@voidzero-dev/vite-plus-core -> unplugin-unused
+@volar/typescript -> @volar/language-service
+babel-plugin-react-compiler -> @babel/core
+babel-plugin-react-compiler -> @babel/traverse
+babel-plugin-react-compiler -> zod
+vitest -> @vitest/browser-webdriverio/context
+vitest -> happy-dom
+
+# Astro component imports resolved by Astro, and its unused Markdown renderer integration.
+astro -> ./Code.astro
+astro -> ./Debug.astro
+astro -> ./components/Font.astro
+astro -> ./components/Image.astro
+astro -> ./components/Picture.astro
+astro -> @astrojs/markdown-remark
+astro -> astro/components/ClientRouter.astro
+
+# React Native platform and codegen imports resolved by Metro.
+react-native-safe-area-context -> react-native/Libraries/Types/CodegenTypes
+react-native-screens -> ./StackHeaderConfig
+react-native-screens -> ./TabsHost
+react-native-screens -> ./TabsScreen
+react-native-webview -> react-native/Libraries/Types/CodegenTypes
+
+# Storage drivers the marketing app does not use.
+unstorage -> @azure/app-configuration
+unstorage -> @azure/cosmos
+unstorage -> @azure/data-tables
+unstorage -> @azure/keyvault-secrets
+unstorage -> @azure/storage-blob
+unstorage -> @capacitor/preferences
+unstorage -> @deno/kv
+unstorage -> @netlify/blobs
+unstorage -> @planetscale/database
+unstorage -> @upstash/redis
+unstorage -> @vercel/functions
+unstorage -> @vercel/kv
+unstorage -> db0
+unstorage -> mongodb
+unstorage -> uploadthing/server
+
+# Worker runtime modules and optional infrastructure integrations.
+@alchemy.run/cloudflare -> cloudflare:pipelines
+@alchemy.run/cloudflare -> cloudflare:workers
+@alchemy.run/sql -> mysql2/promise
+alchemy -> react
+drizzle-orm -> mysql2
+drizzle-orm -> mysql2/promise

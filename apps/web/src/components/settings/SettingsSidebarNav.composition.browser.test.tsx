@@ -6,29 +6,13 @@ import { SidebarProvider } from "../ui/sidebar";
 import { SettingsSidebarNav } from "./SettingsSidebarNav";
 import { SETTINGS_NAV_GROUPS, SETTINGS_SECTION_LABELS } from "./settingsSearch";
 
-const mocks = vi.hoisted(() => ({
-  useEnvironments: vi.fn(() => ({
-    environments: [{ serverConfig: { settings: { buildToolsSettingsVisible: false } } }],
-  })),
-}));
-vi.mock("../../state/environments", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../state/environments")>()),
-  useEnvironments: mocks.useEnvironments,
-}));
 vi.mock("./useAvailableSettingsSearchItems", () => ({
   useAvailableSettingsSearchItems: () => [
     { id: "theme", title: "Theme", to: "/settings/appearance" },
   ],
 }));
 
-function setup(buildToolsSettingsVisible = false) {
-  mocks.useEnvironments.mockReturnValue({
-    environments: [{ serverConfig: { settings: { buildToolsSettingsVisible } } }],
-  });
-}
-
 it("ignores composing keys in the search", async () => {
-  setup();
   await using screen = await render(
     <SidebarProvider defaultOpen>
       <SettingsSidebarNav pathname="/settings/general" />
@@ -70,7 +54,6 @@ function renderNav() {
 }
 
 it("opens search from the physical Slash and F keys on non-US layouts", async () => {
-  setup();
   await using _screen = await renderNav();
   const search = page.getByRole("combobox", { name: "Search settings" });
 
@@ -88,30 +71,25 @@ it("opens search from the physical Slash and F keys on non-US layouts", async ()
   }
 });
 
-it.each([false, true])(
-  "moves Tab through sections with Building T3 visible: %s",
-  async (visible) => {
-    setup(visible);
-    await page.viewport(1280, 800);
-    await using _screen = await renderNav();
-    await userEvent.click(page.getByRole("combobox", { name: "Search settings" }));
+it("moves Tab through settings sections", async () => {
+  await page.viewport(1280, 800);
+  await using _screen = await renderNav();
+  await userEvent.click(page.getByRole("combobox", { name: "Search settings" }));
 
-    const sections = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)
-      .filter((to) => to !== "/settings/building-t3" || visible)
-      .map((to) => SETTINGS_SECTION_LABELS[to]);
-    const tabbed: string[] = [];
-    for (let step = 0; step < sections.length; step += 1) {
-      await userEvent.tab();
-      const section = document.activeElement?.closest("[data-settings-section]");
-      if (!section) break;
-      tabbed.push(section.textContent ?? "");
-    }
-    expect(tabbed).toEqual(sections);
-  },
-);
+  const sections = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths).map(
+    (to) => SETTINGS_SECTION_LABELS[to],
+  );
+  const tabbed: string[] = [];
+  for (let step = 0; step < sections.length; step += 1) {
+    await userEvent.tab();
+    const section = document.activeElement?.closest("[data-settings-section]");
+    if (!section) break;
+    tabbed.push(section.textContent ?? "");
+  }
+  expect(tabbed).toEqual(sections);
+});
 
 it.each([1280, 390])("names each group by a heading outside it at %ipx wide", async (width) => {
-  setup();
   await page.viewport(width, 800);
   await using _screen = await renderNav();
 
