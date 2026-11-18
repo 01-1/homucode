@@ -34,6 +34,7 @@ function recordEffect(action: string) {
   state.completed.resolve();
 }
 
+vi.mock("../madohomu", () => ({ startMadoHomuBranchThread: async () => null }));
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
 vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
