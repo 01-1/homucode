@@ -13,6 +13,7 @@ const HOME_LOOK_PREFERENCES = [
   "projectGroupingEnabled",
   "projectGroupingMode",
   "workingShelfEnabled",
+  "sidebarKeepWatchingPullRequests",
   "threadListSettledShelfExpanded",
   "threadListSnoozedShelfExpanded",
   "threadListWorkingShelfExpanded",

@@ -24,6 +24,7 @@ const PREFERENCES = {
   toolCallVisibility: ["toolCallVisibility", Schema.is(ToolCallVisibility)],
   favorites: ["modelFavorites", Schema.is(ModelFavorites)],
   sidebarWorkingShelfEnabled: ["workingShelfEnabled", isBoolean],
+  sidebarKeepWatchingPullRequests: ["sidebarKeepWatchingPullRequests", isBoolean],
   themeAppearanceMode: ["themeMode", Schema.is(Schema.Literals(["light", "dark", "system"]))],
 } as const satisfies Record<string, readonly [keyof Preferences, (value: unknown) => boolean]>;
 

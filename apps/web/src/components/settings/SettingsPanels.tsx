@@ -499,6 +499,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? ["Working section"]
       : []),
+    ...(settings.sidebarKeepWatchingPullRequests ? ["Keep watched pull requests in Working"] : []),
     ...(settings.sidebarThreadFolderStyle !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle
       ? ["Folder style"]
       : []),
@@ -711,6 +712,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarKeepWatchingPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarKeepWatchingPullRequests,
       sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
@@ -968,6 +970,28 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarWorkingShelfEnabled: Boolean(checked) })
               }
               aria-label={gt("Working section")}
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("watched-pull-requests-in-working")}
+          description="Keep threads watching a pull request in Working after its checks finish."
+          resetAction={
+            settings.sidebarKeepWatchingPullRequests ? (
+              <SettingResetButton
+                label="keep watched pull requests in Working"
+                onClick={() => updateSettings({ sidebarKeepWatchingPullRequests: false })}
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarKeepWatchingPullRequests}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarKeepWatchingPullRequests: Boolean(checked) })
+              }
+              disabled={!settings.sidebarWorkingShelfEnabled || settings.boringSidebarEnabled}
+              aria-label="Keep watched pull requests in Working"
             />
           }
         />
