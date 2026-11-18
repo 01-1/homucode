@@ -110,8 +110,8 @@ describe("synced client setting values", () => {
     expect(formatSyncedSettingValue("customThemes", JSON.stringify(themes))).toBe(
       JSON.stringify(themes, null, 2),
     );
-    expect(formatSyncedSettingValue("theme", "lavender-darker")).toBe("lavender-darker");
-    expect(formatSyncedSettingValue("buildPath", "[ 1 ]")).toBe("[ 1 ]");
+    expect(formatSyncedSettingValue("theme", "lavender-darker")).toBe('"lavender-darker"');
+    expect(formatSyncedSettingValue("buildPath", "[ 1 ]")).toBe('"[ 1 ]"');
     expect(formatSyncedSettingValue("buildPath", "")).toBe('""');
     expect(formatSyncedSettingValue("theme", null)).toBe("null");
     expect(formatSyncedSettingValue("theme", undefined)).toBe("not set");

@@ -174,7 +174,6 @@ export function formatSyncedSettingValue(key: string, value: unknown): string {
       shown = value;
     }
   }
-  if (typeof shown === "string") return shown === "" ? '""' : shown;
   return JSON.stringify(shown, null, 2);
 }
 
