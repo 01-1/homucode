@@ -399,6 +399,10 @@ export interface OrchestratorV2DispatchResult {
 
 export interface OrchestratorV2Shape {
   readonly resumeQueuedRuns: Effect.Effect<number, OrchestratorV2Error>;
+  readonly startQueuedFollowUp: (
+    threadId: ThreadId,
+    endedRunId: RunId,
+  ) => Effect.Effect<void, OrchestratorV2Error>;
   readonly recoverDelegatedTasks: Effect.Effect<void>;
   readonly recoverDelegatedTask: (
     threadId: ThreadId,
@@ -17157,6 +17161,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   return OrchestratorV2.of({
     resumeQueuedRuns,
+    startQueuedFollowUp: (threadId, endedRunId) =>
+      messageIntake.withLock(
+        threadId,
+        threadDispatch.withLock(threadId, startNextQueuedRun(threadId, { endedRunId })),
+      ),
     recoverDelegatedTasks,
     recoverDelegatedTask,
     cancelDelegatedTask,
