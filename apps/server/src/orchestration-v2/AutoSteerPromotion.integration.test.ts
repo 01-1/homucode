@@ -349,3 +349,45 @@ it.effect("manual promotion still consumes ordinary input without automatic opt-
     );
   }).pipe(Effect.provide(layer)),
 );
+
+it.effect("queues a new steer behind held steers, and never auto-steers a /compact", () =>
+  Effect.gen(function* () {
+    const f = yield* setup;
+    yield* f.events.writeWithEffects({
+      events: [
+        f.event({
+          ...f.base,
+          type: "run.updated",
+          runId: f.first.id,
+          payload: { ...f.first, autoSteer: true },
+        }),
+      ],
+      effects: [],
+    });
+    for (const [key, text] of [
+      ["late", "late steer"],
+      ["compact", "/compact"],
+    ] as const)
+      yield* f.engine.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`send:auto-promotion:${key}`),
+        threadId: f.threadId,
+        messageId: MessageId.make(`message:auto-promotion:${key}`),
+        text,
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        deliveryIntent: "steer",
+        createdBy: "user",
+        creationSource: "web",
+      });
+    const after = yield* f.store.getThreadProjection(f.threadId);
+    const runOf = (key: string) =>
+      after.runs.find(
+        (run) => run.userMessageId === MessageId.make(`message:auto-promotion:${key}`),
+      );
+    assert.equal(runOf("late")?.status, "queued");
+    assert.isTrue(runOf("late")?.autoSteer);
+    assert.equal(runOf("compact")?.status, "queued");
+    assert.isUndefined(runOf("compact")?.autoSteer);
+  }).pipe(Effect.provide(layer)),
+);

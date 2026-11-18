@@ -7700,6 +7700,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         dispatchMode = { type: "start_immediately" };
       }
     }
+    // Steers held during a compaction go in before a newer one that arrives as it ends.
+    if (
+      dispatchMode.type === "steer_active" &&
+      (command.deliveryIntent === "auto" || command.deliveryIntent === "steer") &&
+      command.notification === undefined &&
+      command.delegatedCompletion === undefined &&
+      (() => {
+        const head = queuedRunsInDeliveryOrder(projection)[0];
+        return head?.autoSteer === true && head.queueHeld !== true;
+      })()
+    ) {
+      dispatchMode = { type: "queue_after_active" };
+    }
     // Stop leaves the run reading as running until its provider stops. A plain
     // send in that window queues behind the stopped queue instead of steering
     // text the agent never receives, and like any user send it releases the
@@ -8303,6 +8316,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // A send that asked to steer but had to queue (compaction, turn not started yet)
         // is promoted to a steer by AutoSteerQueuedService once the turn can take it.
         ...((command.deliveryIntent === "auto" || command.deliveryIntent === "steer") &&
+        !isNativeMaintenanceCommand(command) &&
         command.notification === undefined &&
         command.delegatedCompletion === undefined &&
         command.idleCompaction === undefined &&
