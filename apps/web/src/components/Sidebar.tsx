@@ -493,6 +493,8 @@ function useSidebarThreads(input: {
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
   // Keeps folders with no active threads, so a project the user filtered to or pinned can start one.
   readonly keepEmptyFolders: (group: SidebarProjectSnapshot) => boolean;
+  /** Settled rows search filters want listed; pages load for them even while the shelf is closed. */
+  readonly searchSettledCount: number;
 }) {
   const {
     projectScopeKey,
@@ -505,6 +507,7 @@ function useSidebarThreads(input: {
     routeRowThreadKey,
     folderGroups,
     keepEmptyFolders: keepEmpty,
+    searchSettledCount,
   } = input;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
@@ -583,8 +586,8 @@ function useSidebarThreads(input: {
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
-    expanded: settledShelfExpanded,
-    visibleCount: settledVisibleCount,
+    expanded: settledShelfExpanded || searchSettledCount > 0,
+    visibleCount: Math.max(settledShelfExpanded ? settledVisibleCount : 0, searchSettledCount),
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
@@ -696,6 +699,7 @@ function useSidebarThreads(input: {
       ["settled", partition.settledThreads],
     ] as const,
     unloadedSettledCount,
+    listedSettledCount: listedSettledThreads.length,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1161,6 +1165,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [searchFilters, setSearchFilters] =
     useState<SidebarSearchFilters>(NO_SIDEBAR_SEARCH_FILTERS);
   const [searchSort, setSearchSort] = useLocalStorage(SEARCH_SORT_KEY, "recent", SidebarSearchSort);
+  // Older settled rows filters asked for; they load without opening the Settled shelf.
+  const [searchSettledCount, setSearchSettledCount] = useState(0);
   // Only status filters read visits; subscribing always would re-render the sidebar on each one.
   const localLastVisitedAtById = useUiStateStore((store) =>
     searchFilters.statuses.length > 0 ? store.threadLastVisitedAtById : null,
@@ -1465,6 +1471,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     searchableThreads,
     searchShelves,
     unloadedSettledCount,
+    listedSettledCount,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1507,6 +1514,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null,
     keepEmptyFolders: (group) =>
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
+    searchSettledCount: isSearchingThreads ? searchSettledCount : 0,
   });
 
   const searchCandidates =
@@ -1588,12 +1596,27 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     key: searchResultsKey,
     count: SEARCH_RESULTS_PAGE_COUNT,
   });
-  const threadSearchResults = orderedSearchResults.slice(
-    0,
+  const orderedSearchResultKeys = orderedSearchResults.map(threadShellKey);
+  // The highlight follows its thread, so rows that arrive late do not move it
+  // under Enter. The top row is pinned once shown, and again when the pinned
+  // thread leaves the results, since late message matches can sort above it.
+  if (
+    orderedSearchResultKeys[0] !== undefined &&
+    (searchHighlightKey === null || !orderedSearchResultKeys.includes(searchHighlightKey))
+  ) {
+    setSearchHighlightKey(orderedSearchResultKeys[0]);
+  }
+  const highlightedResultIndex =
+    searchHighlightKey === null ? -1 : orderedSearchResultKeys.indexOf(searchHighlightKey);
+  // The highlighted row stays mounted when late matches push it past the page.
+  const shownSearchResultCount = Math.max(
     searchResultsShown.key === searchResultsKey
       ? searchResultsShown.count
       : SEARCH_RESULTS_PAGE_COUNT,
+    highlightedResultIndex + 1,
   );
+  const threadSearchResults = orderedSearchResults.slice(0, shownSearchResultCount);
+  const threadSearchResultKeys = orderedSearchResultKeys.slice(0, shownSearchResultCount);
   const hiddenSearchResultCount = orderedSearchResults.length - threadSearchResults.length;
   // Only rows listed for their messages show one, and open find on it.
   const threadSearchMatchByKey = new Map(
@@ -1606,20 +1629,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       return match ? [[key, match] as const] : [];
     }),
   );
-  const threadSearchResultKeys = threadSearchResults.map((thread) =>
-    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-  );
-
-  // The highlight follows its thread, so rows that arrive late do not move
-  // it under Enter; a new query starts at the top. The top row is pinned once
-  // shown, since other sorts can place late message matches above it.
-  if (searchHighlightKey === null && threadSearchResultKeys[0] !== undefined) {
-    setSearchHighlightKey(threadSearchResultKeys[0]);
-  }
-  const activeSearchResultIndex = Math.max(
-    0,
-    searchHighlightKey === null ? 0 : threadSearchResultKeys.indexOf(searchHighlightKey),
-  );
+  const activeSearchResultIndex = Math.max(0, highlightedResultIndex);
   const setActiveSearchResultIndex = (index: number | ((index: number) => number)) =>
     setSearchHighlightKey(
       threadSearchResultKeys[
@@ -1633,11 +1643,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     });
   const moveSearchHighlight = (step: 1 | -1) => {
     const count = threadSearchResults.length;
-    const next = orderedSearchResults[activeSearchResultIndex + step];
+    const nextKey = orderedSearchResultKeys[activeSearchResultIndex + step];
     // Moving past the last shown row shows the next page instead of wrapping.
-    if (step === 1 && activeSearchResultIndex + 1 === count && next !== undefined) {
+    if (step === 1 && activeSearchResultIndex + 1 === count && nextKey !== undefined) {
       showMoreSearchResults();
-      setSearchHighlightKey(threadShellKey(next));
+      setSearchHighlightKey(nextKey);
       return;
     }
     setActiveSearchResultIndex((activeSearchResultIndex + step + count) % count);
@@ -1708,6 +1718,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const clearThreadSearch = () => {
     setThreadSearchQuery("");
     setSearchFilters(NO_SIDEBAR_SEARCH_FILTERS);
+    setSearchSettledCount(0);
     setSearchHighlightKey(null);
   };
   const selectThreadSearchResult = (thread: EnvironmentThreadShell) => {
@@ -4198,8 +4209,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           {isSearchingThreads &&
           !hasThreadSearchQuery &&
           unloadedSettledCount > 0 &&
-          searchFilters.statuses.length === 0 &&
-          (searchFilters.updated === "any" || searchFilters.updated === "older") &&
+          (searchFilters.statuses.length === 0 ||
+            searchFilters.statuses.some((status) => status === "unread" || status === "failed")) &&
           (searchFilters.shelves.length === 0 || searchFilters.shelves.includes("settled")) ? (
             <div
               {...SIDEBAR_SEARCH_PROPS}
@@ -4214,9 +4225,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 onClick={() => {
                   if (olderSettledShelf.loading) return;
                   olderSettledShelf.retry();
-                  // The Settled shelf owns the paging, and pages load only while it is open.
-                  if (!settledShelfExpanded) toggleSettledShelf();
-                  showMoreSettled();
+                  // Asking past the listed rows makes the pager read the next page.
+                  setSearchSettledCount(listedSettledCount + SETTLED_TAIL_PAGE_COUNT);
                 }}
                 className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 font-medium hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
               >
