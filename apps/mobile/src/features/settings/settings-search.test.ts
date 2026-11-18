@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
+
 import { filterSettingsSections } from "./settings-search";
 
 const SECTIONS = [
@@ -70,5 +72,20 @@ describe("filterSettingsSections", () => {
 
   it("drops sections that start empty", () => {
     expect(filterSettingsSections([{ rows: [] }, ...SECTIONS], "").length).toBe(SECTIONS.length);
+  });
+});
+
+it.each(["Cloud machine type", "Build output folder", "Enable loading AppImages"])(
+  "finds HomuCode’s Building T3 controls by %s",
+  (title) => {
+    const row = { id: "SettingsHomuCode", label: "HomuCode" };
+    expect(filterSettingsSections([{ rows: [row] }], title)).toEqual([{ rows: [row] }]);
+  },
+);
+
+describe("setup-wizard offers", () => {
+  it.each(FEATURE_OFFERS)("$id is searchable under HomuCode", (offer) => {
+    const sections = [{ rows: [{ id: "SettingsHomuCode", label: "HomuCode" }] }];
+    expect(filterSettingsSections(sections, offer.title)).toHaveLength(1);
   });
 });

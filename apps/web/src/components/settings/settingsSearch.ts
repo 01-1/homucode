@@ -2,8 +2,9 @@ import { HOSTED_APP_CHANNEL } from "~/branding";
 import { isElectron, isSecretsFeatureEnabled } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import {
   sourceControlClients,
   type SourceControlDefinition,
@@ -74,6 +75,7 @@ export interface SettingsSearchItem {
   readonly fastWorktreeCheckoutOnly?: boolean;
   readonly textGeneratorsOnly?: boolean;
   readonly secondary?: boolean;
+  readonly requiresBuildingT3?: boolean;
   readonly requiresThreadAutoSettlement?: boolean;
 }
 
@@ -91,6 +93,7 @@ export interface SettingsSearchAvailability {
   /** An environment without a provider allow-list, which hides text generators. */
   readonly hasTextGeneratorsEnvironment?: boolean;
   readonly hasPrimaryEnvironment?: boolean;
+  readonly hasBuildingT3?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -230,7 +233,25 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
   .flatMap((definition) => [definition.label, ...(definition.searchKeywords ?? [])])
   .join(" ");
 
+const BUILDING_T3_SEARCH_ITEMS = [
+  ["build-repo-path", "T3 Code checkout"],
+  ["build-boat-cli", "Boat CLI"],
+  ["build-machine-type", "Cloud machine type"],
+  ["build-output-folder", "Build output folder"],
+  ["build-appimage-folder", "AppImage build folder"],
+  ["enable-cloud-builds", "Enable cloud builds"],
+  ["enable-android-builds", "Enable Android builds"],
+  ["enable-loading-builds", "Enable loading builds"],
+  ["serve-apks-on-lan", "Serve APKs on LAN"],
+] as const;
+
 export const SETTINGS_SEARCH_ITEMS = [
+  ...BUILDING_T3_SEARCH_ITEMS.map(([id, title]) => ({
+    id,
+    title,
+    to: "/settings/homucode" as const,
+    requiresBuildingT3: true,
+  })),
   {
     id: "homucode",
     title: "HomuCode",
@@ -880,7 +901,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "claude-hold-background-commands",
     title: "Keep Claude threads working while background commands run",
     to: "/settings/homucode",
-    scope: "environment",
+    scope: "environment-defaults",
     searchTerms: ["claude background bash commands working waiting hold tasks"],
   },
   {
@@ -1019,13 +1040,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "device-names",
     title: "Device names",
     to: "/settings/homucode",
-    scope: "environment",
+    scope: "environment-defaults",
     environmentOnly: true,
     searchTerms: ["rename my devices"],
   },
   {
     id: "bare-stop-wait",
-    title: "Bare stop and wait",
+    title: "Stop or wait jumps the queue",
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1073,7 +1094,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "thread-only-stop",
-    title: "Stop stops only this thread",
+    title: "Stop behavior",
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1561,11 +1582,10 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "connect-device-long-sessions",
     title: "Stay signed in for 30 days",
-    to: "/settings/access",
-    targetId: "connections-environment",
+    to: "/settings/homucode",
+    scope: "environment-defaults",
     searchTerms: ["t3 connect devices sessions pass token expiry reconnect cloud round trip"],
-    cloudOnly: true,
-    managedTunnelOnly: true,
+    environmentOnly: true,
   },
   {
     id: "connect-device-approval",
@@ -1664,6 +1684,35 @@ export const SETTINGS_SEARCH_ITEMS = [
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 
+/**
+ * The Settings row for each setup-wizard offer, so every offer can be changed later. Extra-features
+ * offers can reuse their ids as search anchors.
+ */
+export const FEATURE_OFFER_SETTINGS: Readonly<Partial<Record<string, SettingsSearchItemId>>> = {
+  madohomu: "madohomu-enabled",
+  "quick-model": "quick-model",
+  "settings-sync": "settings-sync",
+  "status-line": "status-line",
+  subagents: "prefer-native-subagents",
+  "bare-stop-wait": "bare-stop-wait",
+  "claude-steer-recovery": "claude-steer-recovery",
+  "reask-after-restart": "reask-after-restart",
+  "apply-model-change-now": "apply-model-change-now",
+  "sent-from": "sent-from",
+  "project-in-title": "thread-title-project-name",
+  "title-id-prefix": "thread-title-id-prefix",
+  "thread-only-stop": "thread-only-stop",
+  "background-git": "background-git",
+  "auto-update-when-idle": "auto-update-when-idle",
+  "building-t3": "show-building-t3",
+  "connect-long-sessions": "connect-device-long-sessions",
+  "claude-hold-background-commands": "claude-hold-background-commands",
+};
+
+const FEATURE_OFFER_TITLES: ReadonlyMap<string | undefined, string> = new Map(
+  FEATURE_OFFERS.map((offer) => [FEATURE_OFFER_SETTINGS[offer.id], offer.title] as const),
+);
+
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
@@ -1747,8 +1796,33 @@ export function getSettingsSearchTargetScope(targetId: string) {
         title: item.title,
         scope: item.scope ?? SETTINGS_CATEGORY_SCOPES[item.to],
         ...(item.requiresThreadAutoSettlement ? { requiresThreadAutoSettlement: true } : {}),
+        ...(item.requiresBuildingT3 ? { requiresBuildingT3: true } : {}),
       }
     : null;
+}
+
+export function getBuildingT3SearchAvailability(
+  environments: readonly {
+    readonly environmentId: EnvironmentId;
+    readonly connection: { readonly phase: EnvironmentConnectionPhase };
+    readonly serverConfig: {
+      readonly settings: Pick<ServerSettings, "buildToolsSettingsVisible">;
+    } | null;
+  }[],
+  currentEnvironmentId?: EnvironmentId,
+) {
+  const eligibleEnvironmentIds = environments
+    .filter(
+      (environment) =>
+        environment.connection.phase === "connected" &&
+        environment.serverConfig?.settings.buildToolsSettingsVisible === true,
+    )
+    .map((environment) => environment.environmentId);
+  return {
+    eligibleEnvironmentIds,
+    isTargetAvailable:
+      currentEnvironmentId !== undefined && eligibleEnvironmentIds.includes(currentEnvironmentId),
+  };
 }
 
 interface AutoSettlementSearchEnvironment {
@@ -1819,6 +1893,7 @@ export function filterAvailableSettingsSearchItems(
   return items.filter(
     (item) =>
       (!item.cloudOnly || availability.hasCloudPublicConfig) &&
+      (!item.requiresBuildingT3 || availability.hasBuildingT3 === true) &&
       (!item.environmentOnly || availability.hasEnvironment) &&
       (!item.providerSettingsOnly || availability.hasProviderSettingsEnvironment) &&
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&
@@ -1868,6 +1943,7 @@ export function searchSettings(
         normalizeSearchText(translate(item.title)),
         normalizeSearchText(translate(SETTINGS_SECTION_LABELS[item.to])),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
+        normalizeSearchText(FEATURE_OFFER_TITLES.get(item.id) ?? ""),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];
 
