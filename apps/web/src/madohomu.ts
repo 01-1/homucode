@@ -26,6 +26,7 @@ import {
 } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
+import { composerDraftHasUserContent, useComposerDraftStore } from "./composerDraftStore";
 import { appAtomRegistry } from "./rpc/atomRegistry";
 import { readProjects, waitForThreadShell } from "./state/entities";
 import { environmentServerConfigsAtom, serverEnvironment } from "./state/server";
@@ -317,12 +318,14 @@ function startThreadOnCheckout(
   if (inFlight) return inFlight;
   const start = async () => {
     const pinned = groups.find((group) => group.kind === "pinned")?.threads ?? [];
+    const { getComposerDraft } = useComposerDraftStore.getState();
     const untouched = findUntouchedMadoHomuThread(
       pinned.filter(
         (thread) =>
           thread.branch === checkout.branch &&
           thread.worktreePath === checkout.worktreePath &&
-          !threadHasStarted(thread),
+          !threadHasStarted(thread) &&
+          !composerDraftHasUserContent(getComposerDraft(scopeThreadRef(environmentId, thread.id))),
       ),
       settings,
     );
