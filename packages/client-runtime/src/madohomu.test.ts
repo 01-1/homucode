@@ -191,6 +191,32 @@ describe("MadoHomu sections", () => {
     ]);
   });
 
+  it("orders Scratch by what the user last wrote, so agent activity never moves a row", () => {
+    const groups = groupMadoHomuThreads(
+      [
+        shell("busy", "2026-11-01", {
+          updatedAt: "2026-11-16",
+          latestUserAuthoredMessageAt: "2026-11-02",
+        }),
+        shell("recent", "2026-11-01", {
+          updatedAt: "2026-11-05",
+          latestUserAuthoredMessageAt: "2026-11-04",
+        }),
+        shell("agent-made", "2026-11-03", {
+          updatedAt: "2026-11-16",
+          latestUserAuthoredMessageAt: null,
+        }),
+      ] as never,
+      { ...settings, madohomuWorkingPlacement: "none" },
+      { now: "2026-11-17T00:00:00.000Z", isWorking: () => true },
+    );
+    expect(
+      groups
+        .find((group) => group.kind === "scratch")
+        ?.threads.map((thread: { id: string }) => thread.id),
+    ).toEqual(["recent", "agent-made", "busy"]);
+  });
+
   it("shows a working Scratch thread where the setting says, and never moves a pinned one", () => {
     const threads = [
       shell("a", "2026-11-10"),

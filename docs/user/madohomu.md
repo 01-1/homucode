@@ -8,7 +8,7 @@ MadoHomu is one thread list in sections, and threads use your normal chat and co
 
 - **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them. On mobile, tap Reorder in the app bar first, or use Move up and Move down in the thread menu.
 - **Your own sections** sit below Pinned. Add one with the + on the Pinned heading, or with Move to → New section in a thread's menu, then move pinned threads into it. Deleting a section returns its threads to Pinned.
-- **Scratch** holds every other thread in the project, such as ones made in T3 Code or by agents, and any you move there. Drag a thread onto Pinned or a section to pin it, or use Move to in its menu.
+- **Scratch** holds every other thread in the project, such as ones made in T3 Code or by agents, and any you move there, newest first by when you last wrote in each, as in the T3 Code list. Drag a thread onto Pinned or a section to pin it, or use Move to in its menu.
 - **Working** shows Scratch threads while they are working and do not need you. "Working threads" in MadoHomu settings can put them at the top of Scratch or leave them in place instead. Pinned threads never move.
 - **Snoozed** and **Settled** hold threads from any section while they are snoozed or settled.
 

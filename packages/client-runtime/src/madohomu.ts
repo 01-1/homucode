@@ -14,6 +14,7 @@ import {
   type LegacyProjectSettingsFields,
 } from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
+import { getThreadSortTimestamp } from "./state/threadSort.ts";
 import {
   effectiveSnoozed,
   isShelvedSettled,
@@ -49,7 +50,13 @@ type MadoHomuGroupSettings = Pick<
 export function groupMadoHomuThreads<
   T extends Pick<
     EnvironmentThreadShell,
-    "id" | "createdAt" | "updatedAt" | "settledOverride" | "runtime"
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "latestUserMessageAt"
+    | "latestUserAuthoredMessageAt"
+    | "settledOverride"
+    | "runtime"
   > &
     ThreadSnoozeShell,
 >(
@@ -91,13 +98,18 @@ export function groupMadoHomuThreads<
   for (const { kind, threads: members } of groups) {
     // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
     const manual = kind === "pinned" || kind === "custom";
+    // Scratch and Working keep the T3 Code list's clock: what the user last wrote, so an agent
+    // working on its own never moves a row.
+    const recent = kind === "scratch" || kind === "working";
     members.sort(
       (a, b) =>
         (manual
           ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
             b.createdAt.localeCompare(a.createdAt)
-          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
-            b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
+          : recent
+            ? (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+              getThreadSortTimestamp(b, "updated_at") - getThreadSortTimestamp(a, "updated_at")
+            : b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
     );
   }
   return groups;
