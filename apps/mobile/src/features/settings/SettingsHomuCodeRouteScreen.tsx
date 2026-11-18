@@ -1,4 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AuthSettingsWriteScope, type ServerSettingsPatch } from "@t3tools/contracts";
+import { supportsSharedSettingsSync } from "@t3tools/client-runtime/state/shared-settings";
+import { useRef, useState } from "react";
 import { AsyncResult } from "effect/reactivity";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,6 +12,7 @@ import {
   mobileSettingsSyncEnabledAtom,
   updateMobilePreferencesAtom,
 } from "../../state/preferences";
+import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import { MobileAgentMemorySettings } from "./MobileAgentMemorySettings";
 import {
   MobileBuildVisibility,
@@ -19,7 +23,15 @@ import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilt
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
+import {
+  managedSettingReason,
+  planMobileScopedSettingsPatch,
+  resolveMobileSettingsTargets,
+  uniformMobileSetting,
+} from "./settings-scoped-server";
+import { useSettingsWriter } from "./useSettingsWriter";
 
 export function SettingsHomuCodeRouteScreen() {
   const menu = useSettingsEnvironmentMenu();
@@ -69,21 +81,22 @@ export function SettingsHomuCodeRouteScreen() {
             disabled={selectedTargets.length === 0}
           />
         </SettingsSection>
+        <SettingsSection title="Building T3">
+          {selectedTargets.map((target) => (
+            <MobileBuildVisibility
+              key={target.environmentId}
+              environmentId={target.environmentId}
+            />
+          ))}
+          {selectedTargets.some(
+            (target) => target.serverConfig.settings.buildToolsSettingsVisible,
+          ) ? (
+            <SettingsRow icon="hammer" label="Building T3" target="SettingsBuildingT3" />
+          ) : null}
+        </SettingsSection>
+        <HomuCodeServerSettings />
         {selectedProjectKey === null ? (
           <>
-            <SettingsSection title="Building T3">
-              {selectedTargets.map((target) => (
-                <MobileBuildVisibility
-                  key={target.environmentId}
-                  environmentId={target.environmentId}
-                />
-              ))}
-              {selectedTargets.some(
-                (target) => target.serverConfig.settings.buildToolsSettingsVisible,
-              ) ? (
-                <SettingsRow icon="hammer" label="Building T3" target="SettingsBuildingT3" />
-              ) : null}
-            </SettingsSection>
             {selectedTargets.map((target) => (
               <MobileExtraSettings
                 key={target.environmentId}
@@ -104,5 +117,78 @@ export function SettingsHomuCodeRouteScreen() {
         ) : null}
       </ScreenScrollView>
     </SettingsScreen>
+  );
+}
+
+function HomuCodeServerSettings() {
+  const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
+  const selectedProject = projectGroups.find((group) => group.key === selectedProjectKey);
+  const projectSelected = selectedProjectKey !== null;
+  const targets = resolveMobileSettingsTargets(
+    selectedTargets,
+    projectSelected ? (selectedProject?.members.map((member) => member.project) ?? []) : null,
+  );
+  const autoreviewTargets = targets.filter((target) =>
+    supportsSharedSettingsSync(target.environment),
+  );
+  const writable = useEnvironmentsWithScope(selectedTargets, AuthSettingsWriteScope);
+  const writeSettings = useSettingsWriter();
+  const writing = useRef(false);
+  const [pending, setPending] = useState(false);
+  const canWrite =
+    !projectSelected && targets.every((target) => writable.has(target.environment.environmentId));
+
+  const write = (key: "statusLineEnabled" | "autoreviewEnabled", enabled: boolean) => {
+    if (
+      writing.current ||
+      !canWrite ||
+      targets.some(
+        (target) => !readEnvironmentScope(target.environment.environmentId, AuthSettingsWriteScope),
+      )
+    )
+      return;
+    const patch: ServerSettingsPatch = { [key]: enabled };
+    writing.current = true;
+    setPending(true);
+    void writeSettings(targets, planMobileScopedSettingsPatch(targets, false, patch)).finally(
+      () => {
+        writing.current = false;
+        setPending(false);
+      },
+    );
+  };
+
+  if (targets.length === 0) return null;
+  return (
+    <>
+      <SettingsSection title="Status line">
+        <SettingsSwitchRow
+          icon="terminal"
+          label="Status line"
+          subtitle="Show the model, context, and usage limits under the composer. Set its command on desktop or web."
+          value={uniformMobileSetting(targets, "statusLineEnabled")}
+          disabled={
+            !canWrite || pending || managedSettingReason(targets, "statusLineEnabled") !== undefined
+          }
+          onValueChange={(enabled) => write("statusLineEnabled", enabled)}
+        />
+      </SettingsSection>
+      {!projectSelected && autoreviewTargets.length > 0 ? (
+        <SettingsSection title="Autoreviewers">
+          <SettingsSwitchRow
+            icon="checkmark.circle"
+            label="Autoreviewers (not recommended)"
+            subtitle="Lets agents attach reviewer subagents. Findings can lag behind the thread. Turning this off pauses attached reviewers."
+            value={uniformMobileSetting(autoreviewTargets, "autoreviewEnabled")}
+            disabled={
+              !canWrite ||
+              pending ||
+              managedSettingReason(targets, "autoreviewEnabled") !== undefined
+            }
+            onValueChange={(enabled) => write("autoreviewEnabled", enabled)}
+          />
+        </SettingsSection>
+      ) : null}
+    </>
   );
 }

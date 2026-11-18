@@ -42,6 +42,7 @@ vi.mock("@effect/atom-react", () => ({
 }));
 vi.mock("../../state/preferences", () => ({
   mobilePreferencesAtom: {},
+  mobileSettingsSyncEnabledAtom: {},
   updateMobilePreferencesAtom: {},
 }));
 vi.mock("./components/AutoSettleDaysField", () => ({ AutoSettleDaysField: () => null }));
@@ -86,6 +87,13 @@ vi.mock("../../components/ui/Button", () => ({
   ),
 }));
 vi.mock("./components/SettingsScreen", () => ({ SettingsScreen: Children }));
+vi.mock("../../components/ui/ListToggleRow", () => ({ ListToggleRow: () => null }));
+vi.mock("./MobileAgentMemorySettings", () => ({ MobileAgentMemorySettings: () => null }));
+vi.mock("./SetupBehaviorSettings", () => ({
+  MobileBuildVisibility: () => null,
+  MobileExtraSettings: () => null,
+  MobileThisDeviceName: () => null,
+}));
 vi.mock("./components/SettingsEnvironmentFilterHeader", () => ({
   useSettingsEnvironmentMenu: () => ({
     title: "Filter",
@@ -141,6 +149,7 @@ vi.mock("./settings-environment-filter", () => ({
   }),
 }));
 
+import { SettingsHomuCodeRouteScreen } from "./SettingsHomuCodeRouteScreen";
 import {
   SettingsThreadsRouteScreen,
   SettingsWorktreesRouteScreen,
@@ -158,6 +167,7 @@ function environment(environmentId: string, label: string) {
         sidebarAutoSettleOnMerge: false,
       },
       environment: {
+        platform: { os: "linux" },
         capabilities: { projectSettingsOverrides: true, threadAutoSettlement: true },
       },
     },
@@ -184,6 +194,34 @@ afterEach(() => {
 });
 
 describe("SettingsServerControlsRouteScreen", () => {
+  it("saves HomuCode server switches across the selected environments", async () => {
+    mocks.targets.push(environment("remote", "Remote"));
+    act(() => root.render(<SettingsHomuCodeRouteScreen />));
+
+    for (const [label, key] of [
+      ["Status line", "statusLineEnabled"],
+      ["Autoreviewers (not recommended)", "autoreviewEnabled"],
+    ] as const) {
+      const matches = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[role="switch"]'),
+      ).filter((button) => button.textContent === label);
+      expect(matches).toHaveLength(1);
+      const toggle = matches[0]!;
+      const next = toggle.getAttribute("aria-checked") !== "true";
+      mocks.updateSettings.mockClear();
+
+      await act(async () => toggle.click());
+
+      expect(mocks.updateSettings.mock.calls.map(([request]) => request)).toEqual([
+        { environmentId: "local", input: { patch: { [key]: next } } },
+        { environmentId: "remote", input: { patch: { [key]: next } } },
+      ]);
+    }
+    mocks.readOnly.add("remote");
+    act(() => root.render(<SettingsHomuCodeRouteScreen key="read-only" />));
+    expect(container.querySelectorAll('[role="switch"]:disabled')).toHaveLength(2);
+  });
+
   it("sends a draft saved during a pending write once that write settles", async () => {
     const pending = Promise.withResolvers<AsyncResult.Success<void>>();
     mocks.updateSettings.mockReturnValueOnce(pending.promise);

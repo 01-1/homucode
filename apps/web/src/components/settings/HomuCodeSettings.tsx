@@ -1,5 +1,6 @@
 import { DEFAULT_UNIFIED_SETTINGS, SidebarThreadFolderStyle } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
+import { updateClientSettings } from "../../hooks/useSettings";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -68,7 +69,7 @@ export function HomuCodeSettingsPanel() {
             <Switch
               checked={settings.settingsSyncEnabled}
               onCheckedChange={(checked) =>
-                updateSettings({ settingsSyncEnabled: Boolean(checked) })
+                void updateClientSettings({ settingsSyncEnabled: Boolean(checked) })
               }
               aria-label="Settings sync"
             />
@@ -249,7 +250,7 @@ export function HomuCodeSettingsPanel() {
               <SettingResetButton
                 label="sent message formatting"
                 onClick={() =>
-                  updateSettings({
+                  void updateClientSettings({
                     userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
                   })
                 }
@@ -260,7 +261,7 @@ export function HomuCodeSettingsPanel() {
             <Switch
               checked={settings.userMessageMarkdownEnabled}
               onCheckedChange={(checked) =>
-                updateSettings({ userMessageMarkdownEnabled: Boolean(checked) })
+                void updateClientSettings({ userMessageMarkdownEnabled: Boolean(checked) })
               }
               aria-label="Format sent messages as Markdown"
             />
@@ -274,7 +275,7 @@ export function HomuCodeSettingsPanel() {
               <SettingResetButton
                 label="+ bullets"
                 onClick={() =>
-                  updateSettings({
+                  void updateClientSettings({
                     userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
                   })
                 }
@@ -286,7 +287,7 @@ export function HomuCodeSettingsPanel() {
               checked={settings.userMessagePlusBullets}
               disabled={!settings.userMessageMarkdownEnabled}
               onCheckedChange={(checked) =>
-                updateSettings({ userMessagePlusBullets: Boolean(checked) })
+                void updateClientSettings({ userMessagePlusBullets: Boolean(checked) })
               }
               aria-label="Lines starting with + become bullets"
             />
@@ -303,7 +304,7 @@ export function HomuCodeSettingsPanel() {
               <SettingResetButton
                 label="folder style"
                 onClick={() =>
-                  updateSettings({
+                  void updateClientSettings({
                     sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
                   })
                 }
@@ -315,7 +316,7 @@ export function HomuCodeSettingsPanel() {
               value={settings.sidebarThreadFolderStyle}
               onValueChange={(value) => {
                 if (isSidebarThreadFolderStyle(value)) {
-                  updateSettings({ sidebarThreadFolderStyle: value });
+                  void updateClientSettings({ sidebarThreadFolderStyle: value });
                 }
               }}
             >

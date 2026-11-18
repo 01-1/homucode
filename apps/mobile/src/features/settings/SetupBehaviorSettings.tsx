@@ -188,26 +188,6 @@ export function MobileExtraSettings({
   if (!settings) return null;
   return (
     <SettingsSection title={`Extra features · ${label}`}>
-      <SettingsSwitchRow
-        icon="terminal"
-        label="Status line"
-        subtitle="Show the model, context, and usage limits under the composer. Set its command on desktop or web."
-        value={settings.statusLineEnabled}
-        disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, "statusLineEnabled")}
-        onValueChange={(statusLineEnabled) =>
-          void update({ environmentId, input: { patch: { statusLineEnabled } } })
-        }
-      />
-      <SettingsSwitchRow
-        icon="checkmark.circle"
-        label="Autoreviewers (not recommended)"
-        subtitle="Lets agents attach reviewer subagents. Findings can lag behind the thread. Turning this off pauses attached reviewers."
-        value={settings.autoreviewEnabled}
-        disabled={!canWrite || isManagedSettingPath(config?.managedPolicy, "autoreviewEnabled")}
-        onValueChange={(autoreviewEnabled) =>
-          void update({ environmentId, input: { patch: { autoreviewEnabled } } })
-        }
-      />
       {FEATURE_OFFERS.filter(
         (offer) =>
           offer.page === 2 && offer.setting && offer.setting !== "buildToolsSettingsVisible",
