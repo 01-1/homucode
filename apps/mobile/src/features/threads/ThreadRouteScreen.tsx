@@ -338,7 +338,7 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   });
 
   // MadoHomu is locked to one project, so a draft for the environment's first project is wrong.
-  if (opensDraft && params.madohomu === true) {
+  if (opensDraft && (params.madohomu === true || params.madohomuLinkProjectId !== undefined)) {
     return withInspectorHeader(
       <ThreadUnavailableScreen
         actionLabel="Back to MadoHomu"
@@ -866,6 +866,7 @@ function ThreadRouteContent(
       StackActions.replace("Thread", {
         draft: {
           draftId: restoredNewTaskDraftKey(creation.messageId),
+          ...(inMadoHomu ? { madohomu: true } : {}),
           environmentId: String(creation.environmentId),
           projectId: String(creation.creation.projectId),
           ...(selectedThreadProject ? { title: selectedThreadProject.title } : {}),
