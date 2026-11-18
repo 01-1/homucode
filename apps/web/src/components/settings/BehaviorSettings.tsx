@@ -153,7 +153,13 @@ export function DeviceNamesSettings({
           </label>
         );
       })}
-      {query.error ? <p>{query.error}</p> : null}
+      {query.error ? (
+        <p className="text-muted-foreground">
+          {
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
+          }
+        </p>
+      ) : null}
       {!devices.length ? (
         <p className="text-sm text-muted-foreground">
           Devices appear after they connect to this server.

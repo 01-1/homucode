@@ -232,6 +232,7 @@ function SetupDetailsSheet({
   return (
     <Sheet title="Worktree setup" onClose={onClose}>
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         bounces={false}
         contentContainerStyle={{

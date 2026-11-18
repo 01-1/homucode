@@ -20,13 +20,15 @@ describe("HttpObservability.layer", () => {
       Effect.succeed(HttpClientResponse.fromWeb(request, new Response("ok"))),
     );
     return Effect.gen(function* () {
-      yield* client.get("https://example.com/ws?wsTicket=secret&clientOs=linux&dpop=proof");
+      yield* client.get(
+        "https://example.com/ws?wsTicket=secret&clientOs=linux&dpop=proof&clientDeviceName=fold",
+      );
       const span = spans.find((candidate) => candidate.kind === "client")!;
       expect(span.attributes.get("url.full")).toBe(
-        "https://example.com/ws?wsTicket=REDACTED&clientOs=linux&dpop=REDACTED",
+        "https://example.com/ws?wsTicket=REDACTED&clientOs=linux&dpop=REDACTED&clientDeviceName=REDACTED",
       );
       expect(span.attributes.get("url.query")).toBe(
-        "wsTicket=REDACTED&clientOs=linux&dpop=REDACTED",
+        "wsTicket=REDACTED&clientOs=linux&dpop=REDACTED&clientDeviceName=REDACTED",
       );
     }).pipe(Effect.provide(HttpObservability.layer), Effect.withTracer(tracer));
   });

@@ -798,6 +798,7 @@ const isClientWebDeployment = Schema.is(ClientWebDeployment);
 const MAX_CLIENT_APP_VERSION_LENGTH = 64;
 const MAX_CLIENT_BROWSER_LENGTH = 64;
 const MAX_CLIENT_DEVICE_MODEL_LENGTH = 80;
+const MAX_CLIENT_DEVICE_NAME_LENGTH = 40;
 
 function hasCompatibleOrchestrationProtocol(url: URL): boolean {
   return (
@@ -819,6 +820,14 @@ function shouldUseBoundedThreadSnapshot(input: {
 }
 
 // Keep telemetry per socket; several client types can connect simultaneously.
+/** The name the user gave this device. Kept out of the analytics props. */
+function readClientDeviceName(request: HttpServerRequest.HttpServerRequest): string | undefined {
+  const url = requestUrl(request);
+  if (Option.isNone(url)) return undefined;
+  const name = url.value.searchParams.get("clientDeviceName")?.trim() ?? "";
+  return name !== "" && name.length <= MAX_CLIENT_DEVICE_NAME_LENGTH ? name : undefined;
+}
+
 function readClientAnalyticsProps(request: HttpServerRequest.HttpServerRequest) {
   const url = requestUrl(request);
   if (Option.isNone(url)) {
@@ -1442,6 +1451,7 @@ export const layerWsRpc = (
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
   reportProfiles: ServerBrowser.ProfileReporter,
   settingsClient: { readonly secretReferences: boolean },
+  clientDeviceName?: string,
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -2031,10 +2041,11 @@ export const layerWsRpc = (
             Effect.andThen(
               Effect.gen(function* () {
                 const settings = yield* serverSettings.getSettings;
-                const namedSentFrom = withDeviceName(rawSentFrom, [
-                  ...settings.deviceNames,
-                  ...deviceNameRules,
-                ]);
+                const namedSentFrom = withDeviceName(
+                  rawSentFrom,
+                  [...settings.deviceNames, ...deviceNameRules],
+                  clientDeviceName,
+                );
                 return yield* startup.enqueueCommand(
                   (command.type === "prepared-run.retry"
                     ? threadLaunch.retryPreparation(command)
@@ -2270,10 +2281,11 @@ export const layerWsRpc = (
                                       ? {}
                                       : { context: input.initialMessage.context }),
                                   },
-                                  withDeviceName(rawSentFrom, [
-                                    ...settings.deviceNames,
-                                    ...deviceNameRules,
-                                  ]),
+                                  withDeviceName(
+                                    rawSentFrom,
+                                    [...settings.deviceNames, ...deviceNameRules],
+                                    clientDeviceName,
+                                  ),
                                 ),
                               }),
                           createdBy: "user",
@@ -2779,7 +2791,7 @@ export const layerWsRpc = (
           const devices = yield* messageDevices.list;
           return {
             rules,
-            current: withDeviceName(rawSentFrom, rules) ?? null,
+            current: withDeviceName(rawSentFrom, rules, clientDeviceName) ?? null,
             devices: devices.map((device) => withDeviceName(device, rules)!),
           };
         }),
@@ -3753,6 +3765,7 @@ export const layer = Layer.unwrap(
               serverBrowser,
               reportProfiles,
               readSettingsClient(url.value),
+              readClientDeviceName(request),
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Handler-context reporters see only request defects, not server-wide defects.
