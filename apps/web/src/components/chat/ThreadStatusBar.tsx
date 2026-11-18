@@ -389,6 +389,7 @@ export function ThreadStatusLineRunner(props: {
       return;
     }
     if (!custom) {
+      // Parsed back from the key, which is what tells the effect the stats changed.
       const stats: StatusLineStats = JSON.parse(statsKey);
       registry.set(resultAtom, { stats, createdAt });
       return;
@@ -484,10 +485,9 @@ function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
       tabIndex={0}
       aria-label="Status line"
       className="min-w-0 flex-1 rounded-sm text-muted-foreground text-xs outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      onMouseEnter={(event) => {
-        measure(event.currentTarget);
-        setHovered(true);
-      }}
+      onMouseEnter={() => setHovered(true)}
+      // On each move, since the line shifts under the pointer when the title beside it changes.
+      onMouseMove={(event) => measure(event.currentTarget)}
       onMouseLeave={() => setHovered(false)}
       onFocus={(event) => {
         // A click focuses it too, and must not pin the panel open.
@@ -499,7 +499,7 @@ function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         setHovered(false);
-        event.currentTarget.blur();
+        setFocused(false);
       }}
     >
       {drawn ? (

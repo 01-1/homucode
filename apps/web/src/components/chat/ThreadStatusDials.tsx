@@ -32,11 +32,21 @@ function gaugeColor(percent: number, [warnAt, errorAt]: Alerts): string {
   return percent >= warnAt ? "var(--warning-foreground)" : "var(--success-foreground)";
 }
 
-// Null once the reset time has passed: the window shown is then a stale one.
+// Past its reset time a limit's number is the old window's, until the provider reports again.
+function windowEnded(limit: StatusLineLimit, nowMs: number): boolean {
+  return limit.resetsAtMs !== null && limit.resetsAtMs <= nowMs;
+}
+
 function resetsIn(limit: StatusLineLimit, nowMs: number): string | null {
-  return limit.resetsAtMs === null || limit.resetsAtMs <= nowMs
+  return limit.resetsAtMs === null || windowEnded(limit, nowMs)
     ? null
     : formatStatusLineSpan(limit.resetsAtMs - nowMs);
+}
+
+function limitNote(limit: StatusLineLimit, nowMs: number): string {
+  if (windowEnded(limit, nowMs)) return "window ended";
+  const left = resetsIn(limit, nowMs);
+  return left === null ? "" : `resets in ${left}`;
 }
 
 function uptimeText(createdAt: string | null, nowMs: number): string | null {
@@ -59,7 +69,7 @@ function Effort(props: { readonly effort: string }) {
       {EFFORT_BAR_HEIGHTS.map((height, index) => (
         <span
           key={height}
-          className={`w-[3px] rounded-xs ${height} ${index < level ? "bg-ring" : "bg-ring/40"}`}
+          className={`w-[3px] rounded-xs ${height} ${index < level ? "bg-foreground" : "bg-foreground/30"}`}
         />
       ))}
     </span>
@@ -128,7 +138,7 @@ function Dial(props: {
       <span className="grid @max-[20rem]/dials:hidden">
         <span className="font-medium text-2xs/3.5 text-foreground">{props.name}</span>
         {props.detail === null ? null : (
-          <span className="flex items-center gap-0.5 text-3xs/3 text-muted-foreground @max-[27rem]/dials:hidden [&_svg]:size-2.5">
+          <span className="flex items-center gap-0.5 text-3xs/3 text-muted-foreground @max-[24rem]/dials:hidden [&_svg]:size-2.5">
             {props.detail}
           </span>
         )}
@@ -145,8 +155,7 @@ function LimitDial(props: {
   readonly className: string;
 }) {
   const left = resetsIn(props.limit, props.nowMs);
-  // Past its reset time the number is the old window's, so it stops calling for attention.
-  const stale = left === null && props.limit.resetsAtMs !== null;
+  const note = limitNote(props.limit, props.nowMs);
   return (
     <Dial
       percent={props.limit.usedPercent}
@@ -160,8 +169,8 @@ function LimitDial(props: {
           </>
         )
       }
-      label={`${props.title} ${props.limit.usedPercent}% used${left === null ? "" : `, resets in ${left}`}`}
-      className={`${props.className} ${stale ? "opacity-50" : ""}`}
+      label={`${props.title} ${props.limit.usedPercent}% used${note === "" ? "" : `, ${note}`}`}
+      className={`${props.className} ${windowEnded(props.limit, props.nowMs) ? "opacity-50" : ""}`}
     />
   );
 }
@@ -196,23 +205,27 @@ export function StatusDialStrip(props: {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const uptime = uptimeText(props.createdAt, nowMs);
   const context = stats.contextTokens === null ? null : formatStatusLineTokens(stats.contextTokens);
+  const hasDial = stats.contextPercent !== null || stats.fiveHour !== null || stats.weekly !== null;
   return (
     <div className="@container/dials">
       <div className="flex items-center gap-3.5 overflow-hidden whitespace-nowrap tabular-nums">
         {stats.modelName === null ? null : (
-          <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground @max-[16rem]/dials:hidden">
+          <span
+            // Beside dials the model goes when room is short; alone it stays, or nothing would.
+            className={`flex min-w-0 items-center gap-1.5 font-medium text-foreground ${hasDial ? "@max-[14rem]/dials:hidden" : ""}`}
+          >
             <span className="max-w-40 truncate">{stats.modelName}</span>
             {stats.effort === null ? null : <Effort effort={stats.effort} />}
             {stats.fastMode ? (
-              <ZapIcon aria-label="Fast mode" className="size-3.5 shrink-0 fill-ring text-ring" />
+              <ZapIcon aria-label="Fast mode" className="size-3.5 shrink-0 fill-foreground" />
             ) : null}
           </span>
         )}
         {context === null ? null : stats.contextPercent === null ? (
           // No known maximum, so no ring: the count stands in for it.
           <Stat label={`Context ${context} tokens`} className="@max-[20rem]/dials:hidden">
-            <span className="font-medium text-foreground">{context}</span>
-            context
+            <span className="font-medium text-foreground">context</span>
+            {context}
           </Stat>
         ) : (
           <Dial
@@ -243,15 +256,15 @@ export function StatusDialStrip(props: {
         )}
         {uptime === null ? null : (
           <>
-            <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[33rem]/dials:hidden" />
-            <Stat label={`Uptime ${uptime}`} className="@max-[33rem]/dials:hidden">
+            <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[29rem]/dials:hidden" />
+            <Stat label={`Uptime ${uptime}`} className="@max-[29rem]/dials:hidden">
               <TimerIcon />
               {uptime}
             </Stat>
           </>
         )}
         {stats.cachePercent === null ? null : (
-          <Stat label={`Cache hits ${stats.cachePercent}%`} className="@max-[41rem]/dials:hidden">
+          <Stat label={`Cache hits ${stats.cachePercent}%`} className="@max-[37rem]/dials:hidden">
             <DatabaseIcon />
             {stats.cachePercent}%
           </Stat>
@@ -259,7 +272,7 @@ export function StatusDialStrip(props: {
         {stats.inputTokens === null ? null : (
           <Stat
             label={`${stats.inputTokens} tokens in, ${stats.outputTokens ?? 0} out`}
-            className="@max-[50rem]/dials:hidden"
+            className="@max-[44rem]/dials:hidden"
           >
             <ArrowDownIcon />
             {formatStatusLineTokens(stats.inputTokens)}
@@ -267,7 +280,7 @@ export function StatusDialStrip(props: {
             {formatStatusLineTokens(stats.outputTokens ?? 0)}
           </Stat>
         )}
-        <span className="ms-auto shrink-0 ps-1 text-2xs @max-[36rem]/dials:hidden">
+        <span className="ms-auto shrink-0 ps-1 text-2xs @max-[33rem]/dials:hidden">
           {formatShortTimestamp(new Date(nowMs).toISOString(), timestampFormat)}
         </span>
       </div>
@@ -278,10 +291,11 @@ export function StatusDialStrip(props: {
 function Fact(props: {
   readonly name: string;
   readonly meter?: { readonly percent: number; readonly alerts: Alerts };
+  readonly dimmed?: boolean;
   readonly children: ReactNode;
 }) {
   return (
-    <div className="grid min-w-0 content-start gap-0.5">
+    <div className={`grid min-w-0 content-start gap-0.5 ${props.dimmed ? "opacity-50" : ""}`}>
       <span className="text-2xs text-muted-foreground">{props.name}</span>
       <span className="break-words font-medium">{props.children}</span>
       {props.meter === undefined ? null : (
@@ -305,10 +319,14 @@ function LimitFact(props: {
   readonly limit: StatusLineLimit;
   readonly nowMs: number;
 }) {
-  const left = resetsIn(props.limit, props.nowMs);
+  const note = limitNote(props.limit, props.nowMs);
   return (
-    <Fact name={props.name} meter={{ percent: props.limit.usedPercent, alerts: LIMIT_ALERTS }}>
-      {props.limit.usedPercent}%{left === null ? null : ` · resets in ${left}`}
+    <Fact
+      name={props.name}
+      meter={{ percent: props.limit.usedPercent, alerts: LIMIT_ALERTS }}
+      dimmed={windowEnded(props.limit, props.nowMs)}
+    >
+      {props.limit.usedPercent}%{note === "" ? null : ` · ${note}`}
     </Fact>
   );
 }
