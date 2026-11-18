@@ -56,6 +56,7 @@ function fixture(
       email?: string;
       disabled?: boolean;
       project_id?: string;
+      quota?: { observed_at?: string; signals?: Record<string, string> };
       id_token?: { chatgpt_account_id: string; plan_type?: string; chatgpt_plan_type?: string };
     }>;
     upstream?: (request: RequestBody) => { status: number; body: unknown };
@@ -340,120 +341,68 @@ describe("CLIProxyAPI built-in management API", () => {
     }),
   );
 
-  it.effect("maps Claude scoped windows without a scheduler plugin", () =>
+  it.effect("reads Claude quota observations with a single management GET", () =>
     Effect.gen(function* () {
+      const checkedAt = "2026-11-18T03:45:00.123Z";
+      const resetAt = 1794974400;
+      const resetAtIso = "2026-11-18T04:00:00.000Z";
       const test = fixture({
-        accounts: [{ ...accounts[0]!, provider: "claude" }],
-        // The usage endpoint answers 429 to requests without a Claude Code user agent.
-        upstream: (request) => ({
-          status: request.header?.["User-Agent"]?.startsWith("claude-code/") ? 200 : 429,
-          body: {
-            five_hour: { utilization: 10, resets_at: null },
-            seven_day: { utilization: 50, resets_at: "2099-01-01T00:00:00Z" },
-            limits: [
-              {
-                kind: "weekly_scoped",
-                percent: 80,
-                resets_at: null,
-                scope: { model: { display_name: "Fable" } },
+        accounts: [
+          {
+            id: "observed.json",
+            auth_index: "a",
+            provider: "claude",
+            quota: {
+              observed_at: "2026-11-17T22:45:00.123456789-05:00",
+              signals: {
+                "Anthropic-Ratelimit-Unified-5h-Utilization": "0.1",
+                "Anthropic-Ratelimit-Unified-5h-Reset": String(resetAt),
+                "anthropic-ratelimit-unified-7d-utilization": "0.5",
+                "Anthropic-Ratelimit-Unified-7d-Reset": "invalid",
+                "Anthropic-Ratelimit-Unified-7d_oi-Utilization": "0.8",
               },
-            ],
-          },
-        }),
-      });
-      const api = yield* test.api;
-      const result = yield* api.readAccounts(config);
-      expect(
-        result[0]?.usageLimits.windows.map((window) => [window.id, window.usedPercent]),
-      ).toEqual([
-        ["five_hour", 10],
-        ["seven_day", 50],
-        ["seven_day_fable", 80],
-      ]);
-    }),
-  );
-
-  it.effect.each([
-    {
-      name: "spend budget",
-      budget: {
-        spend: {
-          enabled: true,
-          used: { amount_minor: 4_631, currency: "USD", exponent: 2 },
-          limit: { amount_minor: 50_000, currency: "USD", exponent: 2 },
-        },
-      },
-    },
-    {
-      name: "extra usage",
-      budget: {
-        extra_usage: {
-          is_enabled: true,
-          used_credits: 4_631,
-          monthly_limit: 50_000,
-          utilization: 9,
-        },
-      },
-    },
-  ])("keeps Claude monthly spend from $name beside rolling windows", ({ budget }) =>
-    Effect.gen(function* () {
-      const test = fixture({
-        accounts: [{ ...accounts[0]!, provider: "claude" }],
-        upstream: () => ({
-          status: 200,
-          body: { five_hour: { utilization: 10, resets_at: null }, ...budget },
-        }),
-      });
-      const result = yield* (yield* test.api).readAccounts(config);
-      expect(
-        result[0]?.usageLimits.windows.map((window) => [window.id, window.usedPercent]),
-      ).toEqual([
-        ["five_hour", 10],
-        ["monthly_spend", expect.closeTo(9.262, 10)],
-      ]);
-    }),
-  );
-
-  it.effect("omits disabled Claude budgets without losing rolling windows", () =>
-    Effect.gen(function* () {
-      const test = fixture({
-        accounts: [{ ...accounts[0]!, provider: "claude" }],
-        upstream: () => ({
-          status: 200,
-          body: {
-            five_hour: { utilization: 10, resets_at: null },
-            spend: { enabled: false, used: null, limit: null },
-            extra_usage: {
-              is_enabled: false,
-              used_credits: null,
-              monthly_limit: null,
-              utilization: null,
             },
           },
-        }),
-      });
-      const result = yield* (yield* test.api).readAccounts(config);
-      expect(result[0]?.usageLimits.windows.map((window) => window.id)).toEqual(["five_hour"]);
-    }),
-  );
-
-  it.effect("keeps a Claude account whose window reports no utilization", () =>
-    Effect.gen(function* () {
-      const test = fixture({
-        accounts: [{ ...accounts[0]!, provider: "claude" }],
-        upstream: () => ({
-          status: 200,
-          body: {
-            five_hour: { utilization: null, resets_at: null },
-            seven_day: { utilization: 50, resets_at: "2099-01-01T00:00:00Z" },
+          {
+            id: "rejected.json",
+            auth_index: "b",
+            provider: "claude",
+            quota: {
+              signals: {
+                "Anthropic-Ratelimit-Unified-5h-Status": "rejected",
+                "Anthropic-Ratelimit-Unified-5h-Reset": String(resetAt),
+              },
+            },
           },
-        }),
+          {
+            id: "unobserved.json",
+            auth_index: "c",
+            provider: "claude",
+            quota: { signals: { "Anthropic-Ratelimit-Unified-5h-Utilization": "" } },
+          },
+        ],
       });
-      const result = yield* (yield* test.api).readAccounts(config);
-      expect(result[0]?.usageLimits.unavailable).toBeUndefined();
-      expect(
-        result[0]?.usageLimits.windows.map((window) => [window.id, window.usedPercent]),
-      ).toEqual([["seven_day", 50]]);
+      const [observed, rejected, unobserved] = yield* (yield* test.api).readAccounts(config);
+      expect(observed?.usageLimits.checkedAt).toBe(checkedAt);
+      expect(observed?.usageLimits.windows).toEqual([
+        expect.objectContaining({
+          id: "five_hour",
+          usedPercent: 10,
+          resetsAt: resetAtIso,
+        }),
+        expect.objectContaining({ id: "seven_day", usedPercent: 50 }),
+        expect.objectContaining({ id: "seven_day_fable", usedPercent: 80 }),
+      ]);
+      expect(observed?.usageLimits.windows[1]?.resetsAt).toBeUndefined();
+      expect(rejected?.usageLimits.windows).toEqual([
+        expect.objectContaining({
+          id: "five_hour",
+          usedPercent: 100,
+          resetsAt: resetAtIso,
+        }),
+      ]);
+      expect(unobserved?.usageLimits.windows).toEqual([]);
+      expect(test.requests).toEqual([{ path: "/v0/management/auth-files" }]);
     }),
   );
 
@@ -631,7 +580,6 @@ describe("CLIProxyAPI built-in management API", () => {
           { id: "kiro.json", auth_index: "k", provider: "kiro", email: "k@example.com" },
           { ...accounts[0]!, provider: "claude" },
         ],
-        upstream: () => ({ status: 200, body: { five_hour: { utilization: 1, resets_at: null } } }),
       });
       const result = yield* (yield* test.api).readAccounts(config);
       expect(result.map((account) => account.driver)).toEqual(["claudeAgent"]);

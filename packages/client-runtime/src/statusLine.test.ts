@@ -1,4 +1,4 @@
-import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, UsageLimitSourceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
@@ -366,6 +366,95 @@ describe("buildStatusLineInput", () => {
         },
         seven_day: { used_percentage: 43 },
       },
+    });
+  });
+
+  it("uses only the selected proxy's account pool for both status line outputs", () => {
+    const provider = source.providers[0]!;
+    const origin = "http://127.0.0.1:8318";
+    const endpoint = origin + "/team-a";
+    const reset = "2026-11-16T02:01:00.000Z";
+    const hub = {
+      id: UsageLimitSourceId.make("proxy"),
+      kind: "cliproxy" as const,
+      label: "CLIProxyAPI",
+      origin,
+      endpoint,
+      checkedAt: provider.checkedAt,
+      accounts: [30, 70].map((usedPercent, index) => ({
+        id: String(index),
+        driver: provider.driver,
+        usageLimits: {
+          checkedAt: provider.checkedAt,
+          windows: [
+            {
+              id: "five_hour",
+              kind: "session" as const,
+              label: "Session",
+              usedPercent,
+              resetsAt: reset,
+            },
+            { id: "seven_day", kind: "weekly" as const, label: "Weekly", usedPercent: 60 },
+          ],
+        },
+      })),
+    };
+    const routed = {
+      ...source,
+      providers: [{ ...provider, auth: { ...provider.auth, endpoint } }],
+      usageLimitSources: [
+        { ...hub, id: UsageLimitSourceId.make("other-proxy"), endpoint: origin + "/team-b" },
+        hub,
+      ],
+    };
+
+    expect(buildStatusLineStats(routed)).toMatchObject({
+      fiveHour: { usedPercent: 50, resetsAtMs: Date.parse(reset) },
+      weekly: { usedPercent: 60, resetsAtMs: null },
+    });
+    expect(buildStatusLineInput(routed).rate_limits).toEqual({
+      five_hour: { used_percentage: 50, resets_at: Date.parse(reset) / 1000 },
+      seven_day: { used_percentage: 60 },
+    });
+    expect(
+      buildStatusLineStats({ ...source, usageLimitSources: routed.usageLimitSources }).weekly,
+    ).toMatchObject({ usedPercent: 43 });
+    expect(
+      buildStatusLineStats({ ...routed, usageLimitSources: [routed.usageLimitSources[0]!] }).weekly,
+    ).toMatchObject({ usedPercent: 43 });
+    const accountsAfterReset = hub.accounts.map((account, index) => ({
+      ...account,
+      usageLimits: {
+        ...account.usageLimits,
+        windows: account.usageLimits.windows.map((window) =>
+          index === 0 && window.kind === "session"
+            ? { ...window, resetsAt: provider.checkedAt }
+            : window,
+        ),
+      },
+    }));
+    expect(
+      buildStatusLineStats({
+        ...routed,
+        usageLimitSources: [{ ...hub, accounts: accountsAfterReset }],
+      }).fiveHour,
+    ).toEqual({ usedPercent: 70, resetsAtMs: Date.parse(reset) });
+
+    const weeklyOnly = hub.accounts.map((account) => ({
+      ...account,
+      usageLimits: {
+        ...account.usageLimits,
+        windows: account.usageLimits.windows.filter((window) => window.kind === "weekly"),
+      },
+    }));
+    expect(
+      buildStatusLineStats({
+        ...routed,
+        usageLimitSources: [{ ...hub, accounts: weeklyOnly }],
+      }),
+    ).toMatchObject({
+      fiveHour: { usedPercent: 47, resetsAtMs: Date.parse(reset) },
+      weekly: { usedPercent: 60, resetsAtMs: null },
     });
   });
 

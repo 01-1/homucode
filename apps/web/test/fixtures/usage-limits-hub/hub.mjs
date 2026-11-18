@@ -16,7 +16,7 @@ const at = (n0, minutes) => (minutes === null ? null : n0 + minutes * MINUTE);
 const iso = (n0, minutes) =>
   minutes === null ? undefined : new Date(at(n0, minutes)).toISOString();
 const usage = (account, n0) => {
-  const [session, weekly, fable] = account.windows;
+  const [session, weekly] = account.windows;
   if (account.provider === "xai") {
     return {
       config: {
@@ -50,24 +50,20 @@ const usage = (account, n0) => {
       },
     };
   }
-  const window = ([used, minutes]) => ({
-    utilization: used,
-    resets_at: at(n0, minutes) === null ? null : new Date(at(n0, minutes)).toISOString(),
-  });
-  return {
-    five_hour: window(session),
-    seven_day: window(weekly),
-    limits: fable
-      ? [
-          {
-            kind: "weekly_scoped",
-            percent: fable[0],
-            resets_at: window(fable).resets_at,
-            scope: { model: { display_name: "Fable" } },
-          },
-        ]
-      : [],
-  };
+  throw new Error(`Unsupported upstream usage request for ${account.provider}`);
+};
+
+const observedQuota = (account, n0) => {
+  if (account.provider !== "claude" || account.state) return {};
+  const signals = {};
+  for (const [index, window] of account.windows.entries()) {
+    const bucket = ["5h", "7d", "7d_oi"][index];
+    const prefix = `Anthropic-Ratelimit-Unified-${bucket}`;
+    const [used, minutes] = window;
+    signals[`${prefix}-Utilization`] = String(used / 100);
+    if (minutes !== null) signals[`${prefix}-Reset`] = String(Math.floor(at(n0, minutes) / 1000));
+  }
+  return { quota: { observed_at: new Date(n0).toISOString(), signals } };
 };
 
 const json = (response, body) => {
@@ -88,6 +84,7 @@ NodeHttp.createServer((request, response) => {
           id,
           auth_index: id,
           provider: account.provider,
+          ...observedQuota(account, n0),
           ...(account.email ? { email: account.email } : {}),
           ...(account.project_id ? { project_id: account.project_id } : {}),
         })),
