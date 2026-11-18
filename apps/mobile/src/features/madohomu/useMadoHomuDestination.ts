@@ -74,27 +74,27 @@ export function useMadoHomuProjectSelection() {
     const readHost = (id: EnvironmentId) =>
       settingsHost(current.linked, id, () => readEnvironmentScope(id, AuthSettingsWriteScope));
     appAtomRegistry.set(selectionPendingAtom, true);
-    try {
-      await writeMadoHomuProject(
-        current.destination,
-        project,
-        readHost,
-        async (environmentId, patch) => {
-          const result = await update({ environmentId, input: { patch } });
-          if (result._tag === "Success") return result.value;
-          throw squashAtomCommandFailure(result);
-        },
-      );
-      return true;
-    } catch (error) {
-      Dialog.alert(
-        "Could not change MadoHomu project",
-        error instanceof Error ? error.message : String(error),
-      );
-      return false;
-    } finally {
-      appAtomRegistry.set(selectionPendingAtom, false);
-    }
+    return (async () => {
+      try {
+        await writeMadoHomuProject(
+          current.destination,
+          project,
+          readHost,
+          async (environmentId, patch) => {
+            const result = await update({ environmentId, input: { patch } });
+            if (result._tag === "Success") return result.value;
+            throw squashAtomCommandFailure(result);
+          },
+        );
+        return true;
+      } catch (error) {
+        Dialog.alert(
+          "Could not change MadoHomu project",
+          error instanceof Error ? error.message : String(error),
+        );
+        return false;
+      }
+    })().finally(() => appAtomRegistry.set(selectionPendingAtom, false));
   };
   return { linked, selectionIssue, isSelecting, changeProject };
 }

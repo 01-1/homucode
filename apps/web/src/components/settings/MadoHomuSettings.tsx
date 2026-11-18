@@ -15,7 +15,12 @@ import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useEnvironments } from "../../state/environments";
 import { isConnectedWithConfig } from "./scopedSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
-import { SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  SettingsRow,
+  SettingsSearchTarget,
+  SettingsSection,
+  useSettingsSearchTargetId,
+} from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
@@ -35,24 +40,28 @@ const WORKING_PLACEMENT_LABELS = {
 } as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
 
 export function MadoHomuSettings() {
-  const { target, scope, search } = useSettingsScope();
+  const { target, scope, search, selectScope } = useSettingsScope();
   const { environments } = useEnvironments();
   const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
-  const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
+  const searchTargetId = useSettingsSearchTargetId();
   if (scope.kind === "project" || scope.kind === "checkout") return null;
   const machineId =
-    selectedId ??
     (search.machine ? EnvironmentId.make(search.machine) : destination) ??
     target?.environmentId ??
     environments[0]?.environmentId;
   const selected = environments.find((candidate) => candidate.environmentId === machineId);
   const label = selected?.label ?? machineId;
+  const selectMachine = (environmentId: EnvironmentId | null) => {
+    if (environmentId !== null && environmentId !== search.machine) {
+      selectScope({ ...search, machine: environmentId });
+    }
+  };
   const environmentPicker =
     environments.length > 1 || (machineId && !selected && environments.length > 0) ? (
       <SettingsRow
         title="Environment"
         control={
-          <Select value={machineId ?? null} onValueChange={setSelectedId}>
+          <Select value={machineId ?? null} onValueChange={selectMachine}>
             <SelectTrigger aria-label="MadoHomu environment" size="sm">
               <SelectValue>{label}</SelectValue>
             </SelectTrigger>
@@ -71,11 +80,15 @@ export function MadoHomuSettings() {
     return (
       <SettingsSection id="madohomu" title="MadoHomu">
         {environmentPicker}
-        <p className="p-4 text-sm text-muted-foreground">
-          {label
-            ? `Reconnect ${label} to configure MadoHomu.`
-            : "Connect an environment to configure MadoHomu."}
-        </p>
+        <SettingsSearchTarget
+          id={searchTargetId?.startsWith("madohomu-") ? searchTargetId : undefined}
+        >
+          <p className="p-4 text-sm text-muted-foreground">
+            {label
+              ? `Reconnect ${label} to configure MadoHomu.`
+              : "Connect an environment to configure MadoHomu."}
+          </p>
+        </SettingsSearchTarget>
       </SettingsSection>
     );
   }
@@ -84,7 +97,7 @@ export function MadoHomuSettings() {
       key={selected.environmentId}
       environmentId={selected.environmentId}
       environmentPicker={environmentPicker}
-      onProjectChosen={setSelectedId}
+      onProjectChosen={selectMachine}
     />
   );
 }

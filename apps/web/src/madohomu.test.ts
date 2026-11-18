@@ -9,7 +9,7 @@ import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { AsyncResult, AtomRegistry } from "effect/reactivity";
+import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
 import { expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import { environmentCatalog } from "./connection/catalog";
@@ -135,7 +135,7 @@ it.each([primary, remote, null])(
           label: id,
           connection: { phase: "connected", error: null, traceId: null },
           serverConfig: { settings: DEFAULT_SERVER_SETTINGS },
-        }) as environments.EnvironmentPresentation,
+        }) as unknown as environments.EnvironmentPresentation,
     );
     using _get = vi.spyOn(appAtomRegistry, "get").mockImplementation(registry.get.bind(registry));
     using _set = vi.spyOn(appAtomRegistry, "set").mockImplementation(registry.set.bind(registry));
