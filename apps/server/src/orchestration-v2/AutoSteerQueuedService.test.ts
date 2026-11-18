@@ -8,7 +8,6 @@ const threadId = ThreadId.make("thread:auto-steer-test");
 const promotion = (id: string): AutoSteerPromotion => ({
   queuedRunId: RunId.make(id),
   targetRunId: RunId.make("run:active"),
-  skipsCompaction: false,
 });
 
 /** Heads seen on successive reads; null means nothing eligible. */
@@ -21,7 +20,6 @@ const harness = (heads: ReadonlyArray<AutoSteerPromotion | null>, refuse: Readon
     dispatched,
     deps: {
       dirty,
-      compactionsSkipped: new Set<string>(),
       read: () => Effect.sync(() => heads[Math.min(reads++, heads.length - 1)] ?? null),
       select: (head: AutoSteerPromotion | null) => head,
       dispatch: (_thread: ThreadId, next: AutoSteerPromotion) =>

@@ -1,6 +1,5 @@
 import {
   CommandId,
-  isCompactionCommandMessage,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2Run,
   type ThreadId,
@@ -19,11 +18,13 @@ import { queuedRunsInDeliveryOrder } from "./QueuedRunOrder.ts";
 /** Safety bound; each promotion consumes one queued run, so a pass ends long before this. */
 const MAX_PROMOTIONS_PER_PASS = 500;
 
-/** Promotes opted-in queue heads once steering is available, without jumping held runs. */
+/**
+ * Promotes opted-in queue heads once steering is available, without jumping held runs. A
+ * compaction holds them; once it ends they all steer in, in queue order.
+ */
 export interface AutoSteerPromotion {
   readonly queuedRunId: OrchestrationV2Run["id"];
   readonly targetRunId: OrchestrationV2Run["id"];
-  readonly skipsCompaction: boolean;
 }
 
 function nextAutoSteerPromotion(projection: {
@@ -33,6 +34,7 @@ function nextAutoSteerPromotion(projection: {
   readonly providerTurns: Parameters<typeof resolveMessageDispatchIntent>[0]["providerTurns"];
   readonly providerThreads: Parameters<typeof resolveMessageDispatchIntent>[0]["providerThreads"];
   readonly providerSessions: Parameters<typeof resolveMessageDispatchIntent>[0]["providerSessions"];
+  readonly turnItems: Parameters<typeof resolveMessageDispatchIntent>[0]["turnItems"];
 }): AutoSteerPromotion | null {
   const head = queuedRunsInDeliveryOrder(
     projection as Parameters<typeof queuedRunsInDeliveryOrder>[0],
@@ -49,27 +51,22 @@ function nextAutoSteerPromotion(projection: {
       null) !== null
   )
     return null;
-  const activeRun = projection.runs.findLast(isActiveRun);
-  if (activeRun === undefined) return null;
-  const activeMessage = projection.messages.find(
-    (message) => message.id === activeRun.userMessageId,
-  );
-  // Promote skips a compaction and starts the message, as the manual Steer button does.
-  if (activeMessage !== undefined && isCompactionCommandMessage(activeMessage)) {
-    return { queuedRunId: head.id, targetRunId: activeRun.id, skipsCompaction: true };
-  }
+  if (!projection.runs.some(isActiveRun)) return null;
   const mode = resolveMessageDispatchIntent(
     projection as Parameters<typeof resolveMessageDispatchIntent>[0],
     { type: "start_immediately" },
     "auto",
   );
   return mode.type === "steer_active"
-    ? { queuedRunId: head.id, targetRunId: mode.targetRunId, skipsCompaction: false }
+    ? { queuedRunId: head.id, targetRunId: mode.targetRunId }
     : null;
 }
 
 const triggers = (event: OrchestrationV2DomainEvent): boolean =>
   (event.type === "provider-turn.updated" && event.payload.status === "running") ||
+  (event.type === "turn-item.updated" &&
+    event.payload.type === "compaction" &&
+    event.payload.status !== "running") ||
   ((event.type === "run.created" || event.type === "run.updated") &&
     (event.payload.status === "running" ||
       (event.payload.status === "queued" && event.payload.autoSteer === true)));
@@ -77,7 +74,6 @@ const triggers = (event: OrchestrationV2DomainEvent): boolean =>
 export interface AutoSteerPassDeps<R, ReadError, DispatchError> {
   /** Threads that got a trigger since their pass last read; a pass consumes its own entry. */
   readonly dirty: Set<ThreadId>;
-  readonly compactionsSkipped: Set<string>;
   readonly read: (threadId: ThreadId) => Effect.Effect<R | null, ReadError>;
   readonly select: (records: R) => AutoSteerPromotion | null;
   readonly dispatch: (
@@ -101,17 +97,12 @@ export const runAutoSteerPass = Effect.fn("runAutoSteerPass")(function* <
     const records = yield* deps.read(threadId);
     if (records === null) return;
     const next = deps.select(records);
-    if (next === null || (next.skipsCompaction && deps.compactionsSkipped.has(next.targetRunId))) {
+    if (next === null) {
       if (!deps.dirty.delete(threadId)) return;
       continue;
     }
-    if (next.skipsCompaction) {
-      if (deps.compactionsSkipped.size > 1_000) deps.compactionsSkipped.clear();
-      deps.compactionsSkipped.add(next.targetRunId);
-    }
     const exit = yield* Effect.exit(deps.dispatch(threadId, next));
     if (exit._tag === "Failure") {
-      if (next.skipsCompaction) deps.compactionsSkipped.delete(next.targetRunId);
       yield* Effect.logDebug("queued send still cannot steer", { threadId, cause: exit.cause });
       if (!deps.dirty.delete(threadId)) return;
     }
@@ -127,24 +118,25 @@ export const make = Effect.gen(function* () {
   let sequence = 0;
   // Threads that got a trigger while their pass was running; the pass runs again for them.
   const dirty = new Set<ThreadId>();
-  // Compaction runs already asked to stop for a queued send. The stop settles later, and
-  // asking again would emit queued-run updates that retrigger this service in a loop.
-  const compactionsSkipped = new Set<string>();
 
   const promote = (threadId: ThreadId) =>
     runAutoSteerPass(
       {
         dirty,
-        compactionsSkipped,
         read: (id) =>
           projections
-            .getThreadRecords(id, [
-              "runs",
-              "messages",
-              "providerTurns",
-              "providerThreads",
-              "providerSessions",
-            ])
+            .getThreadRecords(
+              id,
+              [
+                "runs",
+                "messages",
+                "providerTurns",
+                "providerThreads",
+                "providerSessions",
+                "turnItems",
+              ],
+              { turnItemTypes: ["compaction"], turnItemStatuses: ["running"] },
+            )
             .pipe(
               Effect.map((records) =>
                 records.thread.archivedAt !== null || records.thread.deletedAt !== null
