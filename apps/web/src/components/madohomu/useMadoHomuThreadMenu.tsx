@@ -15,6 +15,7 @@ import type { ThreadActionMenuExtras } from "../../hooks/useThreadActionMenu";
 import { randomUUID } from "../../lib/utils";
 import { useEnvironmentScope } from "../../state/session";
 import { MADOHOMU_THREAD_MENU_LABELS } from "../threadActionMenu.logic";
+import { useSidebar } from "../ui/sidebar";
 import { MadoHomuThreadEditor } from "./MadoHomuThreadEditor";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuThreads } from "./useMadoHomuThreads";
@@ -54,7 +55,14 @@ export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
   const { threads, groups } = useMadoHomuThreads(environmentId);
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canEdit = canOperate && actions.canWrite;
-  const startDraftSection = useMadoHomuRenamingSection((s) => s.startDraft);
+  const startDraft = useMadoHomuRenamingSection((s) => s.startDraft);
+  const sidebar = useSidebar();
+  // The name field lives in the sidebar, so a menu outside it (the title bar) opens it first.
+  const startDraftSection = (threadIds: ReadonlyArray<ThreadId>) => {
+    if (sidebar.isMobile) sidebar.setOpenMobile(true);
+    else sidebar.setOpen(true);
+    startDraft(threadIds);
+  };
   const [editing, setEditing] = useState<ThreadId | null>(null);
   const manualIds = groups
     .filter((g) => g.kind === "pinned" || g.kind === "custom")
@@ -119,5 +127,5 @@ export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
       onClose={() => setEditing(null)}
     />
   ) : null;
-  return { menuExtras, fileThread, savedOrder, setEditing, editor, canEdit };
+  return { menuExtras, fileThread, savedOrder, setEditing, editor, canEdit, startDraftSection };
 }

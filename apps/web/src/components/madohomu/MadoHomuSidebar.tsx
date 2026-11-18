@@ -212,7 +212,6 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const renamingSection = useMadoHomuRenamingSection((s) => s.id);
   const setRenamingSection = useMadoHomuRenamingSection((s) => s.set);
   const draftSection = useMadoHomuRenamingSection((s) => s.draft);
-  const startDraftSection = useMadoHomuRenamingSection((s) => s.startDraft);
   const clearDraftSection = useMadoHomuRenamingSection((s) => s.clearDraft);
   const [dragging, setDragging] = useState<ThreadId | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
@@ -480,6 +479,10 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     );
     if (clicked._tag === "Failure" || clicked.value === null) return;
     const choice = clicked.value;
+    // Already all there: nothing to do, as in the single-thread menu.
+    if (choice.startsWith("move:") && (choice.slice("move:".length) || null) === sharedPlace) {
+      return;
+    }
     clearSelection();
     if (isThreadFolderMenuId(choice)) {
       if (canRun) runThreadFolderMenuAction(choice, { environmentId, threadIds: selectedIds });
@@ -515,11 +518,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       if (!canOperate) return;
       for (const t of codePinned) handleUnpin(scopeThreadRef(t.environmentId, t.id));
     } else if (choice === "move-new-section") {
-      startDraftSection(selectedIds);
+      threadMenu.startDraftSection(selectedIds);
     } else if (choice.startsWith("move:")) {
-      const section = choice.slice("move:".length) || null;
-      // Already all there: nothing to do, as in the single-thread menu.
-      if (section !== sharedPlace) void moveThreads(selectedIds, section);
+      void moveThreads(selectedIds, choice.slice("move:".length) || null);
     } else if (choice === "mark-unread") {
       for (const ref of refs) markThreadUnread(ref);
     } else if (choice === "delete") {
@@ -651,7 +652,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     actions.save({ madohomuSections: [...sections] });
   // A new section stays a draft until its name is committed (see useMadoHomuRenamingSection).
   const addSection = () => {
-    if (draftSection === null) startDraftSection([]);
+    if (draftSection === null) threadMenu.startDraftSection([]);
   };
   const commitDraftSection = (name: string) => {
     const draft = draftSection;

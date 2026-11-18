@@ -508,9 +508,15 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     }
     const routeRef = resolveThreadOpenRoute(threadRef, shell);
     if (scopedThreadKey(routeRef) === routeThreadKey) return;
-    // Linked threads (parent, subagent) share their project, which stands in for a missing shell.
+    // A parent or subagent shares this thread's project, which stands in for a missing shell.
+    const activeDetail = activeThreadRef
+      ? appAtomRegistry.get(environmentThreadDetails.threadAtom(activeThreadRef))?.projection
+      : undefined;
+    const isLinked =
+      activeDetail?.thread.lineage.parentThreadId === threadId ||
+      activeDetail?.subagents.some((subagent) => subagent.childThreadId === threadId) === true;
     const linkedProjectId =
-      threadEnvironmentId === environmentId ? (activeThread?.projectId ?? null) : null;
+      threadEnvironmentId === environmentId && isLinked ? (activeThread?.projectId ?? null) : null;
     if (openThreadInMadoHomu(router, routeRef, linkedProjectId)) return;
     void navigate({
       to: "/$environmentId/$threadId",
