@@ -105,7 +105,7 @@ function reorderSectionsOf(
 
 function MadoHomuWorkspace({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const actions = useMadoHomuActions(environmentId);
-  const projectSelection = useMadoHomuProjectSelection(environmentId);
+  const projectSelection = useMadoHomuProjectSelection();
   const listActions = useThreadListActions();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -552,10 +552,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                             id: "project",
                             title: "Change project…",
                             icon: "folder",
-                            disabled:
-                              projectSelection.eligible.length === 0 ||
-                              projectSelection.isSelecting ||
-                              savingProject,
+                            disabled: projectSelection.isSelecting || savingProject,
                             onPress: () => {
                               openSwipeableRef.current?.close();
                               setChoosingProject(true);
@@ -617,7 +614,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           <MadoHomuProjectPicker
             environmentId={environmentId}
             projectId={settings.madohomuProjectId}
-            environments={projectSelection.eligible}
+            environments={projectSelection.linked}
+            selectionIssue={projectSelection.selectionIssue}
             disabled={savingProject || projectSelection.isSelecting}
             canClear={actions.canWrite}
             onChange={(project) => void changeProject(project)}
@@ -681,7 +679,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             <MadoHomuProjectPicker
               environmentId={environmentId}
               projectId={settings.madohomuProjectId}
-              environments={projectSelection.eligible}
+              environments={projectSelection.linked}
+              selectionIssue={projectSelection.selectionIssue}
               disabled={savingProject || projectSelection.isSelecting}
               canClear={false}
               onChange={(project) => void changeProject(project)}

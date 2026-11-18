@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { madoHomuProjectSelectionIssue } from "@t3tools/client-runtime/madohomu";
 import { projectKey } from "@t3tools/client-runtime/state/entities";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -14,14 +15,13 @@ import { ChevronsUpDownIcon, FolderPlusIcon } from "lucide-react";
 import { openCommandPalette } from "../../commandPaletteBus";
 import {
   madohomuProjectSelectionPendingAtom,
-  madohomuSavedDestinationEnvironmentIdAtom,
+  madohomuDestinationAtom,
   saveMadoHomuProject,
 } from "../../madohomu";
 import { useProjects } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { useEnvironmentsWithScope } from "../../state/session";
-import { expectsPrimaryEnvironment } from "../../state/shell";
 import { resolveEnvironmentOptionLabel } from "../BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { Button } from "../ui/button";
@@ -42,19 +42,11 @@ type OnProjectChosen = (environmentId: EnvironmentId) => void;
 function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProjectChosen) {
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
-  const saved = useAtomValue(madohomuSavedDestinationEnvironmentIdAtom);
+  const destination = useAtomValue(madohomuDestinationAtom);
   const configs = useAtomValue(environmentServerConfigsAtom);
   const pending = useAtomValue(madohomuProjectSelectionPendingAtom);
   const writers = useEnvironmentsWithScope(environments, AuthSettingsWriteScope);
   const creators = useEnvironmentsWithScope(environments, AuthOrchestrationOperateScope);
-  const writable = new Set(
-    environments
-      .filter((env) => env.connection.phase === "connected" && writers.has(env.environmentId))
-      .map((env) => env.environmentId),
-  );
-  const canSetDestination = primary === null ? !expectsPrimaryEnvironment() : writable.has(primary);
-  const canChoose = (id: EnvironmentId) =>
-    !pending && writable.has(id) && (id === saved || canSetDestination);
   const machines = new Map(
     environments.map((env) => [
       env.environmentId,
@@ -65,9 +57,15 @@ function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProj
           runtimeLabel: env.label,
         }),
         kind: resolveEnvironmentMachineKind(env.serverConfig),
+        connected: env.connection.phase === "connected",
+        settingsLoaded: env.serverConfig !== null,
+        canWrite: writers.has(env.environmentId),
       },
     ]),
   );
+  const readHost = (id: EnvironmentId) => machines.get(id) ?? null;
+  const selectionIssue = (id: EnvironmentId) =>
+    madoHomuProjectSelectionIssue(destination, id, readHost);
   const projects = useProjects()
     .filter((project) => project.archivedAt === null && machines.has(project.environmentId))
     .map((project) => ({
@@ -97,7 +95,10 @@ function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProj
     }
   };
   const addTargets = environments
-    .filter((env) => canChoose(env.environmentId) && creators.has(env.environmentId))
+    .filter(
+      (env) =>
+        !pending && creators.has(env.environmentId) && selectionIssue(env.environmentId) === null,
+    )
     .map((env) => env.environmentId);
   const newProject = () =>
     openCommandPalette({
@@ -106,11 +107,13 @@ function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProj
       onProjectAdded: (project) => choose(project.environmentId, project.projectId),
     });
   const clear =
-    environmentId !== null && !pending && writable.has(environmentId)
+    environmentId !== null &&
+    !pending &&
+    madoHomuProjectSelectionIssue(destination, environmentId, readHost, true) === null
       ? () => void choose(environmentId, null)
       : null;
   return {
-    canChoose,
+    selectionIssue,
     clear,
     choose,
     current,
@@ -193,7 +196,17 @@ function ProjectMenuItems({
   showClear?: boolean;
   showNew?: boolean;
 }) {
-  const { addTargets, canChoose, clear, choose, current, currentId, newProject, projects } = picker;
+  const {
+    addTargets,
+    clear,
+    choose,
+    current,
+    currentId,
+    newProject,
+    pending,
+    projects,
+    selectionIssue,
+  } = picker;
   return (
     <>
       {showNew && (
@@ -206,26 +219,30 @@ function ProjectMenuItems({
         </>
       )}
       <MenuRadioGroup value={current?.key ?? ""}>
-        {projects.map((project) => (
-          <MenuRadioItem
-            key={project.key}
-            value={project.key}
-            disabled={!canChoose(project.environmentId)}
-            onClick={() => void choose(project.environmentId, project.id)}
-            closeOnClick
-          >
-            <span className="flex items-center gap-2">
-              <EnvironmentMachineIcon kind={project.machine.kind} aria-hidden />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate">{project.title}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {project.machine.label}
+        {projects.map((project) => {
+          const issue = selectionIssue(project.environmentId);
+          return (
+            <MenuRadioItem
+              key={project.key}
+              value={project.key}
+              disabled={pending || issue !== null}
+              onClick={() => void choose(project.environmentId, project.id)}
+              closeOnClick
+            >
+              <span className="flex items-center gap-2">
+                <EnvironmentMachineIcon kind={project.machine.kind} aria-hidden />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{project.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {project.machine.label}
+                  </span>
+                  {issue && <span className="max-w-64 text-xs text-muted-foreground">{issue}</span>}
                 </span>
+                <MenuRadioItemIndicator />
               </span>
-              <MenuRadioItemIndicator />
-            </span>
-          </MenuRadioItem>
-        ))}
+            </MenuRadioItem>
+          );
+        })}
       </MenuRadioGroup>
       {showClear && currentId !== null && (
         <>

@@ -24,6 +24,7 @@ export function MadoHomuProjectPicker(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly environments: readonly EnvironmentPresentation[];
+  readonly selectionIssue: (environmentId: EnvironmentId) => string | null;
   readonly disabled: boolean;
   readonly canClear: boolean;
   readonly onChange: (project: ScopedProjectRef | null) => void;
@@ -58,29 +59,35 @@ export function MadoHomuProjectPicker(props: {
     <View className="gap-3">
       {props.environments
         .filter((environment) => canCreate.has(environment.environmentId))
-        .map((environment) => (
-          <ListActionRow
-            key={environment.environmentId}
-            icon="folder.badge.plus"
-            label="New project"
-            description={environment.label}
-            disabled={props.disabled}
-            onPress={() => newProject(environment.environmentId)}
-          />
-        ))}
+        .map((environment) => {
+          const issue = props.selectionIssue(environment.environmentId);
+          return (
+            <ListActionRow
+              key={environment.environmentId}
+              icon="folder.badge.plus"
+              label="New project"
+              description={issue ? `${environment.label} · ${issue}` : environment.label}
+              disabled={props.disabled || issue !== null}
+              onPress={() => newProject(environment.environmentId)}
+            />
+          );
+        })}
       {projects.length > 0 ? (
         <View>
           {projects.map((project) => {
             const selected = isSelected(project);
-            const environment = environmentById.get(project.environmentId);
+            const issue = props.selectionIssue(project.environmentId);
+            const label =
+              environmentById.get(project.environmentId)?.label ??
+              currentEnvironment?.entry.target.label;
             return (
               <ListActionRow
                 key={scopedProjectKey(project.environmentId, project.id)}
                 label={project.title}
-                description={environment?.label ?? currentEnvironment?.entry.target.label}
+                description={[label, issue].filter(Boolean).join(" · ")}
                 icon={selected ? "checkmark" : undefined}
                 detail={selected ? "Selected" : undefined}
-                disabled={props.disabled || environment === undefined}
+                disabled={props.disabled || issue !== null}
                 onPress={() =>
                   props.onChange({ environmentId: project.environmentId, projectId: project.id })
                 }

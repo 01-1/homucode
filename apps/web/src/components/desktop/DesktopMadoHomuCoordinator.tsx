@@ -2,33 +2,30 @@ import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   madohomuDefaultEnvironmentIdAtom,
+  madohomuDesktopLauncherEnabledAtom,
   madohomuSavedDestinationEnvironmentIdAtom,
 } from "../../madohomu";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect } from "react";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { expectsPrimaryEnvironment } from "../../state/shell";
 import { toastManager } from "../ui/toast";
 
 export function DesktopMadoHomuCoordinator() {
   const environmentId = useAtomValue(madohomuDefaultEnvironmentIdAtom);
   const saved = useAtomValue(madohomuSavedDestinationEnvironmentIdAtom);
-  const primary = usePrimaryEnvironmentId();
   const configs = useAtomValue(environmentServerConfigsAtom);
   const settings = environmentId === null ? undefined : configs.get(environmentId)?.settings;
-  const ready = !expectsPrimaryEnvironment() || (primary !== null && configs.has(primary));
   const navigate = useNavigate();
   const bridge = window.desktopBridge;
   const enabled = settings?.madohomuEnabled ?? (saved === null ? undefined : true);
-  const launcherEnabled = settings?.madohomuDesktopAppEnabled === true;
+  const launcherEnabled = useAtomValue(madohomuDesktopLauncherEnabledAtom);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the server's MadoHomu opt-in to the Electron launcher and window service
   useEffect(() => {
     if (
-      !ready ||
       !bridge?.configureMadoHomu ||
       bridge.isMadoHomuWindow?.() ||
-      enabled === undefined
+      enabled === undefined ||
+      launcherEnabled === undefined
     )
       return;
     void bridge
@@ -36,7 +33,7 @@ export function DesktopMadoHomuCoordinator() {
       .catch(() =>
         toastManager.add({ type: "error", title: "Could not update the MadoHomu desktop app" }),
       );
-  }, [bridge, enabled, launcherEnabled, environmentId, ready]);
+  }, [bridge, enabled, launcherEnabled, environmentId]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- receives navigation requested by the native merge and split window actions
   useEffect(
     () =>

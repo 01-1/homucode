@@ -7,6 +7,7 @@ import type {
   ScheduledTaskId,
   ScheduledTaskUpsertInput,
   ServerSettings,
+  ServerSettingsPatch,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -360,21 +361,124 @@ export function madohomuMorningBriefInput(input: {
   };
 }
 
-export function selectMadoHomuEnvironment(
-  primary: EnvironmentId | null,
-  environments: ReadonlyArray<{
-    environmentId: EnvironmentId;
-    madohomuEnabled: boolean;
-    madohomuDesktopAppEnabled: boolean;
-  }>,
-): EnvironmentId | null {
-  const enabled = environments.filter((environment) => environment.madohomuEnabled);
-  return (
-    enabled.find((e) => e.environmentId === primary && e.madohomuDesktopAppEnabled)
-      ?.environmentId ??
-    enabled.find((e) => e.madohomuDesktopAppEnabled)?.environmentId ??
-    enabled.find((e) => e.environmentId === primary)?.environmentId ??
-    enabled[0]?.environmentId ??
-    null
+interface MadoHomuEnvironment {
+  readonly environmentId: EnvironmentId;
+  readonly settings: Pick<
+    ServerSettings,
+    "madohomuEnabled" | "madohomuDestinationEnvironmentId"
+  > | null;
+}
+
+interface MadoHomuDestination {
+  readonly anchorEnvironmentId: EnvironmentId | null;
+  readonly savedEnvironmentId: EnvironmentId | null;
+  readonly environmentId: EnvironmentId | null;
+}
+
+/** Clients with the same linked machines choose the same settings host and launch destination. */
+export function resolveMadoHomuDestination(
+  environments: ReadonlyArray<MadoHomuEnvironment>,
+): MadoHomuDestination {
+  const ordered = [...environments].sort((a, b) =>
+    a.environmentId < b.environmentId ? -1 : a.environmentId > b.environmentId ? 1 : 0,
   );
+  // Older clients could have written a pointer to more than one machine.
+  const saved = ordered.find((host) => host.settings?.madohomuDestinationEnvironmentId != null);
+  const savedEnvironmentId = saved?.settings?.madohomuDestinationEnvironmentId ?? null;
+  const legacy = ordered.find((host) => host.settings?.madohomuEnabled);
+  return {
+    // Connection, permission and enabled state can change independently on different clients.
+    anchorEnvironmentId: saved?.environmentId ?? ordered[0]?.environmentId ?? null,
+    savedEnvironmentId,
+    environmentId: savedEnvironmentId ?? legacy?.environmentId ?? null,
+  };
+}
+
+interface MadoHomuSettingsHost {
+  readonly label: string;
+  readonly connected: boolean;
+  readonly settingsLoaded: boolean;
+  readonly canWrite: boolean;
+}
+
+type ReadMadoHomuSettingsHost = (environmentId: EnvironmentId) => MadoHomuSettingsHost | null;
+
+function madoHomuProjectAnchor(
+  destination: MadoHomuDestination,
+  environmentId: EnvironmentId,
+): EnvironmentId | null {
+  return destination.savedEnvironmentId === environmentId ? null : destination.anchorEnvironmentId;
+}
+
+export function madoHomuProjectSelectionIssue(
+  destination: MadoHomuDestination,
+  environmentId: EnvironmentId,
+  readHost: ReadMadoHomuSettingsHost,
+  clear = false,
+): string | null {
+  const issue = (id: EnvironmentId, isAnchor: boolean) => {
+    const host = readHost(id);
+    const label = host?.label ?? id;
+    const purpose = isAnchor ? " to save the launch destination" : " to change the project";
+    if (!host?.connected) return `Connect to ${label}${purpose}.`;
+    if (!host.settingsLoaded) return `Wait for settings from ${label} to load${purpose}.`;
+    if (!host.canWrite) return `Settings write access on ${label} is required${purpose}.`;
+    return null;
+  };
+  const anchor = clear ? null : madoHomuProjectAnchor(destination, environmentId);
+  return (
+    issue(environmentId, false) ??
+    (anchor !== null && anchor !== environmentId ? issue(anchor, true) : null)
+  );
+}
+
+/** Store the project on its owner before publishing the destination on the shared settings host. */
+export async function writeMadoHomuProject(
+  destination: MadoHomuDestination,
+  { environmentId, projectId }: { environmentId: EnvironmentId; projectId: ProjectId | null },
+  readHost: ReadMadoHomuSettingsHost,
+  writeSettings: (
+    environmentId: EnvironmentId,
+    patch: ServerSettingsPatch,
+  ) => Promise<ServerSettings>,
+): Promise<void> {
+  const issue = madoHomuProjectSelectionIssue(
+    destination,
+    environmentId,
+    readHost,
+    projectId === null,
+  );
+  if (issue !== null) throw new Error(issue);
+
+  const anchor = projectId === null ? null : madoHomuProjectAnchor(destination, environmentId);
+  const owner = await writeSettings(environmentId, {
+    madohomuProjectId: projectId,
+    ...(projectId !== null ? { madohomuEnabled: true } : {}),
+    ...(anchor === environmentId ? { madohomuDestinationEnvironmentId: environmentId } : {}),
+  });
+  if (owner.madohomuProjectId !== projectId || (projectId !== null && !owner.madohomuEnabled)) {
+    throw new Error(
+      `${readHost(environmentId)?.label ?? environmentId} did not save the project selection.`,
+    );
+  }
+  if (anchor === null) return;
+
+  const label = readHost(anchor)?.label ?? anchor;
+  try {
+    const saved =
+      anchor === environmentId
+        ? owner
+        : await writeSettings(anchor, { madohomuDestinationEnvironmentId: environmentId });
+    if (saved.madohomuDestinationEnvironmentId !== environmentId) {
+      throw new Error("The server did not confirm the destination setting.");
+    }
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `The project was saved on its machine. The launch destination could not be saved on ${label}. ${detail}`,
+      {
+        cause,
+      },
+    );
+  }
 }
