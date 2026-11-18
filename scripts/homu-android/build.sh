@@ -33,10 +33,10 @@ fi
 "${B[@]}" ssh "$box" -- "bash $R/box-build.sh $rev $VARIANT '$APP_NAME' $MODE" > build.log 2>&1
 if [[ $MODE == ota ]]; then
   for f in update.json runtime-version.json config.json; do "${B[@]}" scp "$box:$R/artifacts/$f" "$f"; done
-  echo "PUBLISHED $rev for runtime $(cat runtime-version.json)"; exit 0
+  echo "PUBLISHED $rev for runtime $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["runtimeVersion"])' runtime-version.json)"; exit 0
 fi
 name="$APP_NAME-$VARIANT-${rev:0:10}.apk"
 for f in app.apk app.apk.sha256 app.apk.badging.txt app.apk.signing.txt config.json runtime-version.json; do "${B[@]}" scp "$box:$R/artifacts/$f" "$f"; done
 [ "$(cut -d' ' -f1 app.apk.sha256)" = "$(sha256sum app.apk | cut -d' ' -f1)" ]
 mkdir -p "$OUT"; cp app.apk "$OUT/$name"
-echo "DONE $OUT/$name (runtime $(cat runtime-version.json))"
+echo "DONE $OUT/$name (runtime $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["runtimeVersion"])' runtime-version.json))"

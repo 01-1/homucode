@@ -245,7 +245,8 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
-  runtimeVersion: {
+  // A pinned runtime lets builds whose Gradle-time fingerprint drifts still match their OTAs.
+  runtimeVersion: repoEnv.T3CODE_MOBILE_RUNTIME_VERSION?.trim() || {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
   },

@@ -22,6 +22,9 @@ p.write_text(s)
 PY
 pnpm install --frozen-lockfile --filter=@t3tools/mobile...
 cd apps/mobile
+# Fingerprint before prebuild and pin it: Gradle's own fingerprint also hashes the generated android/.
+runtime=$(pnpm exec expo-updates runtimeversion:resolve --platform android | tee "$build_root/artifacts/runtime-version.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["runtimeVersion"])')
+echo "T3CODE_MOBILE_RUNTIME_VERSION=$runtime" >> ../../.env
 pnpm exec expo prebuild --clean --platform android --no-install
 python3 - "$(date -u +%y%m%d%H)" <<'PY'
 import pathlib,re,sys
@@ -31,9 +34,8 @@ s=s.replace('react {','react {\n    extraPackagerArgs = ["--max-workers", "2"]',
 p.write_text(s)
 PY
 pnpm exec expo config --type public --json > "$build_root/artifacts/config.json"
-pnpm exec expo-updates runtimeversion:resolve --platform android > "$build_root/artifacts/runtime-version.json"
 if [[ $mode == ota ]]; then
-  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 pnpm dlx eas-cli@27.10.0 update \
+  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 EAS_PROJECT_ROOT=$PWD pnpm dlx eas-cli@27.10.0 update \
     --platform android --channel "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["updates"]["requestHeaders"]["expo-channel-name"])' "$build_root/artifacts/config.json")" \
     --message "$revision" --non-interactive --json > "$build_root/artifacts/update.json"
   echo "PUBLISHED $revision $variant"; exit 0
@@ -47,5 +49,10 @@ apk="$build_root/artifacts/app.apk"
 "$tools/zipalign" -c -P 16 4 "$apk"
 "$tools/aapt2" dump badging "$apk" > "$apk.badging.txt"
 unzip -l "$apk" assets/index.android.bundle > /dev/null  # fails if the JS bundle is missing
+python3 - "$apk" "$runtime" <<'PY'  # the pinned runtime must be what the APK reports to the update server
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1]); r = sys.argv[2]
+assert any(r.encode(e) in z.read(f) for f in ("AndroidManifest.xml", "resources.arsc") for e in ("utf-8", "utf-16-le")), "runtime not embedded"
+PY
 (cd "$build_root/artifacts" && sha256sum app.apk > app.apk.sha256)
 echo "BUILT $revision $variant"
