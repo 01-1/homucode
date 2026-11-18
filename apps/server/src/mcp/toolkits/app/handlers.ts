@@ -1,4 +1,5 @@
 import {
+  ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
   OrchestratorMcpFailure,
   ServerRemoveKeybindingInput,
   STATIC_KEYBINDING_COMMANDS,
@@ -9,7 +10,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as CheckpointDiffQuery from "../../../checkpointing/CheckpointDiffQuery.ts";
 import * as Keybindings from "../../../keybindings.ts";
-import { WORKSPACE_PREPARATION_INPUT } from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadLaunchService from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as AgentSessionImporter from "../../../project/AgentSessionImporter.ts";
@@ -198,12 +198,14 @@ export const layer = McpToolAccess.toLayer(AppToolkit, {
         }
         const { projection } = yield* readThread(input.threadId, ["runs", "turnItems"], {
           runStatuses: ["failed"],
-          turnItemTypes: ["command_execution"],
+          turnItemTypes: ["error"],
         });
+        // The same failure the orchestrator requires before it accepts a retry.
         const setupRuns = new Set(
           projection.turnItems.flatMap((item) =>
-            item.type === "command_execution" &&
-            item.input === WORKSPACE_PREPARATION_INPUT &&
+            item.type === "error" &&
+            item.status === "failed" &&
+            item.failure.code === ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE &&
             item.runId !== null
               ? [item.runId]
               : [],

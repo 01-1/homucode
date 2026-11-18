@@ -1,5 +1,10 @@
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
@@ -9,7 +14,6 @@ import * as WorktreeSetupTracker from "../../../project/WorktreeSetupTracker.ts"
 import * as ThreadLaunchService from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as Keybindings from "../../../keybindings.ts";
-import { WORKSPACE_PREPARATION_INPUT } from "../../../orchestration-v2/Orchestrator.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -116,10 +120,11 @@ const caller = Layer.succeed(McpInvocationContext.McpInvocationContext, {
 
 it.effect("setup retry reruns the newest failed setup through the launch service", () => {
   const retried: Array<unknown> = [];
-  const setupItem = (runId: string) => ({
-    type: "command_execution",
+  const setupFailure = (runId: string) => ({
+    type: "error",
+    status: "failed",
     runId,
-    input: WORKSPACE_PREPARATION_INPUT,
+    failure: { code: ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE },
   });
   return Effect.gen(function* () {
     const toolkit = yield* AppToolkit;
@@ -142,13 +147,22 @@ it.effect("setup retry reruns the newest failed setup through the launch service
               getProjectThreadRecords: () =>
                 Effect.succeed({
                   ...idleThreadProjection(liveThreadShell(threadId)),
-                  // An ordinary failed turn after the setup failure is not retried.
+                  // A later turn whose setup succeeded and whose provider turn failed is not retried.
                   runs: [
                     { id: "setup-old", status: "failed" },
                     { id: "setup-new", status: "failed" },
                     { id: "turn-failed", status: "failed" },
                   ],
-                  turnItems: [setupItem("setup-old"), setupItem("setup-new")],
+                  turnItems: [
+                    setupFailure("setup-old"),
+                    setupFailure("setup-new"),
+                    {
+                      type: "error",
+                      status: "failed",
+                      runId: "turn-failed",
+                      failure: { code: "provider_error" },
+                    },
+                  ],
                 } as never),
             }),
             Layer.mock(WorktreeSetupTracker.WorktreeSetupTracker)({}),
