@@ -1,10 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  groupMadoHomuThreads,
-  madohomuListedThreads,
-  resolveMadoHomuSelection,
-} from "@t3tools/client-runtime/madohomu";
+import { resolveMadoHomuSelection } from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
@@ -19,9 +15,10 @@ import {
 import { useEnvironmentShellStatus } from "../../state/shell";
 import { useSnoozeWakeClock } from "../Sidebar.logic";
 import {
+  groupWebMadoHomuThreads,
+  listWebMadoHomuThreads,
   madohomuCreatedThreadIdsAtom,
   madohomuFirstRowId,
-  madohomuIsWorking,
   madohomuNamedThread,
   startMadoHomuThread,
 } from "../../madohomu";
@@ -34,18 +31,17 @@ export function useMadoHomuThreads(environmentId: EnvironmentId) {
     useProjects().find(
       (p) => p.environmentId === environmentId && p.id === settings.madohomuProjectId,
     ) ?? null;
-  const projectThreads = useVisibleThreadShells().filter(
-    (t) =>
-      t.environmentId === environmentId &&
-      t.projectId === project?.id &&
-      t.deletedAt === null &&
-      t.archivedAt === null,
-  );
   const search = useSearch({ from: "/_chat/madohomu" });
-  const threads = madohomuListedThreads(projectThreads, settings, search.threadId);
+  const threads = listWebMadoHomuThreads(
+    useVisibleThreadShells(),
+    environmentId,
+    project?.id,
+    settings,
+    search.threadId,
+  );
   const clockMs = useSnoozeWakeClock(threads);
   const now = new Date(clockMs).toISOString();
-  const groups = groupMadoHomuThreads(threads, settings, { now, isWorking: madohomuIsWorking });
+  const groups = groupWebMadoHomuThreads(threads, settings, now);
   return { settings, project, threads, groups, now };
 }
 

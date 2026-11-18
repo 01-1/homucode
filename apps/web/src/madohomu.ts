@@ -2,12 +2,14 @@ import {
   findUntouchedMadoHomuThread,
   MADOHOMU_NEW_THREAD_TITLE,
   groupMadoHomuThreads,
+  isMadoHomuThreadPinned,
   madohomuListedThreads,
   madohomuRuntimeMode,
   selectMadoHomuEnvironment,
   resolveMadoHomuSelection,
 } from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
+import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import type {
   EnvironmentThread,
   EnvironmentThreadShell,
@@ -15,11 +17,17 @@ import type {
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { EnvironmentId, type ProjectId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type ProjectId,
+  type ScopedThreadRef,
+  type ServerSettings,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "./rpc/atomRegistry";
-import { readProjects } from "./state/entities";
+import { readProjects, waitForThreadShell } from "./state/entities";
 import { environmentServerConfigsAtom, serverEnvironment } from "./state/server";
 import { environmentShell } from "./state/shell";
 import { primaryEnvironmentIdAtom } from "./state/primaryEnvironment";
@@ -28,7 +36,9 @@ import {
   environmentThreadShells,
   threadEnvironment,
 } from "./state/threads";
+import { waitForAtomValue } from "./state/waitForAtomValue";
 import { newThreadId } from "./lib/utils";
+import { threadHasStarted } from "./lib/chatThreadActions";
 import { scheduledTaskDefaultModel } from "./components/settings/scheduledTasksSettings.logic";
 import { providerInstanceEntriesFor } from "./providerInstances";
 import { resolveSidebarThreadStatus } from "./components/Sidebar.logic";
@@ -116,6 +126,38 @@ export const madohomuIsWorking = (
   thread: Parameters<typeof resolveSidebarThreadStatus>[0] & Parameters<typeof isThreadWorking>[0],
 ) => !madohomuNeedsUser(thread) && isThreadWorking(thread);
 
+export function listWebMadoHomuThreads(
+  shells: ReadonlyArray<EnvironmentThreadShell>,
+  environmentId: EnvironmentId,
+  projectId: ProjectId | undefined,
+  settings: Pick<ServerSettings, "madohomuThreads">,
+  openThreadId: ThreadId | null | undefined,
+) {
+  return madohomuListedThreads(
+    shells.filter(
+      (thread) =>
+        thread.environmentId === environmentId &&
+        thread.projectId === projectId &&
+        thread.deletedAt === null &&
+        thread.archivedAt === null &&
+        thread.lineage.sideChat !== true,
+    ),
+    settings,
+    openThreadId,
+  );
+}
+
+export function groupWebMadoHomuThreads(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  settings: Parameters<typeof groupMadoHomuThreads>[1],
+  now: string,
+) {
+  return groupMadoHomuThreads(threads, settings, { now, isWorking: madohomuIsWorking }).map(
+    (group) =>
+      group.kind === "settled" ? { ...group, threads: sortSettledThreads(group.threads) } : group,
+  );
+}
+
 export function readMadoHomuContext(router: AnyRouter) {
   if (router.state.location?.pathname !== "/madohomu") return null;
   const search = router.state.location.search as Record<string, unknown>;
@@ -130,22 +172,16 @@ export function readMadoHomuContext(router: AnyRouter) {
     (p) => p.environmentId === environmentId && p.id === config.settings.madohomuProjectId,
   );
   if (!project) return null;
-  const projectThreads = appAtomRegistry
-    .get(environmentThreadShells.visibleThreadShellsAtom)
-    .filter(
-      (t) =>
-        t.environmentId === environmentId &&
-        t.projectId === project.id &&
-        t.deletedAt === null &&
-        t.archivedAt === null,
-    );
   const openThreadId = typeof search.threadId === "string" ? ThreadId.make(search.threadId) : null;
-  // The same list and choice as the sidebar, so commands act on the thread on screen.
-  const groups = groupMadoHomuThreads(
-    madohomuListedThreads(projectThreads, config.settings, openThreadId),
+  const threads = listWebMadoHomuThreads(
+    appAtomRegistry.get(environmentThreadShells.visibleThreadShellsAtom),
+    environmentId,
+    project.id,
     config.settings,
-    { now: new Date().toISOString(), isWorking: madohomuIsWorking },
+    openThreadId,
   );
+  // The same list and choice as the sidebar, so commands act on the thread on screen.
+  const groups = groupWebMadoHomuThreads(threads, config.settings, new Date().toISOString());
   const openRef = openThreadId ? scopeThreadRef(environmentId, openThreadId) : null;
   const { named, listLoaded } = madohomuNamedThread({
     namedId: openThreadId,
@@ -199,14 +235,14 @@ export function openThreadInMadoHomu(
   });
 }
 
+type MadoHomuCheckout = { readonly branch: string | null; readonly worktreePath: string | null };
+const DEFAULT_CHECKOUT: MadoHomuCheckout = { branch: null, worktreePath: null };
+
 export async function createMadoHomuThread(
   environmentId: EnvironmentId,
   title: string = MADOHOMU_NEW_THREAD_TITLE,
   icon: string | null = null,
-  checkout: { readonly branch: string | null; readonly worktreePath: string | null } = {
-    branch: null,
-    worktreePath: null,
-  },
+  checkout: MadoHomuCheckout = DEFAULT_CHECKOUT,
 ): Promise<ThreadId | null> {
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
   if (!config?.settings.madohomuEnabled) return null;
@@ -248,60 +284,71 @@ export async function createMadoHomuThread(
 }
 
 /**
- * "New thread on <branch>" from a thread in MadoHomu's project while MadoHomu is open: makes the
- * thread on that checkout, filed in Pinned, and opens it there. Null when the caller should take
- * the normal draft route instead.
+ * Opens an empty pinned thread on the source checkout, creating one if needed.
+ * Null lets the caller use the normal draft route outside MadoHomu.
  */
 export async function startMadoHomuBranchThread(
   router: AnyRouter,
-  source: ScopedThreadRef & {
-    readonly projectId: ProjectId;
-    readonly branch: string | null;
-    readonly worktreePath: string | null;
-  },
+  source: ScopedThreadRef & MadoHomuCheckout & { readonly projectId: ProjectId },
 ): Promise<boolean | null> {
   const context = readMadoHomuContext(router);
   if (context?.environmentId !== source.environmentId) return null;
   if (context.project.id !== source.projectId) return null;
-  const threadId = await createMadoHomuThread(context.environmentId, undefined, null, {
-    branch: source.branch,
-    worktreePath: source.worktreePath,
-  });
-  if (!threadId) return false;
-  await router.navigate({
-    to: "/madohomu",
-    search: { environmentId: context.environmentId, threadId },
-  });
-  return true;
+  return startThreadOnCheckout(router, context, source);
 }
 
-// One New thread at a time: a second press while one is being made would miss it and make another.
-let startingThread: Promise<boolean> | null = null;
+const startingThreads = new Map<string, Promise<boolean>>();
 
 export function startMadoHomuThread(router: AnyRouter): Promise<boolean> {
-  startingThread ??= startThread(router).finally(() => {
-    startingThread = null;
-  });
-  return startingThread;
+  const context = readMadoHomuContext(router);
+  return context
+    ? startThreadOnCheckout(router, context, DEFAULT_CHECKOUT)
+    : Promise.resolve(false);
 }
 
-async function startThread(router: AnyRouter) {
-  const context = readMadoHomuContext(router);
-  if (!context) return false;
-  // Reopens an untouched empty "New thread" instead of making another.
-  const untouched = findUntouchedMadoHomuThread(
-    context.groups
-      .filter((group) => group.kind === "pinned" || group.kind === "custom")
-      .flatMap((group) => group.threads)
-      // A branch thread keeps its checkout, so plain "New thread" never reopens one.
-      .filter((thread) => thread.branch === null && thread.worktreePath === null),
-    context.settings,
-  );
-  const threadId = untouched?.id ?? (await createMadoHomuThread(context.environmentId));
-  if (!threadId) return false;
-  await router.navigate({
-    to: "/madohomu",
-    search: { environmentId: context.environmentId, threadId },
-  });
-  return true;
+function startThreadOnCheckout(
+  router: AnyRouter,
+  context: NonNullable<ReturnType<typeof readMadoHomuContext>>,
+  checkout: MadoHomuCheckout,
+) {
+  const { environmentId, project, groups, settings } = context;
+  const key = JSON.stringify([environmentId, project.id, checkout.branch, checkout.worktreePath]);
+  const inFlight = startingThreads.get(key);
+  if (inFlight) return inFlight;
+  const start = async () => {
+    const pinned = groups.find((group) => group.kind === "pinned")?.threads ?? [];
+    const untouched = findUntouchedMadoHomuThread(
+      pinned.filter(
+        (thread) =>
+          thread.branch === checkout.branch &&
+          thread.worktreePath === checkout.worktreePath &&
+          !threadHasStarted(thread),
+      ),
+      settings,
+    );
+    const threadId =
+      untouched?.id ?? (await createMadoHomuThread(environmentId, undefined, null, checkout));
+    if (!threadId) return false;
+    const open = router.navigate({ to: "/madohomu", search: { environmentId, threadId } });
+    if (untouched) {
+      await open;
+    } else {
+      // Keep sharing the start until the next click can find the new pin in both feeds.
+      await Promise.all([
+        open,
+        waitForThreadShell(scopeThreadRef(environmentId, threadId)),
+        waitForAtomValue({
+          registry: appAtomRegistry,
+          atom: environmentServerConfigsAtom,
+          predicate: (configs) =>
+            isMadoHomuThreadPinned(configs.get(environmentId)?.settings.madohomuThreads[threadId]),
+          timeoutMs: 5_000,
+        }),
+      ]);
+    }
+    return true;
+  };
+  const pending = start().finally(() => startingThreads.delete(key));
+  startingThreads.set(key, pending);
+  return pending;
 }
