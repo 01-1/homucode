@@ -11815,8 +11815,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           messageId: MessageId.make(`async-answer:${command.requestId}`),
           text: replies.join("\n\n"),
           attachments: [],
-          createdBy: "user" as const,
-          creationSource: "server" as const,
+          ...(command.createdBy === "agent"
+            ? { createdBy: "agent" as const, creationSource: "mcp" as const }
+            : { createdBy: "user" as const, creationSource: "server" as const }),
           dispatchMode,
         };
         yield* dispatchMessage(answer, events, effects);

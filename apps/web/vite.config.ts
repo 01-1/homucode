@@ -149,6 +149,17 @@ const browserTestProject = {
         resetPointer: async ({ page }) => {
           await page.mouse.move(-1, -1);
         },
+        // userEvent.click moves the mouse first, which hides content that moved under a still pointer.
+        pressPointer: async ({ page }) => {
+          await page.mouse.down();
+          await page.mouse.up();
+        },
+        holdPointer: async ({ page }) => {
+          await page.mouse.down();
+        },
+        releasePointer: async ({ page }) => {
+          await page.mouse.up();
+        },
       },
     },
   },

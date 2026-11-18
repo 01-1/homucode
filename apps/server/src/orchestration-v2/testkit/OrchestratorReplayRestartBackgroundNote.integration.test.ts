@@ -18,7 +18,10 @@ import * as EffectWorker from "../EffectWorker.ts";
 import * as EventSink from "../EventSink.ts";
 import * as Orchestrator from "../Orchestrator.ts";
 import * as SqlitePersistence from "../../persistence/Sqlite.ts";
-import { materializeReplayPromptTimestamps } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import { CLAUDE_BACKGROUND_SUBAGENT_AFTER_ROOT_PROMPT } from "./fixtures/claude_background_subagent_after_root/input.ts";
 import {
@@ -132,6 +135,7 @@ const readRestartTranscript = Effect.fn("readRestartTranscript")(function* (
       },
       [CLAUDE_BACKGROUND_SUBAGENT_AFTER_ROOT_PROMPT, ...resumedPrompts],
       DateTime.makeUnsafe(0),
+      UNKNOWN_DEVICE_HUMAN_LINE,
     ),
   );
 });

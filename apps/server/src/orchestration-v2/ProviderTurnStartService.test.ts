@@ -2253,6 +2253,12 @@ effectIt.effect(
     }),
 );
 
+// The sender line T3 appends to a human's prompt; an empty prompt becomes just the line.
+const sentByUnknownHuman = (text: string) => {
+  const line = "[T3] Sent from: unknown device. A human sent this message.";
+  return text === "" ? line : `${text}\n\n${line}`;
+};
+
 effectIt.effect("sends new steering text when restarting a manual continuation", () =>
   Effect.gen(function* () {
     const harness = makeLocalCommandHarness({
@@ -2270,7 +2276,7 @@ effectIt.effect("sends new steering text when restarting a manual continuation",
       DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
     ).slice(0, 19);
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe(
-      `${timestamp}: New steering instruction`,
+      `${timestamp}: New steering instruction\n\n[T3] Sent from: unknown device. A human sent this message.`,
     );
     expect(harness.startRootRun.mock.calls[0]?.[0].resume).toBe(false);
   }),
@@ -2306,22 +2312,30 @@ effectIt.effect.each([
   {
     driver: "codex",
     createdBy: "user",
-    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro). A human sent this message.",
   },
   {
     driver: "claudeAgent",
     createdBy: "user",
-    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro). A human sent this message.",
   },
-  { driver: "claudeAgent", createdBy: "agent", line: "" },
-  { driver: "codex", createdBy: "agent", line: "" },
+  {
+    driver: "claudeAgent",
+    createdBy: "agent",
+    line: "\n\n[T3] Automatic message from T3 Code. No human sent this message.",
+  },
+  {
+    driver: "codex",
+    createdBy: "agent",
+    line: "\n\n[T3] Automatic message from T3 Code. No human sent this message.",
+  },
   {
     driver: "cursor",
     createdBy: "user",
-    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro)",
+    line: "\n\n[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro). A human sent this message.",
   },
 ] as const)(
-  "tells $driver which device and send time a $createdBy message came from",
+  "tells $driver who sent a $createdBy message, from which device, and when",
   ({ driver, createdBy, line }) =>
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
@@ -2418,7 +2432,15 @@ effectIt.effect.each([
         harness.startTurn.mock.calls.map(([turn]) =>
           turn.message.text.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /, ""),
         ),
-      ).toEqual([withInlineContext(context, resendsOriginal ? "Original request" : "")]);
+      ).toEqual([
+        // A bare native resume carries no prompt, so it has no sender line either.
+        context === "" && !resendsOriginal
+          ? ""
+          : withInlineContext(
+              context,
+              sentByUnknownHuman(resendsOriginal ? "Original request" : ""),
+            ),
+      ]);
       expect(harness.startTurn.mock.calls[0]?.[0].resume === true).toBe(
         context === "" && !resendsOriginal,
       );

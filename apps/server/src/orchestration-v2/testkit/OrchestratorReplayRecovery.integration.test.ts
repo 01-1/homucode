@@ -59,7 +59,11 @@ import {
   runOrchestratorV2ProviderReplayScenario,
 } from "./ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
-import { materializeReplayPromptTimestamps, timestampedPrompt } from "./ReplayMessageTimestamps.ts";
+import {
+  materializeReplayPromptTimestamps,
+  timestampedPrompt,
+  UNKNOWN_DEVICE_HUMAN_LINE,
+} from "./ReplayMessageTimestamps.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "./ReplayRuntimeInstructions.ts";
 import {
   materializeReplayTranscriptWorkspace,
@@ -81,6 +85,7 @@ const readRawTranscript = Effect.fn("readRecoveryTranscript")(function* (file: U
       ? prompts.filter((prompt): prompt is string => typeof prompt === "string")
       : [PROVIDER_THREAD_RESUME_FIRST_PROMPT, PROVIDER_THREAD_RESUME_SECOND_PROMPT],
     DateTime.makeUnsafe(0),
+    UNKNOWN_DEVICE_HUMAN_LINE,
   );
 });
 const readCodexTranscript = Effect.fn("readCodexRecoveryTranscript")(function* (workspace: string) {
@@ -156,6 +161,7 @@ const readClaudeCancelledSubagentResumeTranscript = Effect.fn(
                   frame.message.message.content,
                 ].join("\n"),
                 DateTime.makeUnsafe(0),
+                UNKNOWN_DEVICE_HUMAN_LINE,
               ),
             },
           },
@@ -164,7 +170,12 @@ const readClaudeCancelledSubagentResumeTranscript = Effect.fn(
     });
   const prompts = yield* decodePromptPair(recorded.metadata?.prompts);
   return yield* ClaudeOrchestratorReplayHarness.decodeTranscript(
-    materializeReplayPromptTimestamps({ ...recorded, entries }, prompts, DateTime.makeUnsafe(0)),
+    materializeReplayPromptTimestamps(
+      { ...recorded, entries },
+      prompts,
+      DateTime.makeUnsafe(0),
+      UNKNOWN_DEVICE_HUMAN_LINE,
+    ),
   );
 });
 const readCursorTranscript = Effect.fn("readCursorRecoveryTranscript")(function* () {

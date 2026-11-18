@@ -92,15 +92,15 @@ other action for a single message. From a hardware keyboard, `Cmd+Return`
 (`Ctrl+Shift+Return`) when Return inserts a new line. The button only offers
 Steer when the running agent supports it.
 
-In **Settings → Threads → Extra features**, you can opt into **Stop or wait jumps
-the queue**. A message containing only “stop” or “wait” then interrupts the current
+**Settings → Threads → Extra features** has three related options. With **Stop or wait jumps
+the queue**, a message containing only “stop” or “wait” interrupts the current
 turn and goes ahead of queued messages. **Resend unread steers after Stop** covers a
 message you steer to Claude while it runs a tool: Claude reads it only after the tool
-finishes, so pressing Stop first would lose it, and this sends it again for you. **Apply model and effort
+finishes, so pressing Stop first would lose it, and this sends it again for you. It starts on. **Apply model and effort
 changes now** makes a model or effort change on a working thread restart its turn on the
 new setting, and the agent carries on without a new message; otherwise the change waits for
-the next turn. Codex loses most of its prompt cache when effort changes. All three options
-start off.
+the next turn. Codex loses most of its prompt cache when effort changes. The other two
+options start off.
 
 ## Queue messages offline on mobile
 
@@ -140,18 +140,24 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-Enable **Settings → Chat → Status line** to show a line in the top bar beside the thread
-title (under the composer on mobile). It shows the model, effort, context use, and usage
-limits, like Claude Code's status line. It refreshes when the thread changes and every 30
-seconds. When the top bar is short of room, the line leaves out the version, `user@host`
-and the directory first. Hover it to see the whole line.
+Enable **Settings → Chat → Status line** to show the thread's status in the top bar beside
+its title. Three dials show what runs out: context use, the 5-hour limit and the weekly
+limit, each with the percentage used inside. Beside them are the model, its effort as
+signal bars, and small icons for uptime, cache hits and tokens in and out. When the top
+bar is short of room, the small icons go first, then the time and the captions beside the
+dials. Hover the status line, or focus it with the keyboard, to see every value by name,
+with the folder and version.
 
-The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
-script on the thread's machine, which needs `bash` and `jq`. To draw your own, set
-**Status line command** to any shell command: it receives Claude Code's status line
-JSON on stdin and runs in the thread's folder, so a script written for Claude Code's
-`statusLine` setting works unchanged. Colors from its output take the matching colors of
-your theme, and percentages are drawn as bars.
+To draw your own, set **Status line command** to any shell command: it receives Claude
+Code's status line JSON on stdin and runs in the thread's folder, so a script written for
+Claude Code's `statusLine` setting works unchanged. Its output shows as a line of text in
+place of the dials. Colors take the matching colors of your theme, percentages are drawn
+as bars, and when room is short the version, `user@host` and the directory are left out
+first.
+
+On mobile the status line is a line of text under the composer: your command's output, or
+without one the [01-1/statusline](https://github.com/01-1/statusline) script on the thread's
+machine, which needs `bash` and `jq`.
 
 ## Quote an assistant response
 

@@ -36,6 +36,7 @@ import {
   type PendingUserInputDraftAnswer,
 } from "@t3tools/client-runtime/state/pending-user-input";
 import type { PendingUserInput } from "../../lib/threadActivity";
+import { useHoldTouchesOnAppear } from "../../lib/strayTouchGuard";
 
 export interface PendingUserInputCardProps {
   readonly environmentId: EnvironmentId;
@@ -120,6 +121,7 @@ function QuestionText(props: {
 }
 
 export function PendingUserInputCard(props: PendingUserInputCardProps) {
+  useHoldTouchesOnAppear(props.pendingUserInput.requestId);
   const questionCount = props.pendingUserInput.questions.length;
   const canRespond = props.pendingUserInput.responseCapability !== "not_resumable";
   const isResponding = props.respondingUserInputId === props.pendingUserInput.requestId;

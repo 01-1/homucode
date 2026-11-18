@@ -2,6 +2,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import {
   type AnsiSegment,
   buildStatusLineInput,
+  buildStatusLineStats,
   expandStatusLineLabel,
   parseAnsiLines,
   reserveStatusLineText,
@@ -12,6 +13,7 @@ import {
   statusLineColorRole,
   type StatusLineInputSource,
   type StatusLineItem,
+  type StatusLineStats,
 } from "@t3tools/client-runtime/status-line";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
@@ -25,21 +27,25 @@ import {
   useState,
 } from "react";
 
-import { useNowMinute } from "../../hooks/useNowMinute";
+import { useNowMinuteMs } from "../../hooks/useNowMinute";
 import { observeResize } from "~/lib/observeResize";
 import { serverEnvironment } from "../../state/server";
+import { StatusDialCard, StatusDialStrip } from "./ThreadStatusDials";
 
 // Claude Code redraws on events; the timer keeps clocks and countdowns current while idle.
 const REFRESH_MS = 30_000;
 const DEBOUNCE_MS = 300;
 const RETRY_MS = 2_000;
 
-type StatusLineResult = {
-  readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
-  readonly error: string | null;
-  /** The name the script was given, to write out where the line shortens it. */
-  readonly modelName: string | null;
-};
+// A custom command's output is drawn as text; without one the client draws the stats itself.
+type StatusLineResult =
+  | {
+      readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
+      readonly error: string | null;
+      /** The name the script was given, to write out where the line shortens it. */
+      readonly modelName: string | null;
+    }
+  | { readonly stats: StatusLineStats; readonly createdAt: string | null };
 
 // The runner sits in the chat view, which has its input; the top bar reads the result from here.
 const statusLineResultAtom = Atom.family((_key: string) =>
@@ -363,12 +369,16 @@ export function ThreadStatusLineRunner(props: {
       config?.environment.capabilities.statusLine === true &&
       config.settings.statusLineEnabled !== false,
   );
+  const custom = useAtomValue(
+    serverEnvironment.configValueAtom(environmentId),
+    (config) => (config?.settings.statusLineCommand ?? "") !== "",
+  );
   const registry = useContext(RegistryContext);
   // Limits are read on the minute so the key, and with it the command, only changes on new data.
-  const nowMinute = useNowMinute();
-  const inputKey = JSON.stringify(
-    buildStatusLineInput({ ...props.source, nowMs: Date.parse(`${nowMinute}:00Z`) }),
-  );
+  const source = { ...props.source, nowMs: useNowMinuteMs() };
+  // Only the mode in use reads the thread's state; the other key stays empty.
+  const inputKey = custom ? JSON.stringify(buildStatusLineInput(source)) : "";
+  const statsKey = custom ? "" : JSON.stringify(buildStatusLineStats(source));
   const modelName = statusLineInputModelName(props.source);
   const resultAtom = statusLineResultAtom(props.statusLineKey);
 
@@ -378,6 +388,15 @@ export function ThreadStatusLineRunner(props: {
       registry.set(resultAtom, null);
       return;
     }
+    if (!custom) {
+      // Parsed back from the key, which is what tells the effect the stats changed.
+      const stats: StatusLineStats = JSON.parse(statsKey);
+      registry.set(resultAtom, { stats, createdAt });
+      return;
+    }
+    // Dials left from before a command was set go at once, not when its first draw lands.
+    const shown = registry.get(resultAtom);
+    if (shown !== null && "stats" in shown) registry.set(resultAtom, null);
     let cancelled = false;
     // The first draw can land before the environment reconnects; it retries without waiting a refresh.
     let quickRetries = 5;
@@ -411,40 +430,96 @@ export function ThreadStatusLineRunner(props: {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [enabled, inputKey, modelName, createdAt, environmentId, resultAtom, registry]);
+  }, [
+    enabled,
+    custom,
+    inputKey,
+    statsKey,
+    modelName,
+    createdAt,
+    environmentId,
+    resultAtom,
+    registry,
+  ]);
 
   return null;
 }
 
-/** The status line in the thread's top bar. On hover it opens in full under the bar. */
+// Under the top bar, which is the positioned ancestor. The strip before it bridges the gap above,
+// so the pointer can reach the panel from the line.
+const PANEL =
+  "absolute top-full z-50 rounded-md rounded-t-none border border-t-0 bg-popover text-popover-foreground shadow-lg before:absolute before:inset-x-0 before:bottom-full before:h-6";
+
+/** The status line in the thread's top bar. On hover or keyboard focus it opens in full under the bar. */
 export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }) {
   const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
-  const [expanded, setExpanded] = useState(false);
+  if (result === null) return null;
+  const drawn = "stats" in result;
+  if (!drawn && result.lines.length === 0 && result.error === null) return null;
+  // Keyed by what is drawn, so an open panel does not carry over when that changes.
+  return <HeaderStatusLine key={drawn ? "dials" : "text"} result={result} />;
+}
+
+function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
+  const { result } = props;
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  // Where the line starts in the top bar, which is where the dials' card starts.
+  const [left, setLeft] = useState(0);
+  const nowMs = useNowMinuteMs();
   const containerRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the theme's font from the page
   useLayoutEffect(() => keepBodyFont(containerRef.current));
-  if (result === null || (result.lines.length === 0 && result.error === null)) return null;
-  const failed = result.lines.length === 0;
-  // Not positioned itself, so the hover panel spans the whole top bar and opens below it.
+  const drawn = "stats" in result;
+  const failed = !drawn && result.lines.length === 0;
+  const measure = (line: HTMLElement) => {
+    const bar = line.offsetParent?.getBoundingClientRect().left ?? 0;
+    setLeft(line.getBoundingClientRect().left - bar);
+  };
+  // Not positioned itself, so the panel is placed against the whole top bar and opens below it.
   // No-drag, or Electron's title bar drag region swallows the hover.
   return (
     <div
       ref={containerRef}
       data-chat-header-status-line={failed ? "error" : "true"}
-      className="min-w-0 flex-1 text-muted-foreground text-xs [-webkit-app-region:no-drag]"
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      tabIndex={0}
+      aria-label="Status line"
+      className="min-w-0 flex-1 rounded-sm text-muted-foreground text-xs outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      onMouseEnter={() => setHovered(true)}
+      // On each move, since the line shifts under the pointer when the title beside it changes.
+      onMouseMove={(event) => measure(event.currentTarget)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={(event) => {
+        // A click focuses it too, and must not pin the panel open.
+        if (!event.currentTarget.matches(":focus-visible")) return;
+        measure(event.currentTarget);
+        setFocused(true);
+      }}
+      onBlur={() => setFocused(false)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        setHovered(false);
+        setFocused(false);
+      }}
     >
-      {failed ? (
+      {drawn ? (
+        <StatusDialStrip stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
+      ) : failed ? (
         <div className="truncate">Status line failed: {result.error}</div>
       ) : (
         <StatusLineRow lines={result.lines} modelName={result.modelName} />
       )}
-      {expanded && !failed ? (
+      {failed || !(hovered || focused) ? null : drawn ? (
+        <div
+          className={`${PANEL} w-3xl px-4 py-3`}
+          style={{ left, maxWidth: `calc(100% - ${left}px - 0.75rem)` }}
+        >
+          <StatusDialCard stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
+        </div>
+      ) : (
         <div
           data-labels="long"
-          // A bridge over the gap above it, so the pointer can reach it from the line.
-          className="group/status-line absolute inset-x-0 top-full z-50 flex flex-col gap-0.5 rounded-md rounded-t-none border border-t-0 bg-popover px-2 py-1.5 text-popover-foreground tabular-nums shadow-lg before:absolute before:inset-x-0 before:bottom-full before:h-6"
+          className={`group/status-line ${PANEL} inset-x-0 flex flex-col gap-0.5 px-2 py-1.5 tabular-nums`}
         >
           {result.lines.map((line, lineIndex) => (
             // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
@@ -453,7 +528,7 @@ export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }
             </div>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

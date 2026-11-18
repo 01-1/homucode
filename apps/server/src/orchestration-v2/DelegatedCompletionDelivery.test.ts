@@ -4198,6 +4198,7 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
               threadId: child.childThreadId,
               requestId,
               answers: { color: "Blue" },
+              createdBy: "agent",
             })
             .pipe(Effect.forkScoped({ startImmediately: true }));
           yield* Effect.raceFirst(Deferred.await(answerWaiting), Fiber.join(answer));
@@ -4212,10 +4213,16 @@ it.layer(Layer.merge(layerTest, ProviderContinuationRequests.layer))(
           yield* Fiber.join(answer);
         }).pipe(Effect.ensuring(Effect.sync(() => spy.mockRestore())));
 
-        const answerRun = (yield* orchestrator.getThreadProjection(child.childThreadId)).runs.find(
+        const answered = yield* orchestrator.getThreadProjection(child.childThreadId);
+        const answerRun = answered.runs.find(
           (run) => run.userMessageId === MessageId.make(`async-answer:${requestId}`),
         );
         assert.isDefined(answerRun?.delegatedTaskId);
+        // The parent agent answered, so the child must not read it as a human's message.
+        assert.equal(
+          answered.messages.find((message) => message.id === answerRun?.userMessageId)?.createdBy,
+          "agent",
+        );
         const followup = (yield* orchestrator.getThreadProjection(parentThreadId)).subagents.find(
           (task) => task.id === answerRun?.delegatedTaskId,
         );

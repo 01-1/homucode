@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
-import { fakeTimers, render } from "../../../test/render";
+import { render } from "../../../test/render";
 import type { PendingUserInput } from "../../session-logic";
 import { Select, SelectTrigger } from "../ui/select";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -101,35 +101,3 @@ it.each<{ focus: string; control: ReactNode; toggles: boolean }>([
     expect(onToggleOption.mock.calls).toEqual(toggles ? [["question", "Incremental"]] : []);
   },
 );
-
-it("ignores a click that lands just as a question appears, then accepts the next one", async () => {
-  using _timers = fakeTimers();
-  const onToggleOption = vi.fn();
-  const onAdvance = vi.fn();
-  await using screen = await render(
-    <ComposerPendingUserInputPanel
-      pendingUserInputs={[
-        { ...prompt, questions: prompt.questions.map((q) => ({ ...q, multiSelect: false })) },
-      ]}
-      cwd={undefined}
-      threadRef={threadRef}
-      respondingRequestIds={[]}
-      answers={{}}
-      questionIndex={0}
-      onToggleOption={onToggleOption}
-      onAdvance={onAdvance}
-      onDismiss={vi.fn()}
-    />,
-  );
-  const option = screen.getByRole("button", { name: /Incremental/ });
-
-  await userEvent.click(option);
-  vi.advanceTimersByTime(1000);
-  expect(onToggleOption).not.toHaveBeenCalled();
-  expect(onAdvance).not.toHaveBeenCalled();
-
-  await userEvent.click(option);
-  vi.advanceTimersByTime(200);
-  expect(onToggleOption.mock.calls).toEqual([["question", "Incremental"]]);
-  expect(onAdvance).toHaveBeenCalledTimes(1);
-});

@@ -6,6 +6,7 @@ import {
   type OrchestrationV2ConversationMessage,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import { messageSourceLine } from "@t3tools/shared/messageSource";
 
 const decodeSentFrom = Schema.decodeUnknownOption(OrchestrationMessageSentFrom);
 
@@ -138,59 +139,25 @@ export function withoutNonUserSentFrom<
   return { ...command, context };
 }
 
-const SURFACE_LABELS: Record<OrchestrationMessageSentFrom["surface"], string> = {
-  web: "T3 web",
-  desktop: "T3 desktop",
-  mobile: "T3 mobile",
-  cli: "T3 CLI",
-};
-
 /**
- * The line the agent reads with a user's message, such as
- * `[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro, via relay)`. Empty for messages an agent,
- * a scheduled task, or T3 itself sent, and for messages from clients that named no surface.
+ * The line the agent reads with every message, naming who sent it: a human and their device,
+ * such as `[T3] Sent from: T3 mobile (iOS, iPhone 16 Pro, via relay). A human sent this message.`,
+ * or what sent an automatic one, such as a scheduled task, another agent, or T3 Code itself.
  */
 type SentMessage = Pick<
   OrchestrationV2ConversationMessage,
-  "createdBy" | "context" | "scheduledTaskId" | "senderThreadId"
->;
-
-export function sentFromLine(message: SentMessage): string {
-  const sentFrom = message.context?.sentFrom;
-  if (
-    message.createdBy !== "user" ||
-    message.scheduledTaskId !== undefined ||
-    message.senderThreadId !== undefined ||
-    sentFrom === undefined
-  ) {
-    return "";
-  }
-  const details = [
-    sentFrom.os === undefined || sentFrom.os === "unknown" || sentFrom.os === "other"
-      ? undefined
-      : sentFrom.os,
-    sentFrom.deviceModel ?? (sentFrom.deviceType === "phone" ? "phone" : undefined),
-    sentFrom.deviceType === "tablet" && sentFrom.deviceModel === undefined ? "tablet" : undefined,
-    sentFrom.surface === "web" ? sentFrom.browser : undefined,
-    sentFrom.connectionMethod === "relay" || sentFrom.connectionMethod === "ssh"
-      ? `via ${sentFrom.connectionMethod}`
-      : undefined,
-  ].filter((part): part is string => part !== undefined);
-  const label = SURFACE_LABELS[sentFrom.surface];
-  if (sentFrom.deviceName !== undefined) {
-    return `[T3] Sent from: ${sentFrom.deviceName} (${[label, ...details].join(", ")})`;
-  }
-  return `[T3] Sent from: ${details.length === 0 ? label : `${label} (${details.join(", ")})`}`;
-}
+  "createdBy" | "creationSource" | "context" | "scheduledTaskId" | "senderThreadId"
+> &
+  Partial<Pick<OrchestrationV2ConversationMessage, "notification" | "linkedSender">>;
 
 /**
- * The prompt with its device line after it. Slash commands go verbatim, since providers parse
+ * The prompt with its sender line after it. Slash commands go verbatim, since providers parse
  * them from the start and end of the prompt.
  */
 export function withSentFromLine(text: string, message: SentMessage, enabled = true): string {
   if (!enabled) return text;
-  const line = sentFromLine(message);
-  if (line === "" || text.trimStart().startsWith("/")) return text;
+  if (text.trimStart().startsWith("/")) return text;
+  const line = messageSourceLine(message);
   return text === "" ? line : `${text}\n\n${line}`;
 }
 

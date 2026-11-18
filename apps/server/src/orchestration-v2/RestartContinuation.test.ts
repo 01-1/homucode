@@ -1075,7 +1075,7 @@ it.effect("continues a cut run past queued follow-ups, which stay held", () =>
       runs: [...cut.runs, queuedFollowUp],
     } as unknown as OrchestrationV2ThreadProjection);
     assert.deepEqual(texts, [
-      "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
+      "Continue where you left off. T3 Code restarted and cut your last turn short; no one stopped or interrupted you, so carry on with your task. A command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
     ]);
   }),
 );
@@ -1107,7 +1107,7 @@ it.effect("continues a resumed queued run that ran after an earlier continuation
       runs: [...cut.runs, finishedContinuation],
     } as unknown as OrchestrationV2ThreadProjection);
     assert.deepEqual(texts, [
-      "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
+      "Continue where you left off. T3 Code restarted and cut your last turn short; no one stopped or interrupted you, so carry on with your task. A command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
     ]);
   }),
 );

@@ -3596,6 +3596,8 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     requestId: RuntimeRequestId,
+    /** "agent" when an agent answered through MCP; a client's answer leaves it unset. */
+    createdBy: Schema.optional(OrchestrationV2Actor),
     decision: Schema.optional(ProviderApprovalDecision),
     feedback: Schema.optional(Schema.String),
     answers: Schema.optional(ProviderUserInputAnswers),
