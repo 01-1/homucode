@@ -249,6 +249,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  statusNote,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -266,6 +267,8 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  /** A status the row shows as an icon alone (MadoHomu's Done), named here. */
+  statusNote: string | null;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
@@ -284,6 +287,7 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {statusNote ? <div className="text-success-foreground">{statusNote}</div> : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -871,6 +875,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
+      statusNote={
+        variant.startsWith("folder") &&
+        topStatus?.icon === "done" &&
+        props.leadingIcon !== undefined
+          ? topStatus.label
+          : null
+      }
     />
   );
 

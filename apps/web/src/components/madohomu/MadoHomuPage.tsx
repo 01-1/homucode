@@ -13,6 +13,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useThreadShell } from "../../state/entities";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
 import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
@@ -91,16 +93,25 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
   const threadMenu = useMadoHomuThreadMenu(environmentId);
   const search = useSearch({ from: "/_chat/madohomu" });
   const navigate = useNavigate();
+  const named = useThreadShell(
+    search.threadId ? scopeThreadRef(environmentId, search.threadId) : null,
+  );
+  // A named thread a filter hides keeps its URL; one deleted, archived or moved is replaced.
+  const namedGone =
+    named === null ||
+    named.deletedAt !== null ||
+    named.archivedAt !== null ||
+    named.projectId !== project?.id;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the shown thread into the URL, so the live list reordering cannot swap the open chat.
   useEffect(() => {
-    // Only a bare URL: a named thread hidden by a filter must stay named.
-    if (selectedId === null || search.threadId !== undefined) return;
+    if (selectedId === null || search.threadId === selectedId) return;
+    if (search.threadId !== undefined && !namedGone) return;
     void navigate({
       to: "/madohomu",
       search: (prev) => ({ ...prev, threadId: selectedId }),
       replace: true,
     });
-  }, [navigate, search.threadId, selectedId]);
+  }, [namedGone, navigate, search.threadId, selectedId]);
   if (!settings.madohomuEnabled)
     return (
       <MadoHomuMessage>
