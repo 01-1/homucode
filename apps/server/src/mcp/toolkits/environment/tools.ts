@@ -72,6 +72,17 @@ export const AGENT_SETTINGS = [
 type AgentSetting = (typeof AGENT_SETTINGS)[number];
 const pick = <F extends Record<AgentSetting, Schema.Top>>(fields: F) =>
   Object.fromEntries(AGENT_SETTINGS.map((key) => [key, fields[key]])) as Pick<F, AgentSetting>;
+/** Decoded by the handler: the full value schemas would multiply the advertised tool size. */
+export const AgentSettingsPatch = Schema.Struct(pick(ServerSettingsPatch.fields));
+// Other keys survive decoding so the handler can refuse them by name instead of dropping them.
+const LooseAgentSettings = Schema.StructWithRest(
+  Schema.Struct(
+    Object.fromEntries(AGENT_SETTINGS.map((key) => [key, Schema.optionalKey(Schema.Unknown)])) as {
+      readonly [K in AgentSetting]: Schema.optionalKey<Schema.Unknown>;
+    },
+  ),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
 const PreferenceFields = {
   ...pick(ServerSettings.fields),
@@ -115,7 +126,7 @@ const EnvironmentReadTool = Tool.make("t3_environment_read", {
 const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update", {
   ...shared,
   description:
-    "Update environment-wide preferences. Asks the user first below full access. Omitted fields are unchanged; `customInstructions: ''` clears it.",
+    "Update environment-wide preferences. Asks the user first below full access. Omitted fields are unchanged; `customInstructions: ''` clears it. `settings` changes more of Settings; give each value in the shape `t3_environment_read` returns it.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     defaultThreadEnvMode: ServerSettingsPatch.fields.defaultThreadEnvMode,
@@ -123,7 +134,7 @@ const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update"
     enableProviderUpdateChecks: ServerSettingsPatch.fields.enableProviderUpdateChecks,
     backgroundActivity: Schema.optionalKey(Schema.Struct({ profile: BackgroundActivityProfile })),
     sourceControlWritingStyle: ServerSettingsPatch.fields.sourceControlWritingStyle,
-    ...pick(ServerSettingsPatch.fields),
+    settings: Schema.optionalKey(LooseAgentSettings),
   }),
   success: Schema.Struct(PreferenceFields),
 }).annotate(Tool.Destructive, true);

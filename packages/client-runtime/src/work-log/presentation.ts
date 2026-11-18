@@ -543,7 +543,13 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "queue-cancel":
     case "queue-reorder":
     case "queue-steer":
+    case "queue-start":
     case "question-respond":
+    case "question-dismiss":
+    case "session-import":
+    case "keybinding-update":
+    case "project-from-thread":
+    case "worktree-setup-cancel":
     case "worktree-handoff":
     case "project-create":
     case "project-update":

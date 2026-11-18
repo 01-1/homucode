@@ -337,7 +337,8 @@ it.effect("an answered question reports already answered instead of not found", 
   );
 });
 
-it.effect("a pending question read keeps option previews", () => {
+it.effect("a pending question read keeps option previews, and dismiss closes it", () => {
+  const dispatched: Array<unknown> = [];
   const shell = McpToolAccessTestkit.liveThreadShell(threadId);
   const requestId = RuntimeRequestId.make("previewed-question");
   const projection = McpToolAccessTestkit.idleThreadProjection(shell);
@@ -358,6 +359,14 @@ it.effect("a pending question read keeps option previews", () => {
         Effect.provideService(McpSchema.McpServerClient, client),
       );
     expect(result.structuredContent).toEqual({ requestId, questions });
+    const dismissed = yield* server
+      .callTool({ name: "t3_pending_request", arguments: { action: "dismiss", requestId } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(dismissed.isError).toBe(false);
+    expect(dispatched).toMatchObject([{ type: "thread.user-input.dismiss", requestId }]);
   }).pipe(
     Effect.provide(
       layerThreadToolkit.pipe(
@@ -404,6 +413,10 @@ it.effect("a pending question read keeps option previews", () => {
                   },
                 ],
               }),
+            dispatch: (command) => {
+              dispatched.push(command);
+              return Effect.succeed({ sequence: 1, storedEvents: [] } as never);
+            },
           }),
         ),
       ),
@@ -811,6 +824,9 @@ it("keeps MCP preference output allowlisted and Unicode-bounded", () => {
   const result = EnvironmentHandlers.preferences(settings);
   expect(result).not.toHaveProperty("privateCredential");
   expect(result).not.toHaveProperty("providers");
+  expect(result).not.toHaveProperty("secretProviders");
+  expect(result).not.toHaveProperty("usageLimitSources");
+  expect(result).toHaveProperty("branchNamePrefix", DEFAULT_SERVER_SETTINGS.branchNamePrefix);
   expect(result.sourceControlWritingStyle).toMatchObject({
     customInstructions: "🙂".repeat(4000),
     truncated: true,
@@ -935,6 +951,76 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
   ),
 );
 
+it.effect(
+  "dispatches the thread menu actions agents reach through organize, queue, and questions",
+  () => {
+    const dispatched: Array<unknown> = [];
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const call = (name: string, args: Record<string, unknown>) =>
+        server
+          .callTool({ name, arguments: { threadId: "menu-thread", ...args } })
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+            Effect.provideService(McpSchema.McpServerClient, client),
+          );
+      for (const action of [
+        "move_project",
+        "mark_read",
+        "auto_settle_off",
+        "close_guest_share",
+        "retry_setup",
+        "stop_session",
+      ]) {
+        const result = yield* call("t3_thread_organize", {
+          action,
+          ...(action === "move_project" ? { projectId: "project-infra" } : {}),
+        });
+        expect(result.isError, action).toBe(false);
+      }
+      expect((yield* call("t3_queue", { action: "resume" })).isError).toBe(false);
+      expect(
+        (yield* call("t3_queue", { action: "start", queuedRunId: "queued-run" })).isError,
+      ).toBe(false);
+      expect(dispatched).toMatchObject([
+        { type: "thread.project.move", threadId: "menu-thread", projectId: "project-infra" },
+        { type: "thread.visit", threadId: "menu-thread", visitedAt: expect.any(String) },
+        { type: "thread.auto-settle.set", enabled: false },
+        { type: "thread.guest-share.close" },
+        { type: "prepared-run.retry", runId: "failed-setup-run" },
+        { type: "provider-session.detach", providerSessionId: "session-a" },
+        { type: "provider-session.detach", providerSessionId: "session-b" },
+        { type: "queue.resume" },
+        { type: "queued-run.start", runId: "queued-run" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        layerThreadToolkit.pipe(
+          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+          Layer.provide(NodeCrypto.layer),
+          Layer.provide(
+            Layer.mock(ThreadManagement.ThreadManagementService)({
+              getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
+              getProjectThreadRecords: ({ threadId: id }) =>
+                Effect.succeed({
+                  ...McpToolAccessTestkit.idleThreadProjection(
+                    McpToolAccessTestkit.liveThreadShell(id),
+                  ),
+                  runs: [{ id: "failed-setup-run", status: "failed" }],
+                  providerSessions: [{ id: "session-a" }, { id: "session-b" }],
+                } as never),
+              dispatch: (command) => {
+                dispatched.push(command);
+                return Effect.succeed({ sequence: dispatched.length, storedEvents: [] } as never);
+              },
+            }),
+          ),
+        ),
+      ),
+    );
+  },
+);
+
 it.effect("an MCP pin lands above every existing pin, as a client pin does", () => {
   const dispatched: Array<OrchestrationV2ServerCommand> = [];
   let targetPinnedAt: DateTime.Utc | null = null;
@@ -971,6 +1057,27 @@ it.effect("an MCP pin lands above every existing pin, as a client pin does", () 
     const again = yield* pin;
     expect(again.isError).toBe(false);
     expect(dispatched[1]).toMatchObject({ type: "thread.pin", orderKey });
+
+    const reorder = (beforeThreadId: string | null) =>
+      server
+        .callTool({
+          name: "t3_thread_organize",
+          arguments: { action: "reorder_pin", threadId: "pinned-late", beforeThreadId },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, clientScope("auto")),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+    expect((yield* reorder("pinned-top")).isError).toBe(false);
+    expect(dispatched[2]).toMatchObject({
+      type: "thread.pin.reorder",
+      threadId: "pinned-late",
+      orderKey: pinOrderKeyBetween(null, "g"),
+    });
+    // The keyless pin sorts last, so no key can place a thread after it.
+    const last = yield* reorder(null);
+    expect(declaredFailure(last)).toMatchObject({ code: "invalid_request" });
+    expect(dispatched).toHaveLength(3);
   }).pipe(
     Effect.provide(
       layerThreadToolkit.pipe(

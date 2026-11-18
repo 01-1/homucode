@@ -157,6 +157,12 @@ the message as its next turn. Pass `-` as the message to read it from stdin.
 2 when the agent waits for an answer you give in the app. Add `--json` for a
 result that always includes the thread id.
 
+`t3 thread organize THREAD ACTION` runs the thread menu's actions: pin, unpin,
+reorder-pin, snooze (`--until`), settle, archive and their reverses, mark-read,
+mark-unread, move-project (`--project`, an id or a folder inside it),
+move-under (`--parent`), move-to-root, auto-settle-on and auto-settle-off,
+stop-session, retry-setup and close-guest-share.
+
 ## Remove an agent
 
 Approved agents appear under **Settings → Sharing & access** like other clients.
@@ -171,7 +177,7 @@ for the reasoningEffort option. Reusing a key replays the original launch.
 
 Use `t3 pending-request list THREAD --json`, `read THREAD REQUEST --json`, and
 `respond THREAD REQUEST --answers-file /absolute/answers.json --json` to answer
-pending user questions. `--answers-file -` reads a JSON object from stdin, mapping
+pending user questions, or `dismiss THREAD REQUEST` to close one unanswered. `--answers-file -` reads a JSON object from stdin, mapping
 question IDs to answers. Secret cards and approvals remain in T3's secure UI.
 
 A project's `t3.json` can configure a local completion receiver:
