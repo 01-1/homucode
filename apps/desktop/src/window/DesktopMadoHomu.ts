@@ -123,8 +123,8 @@ const make = Effect.gen(function* () {
       }
       const created = yield* windows.create(
         {
-          width: 440,
-          height: 820,
+          width: 1100,
+          height: 720,
           minWidth: 360,
           minHeight: 480,
           title: "MadoHomu",

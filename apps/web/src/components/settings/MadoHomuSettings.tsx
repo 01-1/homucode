@@ -201,7 +201,7 @@ function EnvironmentMadoHomuSettings({ environmentId }: { environmentId: Environ
           {isElectron ? (
             <SettingsRow
               {...searchableSetting("madohomu-desktop-app")}
-              description="Add MadoHomu to this desktop's app launcher. Opens a separate, phone-sized window."
+              description="Add MadoHomu to this desktop's app launcher. Opens a separate window."
               control={
                 <Switch
                   aria-label="MadoHomu desktop app"
