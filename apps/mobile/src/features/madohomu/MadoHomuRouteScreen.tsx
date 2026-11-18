@@ -33,6 +33,7 @@ import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { Sheet } from "../../components/ui/Sheet";
+import { useBarOverlap } from "../../components/ui/useBarInset";
 import { uuidv4 } from "../../lib/uuid";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useVisibleThreadShells } from "../../state/entities";
@@ -110,6 +111,8 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const listActions = useThreadListActions();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  // The bar covers the top of the body on iOS, so the fixed block clears it itself.
+  const barOverlap = useBarOverlap();
   const [editing, setEditing] = useState<ThreadId | null>(null);
   const [toggled, setToggled] = useState<ReadonlySet<string>>(() => rememberedToggled);
   const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
@@ -263,7 +266,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     const disabled = { disabled: !canEdit };
     const manual = row.kind === "pinned" || row.kind === "custom";
     return [
-      { id: "extra:edit", title: "Edit", image: "slider.horizontal.3", attributes: disabled },
       {
         id: "extra:move",
         title: "Move to",
@@ -312,6 +314,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             } satisfies MenuAction,
           ]
         : []),
+      { id: "extra:edit", title: "Edit…", image: "slider.horizontal.3", attributes: disabled },
     ];
   };
   const handleMadoHomuAction = (thread: EnvironmentThreadShell, event: string) => {
@@ -335,10 +338,15 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
 
   const renderRow = ({ item }: { readonly item: MadoHomuListRow }) => {
     if (item.type === "section") {
-      const label =
-        item.attention > 0
-          ? `${item.title} (${item.count}) · ${item.attention} need you`
-          : `${item.title} (${item.count})`;
+      const label = `${item.title} (${item.count})`;
+      const badge =
+        item.attention > 0 ? (
+          <View className="shrink-0 rounded-full border border-warning-border bg-warning px-1.5">
+            <Text className="text-2xs font-t3-medium text-warning-foreground">
+              {item.attention}
+            </Text>
+          </View>
+        ) : undefined;
       const disclosure =
         item.expanded === null
           ? undefined
@@ -351,6 +359,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       const heading = (accessory?: ReactNode) => (
         <ThreadListV2Section
           label={label}
+          badge={badge}
           tone={item.kind === "snoozed" ? "snoozed" : "default"}
           {...(disclosure ? { disclosure } : {})}
           accessory={accessory}
@@ -501,25 +510,6 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
         {...(reorderMode
           ? { confirm: { label: "Done", onPress: () => setReordering(false) } }
           : {})}
-        actions={
-          !reorderMode && settings.madohomuEnabled && actions.project && canEdit
-            ? [
-                {
-                  icon: "line.3.horizontal" as const,
-                  accessibilityLabel: "Reorder pinned threads",
-                  onPress: () => {
-                    openSwipeableRef.current?.close();
-                    setReordering(true);
-                  },
-                },
-                {
-                  icon: "folder.badge.plus" as const,
-                  accessibilityLabel: "New section",
-                  onPress: addSection,
-                },
-              ]
-            : []
-        }
         menus={
           reorderMode
             ? []
@@ -539,6 +529,25 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                               openSwipeableRef.current?.close();
                               setChoosingProject(true);
                             },
+                          },
+                        ]
+                      : []),
+                    ...(settings.madohomuEnabled && actions.project && canEdit
+                      ? [
+                          {
+                            id: "reorder",
+                            title: "Reorder…",
+                            icon: "arrow.up.arrow.down",
+                            onPress: () => {
+                              openSwipeableRef.current?.close();
+                              setReordering(true);
+                            },
+                          },
+                          {
+                            id: "new-section",
+                            title: "New section…",
+                            icon: "folder.badge.plus",
+                            onPress: addSection,
                           },
                         ]
                       : []),
@@ -591,34 +600,34 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           onStep={stepThread}
         />
       ) : (
-        <LegendList
-          data={rows}
-          extraData={{ settings, canEdit }}
-          renderScrollComponent={NativeScrollView}
-          keyExtractor={(row) => row.key}
-          getItemType={(row) => row.type}
-          contentInsetAdjustmentBehavior="automatic"
-          onScrollBeginDrag={() => openSwipeableRef.current?.close()}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-          ListHeaderComponent={
-            <View className="gap-3 px-5 py-3">
-              <Button
-                label="New thread"
-                icon="plus"
-                size="compact"
-                loading={busy}
-                disabled={!actions.canCreate || !actions.canWrite || !actions.modelSelection}
-                onPress={() => void create()}
-              />
-              {!actions.modelSelection ? (
-                <Text className="text-sm text-foreground-muted">
-                  Set up an agent in Settings to create threads.
-                </Text>
-              ) : null}
-            </View>
-          }
-          renderItem={renderRow}
-        />
+        <View className="flex-1">
+          <View className="gap-3 px-5 pb-3" style={{ paddingTop: barOverlap + 12 }}>
+            <Button
+              label="New thread"
+              icon="plus"
+              size="compact"
+              loading={busy}
+              disabled={!actions.canCreate || !actions.canWrite || !actions.modelSelection}
+              onPress={() => void create()}
+            />
+            {!actions.modelSelection ? (
+              <Text className="text-sm text-foreground-muted">
+                Set up an agent in Settings to create threads.
+              </Text>
+            ) : null}
+          </View>
+          <LegendList
+            data={rows}
+            extraData={{ settings, canEdit }}
+            renderScrollComponent={NativeScrollView}
+            keyExtractor={(row) => row.key}
+            getItemType={(row) => row.type}
+            contentInsetAdjustmentBehavior="automatic"
+            onScrollBeginDrag={() => openSwipeableRef.current?.close()}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+            renderItem={renderRow}
+          />
+        </View>
       )}
       {settings.madohomuEnabled && choosingProject ? (
         <Sheet title="Change project" onClose={() => setChoosingProject(false)}>

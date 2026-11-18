@@ -374,6 +374,8 @@ type ThreadFileRouteScreenProps = StaticScreenProps<{
   readonly line?: string;
   readonly cwd?: string;
   readonly projectName?: string;
+  /** Opened from a MadoHomu thread, which never names its project. */
+  readonly madohomu?: boolean;
 }>;
 
 function useThreadFilesWorkspace(params: {
@@ -620,8 +622,10 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   const { appearance, setCodeWordBreak } = useAppearancePreferences();
   const params = props.route.params;
   const targetLine = normalizeRouteLine(firstRouteParam(params.line));
-  const { cwd, environmentId, projectName, relativePath, selectedThread, threadId } =
-    useThreadFilesWorkspace(props.route.params);
+  const workspace = useThreadFilesWorkspace(props.route.params);
+  const { cwd, environmentId, relativePath, selectedThread, threadId } = workspace;
+  const madohomu = params.madohomu === true;
+  const projectName = madohomu ? "Files" : workspace.projectName;
   const fileAccessSession = useEnvironmentQuery(
     environmentId !== null ? environmentSession.sessionStateAtom(environmentId) : null,
   );
@@ -780,6 +784,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
       environmentId: String(environmentId),
       threadId: String(threadId),
       path: segments,
+      ...(madohomu ? { madohomu } : {}),
     };
     if (directoryPath !== null) navigation.dispatch(StackActions.push("ThreadFile", destination));
     else navigation.navigate("ThreadFile", destination);
@@ -943,6 +948,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
         StackActions.replace("Thread", {
           environmentId: String(environmentId),
           threadId: String(threadId),
+          ...(madohomu ? { madohomu } : {}),
         }),
       );
     }
@@ -1031,7 +1037,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     );
   }
 
-  const headerSubtitle = fileHeaderSubtitle(projectName, relativePath);
+  const headerSubtitle = fileHeaderSubtitle(madohomu ? "" : projectName, relativePath);
 
   return withInspector(
     <View className="flex-1 bg-sheet">

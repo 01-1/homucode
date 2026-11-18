@@ -284,6 +284,7 @@ describe("MadoHomu sections", () => {
       { ...fresh, id: ThreadId.make("later") },
       { ...fresh, id: ThreadId.make("unpinned") },
       { ...fresh, id: ThreadId.make("outside") },
+      { ...fresh, id: ThreadId.make("filed") },
     ];
     const withIcon = {
       ...settings,

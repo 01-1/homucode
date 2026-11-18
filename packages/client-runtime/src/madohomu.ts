@@ -98,18 +98,16 @@ export function groupMadoHomuThreads<
   for (const { kind, threads: members } of groups) {
     // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
     const manual = kind === "pinned" || kind === "custom";
-    // Scratch and Working keep the T3 Code list's clock: what the user last wrote, so an agent
+    // The other sections keep the T3 Code list's clock: what the user last wrote, so an agent
     // working on its own never moves a row.
-    const recent = kind === "scratch" || kind === "working";
     members.sort(
       (a, b) =>
         (manual
           ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
             b.createdAt.localeCompare(a.createdAt)
-          : recent
-            ? (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
-              getThreadSortTimestamp(b, "updated_at") - getThreadSortTimestamp(a, "updated_at")
-            : b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
+          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+            getThreadSortTimestamp(b, "updated_at") - getThreadSortTimestamp(a, "updated_at")) ||
+        a.id.localeCompare(b.id),
     );
   }
   return groups;
@@ -156,8 +154,8 @@ export function selectMadoHomuThread<T extends { readonly id: ThreadId }>(
 export const MADOHOMU_NEW_THREAD_TITLE = "New thread";
 
 /**
- * An untouched thread MadoHomu's "New thread" made (default title, no messages, no run, no icon
- * or prompt, still pinned), so "New thread" reopens it instead of making another empty one.
+ * An untouched thread MadoHomu's "New thread" made (default title, no messages, no run, no icon,
+ * colour or prompt, still in Pinned itself), so "New thread" reopens it instead of making another empty one.
  */
 export function findUntouchedMadoHomuThread<
   T extends Pick<EnvironmentThreadShell, "id" | "title" | "latestUserMessageAt" | "latestRun">,
@@ -169,6 +167,8 @@ export function findUntouchedMadoHomuThread<
       thread.latestUserMessageAt === null &&
       thread.latestRun === null &&
       isMadoHomuThreadPinned(entry) &&
+      !entry?.section &&
+      !entry?.color &&
       !entry?.icon &&
       !entry?.prompt
     );

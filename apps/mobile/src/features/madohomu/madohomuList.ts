@@ -16,6 +16,7 @@ import type {
 
 import {
   buildThreadListV2ListItems,
+  resolveThreadListV2Status,
   resolveThreadListV2WokeAt,
   type ThreadListV2ThreadListItem,
 } from "../threads/threadListV2";
@@ -69,11 +70,10 @@ export type MadoHomuListRow =
 const COLLAPSED_BY_DEFAULT: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed", "settled"]);
 const ALWAYS_SHOWN: ReadonlySet<MadoHomuGroupKind> = new Set(["pinned", "custom"]);
 
-/** Whether a thread waits on the user: an approval or a question. */
-function madohomuNeedsUser(
-  thread: Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput">,
-): boolean {
-  return thread.hasPendingApprovals || thread.hasPendingUserInput;
+/** Whether a thread, or a subagent its row speaks for, waits on an approval or a question. */
+function madohomuNeedsUser(thread: EnvironmentThreadShell): boolean {
+  const status = resolveThreadListV2Status(thread);
+  return status === "approval" || status === "input";
 }
 
 export function buildMadoHomuListRows(input: {
