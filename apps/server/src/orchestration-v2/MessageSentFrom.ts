@@ -88,10 +88,11 @@ export function parseDeviceNameRules(text: string): ReadonlyArray<DeviceNameRule
   });
 }
 
-/** The connection's device with the name its first matching rule gives, if any. */
+/** The connection's device named by its first matching rule, else by the name it gave itself. */
 export function withDeviceName(
   sentFrom: OrchestrationMessageSentFrom | undefined,
   rules: ReadonlyArray<DeviceNameRule>,
+  selfName?: string,
 ): OrchestrationMessageSentFrom | undefined {
   if (sentFrom === undefined) return undefined;
   const { deviceName: _claimed, ...device } = sentFrom;
@@ -100,7 +101,8 @@ export function withDeviceName(
       (field) => candidate[field] === undefined || candidate[field] === device[field],
     ),
   );
-  return !rule?.name ? device : { ...device, deviceName: rule.name };
+  const name = rule?.name || selfName;
+  return name ? { ...device, deviceName: name } : device;
 }
 
 /** A message context stamped with the socket's device, replacing any the client claimed. */

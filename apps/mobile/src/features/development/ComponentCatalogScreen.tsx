@@ -297,6 +297,7 @@ export function ComponentCatalogScreen() {
       {sheet ? (
         <Sheet title="Example sheet" onClose={() => setSheet(false)}>
           <ScreenScrollView
+            nestedScrollEnabled
             contentInsetAdjustmentBehavior="automatic"
             contentContainerClassName="p-4"
           >

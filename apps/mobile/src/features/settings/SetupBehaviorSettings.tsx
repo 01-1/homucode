@@ -1,4 +1,5 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { TextInput, View } from "react-native";
 import type { BuildToolsRequest, EnvironmentId, ServerSettings } from "@t3tools/contracts";
@@ -9,6 +10,7 @@ import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -53,29 +55,43 @@ function MobileWorkAssistancePicker({
   );
 }
 
-export function MobileDeviceNames({
-  environmentId,
-  currentOnly = false,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly currentOnly?: boolean;
-}) {
+/** Saved on the phone and sent to every server, so naming needs no server support. */
+export function MobileThisDeviceName() {
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  if (!AsyncResult.isSuccess(preferencesResult)) return null;
+  const name = preferencesResult.value.deviceName ?? "";
+  return (
+    <View className="gap-1">
+      <Text>Phone name</Text>
+      <TextInput
+        accessibilityLabel="Phone name"
+        defaultValue={name}
+        placeholder="Name this device"
+        maxLength={40}
+        className="rounded-lg border border-border p-3 text-foreground"
+        onChangeText={(text) => savePreferences({ deviceName: text.trim() })}
+      />
+      <Text className="text-foreground-muted">
+        Agents on every server see this name, unless a server names this device itself.
+      </Text>
+    </View>
+  );
+}
+
+export function MobileDeviceNames({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const settings = useEnvironmentServerConfig(environmentId)?.settings;
   const query = useEnvironmentQuery(serverEnvironment.messageDevices({ environmentId, input: {} }));
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const devices = currentOnly
-    ? query.data?.current
-      ? [query.data.current]
-      : []
-    : [...(query.data?.devices ?? []), ...(query.data?.rules ?? [])].filter(
-        (device, index, all) =>
-          all.findIndex(
-            (entry) =>
-              JSON.stringify({ ...entry, name: undefined, deviceName: undefined }) ===
-              JSON.stringify({ ...device, name: undefined, deviceName: undefined }),
-          ) === index,
-      );
+  const devices = [...(query.data?.devices ?? []), ...(query.data?.rules ?? [])].filter(
+    (device, index, all) =>
+      all.findIndex(
+        (entry) =>
+          JSON.stringify({ ...entry, name: undefined, deviceName: undefined }) ===
+          JSON.stringify({ ...device, name: undefined, deviceName: undefined }),
+      ) === index,
+  );
   return (
     <View className="gap-3">
       {devices.map((entry) => {
@@ -118,7 +134,13 @@ export function MobileDeviceNames({
           </View>
         );
       })}
-      {query.error ? <Text>{query.error}</Text> : null}
+      {query.error ? (
+        <Text className="text-foreground-muted">
+          {
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
+          }
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -215,6 +237,7 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
         }
       />
       <Text>Device names</Text>
+      <MobileThisDeviceName />
       <MobileDeviceNames environmentId={environmentId} />
     </SettingsSection>
   );

@@ -32,8 +32,9 @@ const result = (state: DesktopUpdateState): DesktopUpdateActionResult => ({
   state,
 });
 
-function bridge(state: DesktopUpdateState) {
+function bridge(state: DesktopUpdateState, idleSeconds = 600) {
   return {
+    getSystemIdleSeconds: vi.fn(async () => idleSeconds),
     getUpdateState: vi.fn(async () => state),
     downloadUpdate: vi.fn(async () => result(downloaded)),
     installUpdate: vi.fn(async (_version?: string) => result(downloaded)),
@@ -60,6 +61,45 @@ it("does not install when an agent starts during the download", async () => {
   });
   expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => idle })).toBe("skipped");
   expect(fake.installUpdate).not.toHaveBeenCalled();
+  expect(attempted.size).toBe(0);
+});
+
+it("waits for five minutes without keyboard or mouse input, before and after the download", async () => {
+  const fake = bridge(available, 120);
+  const attempted = new Set<string>();
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 180_000,
+  });
+  expect(fake.downloadUpdate).not.toHaveBeenCalled();
+
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(300).mockResolvedValueOnce(10);
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 290_000,
+  });
+  expect(fake.installUpdate).not.toHaveBeenCalled();
+  expect(attempted.size).toBe(0);
+});
+
+it("does not install when an agent starts while input is being read", async () => {
+  const fake = bridge(downloaded);
+  const attempted = new Set<string>();
+  let idle = true;
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(600).mockImplementationOnce(async () => {
+    idle = false;
+    return 600;
+  });
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => idle })).toBe("skipped");
+  expect(fake.installUpdate).not.toHaveBeenCalled();
+  expect(attempted.size).toBe(0);
+});
+
+it("retries later instead of giving up when input can't be read", async () => {
+  const fake = bridge(downloaded);
+  const attempted = new Set<string>();
+  fake.getSystemIdleSeconds.mockResolvedValueOnce(600).mockRejectedValueOnce(new Error("ipc"));
+  expect(await runAutoUpdate({ bridge: fake, attempted, isIdle: () => true })).toEqual({
+    retryInMs: 300_000,
+  });
   expect(attempted.size).toBe(0);
 });
 

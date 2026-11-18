@@ -84,15 +84,28 @@ function effortLevel(
   return undefined;
 }
 
-/** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
-export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
+function selectedModel(source: Pick<StatusLineInputSource, "modelSelection" | "providers">) {
   const selection = source.modelSelection;
   const provider =
     selection === null
       ? undefined
       : source.providers.find((candidate) => candidate.instanceId === selection.instanceId);
   const model = provider?.models.find((candidate) => candidate.slug === selection?.model);
-  const displayName = statusLineModelName(model?.name ?? selection?.model ?? "");
+  return { selection, provider, model };
+}
+
+/** The model name the status line script is given, such as `Opus 5.5`. Null without a model. */
+export function statusLineInputModelName(
+  source: Pick<StatusLineInputSource, "modelSelection" | "providers">,
+): string | null {
+  const { selection, model } = selectedModel(source);
+  return selection === null ? null : statusLineModelName(model?.name ?? selection.model);
+}
+
+/** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
+export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
+  const { selection, provider, model } = selectedModel(source);
+  const displayName = statusLineInputModelName(source);
   const effort = effortLevel(selection, model);
   const fastMode = getModelSelectionBooleanOptionValue(selection, "fastMode");
   const context = source.contextWindow;
@@ -353,12 +366,80 @@ function sliceSegments(
 
 export interface StatusLineItem {
   readonly kind: "directory" | "clock" | "text";
-  /** The item's text, ending with the separator that follows it in the line (`,` or ` |`). */
+  /** The item's text, without the separator that follows it in the line. */
   readonly segments: ReadonlyArray<AnsiSegment>;
+  /**
+   * The level at which a line short of room drops the item: a version at 1, `user@host` at 2 and
+   * the directory at 3. 0 is never dropped.
+   */
+  readonly dropAt: 0 | 1 | 2 | 3;
+  /**
+   * The separator (`,` or ` |`) after the item at each drop level, 0 to 3. A dropped item leaves
+   * its neighbours the stronger separator, and the last item left has none.
+   */
+  readonly separators: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
 }
 
 const ITEM_SEPARATOR_PATTERN = /,\s+|\s+\|\s+/g;
 const DIRECTORY_PATTERN = /^[~/]\S*(?=\s|$)/;
+const HOST_PATTERN = /^[\w.-]+@[\w.-]+$/;
+const VERSION_PATTERN = /^v(?:ersion)?\s*\d+(?:\.\d+)+\S*$/i;
+
+interface SeparatedItem {
+  readonly kind: StatusLineItem["kind"];
+  readonly segments: ReadonlyArray<AnsiSegment>;
+  readonly separator: ReadonlyArray<AnsiSegment>;
+  readonly dropAt: StatusLineItem["dropAt"];
+}
+
+const segmentsText = (segments: ReadonlyArray<AnsiSegment>) =>
+  segments.map((segment) => segment.text).join("");
+
+function dropLevel(
+  kind: StatusLineItem["kind"],
+  segments: ReadonlyArray<AnsiSegment>,
+): StatusLineItem["dropAt"] {
+  if (kind === "directory") return 3;
+  if (kind === "clock") return 0;
+  const text = segmentsText(segments);
+  if (HOST_PATTERN.test(text)) return 2;
+  // The built-in script's version is a muted `v` and whatever the provider reports after it.
+  const [label] = segments;
+  const labelled =
+    segments.length > 1 &&
+    label !== undefined &&
+    label.color !== null &&
+    statusLineColorRole(label.color) === "muted" &&
+    /^v(?:ersion)?\s*$/i.test(label.text);
+  return labelled || VERSION_PATTERN.test(text) ? 1 : 0;
+}
+
+// A ` |` between two parts of the line outranks a `,` inside one.
+const separatorStrength = (separator: ReadonlyArray<AnsiSegment>) =>
+  separator.length === 0 ? 0 : segmentsText(separator).includes("|") ? 2 : 1;
+
+const staysAt = (item: SeparatedItem, level: number) =>
+  item.kind !== "clock" && (item.dropAt === 0 || item.dropAt > level);
+
+// The strongest separator between the item and the next one still shown at the level.
+function separatorAt(
+  items: ReadonlyArray<SeparatedItem>,
+  index: number,
+  level: number,
+): ReadonlyArray<AnsiSegment> {
+  const item = items[index];
+  if (item === undefined || !staysAt(item, level)) return [];
+  let strongest = item.separator;
+  for (let at = index + 1; at < items.length; at += 1) {
+    const other = items[at];
+    if (other === undefined) break;
+    if (staysAt(other, level)) return strongest;
+    if (separatorStrength(other.separator) > separatorStrength(strongest)) {
+      strongest = other.separator;
+    }
+  }
+  return [];
+}
 
 // Where a muted label such as `cache ` starts a new value in the middle of an item.
 function mutedLabelStarts(line: ReadonlyArray<AnsiSegment>, text: string): ReadonlyArray<number> {
@@ -376,20 +457,19 @@ function mutedLabelStarts(line: ReadonlyArray<AnsiSegment>, text: string): Reado
 }
 
 /**
- * Splits a line into the items a client lays out one by one: a leading `~/…` or `/…` directory,
- * the `[HH:MM:SS]` clock, and the text between `, ` and ` | ` separators, split again where a
- * muted label starts a new value. The text on either side of the clock is joined by the line's
- * own comma, when it has one.
+ * Splits a line into the items a client lays out one by one: a leading directory, the `[HH:MM:SS]`
+ * clock, and the text between `, ` and ` | `, split again where a muted label starts a new value.
+ * The text around the clock is joined by the line's own comma, when it has one.
  */
 export function splitStatusLineItems(
   line: ReadonlyArray<AnsiSegment>,
 ): ReadonlyArray<StatusLineItem> {
-  const text = line.map((segment) => segment.text).join("");
+  const text = segmentsText(line);
   const separators = [...text.matchAll(ITEM_SEPARATOR_PATTERN)];
   const firstComma = separators.find((match) => match[0].startsWith(","));
   const comma = firstComma ? sliceSegments(line, firstComma.index, firstComma.index + 1) : [];
   const labelStarts = mutedLabelStarts(line, text);
-  const items: StatusLineItem[] = [];
+  const items: SeparatedItem[] = [];
   const push = (
     kind: StatusLineItem["kind"],
     start: number,
@@ -398,7 +478,9 @@ export function splitStatusLineItems(
   ) => {
     const from = end - text.slice(start, end).trimStart().length;
     const to = from + text.slice(from, end).trimEnd().length;
-    if (from < to) items.push({ kind, segments: [...sliceSegments(line, from, to), ...separator] });
+    if (from >= to) return;
+    const segments = sliceSegments(line, from, to);
+    items.push({ kind, segments, separator, dropAt: dropLevel(kind, segments) });
   };
   const pushValues = (start: number, end: number, separator: ReadonlyArray<AnsiSegment>) => {
     let from = start;
@@ -435,15 +517,28 @@ export function splitStatusLineItems(
   };
   let cursor = 0;
   for (const match of separators) {
-    const shown = match[0].trimEnd().length;
-    pushStretch(cursor, match.index, sliceSegments(line, match.index, match.index + shown));
+    // The separator's own character, without the space a ` |` has before it.
+    const from = match.index + match[0].length - match[0].trimStart().length;
+    pushStretch(cursor, match.index, sliceSegments(line, from, from + 1));
     cursor = match.index + match[0].length;
   }
   pushStretch(cursor, text.length, []);
-  return items;
+  // A line made only of items that can be dropped keeps them, or nothing would be left to hover.
+  const kept: ReadonlyArray<SeparatedItem> = items.some(
+    (item) => item.kind !== "clock" && item.dropAt === 0,
+  )
+    ? items
+    : items.map((item) => ({ ...item, dropAt: 0 }));
+  return kept.map((item, index) => ({
+    kind: item.kind,
+    segments: item.segments,
+    dropAt: item.dropAt,
+    separators: [0, 1, 2, 3].map((level) => separatorAt(kept, index, level)),
+  }));
 }
 
-// The 01-1/statusline script's labels. `v` runs into its number, so its expansion brings the space.
+// The built-in script's labels, and `conx` from 01-1/statusline. `v` runs into its number, so its
+// expansion brings the space.
 const STATUS_LINE_LABELS: Readonly<Record<string, string>> = {
   conx: "context",
   ctx: "context",
@@ -456,36 +551,51 @@ const STATUS_LINE_LABELS: Readonly<Record<string, string>> = {
   v: "version ",
 };
 
-/** The segment's text with its abbreviated label written out, or null when it is not such a label. */
-export function expandStatusLineLabel(segment: AnsiSegment): string | null {
-  if (segment.color === null || statusLineColorRole(segment.color) !== "muted") return null;
+// The built-in script prints `Opus 5.5` as `O5.5`: the first word's initial, then the second word.
+function shortModelName(name: string): string {
+  const [first = "", second = ""] = name.trim().split(/\s+/);
+  return `${first.slice(0, 1)}${second}`;
+}
+
+/**
+ * The segment's text with its abbreviated label, or the short form of `modelName`, written out.
+ * Null when the segment is neither.
+ */
+export function expandStatusLineLabel(
+  segment: AnsiSegment,
+  modelName: string | null = null,
+): string | null {
+  if (segment.color === null || statusLineColorRole(segment.color) !== "muted") {
+    if (modelName === null) return null;
+    const name = modelName.trim();
+    const short = shortModelName(name);
+    // One letter could be anything, so only a short form of two or more is taken for the model.
+    return short.length > 1 && short !== name && segment.text.trim() === short
+      ? segment.text.replace(short, name)
+      : null;
+  }
   // A label can share its segment with the punctuation before it, as in `), 5h `.
   const [, before, label, after] = /^([^a-z0-9]*)(\S+)(\s*)$/i.exec(segment.text) ?? [];
   const expanded = label === undefined ? undefined : STATUS_LINE_LABELS[label];
   return expanded === undefined ? null : `${before}${expanded}${after}`;
 }
 
-// The widest form each kind of value usually takes; a shorter value is given this much room. A
-// count keeps one width from `6` through `999` to `101.3k`.
-const RESERVED_VALUES: ReadonlyArray<readonly [RegExp, string]> = [
-  [/^\d+(?:\.\d+)?%$/, "100%"],
-  [/^(?:\d+[dhms]){1,2}$/, "00h00m"],
-  [/^\d+(?:\.\d+[kM])?$/, "000.0k"],
-  [/^\d+[kM]$/, "000k"],
-  [/^[+-]\d+$/, "+00"],
-];
+// A value that ticks while a thread runs: a percentage, duration, or count.
+const CHANGING_VALUE = /^(?:\d+(?:\.\d+)?%|(?:\d+[dhms]){1,2}|\d+(?:\.\d+)?[kM]|\d+)$/;
 
 /**
- * The segment's text with each changing value (a percentage, duration, or count) at its usual
- * widest, so a client can hold that much room and the line stays put when the value changes.
+ * The segment's text with each changing value given room: every whole number in it is held at
+ * two digits or its own length, whichever is longer. A client lays the value out in that room, so
+ * the line stays put until a value grows past it.
  */
 export function reserveStatusLineText(segment: AnsiSegment): string {
   if (segment.color !== null && statusLineColorRole(segment.color) === "muted") return segment.text;
   return segment.text
     .split(/([\s/(),]+)/)
-    .map((token) => {
-      const reserved = RESERVED_VALUES.find(([pattern]) => pattern.test(token))?.[1];
-      return reserved === undefined || reserved.length < token.length ? token : reserved;
-    })
+    .map((token) =>
+      CHANGING_VALUE.test(token)
+        ? token.replace(/\d/g, "0").replace(/(?<![.\d])0(?!\d)/g, "00")
+        : token,
+    )
     .join("");
 }

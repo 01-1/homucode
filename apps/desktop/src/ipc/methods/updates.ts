@@ -7,6 +7,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import * as ElectronPowerMonitor from "../../electron/ElectronPowerMonitor.ts";
 import * as DesktopUpdates from "../../updates/DesktopUpdates.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
@@ -64,5 +65,15 @@ export const checkForUpdate = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.updates.check")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
     return yield* updates.check("web-ui");
+  }),
+});
+
+export const getSystemIdleSeconds = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.GET_SYSTEM_IDLE_SECONDS_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.Number,
+  handler: Effect.fn("desktop.ipc.updates.getSystemIdleSeconds")(function* () {
+    const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
+    return yield* powerMonitor.getSystemIdleTime;
   }),
 });

@@ -79,12 +79,13 @@ function primarySocketUrl(
   target: PrimaryConnectionTarget,
   clientMetadata: AuthClientPresentationMetadata | undefined,
   owners: ClientOwnerParams,
+  deviceName: string | undefined,
 ): string {
   const url = new URL(target.wsBaseUrl);
   if (url.pathname === "" || url.pathname === "/") {
     url.pathname = "/ws";
   }
-  appendClientConnectionParams(url, clientMetadata, "direct", owners);
+  appendClientConnectionParams(url, clientMetadata, "direct", owners, deviceName);
   return url.toString();
 }
 
@@ -102,7 +103,12 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
         environmentId: target.environmentId,
         label: target.label,
         httpBaseUrl: target.httpBaseUrl,
-        socketUrl: primarySocketUrl(target, presentation.metadata, yield* readClientOwnerParams),
+        socketUrl: primarySocketUrl(
+          target,
+          presentation.metadata,
+          yield* readClientOwnerParams,
+          yield* ClientCapabilities.readClientDeviceName(presentation),
+        ),
         httpAuthorization: null,
         target,
       } satisfies PreparedConnection;

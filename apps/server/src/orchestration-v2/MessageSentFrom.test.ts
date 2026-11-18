@@ -181,6 +181,22 @@ describe("device names", () => {
     expect(withDeviceName(undefined, rules)).toBeUndefined();
   });
 
+  it("uses the name a device gave itself when no rule names it", () => {
+    const phone = sentFromConnection({
+      surface: "mobile",
+      clientOs: "Android",
+      deviceModel: "Pixel 9",
+    });
+    expect(withDeviceName(phone, rules, "fold")?.deviceName).toBe("my-phone");
+    const fold = sentFromConnection({
+      surface: "mobile",
+      clientOs: "Android",
+      deviceModel: "Pixel Fold",
+    });
+    expect(withDeviceName(fold, rules, "fold")?.deviceName).toBe("fold");
+    expect(withDeviceName(fold, rules)?.deviceName).toBeUndefined();
+  });
+
   it("puts the name first in the agent's line", () => {
     const sentFrom = withDeviceName(
       sentFromConnection({

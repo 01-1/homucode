@@ -11,10 +11,11 @@ export const layer = Layer.mergeAll(
   ),
   Layer.effect(
     UrlParams.CurrentRedactedNames,
-    // Socket tickets and proofs, pairing tokens, and OAuth codes travel in query strings.
+    // Socket tickets and proofs, pairing tokens, OAuth codes and device names travel in query strings.
     Effect.map(UrlParams.CurrentRedactedNames, (names) => [
       ...names,
       "wsTicket",
+      "clientDeviceName",
       "dpop",
       "token",
       "pairingUrl",

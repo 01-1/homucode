@@ -35,6 +35,7 @@ export function NativeChildWorkSheet(props: {
   return (
     <Sheet title="Subagent work" onClose={props.onClose}>
       <ScrollView
+        nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           gap: 16,
