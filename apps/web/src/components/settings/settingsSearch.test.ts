@@ -90,13 +90,13 @@ describe("searchSettings", () => {
     });
   });
 
-  it("finds moved settings on the HomuCode page", () => {
+  it("finds moved settings on the Homu Code page", () => {
     for (const query of [
-      "HomuCode",
+      "Homu Code",
       "Quick model",
       "Device names",
       "App scripts",
-      "Building T3",
+      "Building Homu",
       "Ask again after a restart",
       "Update when agents are idle",
     ]) {
@@ -170,7 +170,7 @@ describe("searchSettings", () => {
     expect(available.map((item) => item.id).filter((id) => gatedIds.has(id))).toEqual([]);
   });
 
-  it("finds Building T3 fields only when an environment enables the page", () => {
+  it("finds Building Homu fields only when an environment enables the page", () => {
     const availability = {
       hasCloudPublicConfig: false,
       hasEnvironment: true,
@@ -192,7 +192,7 @@ describe("searchSettings", () => {
     }
   });
 
-  it("targets only connected environments with Building T3 enabled", () => {
+  it("targets only connected environments with Building Homu enabled", () => {
     const enabled = EnvironmentId.make("enabled");
     const disabled = EnvironmentId.make("disabled");
     const offline = EnvironmentId.make("offline");

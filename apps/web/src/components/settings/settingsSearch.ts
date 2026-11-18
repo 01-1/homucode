@@ -99,7 +99,7 @@ export interface SettingsSearchAvailability {
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": msg("Diagnostics"),
   "/settings/projects": msg("Projects"),
-  "/settings/homucode": msg("HomuCode"),
+  "/settings/homucode": msg("Homu Code"),
   "/settings/general": msg("General"),
   "/settings/appearance": msg("Appearance"),
   "/settings/chat": msg("Chat"),
@@ -234,7 +234,7 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
   .join(" ");
 
 const BUILDING_T3_SEARCH_ITEMS = [
-  ["build-repo-path", "T3 Code checkout"],
+  ["build-repo-path", "Homu Code checkout"],
   ["build-boat-cli", "Boat CLI"],
   ["build-machine-type", "Cloud machine type"],
   ["build-output-folder", "Build output folder"],
@@ -254,7 +254,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   })),
   {
     id: "homucode",
-    title: "HomuCode",
+    title: "Homu Code",
     to: "/settings/homucode",
   },
   {
@@ -480,7 +480,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "madohomu-code-visibility",
-    title: "Show MadoHomu threads in T3 Code",
+    title: "Show MadoHomu threads in Homu Code",
     to: "/settings/homucode",
     searchTerms: ["MadoHomu hide threads sidebar scratch pinned visibility"],
     environmentOnly: true,
@@ -1020,7 +1020,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "show-building-t3",
-    title: "Show Building T3 settings",
+    title: "Show Building Homu settings",
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1408,7 +1408,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "pull-request-links-open-in-app",
-    title: "Open pull requests in T3 Code",
+    title: "Open pull requests in Homu Code",
     to: "/settings/diffs",
     searchTerms: [
       `pr commit links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,

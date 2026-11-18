@@ -146,7 +146,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       });
       if (result._tag === "Success") savePreferences(preferencesPatch);
     } catch {
-      setError("Could not save HomuCode features. Try again.");
+      setError("Could not save Homu Code features. Try again.");
     }
     pending.current = false;
     setBusy(false);
@@ -157,12 +157,12 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   if (!settings || !canWrite || offers.length === 0) return null;
   const title =
     followup === "building-t3"
-      ? "Building T3"
+      ? "Building Homu"
       : followup === "device-name"
         ? "Name this device"
         : pages[step]?.[0]?.page === 2
           ? "Extra features"
-          : "HomuCode features";
+          : "Homu Code features";
   // Saved on the phone: a dropped connection closes this sheet, and reopening it restores them.
   const keep = (next: { readonly selected: ReadonlySet<string>; readonly step: number }) =>
     savePreferences({
@@ -194,7 +194,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
           pages[step]?.map((offer, index, pageOffers) => {
             const options =
               offer.id === "subagents"
-                ? ["T3 delegation (delegate_task)", "Provider native subagents"]
+                ? ["Homu delegation (delegate_task)", "Provider native subagents"]
                 : offer.id === "thread-only-stop"
                   ? ["Only the current thread", "Current thread and its subagents"]
                   : null;

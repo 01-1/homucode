@@ -46,7 +46,10 @@ const SURFACE_LABELS: Record<OrchestrationMessageSentFrom["surface"], string> = 
 };
 
 /** A device as people read it, such as `my-phone (T3 mobile, Android, Pixel 9, via relay)`. */
-function sentFromDeviceLabel(sentFrom: OrchestrationMessageSentFrom): string {
+function sentFromDeviceLabel(
+  sentFrom: OrchestrationMessageSentFrom,
+  label = SURFACE_LABELS[sentFrom.surface],
+): string {
   const details = [
     sentFrom.os === undefined || sentFrom.os === "unknown" || sentFrom.os === "other"
       ? undefined
@@ -58,7 +61,6 @@ function sentFromDeviceLabel(sentFrom: OrchestrationMessageSentFrom): string {
       ? `via ${sentFrom.connectionMethod}`
       : undefined,
   ].filter((part): part is string => part !== undefined);
-  const label = SURFACE_LABELS[sentFrom.surface];
   if (sentFrom.deviceName !== undefined) {
     return `${sentFrom.deviceName} (${[label, ...details].join(", ")})`;
   }
@@ -133,10 +135,15 @@ export function messageSourceLine(message: MessageSourceFields): string {
   return `[T3] Automatic message from ${source.sender}${summary}. No human sent this message.`;
 }
 
-/** The short line people see over a message, such as `Human · my-phone (T3 mobile)`. */
+/** The short line people see over a message, such as `Human · my-phone (Homu mobile)`. */
 export function messageSourceLabel(message: MessageSourceFields): string {
   const source = messageSource(message);
-  if (source.kind === "automatic") return `Automatic · ${source.label}`;
+  if (source.kind === "automatic") {
+    return `Automatic · ${source.label === "T3 Code" ? "Homu Code" : source.label}`;
+  }
   const who = source.guestName === undefined ? "Human" : "Human guest";
-  return source.device === undefined ? who : `${who} · ${source.device}`;
+  const sentFrom = message.context?.sentFrom;
+  if (sentFrom === undefined) return who;
+  const surfaceLabel = sentFrom.surface === "cli" ? SURFACE_LABELS.cli : `Homu ${sentFrom.surface}`;
+  return `${who} · ${sentFromDeviceLabel(sentFrom, surfaceLabel)}`;
 }

@@ -163,7 +163,7 @@ function EnvironmentMadoHomuSettings({
           </SettingsRow>
           <SettingsRow
             {...searchableSetting("madohomu-code-visibility")}
-            description={`Which threads of the MadoHomu project T3 Code's thread list shows. ${MADOHOMU_SCRATCH_LABEL} threads are the ones not pinned in MadoHomu.`}
+            description={`Which threads of the MadoHomu project Homu Code's thread list shows. ${MADOHOMU_SCRATCH_LABEL} threads are the ones not pinned in MadoHomu.`}
             control={
               <Select
                 value={actions.settings.madohomuCodeVisibility}
@@ -174,7 +174,7 @@ function EnvironmentMadoHomuSettings({
                 }}
               >
                 <SelectTrigger
-                  aria-label="Show MadoHomu threads in T3 Code"
+                  aria-label="Show MadoHomu threads in Homu Code"
                   className="w-36"
                   size="sm"
                 >

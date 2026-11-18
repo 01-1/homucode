@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It has no releases or installers of its own: build it from source. Inside the app and the `t3` command it is still called T3 Code.
+HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It has no releases or installers of its own: build it from source. The app displays the name Homu Code. The command is still `t3`.
 
 ## Changes compared to T3 Code
 
@@ -14,8 +14,8 @@ The full list, with details, is in [CHANGES.md](./CHANGES.md). In short:
 - **Composer and messages.** A Claude Code style status line, sent messages as plain text, `+` kept at the start of a line, answered questions that keep every option, and End to jump to the latest message.
 - **Desktop, CLI and mobile.** Presses and keys dropped when they land just as the UI changed under them, opt-in settings sync across web, desktop and phone, opt-in TypeScript app scripts run from a keybinding or `t3 app run`, faster CLI launches, an opt-in phone launch that connects without waiting for sign-in, over-the-air Android updates, Linux desktop link fixes, undo for a staged build, app and provider updates once agents are idle, and smaller fixes.
 - **Offloading to cloud.** Heavy checks and uncached Android dev clients run on Boat.
-- **HomuCode settings.** Find the fork’s options under Settings → HomuCode on web, desktop, and mobile.
-- **Add-ons.** Optional build tools in [`addons/`](./addons/README.md), all off by default. Building T3 under Settings → HomuCode runs cloud builds and staged-build loading with rollback, builds Android APKs and serves them on the LAN.
+- **HomuCode settings.** Find the fork’s options under Settings → Homu Code on web, desktop, and mobile.
+- **Add-ons.** Optional build tools in [`addons/`](./addons/README.md), all off by default. Building Homu under Settings → Homu Code runs cloud builds and staged-build loading with rollback, builds Android APKs and serves them on the LAN.
 
 Only builds from this repository have these changes; upstream's published apps don't. See [Known limits](./CHANGES.md#known-limits).
 
