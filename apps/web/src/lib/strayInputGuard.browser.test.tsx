@@ -40,8 +40,16 @@ it("drops presses on controls that appear or move under the pointer unasked, and
   added.textContent = "Added";
   added.addEventListener("click", () => pressed("added"));
   screen.container.append(added);
-  await userEvent.click(added);
+  // A press held through a key, and a double-click, still never reach it.
+  const doubled = vi.fn();
+  added.addEventListener("dblclick", doubled);
+  await userEvent.hover(added);
+  await commands.holdPointer();
+  await userEvent.keyboard("{Shift}");
+  await commands.releasePointer();
+  await userEvent.dblClick(added);
   expect(pressed.mock.calls).toEqual([["top"]]);
+  expect(doubled).not.toHaveBeenCalled();
   vi.advanceTimersByTime(STRAY_INPUT_GUARD_MS);
   await userEvent.click(added);
   expect(pressed.mock.calls).toEqual([["top"], ["added"]]);

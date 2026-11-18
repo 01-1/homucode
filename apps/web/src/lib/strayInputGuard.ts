@@ -40,7 +40,7 @@ const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 // Touch presses arrive as pointerdown plus touch events, compatibility mouse events and click.
 const PRESS_FOLLOWUPS = ["pointerup", "mousedown", "mouseup", "contextmenu"];
 // Keyboard activation also fires click, with detail 0; only pointer clicks belong to a press.
-const PRESS_CLICKS = ["click", "dblclick", "auxclick"];
+const PRESS_CLICKS = ["click", "auxclick"];
 const PRESS_TOUCHES = ["touchstart", "touchend"];
 
 function actionableAt(target: EventTarget | null): Element | null {
@@ -77,6 +77,7 @@ export function installStrayInputGuard(): Disposable {
   let hoveredChangedAt = Number.NEGATIVE_INFINITY;
   let hitTestFrame: number | null = null;
   let swallowingPress = false;
+  let clickSwallowed = false;
   const swallowedKeys = new Set<string>();
 
   const recent = (time: number) => now() - time < STRAY_INPUT_GUARD_MS;
@@ -175,8 +176,19 @@ export function installStrayInputGuard(): Disposable {
   const onPressFollowup = (event: Event) => {
     if (event.isTrusted && swallowingPress) swallow(event);
   };
+  // The click ends a dropped press, so later keyboard context menus are not swallowed.
   const onPressClick = (event: MouseEvent) => {
-    if (event.detail > 0) onPressFollowup(event);
+    if (event.detail === 0 || !event.isTrusted) return;
+    clickSwallowed = swallowingPress;
+    if (!swallowingPress) return;
+    swallowingPress = false;
+    swallow(event);
+  };
+  const onDoubleClick = (event: MouseEvent) => {
+    if (event.isTrusted && clickSwallowed) swallow(event);
+  };
+  const onPointerCancel = () => {
+    swallowingPress = false;
   };
   // Touch listeners on window are passive, so these can only be stopped, not prevented.
   const onPressTouch = (event: TouchEvent) => {
@@ -195,8 +207,6 @@ export function installStrayInputGuard(): Disposable {
   };
   const onKeyDown = (event: KeyboardEvent) => {
     if (!event.isTrusted || event.isComposing) return;
-    // A key ends any dropped press, so keyboard context menus and clicks are its own.
-    swallowingPress = false;
     if (MODIFIER_KEYS.has(event.key)) return;
     if (event.repeat && swallowedKeys.has(event.code)) {
       swallow(event);
@@ -236,6 +246,8 @@ export function installStrayInputGuard(): Disposable {
       onPressTouch as EventListener,
       { capture: true, passive: true },
     ]),
+    ["dblclick", onDoubleClick as EventListener, { capture: true }],
+    ["pointercancel", onPointerCancel, { capture: true, passive: true }],
     ["wheel", onWheel, { capture: true, passive: true }],
     ["scroll", scheduleHitTest, { capture: true, passive: true }],
     ["resize", scheduleHitTest, { passive: true }],

@@ -154,6 +154,12 @@ const browserTestProject = {
           await page.mouse.down();
           await page.mouse.up();
         },
+        holdPointer: async ({ page }) => {
+          await page.mouse.down();
+        },
+        releasePointer: async ({ page }) => {
+          await page.mouse.up();
+        },
       },
     },
   },
