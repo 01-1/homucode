@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Runs on the boat box: builds and signs one HomuCode Android APK.
-# Usage: box-build.sh COMMIT VARIANT APP_NAME
+# Runs on the boat box: builds and signs one HomuCode Android APK, or with MODE=ota publishes
+# the same commit's JS as an EAS update. Both share every step that feeds the native fingerprint.
+# Usage: box-build.sh COMMIT VARIANT APP_NAME [apk|ota]
 set -euo pipefail
 build_root=/home/user/t3-preview
-revision=${1:?full commit required}; variant=${2:?variant required}; app_name=${3:?app name required}
+revision=${1:?full commit required}; variant=${2:?variant required}; app_name=${3:?app name required}; mode=${4:-apk}
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
 export PATH="$build_root/node-v26.13.1-linux-x64/bin:$build_root/tools/bin:$PATH"
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME="$build_root/android-sdk" ANDROID_SDK_ROOT="$build_root/android-sdk"
@@ -30,6 +31,13 @@ s=s.replace('react {','react {\n    extraPackagerArgs = ["--max-workers", "2"]',
 p.write_text(s)
 PY
 pnpm exec expo config --type public --json > "$build_root/artifacts/config.json"
+pnpm exec expo-updates runtimeversion:resolve --platform android > "$build_root/artifacts/runtime-version.json"
+if [[ $mode == ota ]]; then
+  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 pnpm dlx eas-cli@18 update \
+    --platform android --channel "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["updates"]["requestHeaders"]["expo-channel-name"])' "$build_root/artifacts/config.json")" \
+    --message "$revision" --non-interactive --json > "$build_root/artifacts/update.json"
+  echo "PUBLISHED $revision $variant"; exit 0
+fi
 cd android
 ./gradlew :app:assembleRelease --no-daemon --max-workers=4 -PreactNativeArchitectures=arm64-v8a,x86_64
 tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
