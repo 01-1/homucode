@@ -490,7 +490,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
         ),
       });
     } else if (choice === "unpin") {
-      if (canOperate) for (const t of codePinned) handleUnpin(scopeThreadRef(t.environmentId, t.id));
+      if (!canOperate) return;
+      for (const t of codePinned) handleUnpin(scopeThreadRef(t.environmentId, t.id));
     } else if (choice.startsWith("move:") || choice === "move-new-section") {
       const created =
         choice === "move-new-section" ? { id: randomUUID(), name: "New section" } : null;
