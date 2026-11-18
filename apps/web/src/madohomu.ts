@@ -192,8 +192,7 @@ export function openThreadInMadoHomu(
   const detail = shell
     ? null
     : appAtomRegistry.get(environmentThreadDetails.threadAtom(threadRef))?.projection.thread;
-  const known =
-    shell ?? detail ?? { projectId: knownProjectId, archivedAt: null, deletedAt: null };
+  const known = shell ?? detail ?? { projectId: knownProjectId, archivedAt: null, deletedAt: null };
   if (known.projectId !== context.project.id || known.archivedAt !== null) return null;
   if (known.deletedAt != null) return null;
   return router.navigate({
