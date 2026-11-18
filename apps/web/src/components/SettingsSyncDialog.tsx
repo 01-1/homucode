@@ -89,13 +89,13 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
                         }
                       }}
                     >
-                      <Toggle value="local" title={`This device: ${described.local}`}>
-                        <span className="truncate">This device: {described.local}</span>
-                      </Toggle>
-                      <Toggle value="remote" title={`Synced: ${described.remote}`}>
-                        <span className="truncate">Synced: {described.remote}</span>
-                      </Toggle>
+                      <Toggle value="local">This device</Toggle>
+                      <Toggle value="remote">Synced</Toggle>
                     </ToggleGroup>
+                    <div className="grid grid-cols-2 gap-2 text-muted-foreground text-xs">
+                      <p className="break-words">{described.local}</p>
+                      <p className="break-words">{described.remote}</p>
+                    </div>
                   </li>
                 );
               })}

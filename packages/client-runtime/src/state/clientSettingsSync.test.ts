@@ -108,7 +108,21 @@ describe("synced client setting values", () => {
     ).toEqual({ local: "2 items, incl. claude-fable-5-2", remote: "2 items, incl. gpt-6.2-sol" });
     expect(
       describeSyncedSettingConflict({ key: "favorites", local: ["a", "b"], remote: ["b", "a"] }),
-    ).toEqual({ local: "2 items, different order", remote: "2 items, different order" });
+    ).toEqual({ local: "2 items, from #1: a, b", remote: "2 items, from #1: b, a" });
+    expect(
+      describeSyncedSettingConflict({
+        key: "favorites",
+        local: [{ provider: "claudeAgent", model: "m" }],
+        remote: [{ provider: "claudeWork", model: "m" }],
+      }),
+    ).toEqual({ local: "1 item, incl. m (claudeAgent)", remote: "1 item, incl. m (claudeWork)" });
+    expect(
+      describeSyncedSettingConflict({
+        key: "customThemes",
+        local: JSON.stringify([{ id: "lavender" }]),
+        remote: JSON.stringify([{ id: "lavender" }, { id: "mint" }]),
+      }),
+    ).toEqual({ local: "1 item", remote: "2 items, incl. mint" });
     expect(
       describeSyncedSettingConflict({ key: "theme", local: "lavender-darker", remote: "lavender" }),
     ).toEqual({ local: "lavender-darker", remote: "lavender" });

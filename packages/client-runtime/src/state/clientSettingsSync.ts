@@ -160,13 +160,16 @@ export function syncedSettingLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function syncedItemLabel(item: unknown): string {
+function syncedItemLabel(item: unknown, qualify: boolean): string {
   if (typeof item === "string") return item || "empty";
   if (item && typeof item === "object") {
     const record = item as Record<string, unknown>;
     for (const field of ["model", "name", "label", "title", "id"]) {
       const value = record[field];
-      if (typeof value === "string" && value) return value;
+      if (typeof value !== "string" || !value) continue;
+      return qualify && typeof record.provider === "string"
+        ? `${value} (${record.provider})`
+        : value;
     }
   }
   return stableJson(item);
@@ -187,10 +190,51 @@ function countLabel(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function describeList(value: ReadonlyArray<unknown>, extra: ReadonlyArray<string>, same: boolean) {
-  const count = countLabel(value.length, "item");
-  if (same) return `${count}, different order`;
-  return extra.length === 0 ? count : `${count}, incl. ${shorten(extra.join(", "), 48)}`;
+/** Some synced settings (the theme library, light and dark themes) are stored as JSON text. */
+function decodeForDisplay(value: unknown): unknown {
+  if (typeof value !== "string" || !/^\s*[[{]/.test(value)) return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function describeLists(
+  local: ReadonlyArray<unknown>,
+  remote: ReadonlyArray<unknown>,
+): { readonly local: string; readonly remote: string } {
+  const localKeys = local.map(stableJson);
+  const remoteKeys = remote.map(stableJson);
+  const onlyIn = (items: ReadonlyArray<unknown>, keys: string[], other: string[]) =>
+    items.filter((_, index) => !other.includes(keys[index]!));
+  const localOnly = onlyIn(local, localKeys, remoteKeys);
+  const remoteOnly = onlyIn(remote, remoteKeys, localKeys);
+  if (localOnly.length === 0 && remoteOnly.length === 0) {
+    // Same items in another order: show each side's order from the first position that differs.
+    const start = Math.max(
+      0,
+      localKeys.findIndex((key, index) => key !== remoteKeys[index]),
+    );
+    const order = (items: ReadonlyArray<unknown>) =>
+      `${countLabel(items.length, "item")}, from #${start + 1}: ${shorten(
+        items
+          .slice(start)
+          .map((item) => syncedItemLabel(item, true))
+          .join(", "),
+        48,
+      )}`;
+    return { local: order(local), remote: order(remote) };
+  }
+  const plainRemote = new Set(remoteOnly.map((item) => syncedItemLabel(item, false)));
+  const qualify = localOnly.some((item) => plainRemote.has(syncedItemLabel(item, false)));
+  const side = (items: ReadonlyArray<unknown>, extra: ReadonlyArray<unknown>) => {
+    const count = countLabel(items.length, "item");
+    if (extra.length === 0) return count;
+    const labels = extra.map((item) => syncedItemLabel(item, qualify)).join(", ");
+    return `${count}, incl. ${shorten(labels, 48)}`;
+  };
+  return { local: side(local, localOnly), remote: side(remote, remoteOnly) };
 }
 
 /**
@@ -201,20 +245,9 @@ export function describeSyncedSettingConflict(conflict: ClientSettingsSyncConfli
   readonly local: string;
   readonly remote: string;
 } {
-  const { local, remote } = conflict;
-  if (Array.isArray(local) && Array.isArray(remote)) {
-    const localKeys = local.map(stableJson);
-    const remoteKeys = remote.map(stableJson);
-    const onlyIn = (items: ReadonlyArray<unknown>, keys: string[], other: string[]) =>
-      items.filter((_, index) => !other.includes(keys[index]!)).map(syncedItemLabel);
-    const localOnly = onlyIn(local, localKeys, remoteKeys);
-    const remoteOnly = onlyIn(remote, remoteKeys, localKeys);
-    const same = localOnly.length === 0 && remoteOnly.length === 0;
-    return {
-      local: describeList(local, localOnly, same),
-      remote: describeList(remote, remoteOnly, same),
-    };
-  }
+  const local = decodeForDisplay(conflict.local);
+  const remote = decodeForDisplay(conflict.remote);
+  if (Array.isArray(local) && Array.isArray(remote)) return describeLists(local, remote);
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === "object" && !Array.isArray(value);
   if (isRecord(local) && isRecord(remote)) {
