@@ -33,7 +33,7 @@ PY
 pnpm exec expo config --type public --json > "$build_root/artifacts/config.json"
 pnpm exec expo-updates runtimeversion:resolve --platform android > "$build_root/artifacts/runtime-version.json"
 if [[ $mode == ota ]]; then
-  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 pnpm dlx eas-cli@18 update \
+  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 pnpm dlx eas-cli@27.10.0 update \
     --platform android --channel "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["updates"]["requestHeaders"]["expo-channel-name"])' "$build_root/artifacts/config.json")" \
     --message "$revision" --non-interactive --json > "$build_root/artifacts/update.json"
   echo "PUBLISHED $revision $variant"; exit 0

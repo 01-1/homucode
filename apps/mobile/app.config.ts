@@ -19,6 +19,7 @@ const runtimeVersionPolicy =
 // Forks publish OTAs to their own EAS project; the defaults are upstream's.
 const easProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 const easOwner = repoEnv.T3CODE_EAS_OWNER?.trim() || "pingdotgg";
+const easSlug = repoEnv.T3CODE_EAS_SLUG?.trim() || "t3-code";
 // EAS builds bake in their channel; local Gradle builds need it as a request header.
 const updatesChannel = repoEnv.T3CODE_MOBILE_UPDATES_CHANNEL?.trim();
 
@@ -240,7 +241,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: easSlug,
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
