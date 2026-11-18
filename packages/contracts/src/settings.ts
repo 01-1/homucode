@@ -1644,6 +1644,10 @@ export const ServerSettings = Schema.Struct({
   /** MadoHomu: a focused view locked to one project. */
   madohomuDesktopAppEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   madohomuEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Linked environment that owns the selected MadoHomu project. */
+  madohomuDestinationEnvironmentId: Schema.NullOr(EnvironmentId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   madohomuProjectId: Schema.NullOr(ProjectId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -2162,6 +2166,7 @@ export const ServerSettingsPatch = Schema.Struct({
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   madohomuDesktopAppEnabled: Schema.optionalKey(Schema.Boolean),
   madohomuEnabled: Schema.optionalKey(Schema.Boolean),
+  madohomuDestinationEnvironmentId: Schema.optionalKey(Schema.NullOr(EnvironmentId)),
   madohomuProjectId: Schema.optionalKey(Schema.NullOr(ProjectId)),
   madohomuThreads: Schema.optionalKey(Schema.Record(ThreadId, MadoHomuThreadSettings)),
   madohomuSections: Schema.optionalKey(Schema.Array(MadoHomuSection)),

@@ -73,7 +73,9 @@ describe("useOlderSettledShelf", () => {
       { reads: [read], frontier: null },
     ].map((pages) =>
       Atom.make<ReadonlyMap<EnvironmentId, OlderSettledShelfEnvironment>>(
-        new Map([[environmentId, { older, pages: { ...pages, status: "ready" } }]]),
+        new Map<EnvironmentId, OlderSettledShelfEnvironment>([
+          [environmentId, { older, pages: { ...pages, status: "ready" } }],
+        ]),
       ),
     );
     using _shelf = vi
@@ -101,7 +103,7 @@ describe("useOlderSettledShelf", () => {
     const older = { before, beforeMs: Date.parse(before), counts: new Map([[first, 2]]) };
     const shelf = (expanded: boolean) =>
       Atom.make<ReadonlyMap<EnvironmentId, OlderSettledShelfEnvironment>>(
-        new Map([
+        new Map<EnvironmentId, OlderSettledShelfEnvironment>([
           [
             environmentId,
             {
