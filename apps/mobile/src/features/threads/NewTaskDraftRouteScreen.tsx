@@ -213,6 +213,7 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
               : params.incomingShareId
           }
           draftId={draftId}
+          madohomu={params.madohomu === true}
         />
       )}
     </>

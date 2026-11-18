@@ -1,9 +1,9 @@
 import {
   type ClientSettingsSyncChoice,
-  formatSyncedSettingValue,
+  describeSyncedSettingConflict,
   syncedSettingLabel,
 } from "@t3tools/client-runtime/state/client-settings-sync";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   deferSettingsSyncPrompt,
@@ -37,6 +37,7 @@ export function SettingsSyncDialogHost() {
 }
 
 function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
+  const descriptionId = useId();
   const server = useEnvironment(prompt.environmentId)?.label ?? "your server";
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
@@ -73,33 +74,42 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
               </Button>
             </div>
             <ul className="flex flex-col divide-y divide-border">
-              {prompt.conflicts.map((conflict) => (
-                <li key={conflict.key} className="flex flex-col gap-2 py-2">
-                  <span className="text-sm font-medium">{syncedSettingLabel(conflict.key)}</span>
-                  <ToggleGroup
-                    aria-label={syncedSettingLabel(conflict.key)}
-                    className="w-full *:min-w-0 *:flex-1"
-                    value={[choices[conflict.key] ?? "remote"]}
-                    onValueChange={(next) => {
-                      const value = next[0];
-                      if (value === "local" || value === "remote") {
-                        setChoices((current) => ({ ...current, [conflict.key]: value }));
-                      }
-                    }}
-                  >
-                    <Toggle value="local">
-                      <span className="truncate">
-                        This device: {formatSyncedSettingValue(conflict.local)}
-                      </span>
-                    </Toggle>
-                    <Toggle value="remote">
-                      <span className="truncate">
-                        Synced: {formatSyncedSettingValue(conflict.remote)}
-                      </span>
-                    </Toggle>
-                  </ToggleGroup>
-                </li>
-              ))}
+              {prompt.conflicts.map((conflict) => {
+                const described = describeSyncedSettingConflict(conflict);
+                const localId = `${descriptionId}-${conflict.key}-local`;
+                const remoteId = `${descriptionId}-${conflict.key}-remote`;
+                return (
+                  <li key={conflict.key} className="flex flex-col gap-2 py-2">
+                    <span className="text-sm font-medium">{syncedSettingLabel(conflict.key)}</span>
+                    <ToggleGroup
+                      aria-label={syncedSettingLabel(conflict.key)}
+                      className="w-full *:min-w-0 *:flex-1"
+                      value={[choices[conflict.key] ?? "remote"]}
+                      onValueChange={(next) => {
+                        const value = next[0];
+                        if (value === "local" || value === "remote") {
+                          setChoices((current) => ({ ...current, [conflict.key]: value }));
+                        }
+                      }}
+                    >
+                      <Toggle value="local" aria-describedby={localId}>
+                        This device
+                      </Toggle>
+                      <Toggle value="remote" aria-describedby={remoteId}>
+                        Synced
+                      </Toggle>
+                    </ToggleGroup>
+                    <div className="grid grid-cols-2 gap-2 text-muted-foreground text-xs">
+                      <p id={localId} className="break-words">
+                        {described.local}
+                      </p>
+                      <p id={remoteId} className="break-words">
+                        {described.remote}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </DialogPanel>

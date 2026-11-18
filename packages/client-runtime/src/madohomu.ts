@@ -14,6 +14,7 @@ import {
   type LegacyProjectSettingsFields,
 } from "@t3tools/shared/projectSettings";
 import type { EnvironmentThreadShell } from "./state/models.ts";
+import { getThreadSortTimestamp } from "./state/threadSort.ts";
 import {
   effectiveSnoozed,
   isShelvedSettled,
@@ -49,7 +50,13 @@ type MadoHomuGroupSettings = Pick<
 export function groupMadoHomuThreads<
   T extends Pick<
     EnvironmentThreadShell,
-    "id" | "createdAt" | "updatedAt" | "settledOverride" | "runtime"
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "latestUserMessageAt"
+    | "latestUserAuthoredMessageAt"
+    | "settledOverride"
+    | "runtime"
   > &
     ThreadSnoozeShell,
 >(
@@ -91,13 +98,18 @@ export function groupMadoHomuThreads<
   for (const { kind, threads: members } of groups) {
     // Manual sections never re-sort on activity: a row that jumps when a turn ends is a moving target.
     const manual = kind === "pinned" || kind === "custom";
+    // Scratch and Working keep the T3 Code list's clock: what the user last wrote, so an agent
+    // working on its own never moves a row.
+    const recent = kind === "scratch" || kind === "working";
     members.sort(
       (a, b) =>
         (manual
           ? (position.get(a.id) ?? -1) - (position.get(b.id) ?? -1) ||
             b.createdAt.localeCompare(a.createdAt)
-          : (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
-            b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
+          : recent
+            ? (kind === "scratch" ? Number(working(b)) - Number(working(a)) : 0) ||
+              getThreadSortTimestamp(b, "updated_at") - getThreadSortTimestamp(a, "updated_at")
+            : b.updatedAt.localeCompare(a.updatedAt)) || a.id.localeCompare(b.id),
     );
   }
   return groups;
@@ -200,6 +212,36 @@ export function filterMadoHomuCodeThreads<
     const settings = settingsByEnvironment.get(thread.environmentId);
     return settings === undefined || isMadoHomuThreadShownInCode(settings, thread);
   });
+}
+
+/** How many Scratch rows show before "Show more", and how many each "Show more" adds. */
+export const MADOHOMU_SCRATCH_PAGE = 10;
+
+/**
+ * The rows of a paged section: the first `count`, plus every later row that needs the user, so an
+ * approval or a question never hides behind "Show more". `more` is how many rows stay hidden.
+ */
+export function pageMadoHomuRows<T>(
+  rows: ReadonlyArray<T>,
+  count: number,
+  needsUser: (row: T) => boolean,
+): { readonly shown: T[]; readonly more: number } {
+  const shown = rows.filter((row, index) => index < count || needsUser(row));
+  return { shown, more: rows.length - shown.length };
+}
+
+/**
+ * What an empty Pinned section says. `canDrag` is false where rows only drag in a reorder mode,
+ * so the text never promises a gesture that does nothing.
+ */
+export function madohomuEmptyPinnedText(input: {
+  readonly hasThreads: boolean;
+  readonly canDrag: boolean;
+}): string {
+  if (!input.hasThreads) return "No threads yet. Choose New thread to start one.";
+  return input.canDrag
+    ? "Nothing pinned. Drag a thread here, or use Move to in its menu."
+    : "Nothing pinned. Use Move to in a thread's menu.";
 }
 
 export const MADOHOMU_ICON_COLORS = [

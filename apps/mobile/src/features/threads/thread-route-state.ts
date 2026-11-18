@@ -8,6 +8,8 @@ export type NewTaskDraftRouteParams = {
   readonly cloning?: string | string[];
   readonly draftId?: string | string[];
   readonly incomingShareId?: string | string[];
+  /** Started from a MadoHomu row: the new thread is pinned in MadoHomu. */
+  readonly madohomu?: boolean;
 };
 
 export function isDraftThreadRoute(

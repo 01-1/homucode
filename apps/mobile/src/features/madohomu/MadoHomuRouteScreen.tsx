@@ -3,7 +3,11 @@ import { useAtomValue } from "@effect/atom-react";
 import { LegendList } from "@legendapp/list/react-native";
 import type { MenuAction } from "@react-native-menu/menu";
 import {
+  findUntouchedMadoHomuThread,
+  groupMadoHomuThreads,
   MADOHOMU_SCRATCH_LABEL,
+  MADOHOMU_SCRATCH_PAGE,
+  madohomuEmptyPinnedText,
   madohomuIconColor,
   isMadoHomuThreadPinned,
 } from "@t3tools/client-runtime/madohomu";
@@ -17,7 +21,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { type ReactNode, useRef, useState } from "react";
-import { BackHandler, View } from "react-native";
+import { BackHandler, Pressable, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,6 +32,7 @@ import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
+import { Sheet } from "../../components/ui/Sheet";
 import { uuidv4 } from "../../lib/uuid";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useVisibleThreadShells } from "../../state/entities";
@@ -61,8 +66,9 @@ export function MadoHomuRouteScreen(props: StaticScreenProps<{ readonly environm
 
 const T3_PIN_MENU_TITLES = { pin: "Pin in T3 Code", unpin: "Unpin in T3 Code" } as const;
 
-// Which collapsible sections are open, kept while the app runs so leaving the screen keeps them.
-let rememberedExpanded: ReadonlySet<string> = new Set();
+// Sections flipped from their default open state, kept while the app runs so leaving the screen
+// keeps them.
+let rememberedToggled: ReadonlySet<string> = new Set();
 
 function promptSectionName(title: string, initialValue: string, onName: (name: string) => void) {
   Dialog.prompt({
@@ -84,6 +90,7 @@ function reorderSectionsOf(
   const sections: { id: string; title: string; threads: MadoHomuReorderThread[] }[] = [];
   const dimmed: string[] = [];
   for (const row of rows) {
+    if (row.type === "more") continue;
     const manual = row.kind === "pinned" || row.kind === "custom";
     if (row.type === "section") {
       if (manual) sections.push({ id: row.id, title: row.title, threads: [] });
@@ -104,7 +111,9 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState<ThreadId | null>(null);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => rememberedExpanded);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(() => rememberedToggled);
+  const [scratchCount, setScratchCount] = useState(MADOHOMU_SCRATCH_PAGE);
+  const [choosingProject, setChoosingProject] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reordering, setReordering] = useState(false);
   // A drop shows at once and holds until the next settings arrive from the server.
@@ -152,17 +161,19 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       (isListedThreadLineage(thread.lineage) || settings.madohomuThreads[thread.id] !== undefined),
   );
   const now = useThreadListNow(threads);
+  // Reorder mode needs a project to edit; without one the screen shows the picker instead.
+  const reorderMode = reordering && settings.madohomuEnabled && actions.project !== null;
   const rows = buildMadoHomuListRows({
     threads,
     settings,
     now,
-    expanded,
+    toggled,
+    scratchCount,
+    keepManualOpen: reorderMode,
     snoozeEnvironmentIds,
     queuedThreadKeys,
     isWorking: isThreadWorking,
   });
-  // Reorder mode needs a project to edit; without one the screen shows the picker instead.
-  const reorderMode = reordering && settings.madohomuEnabled && actions.project !== null;
   const edited = threads.find((thread) => thread.id === editing);
   const open = (threadId: ThreadId) =>
     navigation.dispatch(StackActions.push("Thread", { environmentId, threadId, madohomu: true }));
@@ -171,7 +182,14 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     pending.current = true;
     setBusy(true);
     await (async () => {
-      const threadId = await actions.createThread();
+      // An untouched empty thread from an earlier "New thread" is reused, not duplicated.
+      const untouched = findUntouchedMadoHomuThread(
+        groupMadoHomuThreads(threads, settings, { now })
+          .filter((group) => group.kind === "pinned" || group.kind === "custom")
+          .flatMap((group) => group.threads),
+        settings,
+      );
+      const threadId = untouched?.id ?? (await actions.createThread());
       if (threadId) open(threadId);
     })().finally(() => {
       pending.current = false;
@@ -179,10 +197,10 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     });
   };
   const toggleSection = (id: string) =>
-    setExpanded((current) => {
+    setToggled((current) => {
       const next = new Set(current);
       if (!next.delete(id)) next.add(id);
-      rememberedExpanded = next;
+      rememberedToggled = next;
       return next;
     });
   const addSection = () =>
@@ -205,6 +223,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           projectId: String(thread.projectId),
           branch: thread.branch,
           worktreePath: thread.worktreePath,
+          madohomu: true,
         },
       }),
     );
@@ -316,26 +335,32 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
 
   const renderRow = ({ item }: { readonly item: MadoHomuListRow }) => {
     if (item.type === "section") {
-      const label = `${item.title} (${item.count})`;
-      if (item.expanded !== null) {
-        const expanded = item.expanded;
-        return (
-          <ThreadListV2Section
-            label={label}
-            tone={item.kind === "snoozed" ? "snoozed" : "default"}
-            disclosure={{
-              expanded,
+      const label =
+        item.attention > 0
+          ? `${item.title} (${item.count}) · ${item.attention} need you`
+          : `${item.title} (${item.count})`;
+      const disclosure =
+        item.expanded === null
+          ? undefined
+          : {
+              expanded: item.expanded,
               onToggle: () => toggleSection(item.id),
-              accessibilityLabel: `${item.count} ${item.kind} ${item.count === 1 ? "thread" : "threads"}`,
-              accessibilityHint: `${expanded ? "Collapses" : "Expands"} the ${item.kind} threads.`,
-            }}
-          />
-        );
-      }
-      if (item.kind !== "custom") return <ThreadListV2Section label={label} />;
+              accessibilityLabel: `${item.title}, ${item.count} ${item.count === 1 ? "thread" : "threads"}${item.attention > 0 ? `, ${item.attention} need you` : ""}`,
+              accessibilityHint: `${item.expanded ? "Collapses" : "Expands"} the section.`,
+            };
+      const heading = (accessory?: ReactNode) => (
+        <ThreadListV2Section
+          label={label}
+          tone={item.kind === "snoozed" ? "snoozed" : "default"}
+          {...(disclosure ? { disclosure } : {})}
+          accessory={accessory}
+        />
+      );
+      if (item.kind !== "custom") return heading();
       const index = settings.madohomuSections.findIndex((section) => section.id === item.id);
       const sectionEdit = { disabled: !canEdit };
-      return (
+      // The heading's tap folds the section, so the section menu opens from its own button.
+      return heading(
         <Menu
           accessibilityLabel={`${item.title} section actions`}
           actions={[
@@ -386,25 +411,34 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
               });
           }}
         >
-          <ThreadListV2Section
-            label={label}
-            accessory={
-              <SymbolView
-                name="ellipsis"
-                size={14}
-                tintColorClassName="accent-foreground-muted"
-                type="monochrome"
-              />
-            }
-          />
-        </Menu>
+          <View className="px-1 py-1">
+            <SymbolView
+              name="ellipsis"
+              size={14}
+              tintColorClassName="accent-foreground-muted"
+              type="monochrome"
+            />
+          </View>
+        </Menu>,
       );
     }
     if (item.type === "empty") {
       return (
         <Text className="px-5 py-2 text-sm text-foreground-muted">
-          {item.kind === "pinned" ? "Create a thread to start chatting." : "No threads yet."}
+          {madohomuEmptyPinnedText({ hasThreads: threads.length > 0, canDrag: false })}
         </Text>
+      );
+    }
+    if (item.type === "more") {
+      return (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show more, ${item.count} more ${item.count === 1 ? "thread" : "threads"}`}
+          onPress={() => setScratchCount((count) => count + MADOHOMU_SCRATCH_PAGE)}
+          className="px-5 py-3"
+        >
+          <Text className="text-sm text-foreground-muted">Show more ({item.count})</Text>
+        </Pressable>
       );
     }
     const { row } = item;
@@ -488,10 +522,37 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                       },
                     ]
                   : []),
+              ]
+        }
+        menus={
+          reorderMode
+            ? []
+            : [
                 {
+                  title: "MadoHomu options",
                   icon: "gearshape",
-                  accessibilityLabel: "MadoHomu settings",
-                  onPress: () => openSettings(navigation, "SettingsMadoHomu"),
+                  items: [
+                    ...(settings.madohomuEnabled
+                      ? [
+                          {
+                            id: "project",
+                            title: "Change project…",
+                            icon: "folder",
+                            disabled: !actions.canWrite,
+                            onPress: () => {
+                              openSwipeableRef.current?.close();
+                              setChoosingProject(true);
+                            },
+                          },
+                        ]
+                      : []),
+                    {
+                      id: "settings",
+                      title: "MadoHomu settings",
+                      icon: "gearshape",
+                      onPress: () => openSettings(navigation, "SettingsMadoHomu"),
+                    },
+                  ],
                 },
               ]
         }
@@ -563,6 +624,25 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           renderItem={renderRow}
         />
       )}
+      {settings.madohomuEnabled && choosingProject ? (
+        <Sheet title="Change project" onClose={() => setChoosingProject(false)}>
+          <ScrollView
+            contentInsetAdjustmentBehavior="automatic"
+            contentContainerClassName="gap-4 p-5 pb-12"
+          >
+            <MadoHomuProjectPicker
+              environmentId={environmentId}
+              projectId={settings.madohomuProjectId}
+              disabled={!actions.canWrite}
+              allowClear={false}
+              onChange={(madohomuProjectId) => {
+                setChoosingProject(false);
+                void actions.save({ madohomuProjectId });
+              }}
+            />
+          </ScrollView>
+        </Sheet>
+      ) : null}
       {settings.madohomuEnabled && edited ? (
         <MadoHomuThreadEditor
           key={edited.id}

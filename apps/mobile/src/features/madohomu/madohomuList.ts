@@ -1,6 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   groupMadoHomuThreads,
+  MADOHOMU_SCRATCH_PAGE,
+  pageMadoHomuRows,
   reorderMadoHomuThreads,
   type MadoHomuGroup,
   type MadoHomuGroupKind,
@@ -30,13 +32,22 @@ export interface MadoHomuSectionRow {
   readonly id: string;
   readonly title: string;
   readonly count: number;
+  /** Null where the section cannot collapse right now (manual sections in Reorder mode). */
   readonly expanded: boolean | null;
+  /** Rows needing the user that a collapsed section hides; 0 when expanded. */
+  readonly attention: number;
 }
 
 export interface MadoHomuEmptyRow {
   readonly type: "empty";
   readonly key: string;
   readonly kind: MadoHomuGroupKind;
+}
+
+export interface MadoHomuMoreRow {
+  readonly type: "more";
+  readonly key: string;
+  readonly count: number;
 }
 
 export interface MadoHomuThreadRow {
@@ -49,16 +60,32 @@ export interface MadoHomuThreadRow {
   readonly canMoveDown: boolean;
 }
 
-export type MadoHomuListRow = MadoHomuSectionRow | MadoHomuEmptyRow | MadoHomuThreadRow;
+export type MadoHomuListRow =
+  | MadoHomuSectionRow
+  | MadoHomuEmptyRow
+  | MadoHomuMoreRow
+  | MadoHomuThreadRow;
 
-const COLLAPSIBLE: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed", "settled"]);
+const COLLAPSED_BY_DEFAULT: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed", "settled"]);
 const ALWAYS_SHOWN: ReadonlySet<MadoHomuGroupKind> = new Set(["pinned", "custom"]);
+
+/** Whether a thread waits on the user: an approval or a question. */
+function madohomuNeedsUser(
+  thread: Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput">,
+): boolean {
+  return thread.hasPendingApprovals || thread.hasPendingUserInput;
+}
 
 export function buildMadoHomuListRows(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly settings: MadoHomuListSettings;
   readonly now: string;
-  readonly expanded: ReadonlySet<string>;
+  /** Ids of sections the user flipped from their default (open, or closed for Snoozed/Settled). */
+  readonly toggled: ReadonlySet<string>;
+  /** How many Scratch rows show before "Show more". */
+  readonly scratchCount?: number;
+  /** Reorder mode: Pinned and custom sections stay open so every drop target shows. */
+  readonly keepManualOpen?: boolean;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys?: ReadonlySet<string>;
   readonly isWorking?: (thread: EnvironmentThreadShell) => boolean;
@@ -70,8 +97,11 @@ export function buildMadoHomuListRows(input: {
   });
   for (const group of groups) {
     if (group.threads.length === 0 && !ALWAYS_SHOWN.has(group.kind)) continue;
-    const collapsible = COLLAPSIBLE.has(group.kind);
-    const expanded = collapsible ? input.expanded.has(group.id) : null;
+    const manual = ALWAYS_SHOWN.has(group.kind);
+    const expanded =
+      manual && input.keepManualOpen
+        ? null
+        : COLLAPSED_BY_DEFAULT.has(group.kind) === input.toggled.has(group.id);
     rows.push({
       type: "section",
       key: `section:${group.id}`,
@@ -80,22 +110,33 @@ export function buildMadoHomuListRows(input: {
       title: group.title,
       count: group.threads.length,
       expanded,
+      attention: expanded === false ? group.threads.filter(madohomuNeedsUser).length : 0,
     });
     if (expanded === false) continue;
     if (group.threads.length === 0) {
-      rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
+      // An empty custom section shows only its heading.
+      if (group.kind === "pinned") {
+        rows.push({ type: "empty", key: `empty:${group.id}`, kind: group.kind });
+      }
       continue;
     }
-    const manual = ALWAYS_SHOWN.has(group.kind);
+    const { shown, more } =
+      group.kind === "scratch"
+        ? pageMadoHomuRows(
+            group.threads,
+            input.scratchCount ?? MADOHOMU_SCRATCH_PAGE,
+            madohomuNeedsUser,
+          )
+        : { shown: group.threads, more: 0 };
     const items = buildThreadListV2ListItems({
-      items: group.threads.map((thread, index) => ({
+      items: shown.map((thread, index) => ({
         thread,
         variant: group.kind === "settled" ? ("slim" as const) : ("card" as const),
         snoozed: group.kind === "snoozed",
         pinned: thread.pinnedAt != null,
         wokeAt:
           group.kind === "settled" ? null : resolveThreadListV2WokeAt(thread, { now: input.now }),
-        isLast: index === group.threads.length - 1,
+        isLast: index === shown.length - 1,
       })),
       pendingTasks: [],
       snoozeLabelNow: input.now,
@@ -114,6 +155,13 @@ export function buildMadoHomuListRows(input: {
         canMoveDown: manual && index < items.length - 1,
       });
     });
+    if (more > 0) {
+      rows.push({
+        type: "more",
+        key: `more:${group.id}`,
+        count: more,
+      });
+    }
   }
   return rows;
 }

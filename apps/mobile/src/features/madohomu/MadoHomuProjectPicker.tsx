@@ -19,6 +19,8 @@ export function MadoHomuProjectPicker(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly disabled: boolean;
+  /** Offers "Clear project"; the screen's own Change project menu leaves it out. */
+  readonly allowClear?: boolean;
   readonly onChange: (projectId: ProjectId | null) => void;
 }) {
   const navigation = useNavigation();
@@ -59,6 +61,7 @@ export function MadoHomuProjectPicker(props: {
             <ListActionRow
               key={project.id}
               label={project.title}
+              icon={props.projectId === project.id ? "checkmark" : undefined}
               detail={props.projectId === project.id ? "Selected" : undefined}
               disabled={props.disabled}
               onPress={() => props.onChange(project.id)}
@@ -66,7 +69,7 @@ export function MadoHomuProjectPicker(props: {
           ))}
         </View>
       ) : null}
-      {props.projectId !== null ? (
+      {props.allowClear !== false && props.projectId !== null ? (
         <ListActionRow
           label="Clear project"
           disabled={props.disabled}

@@ -65,6 +65,7 @@ import {
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useProjectClone } from "../../state/projectClones";
 import { projectEnvironment } from "../../state/projects";
+import { serverEnvironment } from "../../state/server";
 import { sourceControlEnvironment } from "../../state/sourceControl";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProjectCloneBanner } from "./ProjectCloneBanner";
@@ -157,6 +158,8 @@ export function NewTaskDraftScreen(props: {
   };
   readonly draftId?: string;
   readonly incomingShareId?: string;
+  /** Started from a MadoHomu row: pin the new thread there when it is in MadoHomu's project. */
+  readonly madohomu?: boolean;
 }) {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
@@ -228,6 +231,7 @@ export function NewTaskDraftScreen(props: {
     }
   };
   const deleteProject = useAtomCommand(projectEnvironment.delete, { reportFailure: false });
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings);
   const removeClonedProject = async () => {
     if (!selectedProject) return;
     const removed = selectedProject;
@@ -673,10 +677,26 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
     promptInputRef.current?.blur();
+    const madohomuSettings = selectedEnvironmentServerConfig?.settings;
+    const madohomu =
+      props.madohomu === true &&
+      madohomuSettings?.madohomuEnabled === true &&
+      madohomuSettings.madohomuProjectId === selectedProject.id;
+    if (madohomu) {
+      void updateSettings({
+        environmentId: selectedProject.environmentId,
+        input: {
+          patch: {
+            madohomuThreads: { [message.threadId]: { icon: null, prompt: "", pinned: true } },
+          },
+        },
+      });
+    }
     navigation.dispatch(
-      CommonActions.setParams(
-        submittedThreadParams(String(message.environmentId), String(message.threadId)),
-      ),
+      CommonActions.setParams({
+        ...submittedThreadParams(String(message.environmentId), String(message.threadId)),
+        ...(madohomu ? { madohomu: true } : {}),
+      }),
     );
     // The composer has moved to the submitted thread; a pick still converting
     // would otherwise resurrect this draft.

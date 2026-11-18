@@ -41,7 +41,7 @@ const summary = (rows: ReturnType<typeof buildMadoHomuListRows>) =>
 
 describe("buildMadoHomuListRows", () => {
   it("lists every section in order, keeps empty custom sections and hides empty Scratch", () => {
-    const rows = buildMadoHomuListRows({ threads, settings, now: NOW, expanded: new Set() });
+    const rows = buildMadoHomuListRows({ threads, settings, now: NOW, toggled: new Set() });
     expect(summary(rows)).toEqual([
       "section:pinned",
       b,
@@ -49,7 +49,6 @@ describe("buildMadoHomuListRows", () => {
       "section:work",
       c,
       "section:empty",
-      "empty:empty",
       "section:scratch",
       s,
     ]);
@@ -75,16 +74,84 @@ describe("buildMadoHomuListRows", () => {
       threads: settled,
       settings,
       now: NOW,
-      expanded: new Set(),
+      toggled: new Set(),
     });
     expect(summary(collapsed).slice(-1)).toEqual(["section:settled"]);
     const open = buildMadoHomuListRows({
       threads: settled,
       settings,
       now: NOW,
-      expanded: new Set(["settled"]),
+      toggled: new Set(["settled"]),
     });
     expect(summary(open).slice(-2)).toEqual(["section:settled", "done"]);
+  });
+
+  it("collapses any section, counting the rows that need the user, except in Reorder mode", () => {
+    const asking = threads.map((thread) =>
+      thread.id === b ? { ...thread, hasPendingApprovals: true } : thread,
+    );
+    const rows = buildMadoHomuListRows({
+      threads: asking,
+      settings,
+      now: NOW,
+      toggled: new Set(["pinned"]),
+    });
+    expect(summary(rows).slice(0, 2)).toEqual(["section:pinned", "section:work"]);
+    expect(rows[0]).toMatchObject({ expanded: false, attention: 1 });
+    const reorder = buildMadoHomuListRows({
+      threads: asking,
+      settings,
+      now: NOW,
+      toggled: new Set(["pinned"]),
+      keepManualOpen: true,
+    });
+    expect(summary(reorder).slice(0, 3)).toEqual(["section:pinned", b, a]);
+    expect(reorder[0]).toMatchObject({ expanded: null, attention: 0 });
+  });
+
+  it("pages Scratch but keeps every row that needs the user", () => {
+    const scratch = Array.from({ length: 5 }, (_, index) =>
+      makeThreadShellFixture({
+        id: ThreadId.make(`x${index}`),
+        title: `X${index}`,
+        latestUserMessageAt: `2026-06-01T0${9 - index}:00:00.000Z`,
+        latestUserAuthoredMessageAt: `2026-06-01T0${9 - index}:00:00.000Z`,
+        hasPendingUserInput: index === 4,
+      }),
+    );
+    const rows = buildMadoHomuListRows({
+      threads: [...threads.slice(0, 3), ...scratch],
+      settings,
+      now: NOW,
+      toggled: new Set(),
+      scratchCount: 2,
+    });
+    const ids = summary(rows);
+    expect(ids.slice(ids.indexOf("section:scratch"))).toEqual([
+      "section:scratch",
+      "x0",
+      "x1",
+      "x4",
+      "more:scratch",
+    ]);
+    expect(rows.at(-1)).toMatchObject({ type: "more", count: 3 });
+  });
+
+  it("says nothing pinned in an empty Pinned section", () => {
+    const rows = buildMadoHomuListRows({
+      threads: threads.filter((thread) => thread.id === s),
+      settings: { ...settings, madohomuThreads: {}, madohomuThreadOrder: [] },
+      now: NOW,
+      toggled: new Set(),
+    });
+    expect(summary(rows)).toEqual([
+      "section:pinned",
+      "empty:pinned",
+      "section:work",
+      "section:empty",
+      "section:scratch",
+      s,
+    ]);
   });
 });
 
