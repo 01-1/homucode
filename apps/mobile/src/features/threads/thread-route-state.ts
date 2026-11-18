@@ -41,3 +41,19 @@ export function draftRouteIdentity(draft: NewTaskDraftRouteParams): string {
     first(draft.incomingShareId),
   ]);
 }
+
+/** `{ madohomu: true }` when the nearest thread route was opened from MadoHomu. */
+export function madohomuRouteFlag(
+  state:
+    | {
+        readonly index: number;
+        readonly routes: ReadonlyArray<{ readonly name: string; readonly params?: object }>;
+      }
+    | undefined,
+): { readonly madohomu?: true } {
+  const thread = state?.routes
+    .slice(0, state.index + 1)
+    .findLast((route) => route.name === "Thread");
+  const params = thread?.params as { readonly madohomu?: unknown } | undefined;
+  return params?.madohomu === true ? { madohomu: true } : {};
+}

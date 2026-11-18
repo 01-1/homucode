@@ -301,6 +301,12 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       ...(manual
         ? [
             {
+              id: "extra:reorder",
+              title: "Reorder…",
+              image: "arrow.up.arrow.down",
+              attributes: disabled,
+            } satisfies MenuAction,
+            {
               id: "extra:up",
               title: "Move up",
               image: "arrow.up",
@@ -320,6 +326,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const handleMadoHomuAction = (thread: EnvironmentThreadShell, event: string) => {
     if (!canEdit) return;
     if (event === "extra:edit") setEditing(thread.id);
+    else if (event === "extra:reorder") setReordering(true);
     else if (event === "extra:scratch") void actions.setThreadPlace(thread.id, null);
     else if (event === "extra:new-section") {
       promptSectionName("New section", "", (name) => {
@@ -338,10 +345,15 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
 
   const renderRow = ({ item }: { readonly item: MadoHomuListRow }) => {
     if (item.type === "section") {
-      const label = `${item.title} (${item.count})`;
       const badge =
         item.attention > 0 ? (
-          <View className="shrink-0 rounded-full border border-warning-border bg-warning px-1.5">
+          <View className="shrink-0 flex-row items-center gap-0.5 rounded-full border border-warning-border bg-warning px-1.5">
+            <SymbolView
+              name="exclamationmark.shield"
+              size={10}
+              tintColorClassName="accent-warning-foreground"
+              type="monochrome"
+            />
             <Text className="text-2xs font-t3-medium text-warning-foreground">
               {item.attention}
             </Text>
@@ -358,8 +370,9 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
             };
       const heading = (accessory?: ReactNode) => (
         <ThreadListV2Section
-          label={label}
+          label={item.title}
           badge={badge}
+          count={item.count}
           tone={item.kind === "snoozed" ? "snoozed" : "default"}
           {...(disclosure ? { disclosure } : {})}
           accessory={accessory}
@@ -554,7 +567,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
                     {
                       id: "settings",
                       title: "MadoHomu settings",
-                      icon: "gearshape",
+                      icon: "slider.horizontal.3",
                       onPress: () => openSettings(navigation, "SettingsMadoHomu"),
                     },
                   ],
