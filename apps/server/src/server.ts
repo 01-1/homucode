@@ -223,6 +223,7 @@ import * as ThreadSettlementService from "./orchestration-v2/ThreadSettlementSer
 import * as IdleCompactionService from "./orchestration-v2/IdleCompactionService.ts";
 import * as AutoSteerQueuedService from "./orchestration-v2/AutoSteerQueuedService.ts";
 import * as ThreadTitleIdReconciler from "./orchestration-v2/ThreadTitleIdReconciler.ts";
+import * as ProviderIdleAutoUpdate from "./provider/ProviderIdleAutoUpdate.ts";
 import * as ThreadPullRequestService from "./orchestration-v2/ThreadPullRequestService.ts";
 import * as RunFinalizationService from "./orchestration-v2/RunFinalizationService.ts";
 import * as ProjectionMaintenance from "./orchestration-v2/ProjectionMaintenance.ts";
@@ -738,6 +739,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ).pipe(Layer.provide(AutoreviewService.layer)),
   ProviderUsageLimitsIngestion.layer,
   layerProviderInstallationRefresh,
+  ProviderIdleAutoUpdate.layer,
   ProviderInstallation.layer,
   ReplayMarkers.layer,
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),

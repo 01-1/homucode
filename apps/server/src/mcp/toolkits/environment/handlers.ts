@@ -1,12 +1,15 @@
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as Settings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { readCaller, unavailable } from "../../threadAccess.ts";
-import { EnvironmentToolkit } from "./tools.ts";
+import { AGENT_SETTINGS, AgentSettingsPatch, EnvironmentToolkit } from "./tools.ts";
+
+const decodeAgentSettings = Schema.decodeUnknownEffect(AgentSettingsPatch);
 
 export function preferences(settings: ServerSettings) {
   const {
@@ -18,6 +21,10 @@ export function preferences(settings: ServerSettings) {
   } = settings;
   const characters = Array.from(sourceControlWritingStyle.customInstructions);
   return {
+    ...(Object.fromEntries(AGENT_SETTINGS.map((key) => [key, settings[key]])) as Pick<
+      ServerSettings,
+      (typeof AGENT_SETTINGS)[number]
+    >),
     defaultThreadEnvMode,
     newWorktreesStartFromOrigin,
     enableProviderUpdateChecks,
@@ -55,8 +62,30 @@ export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
     }),
   ),
   t3_environment_preferences_update: McpToolAccess.writesEnvironment(
-    (patch, check) =>
+    ({ settings: loose, ...preferencesPatch }, check) =>
       Effect.gen(function* () {
+        const refused = Object.keys(loose ?? {}).filter(
+          (key) => !(AGENT_SETTINGS as ReadonlyArray<string>).includes(key),
+        );
+        if (refused.length > 0) {
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: `Agents cannot change ${refused.slice(0, 5).join(", ")}. Settable: ${AGENT_SETTINGS.join(", ")}.`,
+          });
+        }
+        const settingsPatch =
+          loose === undefined
+            ? {}
+            : yield* decodeAgentSettings(loose).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new OrchestratorMcpFailure({
+                      code: "invalid_request",
+                      message: `Invalid settings: ${error.message}`,
+                    }),
+                ),
+              );
+        const patch = { ...preferencesPatch, ...settingsPatch };
         const scope = yield* McpInvocationContext.McpInvocationContext;
         const executor = yield* ThreadCommandExecutor.ThreadCommandExecutor;
         const update = Effect.gen(function* () {

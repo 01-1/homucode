@@ -17,7 +17,7 @@ import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 
-export function MobileWorkAssistancePicker({
+function MobileWorkAssistancePicker({
   value,
   onChange,
   environmentId,
@@ -195,7 +195,11 @@ export function MobileExtraSettings({ environmentId }: { readonly environmentId:
             ? "Restart to apply your saved choice."
             : "Restart to apply changes."}
       </Text>
-      <Text>Work assistance</Text>
+      <Text>Work assistance (not recommended)</Text>
+      <Text className="text-foreground-muted">
+        Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
+        that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
+      </Text>
       <MobileWorkAssistancePicker
         environmentId={environmentId}
         value={settings.workAssistanceTarget}
