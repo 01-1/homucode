@@ -27,6 +27,12 @@
         ]
       }
     ],
+    // React Native libraries import react without depending on @types/react. In pnpm's
+    // global virtual store they cannot reach a hoisted copy, so point them at ours.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"]
+    },
     "allowImportingTsExtensions": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,

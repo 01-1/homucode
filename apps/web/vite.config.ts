@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Vite config runs before any Effect runtime.
 import * as NodeFSP from "node:fs/promises";
+import * as NodeURL from "node:url";
 import * as NodeZlib from "node:zlib";
 
 import react from "@vitejs/plugin-react";
@@ -385,7 +386,7 @@ export default defineConfig(({ command }) => {
       "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
     },
     resolve: {
-      tsconfigPaths: true,
+      alias: { "~": NodeURL.fileURLToPath(new URL("./src", import.meta.url)) },
       dedupe: ["react", "react-dom"],
     },
     experimental: {

@@ -77,19 +77,22 @@ if (installStatus !== 0 || cancelSignal) {
 
 // pnpm cannot clone or hardlink across filesystems, so a store on another
 // device silently turns every worktree install into a full copy.
-const storeDir: unknown = JSON.parse(
-  NodeFS.readFileSync(NodePath.join(worktree, "node_modules", ".modules.yaml"), "utf8"),
-).storeDir;
+const nodeModules = NodePath.join(worktree, "node_modules");
+const modules = JSON.parse(
+  NodeFS.readFileSync(NodePath.join(nodeModules, ".modules.yaml"), "utf8"),
+);
+const storeDir: unknown = modules.storeDir;
+const virtualStore = NodePath.resolve(nodeModules, modules.virtualStoreDir ?? ".");
 if (
   typeof storeDir === "string" &&
-  NodeFS.statSync(storeDir).dev !== NodeFS.statSync(NodePath.join(worktree, "node_modules")).dev
+  NodeFS.statSync(storeDir).dev !== NodeFS.statSync(virtualStore).dev
 ) {
   process.stderr.write(
     [
       "",
-      "WARNING: the pnpm store is on a different filesystem than this worktree.",
+      "WARNING: the pnpm store is on a different filesystem than the virtual store.",
       `  store:    ${storeDir}`,
-      `  worktree: ${worktree}`,
+      `  virtual store: ${virtualStore}`,
       "pnpm cannot hardlink or clone across filesystems, so it copied every package into node_modules.",
       "Fix: put the store on the worktree's filesystem, for example:",
       `  pnpm config set store-dir ${JSON.stringify(NodePath.join(NodePath.dirname(worktree), ".pnpm-store"))} --global`,

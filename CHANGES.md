@@ -90,6 +90,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Smaller items
 
+- **Smaller HomuCode source worktrees.** pnpm shares dependency files across checkouts. A fresh install puts only a few thousand entries in the root `node_modules` directory, down from about 220,000. After updating an existing checkout, run `vp i` to switch its dependency links.
 - On pbox, the Vite+ wrapper runs heavy checks on Boat. It reuses one warm box, stops it after 15 idle minutes, and runs one low-priority local check at a time during a Boat outage. Android dev-client cache misses also build on Boat.
 
 - Schedule and usage-stop fixes, settle timestamps and agent message timestamps, a human-message timestamp in activity, thread title instructions that override the default length limits, project router creation notices (off by default; see [docs/project-router-notices.md](./docs/project-router-notices.md)), and thread and project pins kept per device.
