@@ -44,9 +44,21 @@ const summary = (rows: ReturnType<typeof buildMadoHomuListRows>) =>
     row.type === "thread" ? row.row.item.thread.id : `${row.type}:${row.key.split(":")[1]}`,
   );
 
+const localSettled = {
+  unloadedSettledCount: 0,
+  settledLimit: 10,
+  isListedSettled: () => true,
+};
+
 describe("buildMadoHomuListRows", () => {
   it("lists every section in order, keeps empty custom sections and hides empty Scratch", () => {
-    const rows = buildMadoHomuListRows({ threads, settings, now: NOW, toggled: new Set() });
+    const rows = buildMadoHomuListRows({
+      ...localSettled,
+      threads,
+      settings,
+      now: NOW,
+      toggled: new Set(),
+    });
     expect(summary(rows)).toEqual([
       "section:pinned",
       b,
@@ -67,29 +79,54 @@ describe("buildMadoHomuListRows", () => {
     ]);
   });
 
-  it("collapses Settled until it is expanded", () => {
-    const settled = [
-      ...threads,
+  it("counts unloaded Settled threads and lists only the available page when expanded", () => {
+    const below = ThreadId.make("below");
+    const options = {
+      threads,
+      settings,
+      now: NOW,
+      unloadedSettledCount: 40,
+      settledLimit: 1,
+      isListedSettled: (thread: (typeof threads)[number]) => thread.id !== below,
+    };
+    const collapsed = buildMadoHomuListRows({ ...options, toggled: new Set() });
+    expect(collapsed.at(-1)).toMatchObject({ kind: "settled", count: 40, expanded: false });
+    const loading = buildMadoHomuListRows({ ...options, toggled: new Set(["settled"]) });
+    expect(summary(loading).slice(-2)).toEqual(["section:settled", "more:settled"]);
+
+    const settled = ["shown", "next", "below"].map((id, index) =>
       makeThreadShellFixture({
-        id: ThreadId.make("done"),
-        title: "Done",
+        id: ThreadId.make(id),
+        settledAt: `2026-06-01T0${3 - index}:00:00.000Z`,
         settledOverride: "settled",
       }),
-    ];
-    const collapsed = buildMadoHomuListRows({
-      threads: settled,
-      settings,
-      now: NOW,
-      toggled: new Set(),
-    });
-    expect(summary(collapsed).slice(-1)).toEqual(["section:settled"]);
+    );
     const open = buildMadoHomuListRows({
-      threads: settled,
-      settings,
-      now: NOW,
+      ...options,
+      threads: [...threads, ...settled],
       toggled: new Set(["settled"]),
+      unloadedSettledCount: 37,
     });
-    expect(summary(open).slice(-2)).toEqual(["section:settled", "done"]);
+    expect(summary(open).slice(-3)).toEqual(["section:settled", "shown", "more:settled"]);
+    expect(open.at(-3)).toMatchObject({ count: 40, expanded: true });
+    expect(open.at(-1)).toMatchObject({ kind: "settled", count: 39 });
+    const more = buildMadoHomuListRows({
+      ...options,
+      threads: [...threads, ...settled],
+      toggled: new Set(["settled"]),
+      settledLimit: 25,
+      unloadedSettledCount: 37,
+    });
+    expect(summary(more).slice(-4)).toEqual(["section:settled", "shown", "next", "more:settled"]);
+    const all = buildMadoHomuListRows({
+      ...options,
+      threads: [...threads, ...settled],
+      toggled: new Set(["settled"]),
+      settledLimit: 25,
+      isListedSettled: () => true,
+      unloadedSettledCount: 0,
+    });
+    expect(summary(all).slice(-4)).toEqual(["section:settled", "shown", "next", "below"]);
   });
 
   it("collapses any section, counting the rows that need the user, except in Reorder mode", () => {
@@ -103,6 +140,7 @@ describe("buildMadoHomuListRows", () => {
             : thread,
     );
     const rows = buildMadoHomuListRows({
+      ...localSettled,
       threads: asking,
       settings,
       now: NOW,
@@ -112,6 +150,7 @@ describe("buildMadoHomuListRows", () => {
     expect(rows[0]).toMatchObject({ expanded: false, attention: 2 });
     expect(rows[1]).toMatchObject({ expanded: false, attention: 1 });
     const reorder = buildMadoHomuListRows({
+      ...localSettled,
       threads: asking,
       settings,
       now: NOW,
@@ -135,6 +174,7 @@ describe("buildMadoHomuListRows", () => {
       }),
     );
     const rows = buildMadoHomuListRows({
+      ...localSettled,
       threads: [...threads.slice(0, 3), ...scratch],
       settings,
       now: NOW,
@@ -156,6 +196,7 @@ describe("buildMadoHomuListRows", () => {
 
   it("says nothing pinned in an empty Pinned section", () => {
     const rows = buildMadoHomuListRows({
+      ...localSettled,
       threads: threads.filter((thread) => thread.id === s),
       settings: { ...settings, madohomuThreads: {}, madohomuThreadOrder: [] },
       now: NOW,
@@ -177,6 +218,7 @@ describe("buildMadoHomuListRows", () => {
     const w = ThreadId.make("w");
     const g = ThreadId.make("g");
     const rows = buildMadoHomuListRows({
+      ...localSettled,
       threads: [
         ...threads,
         makeThreadShellFixture({ id: w, title: "W" }),

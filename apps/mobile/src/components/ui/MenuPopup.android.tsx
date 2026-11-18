@@ -4,11 +4,13 @@ import {
   Column,
   DropdownMenu,
   DropdownMenuItem,
+  HorizontalDivider,
   RNHostView,
   Text,
 } from "@expo/ui/jetpack-compose";
 import { defaultMinSize, padding, size, width } from "@expo/ui/jetpack-compose/modifiers";
 import type { MenuAction } from "@react-native-menu/menu";
+import { Fragment, type ReactNode } from "react";
 import { Pressable } from "react-native";
 import { resolveScaledTextRole } from "../../lib/appearancePreferences";
 
@@ -66,31 +68,24 @@ export function MenuPopupItems(
   const muted = colors["--color-foreground-muted"];
   // A fixed native item height clips wrapped labels; a minimum lets each row grow.
   const itemModifiers = [width(props.menuWidth), defaultMinSize({ minHeight: menuItemHeight })];
-  return (
-    <>
-      {props.parent ? (
-        <DropdownMenuItem onClick={props.onBack} modifiers={itemModifiers}>
-          <DropdownMenuItem.LeadingIcon>
-            <MenuIcon name="arrow.left" onPress={props.onBack} />
-          </DropdownMenuItem.LeadingIcon>
-          <DropdownMenuItem.Text>
-            <Text color={foreground} style={{ typography: "bodyLarge", ...body }}>
-              {props.parent.title}
-            </Text>
-          </DropdownMenuItem.Text>
-        </DropdownMenuItem>
-      ) : props.title ? (
-        <Text
-          color={muted}
-          style={{ typography: "bodySmall", ...caption }}
-          modifiers={[padding(16 * scale, 8 * scale, 16 * scale, 8 * scale)]}
-        >
-          {props.title}
-        </Text>
-      ) : null}
-      {props.actions.map((action, index) => (
+  const renderItems = (actions: readonly MenuAction[]): ReactNode =>
+    actions.map((action, index) => {
+      const key = action.id ?? `${index}-${action.title}`;
+      if (action.attributes?.hidden) return null;
+      if (action.displayInline && !action.title && action.subactions?.length) {
+        return (
+          <Fragment key={key}>
+            {index > 0 ? <HorizontalDivider color={colors["--color-border"]} /> : null}
+            {renderItems(action.subactions)}
+            {index < actions.length - 1 ? (
+              <HorizontalDivider color={colors["--color-border"]} />
+            ) : null}
+          </Fragment>
+        );
+      }
+      return (
         <DropdownMenuItem
-          key={action.id ?? `${index}-${action.title}`}
+          key={key}
           enabled={!action.attributes?.disabled}
           modifiers={itemModifiers}
           onClick={() => props.onPress(action)}
@@ -145,7 +140,31 @@ export function MenuPopupItems(
             </DropdownMenuItem.TrailingIcon>
           ) : null}
         </DropdownMenuItem>
-      ))}
+      );
+    });
+  return (
+    <>
+      {props.parent ? (
+        <DropdownMenuItem onClick={props.onBack} modifiers={itemModifiers}>
+          <DropdownMenuItem.LeadingIcon>
+            <MenuIcon name="arrow.left" onPress={props.onBack} />
+          </DropdownMenuItem.LeadingIcon>
+          <DropdownMenuItem.Text>
+            <Text color={foreground} style={{ typography: "bodyLarge", ...body }}>
+              {props.parent.title}
+            </Text>
+          </DropdownMenuItem.Text>
+        </DropdownMenuItem>
+      ) : props.title ? (
+        <Text
+          color={muted}
+          style={{ typography: "bodySmall", ...caption }}
+          modifiers={[padding(16 * scale, 8 * scale, 16 * scale, 8 * scale)]}
+        >
+          {props.title}
+        </Text>
+      ) : null}
+      {renderItems(props.actions)}
     </>
   );
 }

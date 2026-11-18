@@ -83,7 +83,18 @@ export function useMadoHomuThreadMenu(input: {
             state: pinned ? "off" : "on",
             attributes: disabled,
           },
-          { id: "extra:new-section", title: "New section…", attributes: disabled },
+          {
+            title: "",
+            displayInline: true,
+            subactions: [
+              {
+                id: "extra:new-section",
+                title: "New section…",
+                image: "folder.badge.plus",
+                attributes: disabled,
+              },
+            ],
+          },
         ],
       },
       ...(manual && input.onReorder
@@ -112,7 +123,7 @@ export function useMadoHomuThreadMenu(input: {
             } satisfies MenuAction,
           ]
         : []),
-      { id: "extra:edit", title: "Edit…", image: "slider.horizontal.3", attributes: disabled },
+      { id: "extra:edit", title: "Edit…", image: "pencil", attributes: disabled },
     ];
   };
 

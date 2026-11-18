@@ -85,7 +85,10 @@ import {
   useHardwareKeyboardCommand,
 } from "../keyboard/hardwareKeyboardCommands";
 import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
-import { resolveDraftProjectSelection } from "./new-task-project-selection";
+import {
+  madohomuDraftSendBlockReason,
+  resolveDraftProjectSelection,
+} from "./new-task-project-selection";
 import {
   resolveNewTaskBranchLabel,
   resolveNewTaskWorkspaceLabel,
@@ -158,7 +161,7 @@ export function NewTaskDraftScreen(props: {
   };
   readonly draftId?: string;
   readonly incomingShareId?: string;
-  /** Started from a MadoHomu row: pin the new thread there when it is in MadoHomu's project. */
+  /** Started from a MadoHomu row: the draft must still target that MadoHomu project. */
   readonly madohomu?: boolean;
 }) {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
@@ -658,6 +661,22 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
 
+    const madohomu = props.madohomu === true;
+    if (madohomu) {
+      const settings = appAtomRegistry.get(
+        serverEnvironment.configValueAtom(selectedProject.environmentId),
+      )?.settings;
+      const blockReason = madohomuDraftSendBlockReason(
+        props.initialProjectRef,
+        selectedProject,
+        settings,
+      );
+      if (blockReason !== null) {
+        Dialog.alert("MadoHomu draft kept", blockReason);
+        return null;
+      }
+    }
+
     const message = flow.buildPendingTaskMessage(creationMetadata, {
       currentCheckoutBranch: queuesInsteadOfStarting ? null : flow.currentCheckoutBranchName,
     });
@@ -677,11 +696,6 @@ export function NewTaskDraftScreen(props: {
       return null;
     }
     promptInputRef.current?.blur();
-    const madohomuSettings = selectedEnvironmentServerConfig?.settings;
-    const madohomu =
-      props.madohomu === true &&
-      madohomuSettings?.madohomuEnabled === true &&
-      madohomuSettings.madohomuProjectId === selectedProject.id;
     if (madohomu) {
       void updateSettings({
         environmentId: selectedProject.environmentId,

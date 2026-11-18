@@ -8,6 +8,7 @@ import {
   isOrchestrationV2WorkActive,
   type EnvironmentId,
   type OrchestrationV2Subagent,
+  type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { deriveSubagentElapsedMs, formatDuration } from "@t3tools/shared/orchestrationTiming";
@@ -48,7 +49,9 @@ export function useThreadTurnSubagents(target: AgentsTarget | null): ThreadTurnS
   );
 }
 
-export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
+export function ThreadAgentsSheet({
+  route,
+}: StaticScreenProps<AgentsTarget & { readonly projectId?: ProjectId }>) {
   const target = route.params;
   const navigation = useNavigation();
   const openInspector = useOpenThreadInspector();
@@ -67,7 +70,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
     [subagents],
   );
 
-  const openChildThread = (child: { environmentId: EnvironmentId; threadId: ThreadId }) => {
+  const openChildThread = (child: AgentsTarget, localParentProjectId?: ProjectId) => {
     void Haptics.selectionAsync();
     if (
       openInspector(target, {
@@ -82,7 +85,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
       StackActions.replace("Thread", {
         environmentId: child.environmentId,
         threadId: child.threadId,
-        ...madohomuLinkFlag(rootStackState(navigation), child),
+        ...madohomuLinkFlag(rootStackState(navigation), child, localParentProjectId),
       }),
     );
   };
@@ -109,7 +112,12 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
                 subagent={subagent}
                 environmentId={target.environmentId}
                 tickSeconds={hasLiveAgent}
-                onOpen={openChildThread}
+                onOpen={(child) =>
+                  openChildThread(
+                    child,
+                    subagent.childThreadId === null ? undefined : target.projectId,
+                  )
+                }
               />
             </View>
           ) : (
@@ -119,7 +127,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
               subagent={subagent}
               group={group}
               onOpen={(threadId) =>
-                openChildThread({ environmentId: target.environmentId, threadId })
+                openChildThread({ environmentId: target.environmentId, threadId }, target.projectId)
               }
             />
           );
