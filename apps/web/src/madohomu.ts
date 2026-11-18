@@ -47,17 +47,16 @@ export const madohomuDestinationEnvironmentIdAtom = Atom.make((get) => {
 });
 
 /** Threads this client just made: until each one's shell arrives, a link to it is loading. */
-// Wrapped in an object: a bare Set is iterable, which Atom.make would read as a stream.
-export const madohomuCreatedThreadIdsAtom = Atom.make<{ readonly ids: ReadonlySet<ThreadId> }>({
-  ids: new Set(),
-}).pipe(Atom.keepAlive, Atom.withLabel("madohomu:created-thread-ids"));
+export const madohomuCreatedThreadIdsAtom = Atom.make<ReadonlySet<ThreadId>>(
+  new Set<ThreadId>(),
+).pipe(Atom.keepAlive, Atom.withLabel("madohomu:created-thread-ids"));
 
 export function forgetCreatedMadoHomuThread(threadId: ThreadId) {
-  const created = appAtomRegistry.get(madohomuCreatedThreadIdsAtom).ids;
+  const created = appAtomRegistry.get(madohomuCreatedThreadIdsAtom);
   if (!created.has(threadId)) return;
   const ids = new Set(created);
   ids.delete(threadId);
-  appAtomRegistry.set(madohomuCreatedThreadIdsAtom, { ids });
+  appAtomRegistry.set(madohomuCreatedThreadIdsAtom, ids);
 }
 
 type NamedShell = Pick<EnvironmentThreadShell, "projectId" | "deletedAt" | "archivedAt">;
@@ -156,7 +155,7 @@ export function readMadoHomuContext(router: AnyRouter) {
       ? appAtomRegistry.get(environmentThreadDetails.statusAtom(openRef))
       : "empty",
     shellStatus: appAtomRegistry.get(environmentShell.stateValueAtom(environmentId)).status,
-    created: appAtomRegistry.get(madohomuCreatedThreadIdsAtom).ids,
+    created: appAtomRegistry.get(madohomuCreatedThreadIdsAtom),
   });
   const { threadId } = resolveMadoHomuSelection({
     namedId: openThreadId,
@@ -222,8 +221,8 @@ export async function createMadoHomuThread(
   );
   if (!modelSelection) return null;
   const threadId = newThreadId();
-  const created = appAtomRegistry.get(madohomuCreatedThreadIdsAtom).ids;
-  appAtomRegistry.set(madohomuCreatedThreadIdsAtom, { ids: new Set(created).add(threadId) });
+  const created = appAtomRegistry.get(madohomuCreatedThreadIdsAtom);
+  appAtomRegistry.set(madohomuCreatedThreadIdsAtom, new Set(created).add(threadId));
   const result = await runAtomCommand(appAtomRegistry, threadEnvironment.create, {
     environmentId,
     input: {
