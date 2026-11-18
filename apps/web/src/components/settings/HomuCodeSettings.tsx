@@ -224,6 +224,22 @@ function HomuCodeEnvironmentSettings() {
             />
           }
         />
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("subagents-inherit-parent-pin")}
+          settingKeys={["subagentsInheritParentPin"]}
+          description="Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server."
+          control={
+            <ScopedSwitch
+              settingKeys={["subagentsInheritParentPin"]}
+              checked={settings.subagentsInheritParentPin}
+              onCheckedChange={(checked) =>
+                updateSettings({ subagentsInheritParentPin: Boolean(checked) })
+              }
+              aria-label="Subagents inherit parent pin"
+            />
+          }
+        />
       </SettingsSection>
       <SettingsSection id="claude-background-commands" title="Claude background commands">
         <SettingsRow

@@ -199,6 +199,7 @@ import { isRuntimePolicyAboveCeilingError, RuntimePolicyV2 } from "./RuntimePoli
 import {
   endOrphanedNativeSubagent,
   endRunlessRootTurns,
+  inheritSubagentPins,
   makeSubagentChildThread,
   subagentResultForRun,
   delegatedTaskProgress,
@@ -10167,6 +10168,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.title === undefined ? {} : { title: command.title }),
         ordinal: (yield* subagentCount(command.parentThreadId)) + 1,
       });
+      const subagentsInheritParentPin = yield* serverSettings.subagentsInheritParentPin;
       const childThread: OrchestrationV2AppThread = {
         ...makeSubagentChildThread({
           parentThread: parentProjection.thread,
@@ -10180,6 +10182,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           createdBy: command.createdBy,
           creationSource: command.creationSource,
         }),
+        ...(subagentsInheritParentPin ? inheritSubagentPins(parentProjection.thread, now) : {}),
         ...(command.assistance === undefined ? {} : { automationOrigin: command.assistance }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
