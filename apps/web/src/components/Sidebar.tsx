@@ -1619,28 +1619,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     count: SEARCH_RESULTS_PAGE_COUNT,
   });
   const orderedSearchResultKeys = orderedSearchResults.map(threadShellKey);
-  // The highlight follows its thread, so rows that arrive late do not move it
-  // under Enter. The top row is pinned once shown, and again when the pinned
-  // thread leaves the results, since late message matches can sort above it.
-  if (
-    orderedSearchResultKeys[0] !== undefined &&
-    (searchHighlightKey === null || !orderedSearchResultKeys.includes(searchHighlightKey))
-  ) {
-    setSearchHighlightKey(orderedSearchResultKeys[0]);
-  }
+  const isNewSearch = searchResultsShown.key !== searchResultsKey;
+  // The highlight follows its thread, so rows that arrive late do not move it under Enter.
+  // The top row is pinned for each new search and when the pinned thread leaves the
+  // results, since late message matches can sort above it.
+  const pinnedHighlightKey =
+    !isNewSearch &&
+    searchHighlightKey !== null &&
+    orderedSearchResultKeys.includes(searchHighlightKey)
+      ? searchHighlightKey
+      : (orderedSearchResultKeys[0] ?? null);
+  if (pinnedHighlightKey !== searchHighlightKey) setSearchHighlightKey(pinnedHighlightKey);
   const highlightedResultIndex =
-    searchHighlightKey === null ? -1 : orderedSearchResultKeys.indexOf(searchHighlightKey);
-  const pagedSearchResultCount =
-    searchResultsShown.key === searchResultsKey
-      ? searchResultsShown.count
-      : SEARCH_RESULTS_PAGE_COUNT;
+    pinnedHighlightKey === null ? -1 : orderedSearchResultKeys.indexOf(pinnedHighlightKey);
   // A new search starts from the first page. The highlighted row stays mounted when late
   // matches push it past the page, and rows shown that way stay shown.
-  const shownSearchResultCount = Math.max(pagedSearchResultCount, highlightedResultIndex + 1);
-  if (
-    searchResultsShown.key !== searchResultsKey ||
-    shownSearchResultCount > searchResultsShown.count
-  ) {
+  const shownSearchResultCount = Math.max(
+    isNewSearch ? SEARCH_RESULTS_PAGE_COUNT : searchResultsShown.count,
+    highlightedResultIndex + 1,
+  );
+  if (isNewSearch || shownSearchResultCount > searchResultsShown.count) {
     setSearchResultsShown({ key: searchResultsKey, count: shownSearchResultCount });
   }
   const threadSearchResults = orderedSearchResults.slice(0, shownSearchResultCount);
