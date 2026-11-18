@@ -90,6 +90,7 @@ function reorderSectionsOf(
   const sections: { id: string; title: string; threads: MadoHomuReorderThread[] }[] = [];
   const dimmed: string[] = [];
   for (const row of rows) {
+    if (row.type === "more") continue;
     const manual = row.kind === "pinned" || row.kind === "custom";
     if (row.type === "section") {
       if (manual) sections.push({ id: row.id, title: row.title, threads: [] });

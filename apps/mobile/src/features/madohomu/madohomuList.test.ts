@@ -127,7 +127,13 @@ describe("buildMadoHomuListRows", () => {
       scratchCount: 2,
     });
     const ids = summary(rows);
-    expect(ids.slice(ids.indexOf("section:scratch"))).toEqual(["section:scratch", "x0", "x1", "x4", "more:scratch"]);
+    expect(ids.slice(ids.indexOf("section:scratch"))).toEqual([
+      "section:scratch",
+      "x0",
+      "x1",
+      "x4",
+      "more:scratch",
+    ]);
     expect(rows.at(-1)).toMatchObject({ type: "more", count: 3 });
   });
 

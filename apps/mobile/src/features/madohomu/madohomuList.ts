@@ -47,8 +47,6 @@ export interface MadoHomuEmptyRow {
 export interface MadoHomuMoreRow {
   readonly type: "more";
   readonly key: string;
-  readonly kind: MadoHomuGroupKind;
-  readonly sectionId: string;
   readonly count: number;
 }
 
@@ -72,7 +70,7 @@ const COLLAPSED_BY_DEFAULT: ReadonlySet<MadoHomuGroupKind> = new Set(["snoozed",
 const ALWAYS_SHOWN: ReadonlySet<MadoHomuGroupKind> = new Set(["pinned", "custom"]);
 
 /** Whether a thread waits on the user: an approval or a question. */
-export function madohomuNeedsUser(
+function madohomuNeedsUser(
   thread: Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput">,
 ): boolean {
   return thread.hasPendingApprovals || thread.hasPendingUserInput;
@@ -161,8 +159,6 @@ export function buildMadoHomuListRows(input: {
       rows.push({
         type: "more",
         key: `more:${group.id}`,
-        kind: group.kind,
-        sectionId: group.id,
         count: more,
       });
     }
