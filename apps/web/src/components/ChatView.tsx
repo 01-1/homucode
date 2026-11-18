@@ -138,7 +138,7 @@ import {
 } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   assistantCitationFromLocation,
   useSideChatCitationReveal,
@@ -399,6 +399,7 @@ import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransitio
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { endKeyScrollsThread } from "./chat/threadEndKey";
+import { openThreadInMadoHomu } from "../madohomu";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -599,6 +600,7 @@ export default function ChatView(props: ChatViewProps) {
   const clientSettingsHydrated = useClientSettingsHydrated();
   const timestampFormat = settings.timestampFormat;
   const navigate = useNavigate();
+  const router = useRouter();
   // Selects primitives: an object here is new on every router store update, which
   // re-renders ChatView on unrelated navigation state changes.
   const citationHref = useLocation({ select: (location) => location.href });
@@ -928,6 +930,10 @@ export default function ChatView(props: ChatViewProps) {
         title,
         sideChat: true,
         open: (): void => {
+          // A side chat's parent shares its project, so MadoHomu keeps it in view.
+          if (openThreadInMadoHomu(router, sideChatParentRef, activeThread?.projectId ?? null)) {
+            return;
+          }
           void navigate({
             to: "/$environmentId/$threadId",
             params: buildThreadRouteParams(sideChatParentRef),
@@ -939,11 +945,12 @@ export default function ChatView(props: ChatViewProps) {
       return {
         title: parentSubagentThread?.title ?? "Parent thread",
         open: (): void => {
+          const route = resolveThreadOpenRoute(parentSubagentThreadRef, parentSubagentThread);
+          // A subagent's parent shares its project, so MadoHomu keeps it in view.
+          if (openThreadInMadoHomu(router, route, activeThread?.projectId ?? null)) return;
           void navigate({
             to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(
-              resolveThreadOpenRoute(parentSubagentThreadRef, parentSubagentThread),
-            ),
+            params: buildThreadRouteParams(route),
           });
         },
       };
@@ -958,6 +965,7 @@ export default function ChatView(props: ChatViewProps) {
         ? {}
         : {
             open: (): void => {
+              if (openThreadInMadoHomu(router, parentRef)) return;
               void navigate({
                 to: "/$environmentId/$threadId",
                 params: buildThreadRouteParams(parentRef),
