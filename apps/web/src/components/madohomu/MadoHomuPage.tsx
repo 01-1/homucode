@@ -1,23 +1,22 @@
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect } from "react";
 import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { useThreadShell } from "../../state/entities";
+import { forgetCreatedMadoHomuThread } from "../../madohomu";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
 import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
 import { useMadoHomuThreadMenu } from "./useMadoHomuThreadMenu";
 import {
   useMadoHomuNewThread,
-  useMadoHomuSelectedThreadId,
+  useMadoHomuSelection,
   useMadoHomuThreads,
 } from "./useMadoHomuThreads";
 
@@ -85,32 +84,21 @@ function MadoHomuWindowModeButton({
 
 function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
   const { settings, project } = useMadoHomuThreads(environmentId);
-  const selectedId = useMadoHomuSelectedThreadId(environmentId);
+  const selection = useMadoHomuSelection(environmentId);
+  const selectedId = selection.threadId;
   const threadMenu = useMadoHomuThreadMenu(environmentId);
-  const search = useSearch({ from: "/_chat/madohomu" });
   const navigate = useNavigate();
-  const named = useThreadShell(
-    search.threadId ? scopeThreadRef(environmentId, search.threadId) : null,
-  );
-  // A named thread a filter hides keeps its URL; one deleted, archived or moved is replaced.
-  const namedLeft =
-    named !== null &&
-    (named.deletedAt !== null || named.archivedAt !== null || named.projectId !== project?.id);
-  const namedId = named?.id ?? null;
-  // The last named thread that was here: one not loaded yet (just made) is not one that is gone.
-  const seenThreadId = useRef<ThreadId | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the shown thread into the URL, so the live list reordering cannot swap the open chat.
+  const { namedId, namedLoaded, replace } = selection;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the fallback thread into the URL once the named one is known to be gone, and drops the just-made mark once its shell arrives.
   useEffect(() => {
-    if (namedId !== null && !namedLeft) seenThreadId.current = namedId;
-    if (selectedId === null || search.threadId === selectedId) return;
-    const namedGone = namedId === null ? seenThreadId.current === search.threadId : namedLeft;
-    if (search.threadId !== undefined && !namedGone) return;
+    if (namedId && namedLoaded) forgetCreatedMadoHomuThread(namedId);
+    if (!replace || selectedId === null || namedId === selectedId) return;
     void navigate({
       to: "/madohomu",
       search: (prev) => ({ ...prev, threadId: selectedId }),
       replace: true,
     });
-  }, [namedId, namedLeft, navigate, search.threadId, selectedId]);
+  }, [namedId, namedLoaded, navigate, replace, selectedId]);
   if (!settings.madohomuEnabled)
     return (
       <MadoHomuMessage>
@@ -127,6 +115,15 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
       <SidebarInset>
         <MadoHomuTitlebar trailing={windowMode} />
         <MadoHomuNoProject environmentId={environmentId} />
+      </SidebarInset>
+    );
+  if (selection.loading)
+    return (
+      <SidebarInset>
+        <MadoHomuTitlebar trailing={windowMode} />
+        <p className="p-6 text-sm text-muted-foreground" role="status">
+          Loading…
+        </p>
       </SidebarInset>
     );
   if (!selectedId)

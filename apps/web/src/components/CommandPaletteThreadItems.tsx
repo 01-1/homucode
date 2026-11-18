@@ -14,7 +14,7 @@ import {
 } from "@t3tools/shared/paletteSearch";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +23,7 @@ import {
   deriveProviderInstanceEntries,
   type ProviderInstanceEntry,
 } from "../providerInstances";
+import { openThreadInMadoHomu } from "../madohomu";
 import { useVisibleThreadShells } from "../state/entities";
 import {
   useEnvironmentProviders,
@@ -99,6 +100,7 @@ export function useCommandPaletteThreadItems(input: {
 }) {
   const { activeThread, threadSearchQuery } = input;
   const navigate = useNavigate();
+  const router = useRouter();
   const threads = useVisibleThreadShells();
   const { projectEnvironmentLocationById } = useEnvironmentLookups();
   const providerEntryByEnvironmentAndInstanceId = useProviderEntryByEnvironmentAndInstanceId();
@@ -183,10 +185,12 @@ export function useCommandPaletteThreadItems(input: {
           },
         });
       }
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-      });
+      const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+      await (openThreadInMadoHomu(router, threadRef) ??
+        navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(threadRef),
+        }));
     },
   });
 

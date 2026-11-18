@@ -1,16 +1,30 @@
+import { useAtomValue } from "@effect/atom-react";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   groupMadoHomuThreads,
   madohomuListedThreads,
-  selectMadoHomuThread,
+  resolveMadoHomuSelection,
 } from "@t3tools/client-runtime/madohomu";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
-import { useProjects, useVisibleThreadShells } from "../../state/entities";
+import {
+  useProjects,
+  useThreadProjection,
+  useThreadShell,
+  useThreadStatus,
+  useVisibleThreadShells,
+} from "../../state/entities";
+import { useEnvironmentShellStatus } from "../../state/shell";
 import { useSnoozeWakeClock } from "../Sidebar.logic";
-import { startMadoHomuThread } from "../../madohomu";
+import {
+  madohomuCreatedThreadIdsAtom,
+  madohomuFirstRowId,
+  madohomuNamedThread,
+  startMadoHomuThread,
+} from "../../madohomu";
 import { toastManager } from "../ui/toast";
 
 /** MadoHomu's project threads, grouped the way the sidebar shows them. */
@@ -36,13 +50,35 @@ export function useMadoHomuThreads(environmentId: EnvironmentId) {
 }
 
 /**
- * The thread MadoHomu shows: the one the URL names, or else the sidebar's first row. The page
- * and the sidebar both read this, so the open thread is always the highlighted row.
+ * The thread MadoHomu shows (see `resolveMadoHomuSelection`). The page, the sidebar highlight
+ * and the thread shortcuts all read this one choice.
  */
-export function useMadoHomuSelectedThreadId(environmentId: EnvironmentId): ThreadId | null {
+export function useMadoHomuSelection(environmentId: EnvironmentId) {
   const search = useSearch({ from: "/_chat/madohomu" });
-  const { groups } = useMadoHomuThreads(environmentId);
-  return selectMadoHomuThread(groups, search.threadId)?.id ?? null;
+  const { groups, project } = useMadoHomuThreads(environmentId);
+  const ref = search.threadId ? scopeThreadRef(environmentId, search.threadId) : null;
+  const shell = useThreadShell(ref);
+  const detailRef = shell === null ? ref : null;
+  const { named, listLoaded } = madohomuNamedThread({
+    namedId: search.threadId,
+    shell,
+    detail: useThreadProjection(detailRef),
+    detailStatus: useThreadStatus(detailRef),
+    shellStatus: useEnvironmentShellStatus(environmentId),
+    created: useAtomValue(madohomuCreatedThreadIdsAtom),
+  });
+  const selection = resolveMadoHomuSelection({
+    namedId: search.threadId,
+    named,
+    projectId: project?.id ?? null,
+    listLoaded,
+    firstId: madohomuFirstRowId(groups),
+  });
+  return { ...selection, namedId: search.threadId, namedLoaded: named !== null };
+}
+
+export function useMadoHomuSelectedThreadId(environmentId: EnvironmentId): ThreadId | null {
+  return useMadoHomuSelection(environmentId).threadId;
 }
 
 /**
