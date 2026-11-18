@@ -335,10 +335,15 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
 
   const renderRow = ({ item }: { readonly item: MadoHomuListRow }) => {
     if (item.type === "section") {
-      const label =
-        item.attention > 0
-          ? `${item.title} (${item.count}) · ${item.attention} need you`
-          : `${item.title} (${item.count})`;
+      const label = `${item.title} (${item.count})`;
+      const badge =
+        item.attention > 0 ? (
+          <View className="shrink-0 rounded-full border border-warning-border bg-warning px-1.5">
+            <Text className="text-2xs font-t3-medium text-warning-foreground">
+              {item.attention}
+            </Text>
+          </View>
+        ) : undefined;
       const disclosure =
         item.expanded === null
           ? undefined
@@ -351,6 +356,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
       const heading = (accessory?: ReactNode) => (
         <ThreadListV2Section
           label={label}
+          badge={badge}
           tone={item.kind === "snoozed" ? "snoozed" : "default"}
           {...(disclosure ? { disclosure } : {})}
           accessory={accessory}

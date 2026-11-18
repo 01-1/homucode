@@ -88,7 +88,11 @@ describe("buildMadoHomuListRows", () => {
 
   it("collapses any section, counting the rows that need the user, except in Reorder mode", () => {
     const asking = threads.map((thread) =>
-      thread.id === b ? { ...thread, hasPendingApprovals: true } : thread,
+      thread.id === b
+        ? { ...thread, hasPendingApprovals: true }
+        : thread.id === a
+          ? { ...thread, pendingSubagentRequest: "approval" as const }
+          : thread,
     );
     const rows = buildMadoHomuListRows({
       threads: asking,
@@ -97,7 +101,7 @@ describe("buildMadoHomuListRows", () => {
       toggled: new Set(["pinned"]),
     });
     expect(summary(rows).slice(0, 2)).toEqual(["section:pinned", "section:work"]);
-    expect(rows[0]).toMatchObject({ expanded: false, attention: 1 });
+    expect(rows[0]).toMatchObject({ expanded: false, attention: 2 });
     const reorder = buildMadoHomuListRows({
       threads: asking,
       settings,
@@ -117,6 +121,7 @@ describe("buildMadoHomuListRows", () => {
         latestUserMessageAt: `2026-06-01T0${9 - index}:00:00.000Z`,
         latestUserAuthoredMessageAt: `2026-06-01T0${9 - index}:00:00.000Z`,
         hasPendingUserInput: index === 4,
+        pendingSubagentRequest: index === 3 ? "user_input" : null,
       }),
     );
     const rows = buildMadoHomuListRows({
@@ -131,10 +136,11 @@ describe("buildMadoHomuListRows", () => {
       "section:scratch",
       "x0",
       "x1",
+      "x3",
       "x4",
       "more:scratch",
     ]);
-    expect(rows.at(-1)).toMatchObject({ type: "more", count: 3 });
+    expect(rows.at(-1)).toMatchObject({ type: "more", count: 2 });
   });
 
   it("says nothing pinned in an empty Pinned section", () => {

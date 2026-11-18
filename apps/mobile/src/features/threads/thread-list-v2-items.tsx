@@ -208,6 +208,8 @@ export function ThreadListV2Section(props: {
     readonly accessibilityLabel: string;
     readonly accessibilityHint: string;
   };
+  /** Sits right after the label, outside its text, so a long label truncates before it. */
+  readonly badge?: ReactNode;
   readonly accessory?: ReactNode;
 }) {
   const snoozed = props.tone === "snoozed";
@@ -231,6 +233,7 @@ export function ThreadListV2Section(props: {
       >
         {props.label}
       </Text>
+      {props.badge}
       <View
         className={cn(
           "h-px flex-1",
