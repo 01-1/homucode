@@ -15,7 +15,6 @@ These guides describe the T3 Code interface with HomuCode’s changes. For fork 
 - [Appearance and themes](./user/appearance.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [App scripts](./user/app-scripts.md)
-- [Duet](./user/duet.md)
 - [Voice input](./user/voice-input.md)
 - [Text generation models](./user/text-generation.md)
 - [SnapShots](./user/snap-shot.md)
