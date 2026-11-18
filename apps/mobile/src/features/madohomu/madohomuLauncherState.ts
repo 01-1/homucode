@@ -29,7 +29,7 @@ export function madohomuLauncherDestinationAction(
   const params = root?.params as { readonly environmentId?: string } | undefined;
   if (!state || root?.name !== "MadoHomu" || params?.environmentId === environmentId) return;
   return {
-    type: "SET_PARAMS",
+    type: "SET_PARAMS" as const,
     source: root.key,
     target: state.key,
     payload: { params: { environmentId } },
