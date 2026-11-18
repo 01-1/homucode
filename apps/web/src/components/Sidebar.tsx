@@ -250,7 +250,6 @@ import {
   orderSidebarSearchResults,
   sidebarSearchFiltersNarrowList,
   type SidebarSearchFilters,
-  type SidebarSearchShelf,
   sidebarListItemId,
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
@@ -304,7 +303,11 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
-import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
+import {
+  SIDEBAR_SEARCH_PROPS,
+  SidebarHeaderIconButton,
+  SidebarThreadHeader,
+} from "./sidebar/SidebarThreadHeader";
 import { SidebarSearchFilterMenu, SidebarSearchSortMenu } from "./sidebar/SidebarSearchControls";
 import { TooltipProvider } from "./ui/tooltip";
 import {
@@ -1506,18 +1509,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
   });
 
-  const searchShelfByKey = new Map<string, SidebarSearchShelf>();
-  if (isSearchingThreads && searchFilters.shelves.length > 0) {
-    for (const [shelf, shelfThreads] of searchShelves) {
-      for (const thread of shelfThreads) searchShelfByKey.set(threadShellKey(thread), shelf);
-    }
-  }
   const searchCandidates =
     isSearchingThreads && sidebarSearchFiltersNarrowList(searchFilters)
       ? filterSidebarSearchThreads(searchableThreads, searchFilters, {
           // oxlint-disable-next-line react/purity -- Age filters sample the clock when the search inputs change; the compiler recomputes it only then.
           now: Date.now(),
-          shelfOf: (thread) => searchShelfByKey.get(threadShellKey(thread)),
+          shelves: searchShelves,
           lastVisitedAtOf: (thread) =>
             resolveThreadLastVisitedAt(
               thread.lastVisitedAt,
@@ -1526,8 +1523,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         })
       : searchableThreads;
   // Ranked across environments as the palette ranks them, so one
-  // environment's list does not sit above another's better matches; rows
-  // already shown keep their places while slower environments answer.
+  // environment's list does not sit above another's better matches; under
+  // Best match, rows already shown keep their places while slower environments answer.
   const threadByMatchKey =
     threadSearch.matches.length === 0
       ? null
@@ -1614,7 +1611,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   // The highlight follows its thread, so rows that arrive late do not move
-  // it under Enter; a new query starts at the top.
+  // it under Enter; a new query starts at the top. The top row is pinned once
+  // shown, since other sorts can place late message matches above it.
+  if (searchHighlightKey === null && threadSearchResultKeys[0] !== undefined) {
+    setSearchHighlightKey(threadSearchResultKeys[0]);
+  }
   const activeSearchResultIndex = Math.max(
     0,
     searchHighlightKey === null ? 0 : threadSearchResultKeys.indexOf(searchHighlightKey),
@@ -1625,8 +1626,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         typeof index === "function" ? index(activeSearchResultIndex) : index
       ] ?? null,
     );
+  const showMoreSearchResults = () =>
+    setSearchResultsShown({
+      key: searchResultsKey,
+      count: threadSearchResults.length + SEARCH_RESULTS_PAGE_COUNT,
+    });
   const moveSearchHighlight = (step: 1 | -1) => {
     const count = threadSearchResults.length;
+    const next = orderedSearchResults[activeSearchResultIndex + step];
+    // Moving past the last shown row shows the next page instead of wrapping.
+    if (step === 1 && activeSearchResultIndex + 1 === count && next !== undefined) {
+      showMoreSearchResults();
+      setSearchHighlightKey(threadShellKey(next));
+      return;
+    }
     setActiveSearchResultIndex((activeSearchResultIndex + step + count) % count);
   };
 
@@ -1704,7 +1717,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       threadSearchMatchKey({ environmentId: thread.environmentId, threadId: thread.id }),
     );
     const query = threadSearch.query;
-    clearThreadSearch();
+    // Filters stay: a filtered list is worked through one thread at a time.
+    setThreadSearchQuery("");
+    setSearchHighlightKey(null);
     navigateToThread(ref);
     if (match) openThreadFindOnQuery(scopedThreadKey(ref), findForMessageMatch(match, query));
   };
@@ -3817,6 +3832,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           );
                         }
                       }
+                      // A selected value stays listed, so it can be unticked after the scope drops it.
+                      for (const id of searchFilters.providers) {
+                        if (providers.has(id)) continue;
+                        const entry = [...providerEntriesByEnvironment.values()]
+                          .map((entries) => entries.get(id))
+                          .find((candidate) => candidate !== undefined);
+                        providers.set(id, entry?.displayName ?? id);
+                      }
+                      for (const id of searchFilters.environments) {
+                        if (!environments.has(id)) {
+                          environments.set(id, environmentLabelById.get(id as EnvironmentId) ?? id);
+                        }
+                      }
                       const choices = (labels: Map<string, string>) =>
                         [...labels]
                           .map(([value, label]) => ({ value, label }))
@@ -4089,6 +4117,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 >
                   <ul
                     ref={searchResultsListRef}
+                    {...SIDEBAR_SEARCH_PROPS}
                     id="sidebar-thread-search-results"
                     role="listbox"
                     aria-label="Thread search results"
@@ -4142,13 +4171,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 </DndContext>
                 {hiddenSearchResultCount > 0 ? (
                   <button
+                    {...SIDEBAR_SEARCH_PROPS}
                     type="button"
-                    onClick={() =>
-                      setSearchResultsShown({
-                        key: searchResultsKey,
-                        count: threadSearchResults.length + SEARCH_RESULTS_PAGE_COUNT,
-                      })
-                    }
+                    onClick={showMoreSearchResults}
                     className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                   >
                     <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
@@ -4169,14 +4194,39 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               </p>
             )
           ) : null}
-          {/* Older settled threads load only for a query, so filters alone cannot list them. */}
+          {/* A query searches older settled threads on the server; filters alone see loaded ones. */}
           {isSearchingThreads &&
           !hasThreadSearchQuery &&
           unloadedSettledCount > 0 &&
+          searchFilters.statuses.length === 0 &&
+          (searchFilters.updated === "any" || searchFilters.updated === "older") &&
           (searchFilters.shelves.length === 0 || searchFilters.shelves.includes("settled")) ? (
-            <p className="px-2.5 py-2 text-xs text-sidebar-muted-foreground">
-              {`${unloadedSettledCount} older settled ${unloadedSettledCount === 1 ? "thread is" : "threads are"} not listed. Type to search them too.`}
-            </p>
+            <div
+              {...SIDEBAR_SEARCH_PROPS}
+              className="flex items-center gap-2 px-2.5 py-2 text-xs text-sidebar-muted-foreground"
+            >
+              <span className="min-w-0 flex-1">
+                {`${unloadedSettledCount} older settled ${unloadedSettledCount === 1 ? "thread is" : "threads are"} not loaded.`}
+              </span>
+              <button
+                type="button"
+                aria-disabled={olderSettledShelf.loading}
+                onClick={() => {
+                  if (olderSettledShelf.loading) return;
+                  olderSettledShelf.retry();
+                  // The Settled shelf owns the paging, and pages load only while it is open.
+                  if (!settledShelfExpanded) toggleSettledShelf();
+                  showMoreSettled();
+                }}
+                className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 font-medium hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
+              >
+                {olderSettledShelf.loading
+                  ? "Loading"
+                  : olderSettledShelf.failed
+                    ? "Retry"
+                    : "Load more"}
+              </button>
+            </div>
           ) : null}
           {/* A scope can hide every active thread; say so even when its project still has settled ones. */}
           {!isSearchingThreads &&

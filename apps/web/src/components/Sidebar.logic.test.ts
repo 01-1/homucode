@@ -480,7 +480,7 @@ describe("sidebar search filters and sort", () => {
   });
 
   it("widens within a filter and narrows across filters", () => {
-    const threads = [
+    const threads: Thread[] = [
       shell("pinned", { latestUserMessageAt: daysAgo(0.5), hasPendingApprovals: true }),
       shell("working", {
         latestUserMessageAt: daysAgo(2),
@@ -501,19 +501,22 @@ describe("sidebar search filters and sort", () => {
       }),
       shell("snoozed", { latestUserMessageAt: daysAgo(3) }),
     ];
-    const shelves: Record<string, SidebarSearchShelf> = {
-      pinned: "pinned",
-      working: "active",
-      "settled-old": "settled",
-      snoozed: "snoozed",
-    };
+    const [pinned, working, settledOld, snoozed] = threads;
+    const shelves: ReadonlyArray<readonly [SidebarSearchShelf, readonly Thread[]]> = [
+      ["pinned", [pinned!]],
+      ["active", []],
+      // The Working shelf lists active threads while they run.
+      ["active", [working!]],
+      ["snoozed", [snoozed!]],
+      ["settled", [settledOld!]],
+    ];
     const filter = (filters: Partial<SidebarSearchFilters>) =>
       filterSidebarSearchThreads(
         threads,
         { ...NO_SIDEBAR_SEARCH_FILTERS, ...filters },
         {
           now,
-          shelfOf: (thread) => shelves[thread.id],
+          shelves,
           lastVisitedAtOf: () => daysAgo(41),
         },
       ).map((thread) => thread.id);

@@ -1373,16 +1373,22 @@ export function filterSidebarSearchThreads<T extends EnvironmentThreadShell>(
   filters: SidebarSearchFilters,
   context: {
     readonly now: number;
-    readonly shelfOf: (thread: T) => SidebarSearchShelf | undefined;
+    /** Each shelf's threads before folders fold members away, so a collapsed folder hides none. */
+    readonly shelves: ReadonlyArray<readonly [SidebarSearchShelf, readonly T[]]>;
     readonly lastVisitedAtOf: (thread: T) => string | undefined;
   },
 ): T[] {
   if (!sidebarSearchFiltersNarrowList(filters)) return [...threads];
+  const shelved =
+    filters.shelves.length === 0
+      ? null
+      : new Set(
+          context.shelves.flatMap(([shelf, shelfThreads]) =>
+            filters.shelves.includes(shelf) ? shelfThreads.map(searchThreadKey) : [],
+          ),
+        );
   return threads.filter((thread) => {
-    if (filters.shelves.length > 0) {
-      const shelf = context.shelfOf(thread);
-      if (shelf === undefined || !filters.shelves.includes(shelf)) return false;
-    }
+    if (shelved !== null && !shelved.has(searchThreadKey(thread))) return false;
     if (filters.statuses.length > 0) {
       const lastVisitedAt = context.lastVisitedAtOf(thread);
       if (
@@ -1411,6 +1417,10 @@ export function filterSidebarSearchThreads<T extends EnvironmentThreadShell>(
     }
     return filters.features.every((feature) => matchesSidebarSearchFeature(thread, feature));
   });
+}
+
+function searchThreadKey(thread: Pick<EnvironmentThreadShell, "environmentId" | "id">): string {
+  return scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
 }
 
 const titleCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });

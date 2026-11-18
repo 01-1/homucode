@@ -49,9 +49,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
-import { SIDEBAR_SEARCH_POPUP_ATTRIBUTE, SidebarHeaderIconButton } from "./SidebarThreadHeader";
-
-const SEARCH_POPUP_PROPS = { [SIDEBAR_SEARCH_POPUP_ATTRIBUTE]: "" };
+import { SIDEBAR_SEARCH_PROPS, SidebarHeaderIconButton } from "./SidebarThreadHeader";
 
 interface FilterOption<Value extends string> {
   readonly value: Value;
@@ -146,7 +144,7 @@ function CheckboxFilterSubmenu<Value extends string>({
           options.filter((option) => selected.includes(option.value)).map((option) => option.label),
         )}
       />
-      <MenuSubPopup {...SEARCH_POPUP_PROPS}>
+      <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
         {options.map((option) => (
           <MenuCheckboxItem
             key={option.value}
@@ -267,7 +265,7 @@ function FilterMenuContent({
               : selectionSummary(selectedProjectKeys, selectedProjectLabels)
           }
         />
-        <MenuSubPopup {...SEARCH_POPUP_PROPS}>
+        <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
           <ProjectFilterChoices
             projects={projects}
             selectedKeys={selectedProjectKeys}
@@ -296,7 +294,7 @@ function FilterMenuContent({
           label="Last activity"
           summary={updated?.label ?? "Any time"}
         />
-        <MenuSubPopup {...SEARCH_POPUP_PROPS}>
+        <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
           <MenuRadioGroup
             value={filters.updated}
             onValueChange={(next) => update({ updated: next as SidebarSearchUpdated })}
@@ -409,7 +407,7 @@ export function SidebarSearchFilterMenu(props: SidebarSearchFilterMenuProps) {
         <ListFilterIcon className="size-4" />
         <ActiveCount count={count} />
       </MenuTrigger>
-      <MenuPopup {...SEARCH_POPUP_PROPS} align="end">
+      <MenuPopup {...SIDEBAR_SEARCH_PROPS} align="end">
         <FilterMenuContent {...props} />
       </MenuPopup>
     </Menu>
@@ -431,7 +429,7 @@ export function SidebarSearchSortMenu({
       <MenuTrigger render={<SidebarHeaderIconButton label={`Sort threads: ${current.label}`} />}>
         <ArrowDownUpIcon className="size-4" />
       </MenuTrigger>
-      <MenuPopup {...SEARCH_POPUP_PROPS} align="end">
+      <MenuPopup {...SIDEBAR_SEARCH_PROPS} align="end">
         <MenuRadioGroup
           value={sort}
           onValueChange={(next) => onSortChange(next as SidebarSearchSort)}

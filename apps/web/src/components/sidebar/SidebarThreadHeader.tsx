@@ -15,8 +15,9 @@ import { Button } from "../ui/button";
 import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-/** Marks popups that belong to the sidebar search, so using them keeps its controls shown. */
-export const SIDEBAR_SEARCH_POPUP_ATTRIBUTE = "data-sidebar-search-popup";
+/** Marks the search's menus and results, so using them keeps the search controls shown. */
+const SIDEBAR_SEARCH_ATTRIBUTE = "data-sidebar-search";
+export const SIDEBAR_SEARCH_PROPS = { [SIDEBAR_SEARCH_ATTRIBUTE]: "" };
 
 export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
@@ -82,7 +83,7 @@ export function SidebarThreadHeader({
       if (
         target instanceof Node &&
         (rowRef.current?.contains(target) ||
-          (target instanceof Element && target.closest(`[${SIDEBAR_SEARCH_POPUP_ATTRIBUTE}]`)))
+          (target instanceof Element && target.closest(`[${SIDEBAR_SEARCH_ATTRIBUTE}]`)))
       ) {
         return;
       }
@@ -118,6 +119,8 @@ export function SidebarThreadHeader({
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
           onFocus={() => setEngaged(true)}
+          // Picking a result keeps focus here, so a press must engage a field already focused.
+          onPointerDown={() => setEngaged(true)}
           onKeyDown={(event) => {
             onSearchKeyDown(event);
             // With nothing left to clear, Escape leaves search.
