@@ -140,18 +140,23 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-Enable **Settings → Chat → Status line** to show a line in the top bar beside the thread
-title (under the composer on mobile). It shows the model, effort, context use, and usage
-limits, like Claude Code's status line. It refreshes when the thread changes and every 30
-seconds. When the top bar is short of room, the line leaves out the version, `user@host`
-and the directory first. Hover it to see the whole line.
+Enable **Settings → Chat → Status line** to show the thread's status in the top bar beside
+its title. Three dials show what runs out: context use, the 5-hour limit and the weekly
+limit, each with the percentage used inside. Beside them are the model, its effort as
+signal bars, and small icons for uptime, cache hits and tokens in and out. When the top
+bar is short of room, the small icons go first, then the captions beside the dials. Hover
+the status line to see every value by name, with the folder and version.
 
-The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
-script on the thread's machine, which needs `bash` and `jq`. To draw your own, set
-**Status line command** to any shell command: it receives Claude Code's status line
-JSON on stdin and runs in the thread's folder, so a script written for Claude Code's
-`statusLine` setting works unchanged. Colors from its output take the matching colors of
-your theme, and percentages are drawn as bars.
+To draw your own, set **Status line command** to any shell command: it receives Claude
+Code's status line JSON on stdin and runs in the thread's folder, so a script written for
+Claude Code's `statusLine` setting works unchanged. Its output shows as a line of text in
+place of the dials. Colors take the matching colors of your theme, percentages are drawn
+as bars, and when room is short the version, `user@host` and the directory are left out
+first.
+
+On mobile the status line is a line of text under the composer, from the
+[01-1/statusline](https://github.com/01-1/statusline) script on the thread's machine, which
+needs `bash` and `jq`.
 
 ## Quote an assistant response
 

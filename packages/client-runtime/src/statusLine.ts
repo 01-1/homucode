@@ -102,6 +102,87 @@ export function statusLineInputModelName(
   return selection === null ? null : statusLineModelName(model?.name ?? selection.model);
 }
 
+export interface StatusLineLimit {
+  readonly usedPercent: number;
+  readonly resetsAtMs: number | null;
+}
+
+/** What a client draws its own status line from, when no custom command draws it. */
+export interface StatusLineStats {
+  readonly modelName: string | null;
+  readonly effort: string | null;
+  readonly fastMode: boolean | null;
+  readonly version: string | null;
+  readonly cwd: string | null;
+  readonly contextPercent: number | null;
+  readonly contextTokens: number | null;
+  readonly contextMaxTokens: number | null;
+  readonly fiveHour: StatusLineLimit | null;
+  readonly weekly: StatusLineLimit | null;
+  readonly cachePercent: number | null;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+}
+
+function statusLineLimit(
+  windows: ReadonlyArray<ServerProviderUsageWindow>,
+  kind: ServerProviderUsageWindow["kind"],
+): StatusLineLimit | null {
+  const limit = rateLimit(windows, kind);
+  if (limit === undefined) return null;
+  return {
+    usedPercent: limit.used_percentage,
+    resetsAtMs: limit.resets_at === undefined ? null : limit.resets_at * 1000,
+  };
+}
+
+/** The same facts `buildStatusLineInput` gives a script, typed for a client to draw. */
+export function buildStatusLineStats(source: StatusLineInputSource): StatusLineStats {
+  const { selection, provider, model } = selectedModel(source);
+  const context = source.contextWindow;
+  const windows = usageWindows(source);
+  const inputTokens = context?.inputTokens ?? null;
+  const cachedInputTokens = context?.cachedInputTokens ?? null;
+  return {
+    modelName: statusLineInputModelName(source),
+    effort: effortLevel(selection, model) ?? null,
+    fastMode: getModelSelectionBooleanOptionValue(selection, "fastMode") ?? null,
+    version: provider?.version || null,
+    cwd: source.cwd,
+    contextPercent:
+      context === null || context.usedPercentage === null
+        ? null
+        : Math.round(context.usedPercentage),
+    contextTokens: context?.usedTokens ?? null,
+    contextMaxTokens: context?.maxTokens ?? null,
+    fiveHour: statusLineLimit(windows, "session"),
+    weekly: statusLineLimit(windows, "weekly"),
+    cachePercent:
+      inputTokens !== null && inputTokens > 0 && cachedInputTokens !== null
+        ? Math.round(Math.min(1, cachedInputTokens / inputTokens) * 100)
+        : null,
+    inputTokens,
+    outputTokens: context?.outputTokens ?? null,
+  };
+}
+
+/** A token count the way the status line writes it: `588`, `68.8k`, `341k`, `1.2M`. */
+export function formatStatusLineTokens(tokens: number): string {
+  const short = (value: number) => value.toFixed(1).replace(/\.0$/, "");
+  if (tokens < 1_000) return String(Math.round(tokens));
+  if (tokens < 99_950) return `${short(tokens / 1_000)}k`;
+  return tokens < 999_500 ? `${Math.round(tokens / 1_000)}k` : `${short(tokens / 1_000_000)}M`;
+}
+
+/** A span of time the way the status line writes it: `2d04h`, `1h48m`, `48m`. */
+export function formatStatusLineSpan(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  if (minutes >= 1440) return `${Math.floor(minutes / 1440)}d${pad(Math.floor((minutes % 1440) / 60))}h`;
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h${pad(minutes % 60)}m`;
+  return `${minutes}m`;
+}
+
 /** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
 export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
   const { selection, provider, model } = selectedModel(source);
