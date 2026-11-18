@@ -214,6 +214,36 @@ export function filterMadoHomuCodeThreads<
   });
 }
 
+/** How many Scratch rows show before "Show more", and how many each "Show more" adds. */
+export const MADOHOMU_SCRATCH_PAGE = 10;
+
+/**
+ * The rows of a paged section: the first `count`, plus every later row that needs the user, so an
+ * approval or a question never hides behind "Show more". `more` is how many rows stay hidden.
+ */
+export function pageMadoHomuRows<T>(
+  rows: ReadonlyArray<T>,
+  count: number,
+  needsUser: (row: T) => boolean,
+): { readonly shown: T[]; readonly more: number } {
+  const shown = rows.filter((row, index) => index < count || needsUser(row));
+  return { shown, more: rows.length - shown.length };
+}
+
+/**
+ * What an empty Pinned section says. `canDrag` is false where rows only drag in a reorder mode,
+ * so the text never promises a gesture that does nothing.
+ */
+export function madohomuEmptyPinnedText(input: {
+  readonly hasThreads: boolean;
+  readonly canDrag: boolean;
+}): string {
+  if (!input.hasThreads) return "No threads yet. Choose New thread to start one.";
+  return input.canDrag
+    ? "Nothing pinned. Drag a thread here, or use Move to in its menu."
+    : "Nothing pinned. Use Move to in a thread's menu.";
+}
+
 export const MADOHOMU_ICON_COLORS = [
   "#f43f5e",
   "#f97316",

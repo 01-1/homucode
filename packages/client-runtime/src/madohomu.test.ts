@@ -19,6 +19,7 @@ import {
   findMadoHomuMorningBriefThread,
   findUntouchedMadoHomuThread,
   madohomuListedThreads,
+  pageMadoHomuRows,
   selectMadoHomuThread,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
@@ -358,4 +359,13 @@ describe("filterMadoHomuCodeThreads", () => {
     const all = { ...settings, madohomuCodeVisibility: "all" as const };
     expect(filterMadoHomuCodeThreads(threads, new Map([[env, all]]))).toBe(threads);
   });
+});
+
+it("keeps rows that need the user visible past the page", () => {
+  const rows = ["a", "b", "c", "needs-me", "d"];
+  expect(pageMadoHomuRows(rows, 2, (row) => row === "needs-me")).toEqual({
+    shown: ["a", "b", "needs-me"],
+    more: 2,
+  });
+  expect(pageMadoHomuRows(rows, 10, () => false)).toEqual({ shown: rows, more: 0 });
 });

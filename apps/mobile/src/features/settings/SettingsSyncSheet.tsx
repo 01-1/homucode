@@ -1,6 +1,6 @@
 import type { ClientSettingsSyncChoice } from "@t3tools/client-runtime/state/client-settings-sync";
 import {
-  formatSyncedSettingValue,
+  describeSyncedSettingConflict,
   syncedSettingLabel,
 } from "@t3tools/client-runtime/state/client-settings-sync";
 import type { SettingsSyncPrompt } from "@t3tools/client-runtime/state/client-settings-sync-runner";
@@ -104,21 +104,24 @@ function SettingsSyncChoices(props: {
           />
         </View>
       </View>
-      {prompt.conflicts.map((conflict) => (
-        <SettingsSection key={conflict.key} title={syncedSettingLabel(conflict.key)}>
-          <ListChoiceRow
-            label={`This phone: ${formatSyncedSettingValue(conflict.local)}`}
-            selected={choices[conflict.key] === "local"}
-            onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "local" }))}
-          />
-          <ListChoiceRow
-            label={`Synced: ${formatSyncedSettingValue(conflict.remote)}`}
-            selected={choices[conflict.key] !== "local"}
-            separated
-            onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "remote" }))}
-          />
-        </SettingsSection>
-      ))}
+      {prompt.conflicts.map((conflict) => {
+        const described = describeSyncedSettingConflict(conflict);
+        return (
+          <SettingsSection key={conflict.key} title={syncedSettingLabel(conflict.key)}>
+            <ListChoiceRow
+              label={`This phone: ${described.local}`}
+              selected={choices[conflict.key] === "local"}
+              onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "local" }))}
+            />
+            <ListChoiceRow
+              label={`Synced: ${described.remote}`}
+              selected={choices[conflict.key] !== "local"}
+              separated
+              onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "remote" }))}
+            />
+          </SettingsSection>
+        );
+      })}
       <View className="gap-2">
         <Button label="Apply" fullWidth onPress={() => props.onApply(choices)} />
         <Button label="Decide later" tone="secondary" fullWidth onPress={props.onDecideLater} />
