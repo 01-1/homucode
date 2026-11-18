@@ -106,14 +106,14 @@ describe("reduceCommandPaletteUiState", () => {
       openIntent: { kind: "add-project" },
       session: 2,
     });
-    const environmentId = EnvironmentId.make("local");
+    const environmentIds = [EnvironmentId.make("local"), EnvironmentId.make("remote")];
     const onProjectAdded = () => {};
     state = reduceCommandPaletteUiState(state, {
       _tag: "OpenAddProject",
-      environmentId,
+      environmentIds,
       onProjectAdded,
     });
-    expect(state.openIntent).toEqual({ kind: "add-project", environmentId, onProjectAdded });
+    expect(state.openIntent).toEqual({ kind: "add-project", environmentIds, onProjectAdded });
   });
 });
 

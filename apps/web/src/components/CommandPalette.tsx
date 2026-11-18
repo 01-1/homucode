@@ -1,4 +1,4 @@
-import { madohomuDestinationEnvironmentIdAtom, openThreadInMadoHomu } from "../madohomu";
+import { canOpenMadoHomuAtom, openThreadInMadoHomu } from "../madohomu";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -419,7 +419,7 @@ function OpenCommandPaletteDialog(props: {
 }) {
   const navigate = useNavigate();
   const router = useRouter();
-  const madohomuEnvironmentId = useAtomValue(madohomuDestinationEnvironmentIdAtom);
+  const canOpenMadoHomu = useAtomValue(canOpenMadoHomuAtom);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { openChildSearch, setOpen } = props;
   // Keyed by palette session: the intent and restored search only seed this
@@ -596,19 +596,19 @@ function OpenCommandPaletteDialog(props: {
   };
 
   // Read once per palette session, like the rest of the open intent.
-  const [{ onProjectAdded, addProjectOnlyEnvironmentId }] = useState(() => {
+  const [{ onProjectAdded, addProjectAllowedEnvironmentIds }] = useState(() => {
     const intent = props.openIntent?.kind === "add-project" ? props.openIntent : null;
     return {
       onProjectAdded: intent?.onProjectAdded ?? null,
-      addProjectOnlyEnvironmentId: intent?.environmentId ?? null,
+      addProjectAllowedEnvironmentIds: intent?.environmentIds ?? null,
     };
   });
   const addProjectEnvironmentOptions = (() => {
     const options = environments
       .filter(
         (environment) =>
-          addProjectOnlyEnvironmentId === null ||
-          environment.environmentId === addProjectOnlyEnvironmentId,
+          addProjectAllowedEnvironmentIds === null ||
+          addProjectAllowedEnvironmentIds.includes(environment.environmentId),
       )
       .filter((environment) => canCreateProjectInEnvironment(environment.connection.phase))
       .map((environment): AddProjectEnvironmentOption => {
@@ -1252,7 +1252,7 @@ function OpenCommandPaletteDialog(props: {
   };
   const addProjectEntry = resolveAddProjectEntry(
     addProjectEnvironmentOptions,
-    addProjectOnlyEnvironmentId ?? defaultAddProjectEnvironmentId,
+    defaultAddProjectEnvironmentId,
   );
 
   const openAddProjectFlow = () => {
@@ -1704,7 +1704,7 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  if (madohomuEnvironmentId)
+  if (canOpenMadoHomu)
     actionItems.push({
       kind: "action",
       value: "action:madohomu",
@@ -1712,7 +1712,7 @@ function OpenCommandPaletteDialog(props: {
       searchTerms: ["madohomu", "chat"],
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
-        await navigate({ to: "/madohomu", search: { environmentId: madohomuEnvironmentId! } });
+        await navigate({ to: "/madohomu", search: {} });
       },
     });
 
@@ -1904,7 +1904,7 @@ function OpenCommandPaletteDialog(props: {
 
   const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
     if (onProjectAdded) {
-      onProjectAdded(projectRef);
+      await onProjectAdded(projectRef);
       return;
     }
     await handleNewThread(projectRef);
@@ -1916,6 +1916,19 @@ function OpenCommandPaletteDialog(props: {
     readonly platform: string;
     readonly currentProjectCwd: string | null;
   }) => {
+    if (
+      addProjectAllowedEnvironmentIds !== null &&
+      !addProjectAllowedEnvironmentIds.includes(input.environmentId)
+    ) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Cannot select a MadoHomu project on this machine",
+          description: "Choose a folder on a machine where you can change MadoHomu settings.",
+        }),
+      );
+      return;
+    }
     const environment = environments.find(
       (candidate) => candidate.environmentId === input.environmentId,
     );
@@ -1963,10 +1976,14 @@ function OpenCommandPaletteDialog(props: {
     if (existing) {
       // Adding an archived project's folder again brings the project back.
       if (existing.archivedAt != null) {
-        void updateProject({
+        const result = await updateProject({
           environmentId: existing.environmentId,
           input: { projectId: existing.id, archived: false },
-        }).then((result) => reportProjectFailure("Failed to unarchive project", result));
+        });
+        if (result._tag === "Failure") {
+          reportProjectFailure("Failed to unarchive project", result);
+          return;
+        }
       }
       const latestThread = getLatestThreadForProject(
         threads.filter((thread) => thread.environmentId === existing.environmentId),
@@ -1974,7 +1991,7 @@ function OpenCommandPaletteDialog(props: {
         clientSettings.sidebarThreadSortOrder,
       );
       if (onProjectAdded) {
-        onProjectAdded(scopeProjectRef(existing.environmentId, existing.id));
+        await onProjectAdded(scopeProjectRef(existing.environmentId, existing.id));
       } else if (latestThread && latestThread.settledOverride !== "settled") {
         await navigate({
           to: "/$environmentId/$threadId",

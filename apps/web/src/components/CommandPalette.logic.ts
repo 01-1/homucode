@@ -74,7 +74,7 @@ export function browseInputEndPaddingClass(input: {
 export type CommandPaletteProjectAdded = (project: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
-}) => void;
+}) => void | Promise<void>;
 
 export type SearchOverlayMode = "command" | "files" | "content";
 
@@ -82,8 +82,8 @@ export type CommandPaletteOpenIntent =
   | { readonly kind: "new-thread-in" | "change-theme" }
   | {
       readonly kind: "add-project";
-      /** Limits the flow to this environment (MadoHomu's picker). */
-      readonly environmentId?: EnvironmentId;
+      /** Limits the flow to these environments (MadoHomu's picker). */
+      readonly environmentIds?: ReadonlyArray<EnvironmentId>;
       /** Replaces opening a new thread in the project once it exists (MadoHomu's picker). */
       readonly onProjectAdded?: CommandPaletteProjectAdded;
     }
@@ -114,7 +114,7 @@ export type CommandPaletteUiAction =
     }
   | {
       readonly _tag: "OpenAddProject";
-      readonly environmentId?: EnvironmentId;
+      readonly environmentIds?: ReadonlyArray<EnvironmentId>;
       readonly onProjectAdded?: CommandPaletteProjectAdded;
     }
   | { readonly _tag: "OpenNewThreadIn" }
@@ -173,7 +173,7 @@ export function reduceCommandPaletteUiState(
     case "OpenAddProject":
       return openWithIntent({
         kind: "add-project",
-        ...(action.environmentId ? { environmentId: action.environmentId } : {}),
+        ...(action.environmentIds ? { environmentIds: action.environmentIds } : {}),
         ...(action.onProjectAdded ? { onProjectAdded: action.onProjectAdded } : {}),
       });
     case "OpenNewThreadIn":

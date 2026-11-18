@@ -1,7 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
 import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
+import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
@@ -26,9 +28,11 @@ const WORKING_PLACEMENT_LABELS = {
 
 export function MadoHomuSettings() {
   const { target, targets, scope } = useSettingsScope();
+  const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
   const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   if (scope.kind === "project" || scope.kind === "checkout") return null;
-  const selected = targets.find((candidate) => candidate.environmentId === selectedId) ?? target;
+  const selected =
+    targets.find((candidate) => candidate.environmentId === (selectedId ?? destination)) ?? target;
   if (!selected) return null;
   const environmentPicker =
     targets.length > 1 ? (
@@ -55,6 +59,7 @@ export function MadoHomuSettings() {
       key={selected.environmentId}
       environmentId={selected.environmentId}
       environmentPicker={environmentPicker}
+      onProjectChosen={setSelectedId}
     />
   );
 }
@@ -62,9 +67,11 @@ export function MadoHomuSettings() {
 function EnvironmentMadoHomuSettings({
   environmentId,
   environmentPicker,
+  onProjectChosen,
 }: {
   environmentId: EnvironmentId;
   environmentPicker: ReactNode;
+  onProjectChosen: (environmentId: EnvironmentId) => void;
 }) {
   const actions = useMadoHomuActions(environmentId);
   const [time, setTime] = useState<string | null>(null);
@@ -105,7 +112,7 @@ function EnvironmentMadoHomuSettings({
       {actions.settings.madohomuEnabled ? (
         <>
           <SettingsRow {...searchableSetting("madohomu-project")}>
-            <MadoHomuProjectPicker environmentId={environmentId} />
+            <MadoHomuProjectPicker environmentId={environmentId} onChosen={onProjectChosen} />
             <div className="py-2 text-sm">
               <Link
                 to="/madohomu"

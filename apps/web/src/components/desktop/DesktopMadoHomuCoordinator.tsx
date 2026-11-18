@@ -1,42 +1,42 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
-import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
+import {
+  madohomuDefaultEnvironmentIdAtom,
+  madohomuSavedDestinationEnvironmentIdAtom,
+} from "../../madohomu";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect } from "react";
 import { usePrimaryEnvironmentId } from "../../state/environments";
-import { serverEnvironment } from "../../state/server";
+import { expectsPrimaryEnvironment } from "../../state/shell";
 import { toastManager } from "../ui/toast";
 
 export function DesktopMadoHomuCoordinator() {
-  const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
+  const environmentId = useAtomValue(madohomuDefaultEnvironmentIdAtom);
+  const saved = useAtomValue(madohomuSavedDestinationEnvironmentIdAtom);
   const primary = usePrimaryEnvironmentId();
   const configs = useAtomValue(environmentServerConfigsAtom);
-  const environmentId = destination ?? primary ?? configs.keys().next().value ?? null;
-  return environmentId ? <EnvironmentMadoHomuCoordinator environmentId={environmentId} /> : null;
-}
-
-function EnvironmentMadoHomuCoordinator({ environmentId }: { environmentId: EnvironmentId }) {
-  const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+  const settings = environmentId === null ? undefined : configs.get(environmentId)?.settings;
+  const ready = !expectsPrimaryEnvironment() || (primary !== null && configs.has(primary));
   const navigate = useNavigate();
   const bridge = window.desktopBridge;
-  const enabled = settings?.madohomuEnabled;
-  const launcherEnabled = settings?.madohomuDesktopAppEnabled;
+  const enabled = settings?.madohomuEnabled ?? (saved === null ? undefined : true);
+  const launcherEnabled = settings?.madohomuDesktopAppEnabled === true;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the server's MadoHomu opt-in to the Electron launcher and window service
   useEffect(() => {
-    if (!bridge?.configureMadoHomu || enabled === undefined) return;
-    const isMadoHomuWindow = bridge.isMadoHomuWindow?.() === true;
+    if (
+      !ready ||
+      !bridge?.configureMadoHomu ||
+      bridge.isMadoHomuWindow?.() ||
+      enabled === undefined
+    )
+      return;
     void bridge
-      .configureMadoHomu({
-        enabled,
-        launcherEnabled: launcherEnabled === true,
-        // The MadoHomu window's own destination can lag its route at startup; leave it to the main window.
-        ...(isMadoHomuWindow ? {} : { environmentId }),
-      })
+      .configureMadoHomu({ enabled, launcherEnabled, environmentId })
       .catch(() =>
         toastManager.add({ type: "error", title: "Could not update the MadoHomu desktop app" }),
       );
-  }, [bridge, enabled, launcherEnabled, environmentId]);
+  }, [bridge, enabled, launcherEnabled, environmentId, ready]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- receives navigation requested by the native merge and split window actions
   useEffect(
     () =>

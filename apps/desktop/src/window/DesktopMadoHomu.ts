@@ -94,7 +94,8 @@ const make = Effect.gen(function* () {
   );
   const madohomuUrl = (location?: Omit<DesktopMadoHomuWindowMode, "mode">) => {
     const route = new URL("https://route.invalid/madohomu");
-    const environmentId = location?.environmentId ?? settings.environmentId;
+    // Launches follow the saved destination in the renderer. Split and merge carry an explicit route.
+    const environmentId = location?.environmentId;
     if (environmentId) route.searchParams.set("environmentId", environmentId);
     if (location?.threadId) route.searchParams.set("threadId", location.threadId);
     const url = new URL(getDesktopUrl(environment.isDevelopment));
@@ -215,19 +216,18 @@ const make = Effect.gen(function* () {
         settings.environmentId === next.environmentId
       )
         return;
-      const previousEnvironment = settings.environmentId;
       const wasEnabled = settings.enabled;
       settings = next;
       configured = true;
       if (!next.enabled && wasEnabled) {
         requested = false;
-        window?.close();
-        window = null;
-      } else if (window && previousEnvironment !== next.environmentId) {
-        yield* Effect.tryPromise({
-          try: () => window!.loadURL(madohomuUrl()),
-          catch: (cause) => new DesktopMadoHomuError({ operation: "configure", cause }),
-        });
+        // A detached thread can be pinned to a machine other than the launch destination.
+        const route = window?.webContents.getURL().split("#")[1];
+        const pinned = new URLSearchParams(route?.split("?")[1]).get("environmentId");
+        if (pinned === null || pinned === next.environmentId) {
+          window?.close();
+          window = null;
+        }
       }
       const launcher = next.enabled && next.launcherEnabled;
       if (appliedLauncher !== launcher) {
@@ -286,7 +286,7 @@ const make = Effect.gen(function* () {
     open,
     setWindowMode: Effect.fn("DesktopMadoHomu.setWindowMode")(
       function* ({ mode, ...location }) {
-        if (!settings.enabled) return;
+        if (!settings.enabled && !location.environmentId) return;
         if (mode === "split") {
           yield* openWindow(location);
           yield* navigateMain("code", location);
