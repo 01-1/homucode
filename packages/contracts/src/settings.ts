@@ -1588,11 +1588,17 @@ export const ServerSettings = Schema.Struct({
   autoreviewEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   bareStopWaitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   claudeSteersSurviveStop: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** A turn a restart cut while it waited on an approval, question or secret resumes and asks again. */
+  reaskPendingRequestsAfterRestart: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   /** A model or effort change restarts the running turn on it, and the turn carries on by itself. */
   applyModelChangeNow: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   messageSentFromEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   stopThreadSubagents: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   backgroundGitEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Install app and provider updates once this machine's agents (of that provider) idle for five minutes. */
+  autoUpdateWhenIdle: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   buildToolsSettingsVisible: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   cloudBuildEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   loadBuildEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1689,7 +1695,7 @@ export const ServerSettings = Schema.Struct({
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   /** Clones default to `<addProjectBaseDirectory>/<host>/<owner>/<repo>`, like ghq. */
   ghqCloneLayout: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Shows a line under the composer, like Claude Code's status line. */
+  /** Shows a line in the top bar, like Claude Code's status line. */
   statusLineEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Shell command that reads Claude Code's status line JSON on stdin. Empty runs the built-in script. */
   statusLineCommand: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -2105,10 +2111,12 @@ export const ServerSettingsPatch = Schema.Struct({
   syncedClientSettings: Schema.optionalKey(SyncedClientSettings),
   bareStopWaitEnabled: Schema.optionalKey(Schema.Boolean),
   claudeSteersSurviveStop: Schema.optionalKey(Schema.Boolean),
+  reaskPendingRequestsAfterRestart: Schema.optionalKey(Schema.Boolean),
   applyModelChangeNow: Schema.optionalKey(Schema.Boolean),
   messageSentFromEnabled: Schema.optionalKey(Schema.Boolean),
   stopThreadSubagents: Schema.optionalKey(Schema.Boolean),
   backgroundGitEnabled: Schema.optionalKey(Schema.Boolean),
+  autoUpdateWhenIdle: Schema.optionalKey(Schema.Boolean),
   buildToolsSettingsVisible: Schema.optionalKey(Schema.Boolean),
   cloudBuildEnabled: Schema.optionalKey(Schema.Boolean),
   loadBuildEnabled: Schema.optionalKey(Schema.Boolean),

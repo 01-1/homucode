@@ -416,6 +416,7 @@ class T3WorkspaceNavigationView(
     "threads" -> "Chats"
     "pullRequests" -> "Pulls"
     "usage" -> "Usage"
+    "madohomu" -> "MadoHomu"
     else -> "Settings"
   }
 
@@ -428,6 +429,7 @@ class T3WorkspaceNavigationView(
       "threads" -> R.drawable.t3_chats
       "pullRequests" -> R.drawable.t3_pull_requests
       "usage" -> R.drawable.t3_usage
+      "madohomu" -> R.drawable.t3_madohomu
       else -> R.drawable.t3_settings
     }
   )

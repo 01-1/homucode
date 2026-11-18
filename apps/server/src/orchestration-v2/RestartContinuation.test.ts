@@ -931,6 +931,7 @@ it.effect("does not cancel or resume a run that completes while shutdown intent 
 const continuationDispatches = (
   projection: OrchestrationV2ThreadProjection,
   sourceRunId: RunId = runId,
+  reaskPendingRequestsAfterRestart = false,
 ) =>
   Effect.gen(function* () {
     const dispatches: Array<Extract<OrchestrationV2Command, { type: "message.dispatch" }>> = [];
@@ -945,7 +946,10 @@ const continuationDispatches = (
               return Effect.succeed({} as never);
             },
           }),
-          ServerSettings.layerTest({ continueThreadsAfterServerUpdate: true }),
+          ServerSettings.layerTest({
+            continueThreadsAfterServerUpdate: true,
+            reaskPendingRequestsAfterRestart,
+          }),
         ),
       ),
     );
@@ -1021,8 +1025,8 @@ it.effect.each([
   }),
 );
 
-const continuationTexts = (projection: OrchestrationV2ThreadProjection) =>
-  continuationDispatches(projection).pipe(
+const continuationTexts = (projection: OrchestrationV2ThreadProjection, reask = false) =>
+  continuationDispatches(projection, runId, reask).pipe(
     Effect.map((dispatches) => dispatches.map((command) => command.text)),
   );
 
@@ -1361,6 +1365,10 @@ it.effect.each([
         runtimeRequests,
       } as unknown as OrchestrationV2ThreadProjection;
       assert.lengthOf(yield* continuationTexts(cut), shouldContinue ? 1 : 0);
+      assert.isDefined(restartContinuationRun(live, now, true));
+      const reasked = yield* continuationTexts(cut, true);
+      assert.lengthOf(reasked, 1);
+      assert.equal(reasked[0]!.includes("Make the same request again now."), !shouldContinue);
     }),
 );
 
@@ -1380,7 +1388,7 @@ it.effect("does not wake a snoozed or settled thread, but continues once a snooz
   }),
 );
 
-it.effect("does not continue a run waiting on a secret the restart closed", () =>
+it.effect("continues a run waiting on a secret the restart closed only when asking again", () =>
   Effect.gen(function* () {
     const completedAt = DateTime.makeUnsafe("2026-10-03T10:05:00.000Z");
     const secret = (secretStatus: string, at: DateTime.Utc | null) =>
@@ -1392,6 +1400,17 @@ it.effect("does not continue a run waiting on a secret the restart closed", () =
     assert.deepEqual(
       yield* continuationTexts({ ...cut, turnItems: [secret("cancelled", completedAt)] }),
       [],
+    );
+    assert.isDefined(
+      restartContinuationRun(
+        { ...makeProjection(), turnItems: [secret("pending", null)] },
+        now,
+        true,
+      ),
+    );
+    assert.lengthOf(
+      yield* continuationTexts({ ...cut, turnItems: [secret("cancelled", completedAt)] }, true),
+      1,
     );
     assert.lengthOf(
       yield* continuationTexts({

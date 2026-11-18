@@ -1300,7 +1300,7 @@ export function ChatSettingsPanel() {
           serverScoped
           settingKeys={["statusLineEnabled"]}
           {...searchableSetting("status-line")}
-          description="Show a line under the composer with the model, context, and usage limits, like Claude Code's status line."
+          description="Show a line in the top bar with the model, context, and usage limits, like Claude Code's status line."
           resetAction={
             settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled ? (
               <SettingResetButton

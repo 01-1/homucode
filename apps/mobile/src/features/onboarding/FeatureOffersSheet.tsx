@@ -4,11 +4,7 @@ import {
   updateMobilePreferencesAtom,
   mobileSettingsSyncEnabledAtom,
 } from "../../state/preferences";
-import {
-  MobileBuildTools,
-  MobileThisDeviceName,
-  MobileWorkAssistancePicker,
-} from "../settings/SetupBehaviorSettings";
+import { MobileBuildTools, MobileThisDeviceName } from "../settings/SetupBehaviorSettings";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
@@ -22,7 +18,6 @@ import {
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
   type EnvironmentId,
-  type ServerSettings,
 } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
@@ -90,9 +85,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     draft ? new Set(draft.selected) : null,
   );
   const [savedStep, setStep] = useState(draft?.step ?? 0);
-  const [chosenTarget, setWorkTarget] = useState<
-    ServerSettings["workAssistanceTarget"] | undefined
-  >(draft?.workAssistanceTarget);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
@@ -102,8 +94,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     (settings
       ? selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled })
       : new Set<string>());
-  const workTarget =
-    chosenTarget === undefined ? (settings?.workAssistanceTarget ?? null) : chosenTarget;
   const offers = settings
     ? unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
         (offer) => offer.setting !== "connectDeviceLongSessions" || canSetLongSessions,
@@ -114,7 +104,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
   const includes = (id: string) => offers.some((offer) => offer.id === id) && selected.has(id);
   const followups = [
     ...(includes("sent-from") ? ["device-name"] : []),
-    ...(includes("work-assistance") ? ["work-assistance"] : []),
     ...(includes("building-t3") ? ["building-t3"] : []),
   ];
   const step = Math.max(0, Math.min(savedStep, pages.length + followups.length - 1));
@@ -125,12 +114,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
     pending.current = true;
     setBusy(true);
     const patch = featureOfferSettingsPatch(settings, offers, selected);
-    const settingsPatch = apply
-      ? {
-          ...patch,
-          ...(includes("work-assistance") ? { workAssistanceTarget: workTarget } : {}),
-        }
-      : { featureOffersSeen: patch.featureOffersSeen };
+    const settingsPatch = apply ? patch : { featureOffersSeen: patch.featureOffersSeen };
     const preferencesPatch = {
       featureOffersSeen: [
         ...new Set([
@@ -153,7 +137,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       });
       if (result._tag === "Success") savePreferences(preferencesPatch);
     } catch {
-      setError("Could not save optional features. Try again.");
+      setError("Could not save HomuCode features. Try again.");
     }
     pending.current = false;
     setBusy(false);
@@ -167,39 +151,24 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       ? "Building T3"
       : followup === "device-name"
         ? "Name this device"
-        : followup === "work-assistance"
-          ? "Work assistance"
-          : pages[step]?.[0]?.page === 2
-            ? "Extra features"
-            : "Optional features";
+        : pages[step]?.[0]?.page === 2
+          ? "Extra features"
+          : "HomuCode features";
   // Saved on the phone: a dropped connection closes this sheet, and reopening it restores them.
-  const keep = (next: {
-    readonly selected: ReadonlySet<string>;
-    readonly step: number;
-    readonly target: ServerSettings["workAssistanceTarget"] | undefined;
-  }) =>
+  const keep = (next: { readonly selected: ReadonlySet<string>; readonly step: number }) =>
     savePreferences({
-      featureOffersDraft: {
-        environmentId,
-        selected: [...next.selected],
-        step: next.step,
-        ...(next.target === undefined ? {} : { workAssistanceTarget: next.target }),
-      },
+      featureOffersDraft: { environmentId, selected: [...next.selected], step: next.step },
     });
   const select = (id: string, checked: boolean) => {
     const next = new Set(selected);
     if (checked) next.add(id);
     else next.delete(id);
     setSelected(next);
-    keep({ selected: next, step, target: chosenTarget });
+    keep({ selected: next, step });
   };
   const goTo = (next: number) => {
     setStep(next);
-    keep({ selected, step: next, target: chosenTarget });
-  };
-  const chooseTarget = (target: ServerSettings["workAssistanceTarget"]) => {
-    setWorkTarget(target);
-    keep({ selected, step, target });
+    keep({ selected, step: next });
   };
   return (
     <Sheet title={title} onClose={() => void save(false)} dismissDisabled={busy}>
@@ -256,12 +225,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
               </View>
             );
           })
-        ) : followup === "work-assistance" ? (
-          <MobileWorkAssistancePicker
-            environmentId={environmentId}
-            value={workTarget}
-            onChange={chooseTarget}
-          />
         ) : followup === "device-name" ? (
           <MobileThisDeviceName />
         ) : (
@@ -273,7 +236,6 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
             tone="primary"
             fullWidth
             loading={busy}
-            disabled={followup === "work-assistance" && workTarget === null}
             onPress={() => {
               if (last) void save(true);
               else goTo(step + 1);

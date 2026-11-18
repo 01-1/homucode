@@ -94,8 +94,9 @@ Steer when the running agent supports it.
 
 In **Settings → Threads → Extra features**, you can opt into **Stop or wait jumps
 the queue**. A message containing only “stop” or “wait” then interrupts the current
-turn and goes ahead of queued messages. **Claude steers survive Stop** re-sends a
-message Claude held behind a running tool when you press Stop. **Apply model and effort
+turn and goes ahead of queued messages. **Resend unread steers after Stop** covers a
+message you steer to Claude while it runs a tool: Claude reads it only after the tool
+finishes, so pressing Stop first would lose it, and this sends it again for you. **Apply model and effort
 changes now** makes a model or effort change on a working thread restart its turn on the
 new setting, and the agent carries on without a new message; otherwise the change waits for
 the next turn. Codex loses most of its prompt cache when effort changes. All three options
@@ -139,10 +140,10 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-Enable **Settings → Chat → Status line** to show a line under the composer, repeated in the top bar beside the thread title. It shows the
-model, effort, context use, and usage limits, like Claude Code's status line. It
-refreshes when the thread changes and every 30 seconds. Hover it to see the whole line
-when it is cut short.
+Enable **Settings → Chat → Status line** to show a line in the top bar beside the thread
+title (under the composer on mobile). It shows the model, effort, context use, and usage
+limits, like Claude Code's status line. It refreshes when the thread changes and every 30
+seconds. Hover it to see the whole line when it is cut short.
 
 The built-in line runs the [01-1/statusline](https://github.com/01-1/statusline)
 script on the thread's machine, which needs `bash` and `jq`. To draw your own, set

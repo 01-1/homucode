@@ -3,7 +3,11 @@ import * as NodeAssert from "node:assert/strict";
 import { describe, it } from "vite-plus/test";
 import type * as EffectCodexSchema from "effect-codex-app-server/schema";
 
-import { describeMcpElicitation, toMcpElicitationResponse } from "./CodexMcpElicitation.ts";
+import {
+  describeMcpElicitation,
+  isCodexAppAccessElicitation,
+  toMcpElicitationResponse,
+} from "./CodexMcpElicitation.ts";
 
 describe("Codex MCP elicitation approvals", () => {
   const request = {
@@ -50,6 +54,31 @@ describe("Codex MCP elicitation approvals", () => {
       action: "accept",
       content: { approval: "once" },
     });
+  });
+
+  it("recognizes one-time app access forms without accepting a second action", () => {
+    NodeAssert.equal(isCodexAppAccessElicitation(request), true);
+    NodeAssert.equal(
+      isCodexAppAccessElicitation({
+        ...request,
+        _meta: { codex_approval_kind: "mcp_tool_call", target: "production" },
+      }),
+      false,
+    );
+    NodeAssert.equal(
+      isCodexAppAccessElicitation({
+        ...request,
+        requestedSchema: {
+          ...request.requestedSchema,
+          properties: {
+            ...request.requestedSchema.properties,
+            confirm: { type: "boolean", default: true },
+          },
+          required: ["approval", "confirm"],
+        },
+      }),
+      false,
+    );
   });
 
   it("returns session-scoped approval in the MCP response", () => {

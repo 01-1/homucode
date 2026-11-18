@@ -15,7 +15,7 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
-export function WorkAssistancePicker({
+function WorkAssistancePicker({
   value,
   onChange,
   environmentId,
@@ -247,8 +247,8 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
       </p>
       <SettingsSection title="Work assistance">
         <SettingsRow
-          title="Enable work assistance"
-          description="Choose the project and environment whose work can receive assistance."
+          title="Enable work assistance (not recommended)"
+          description="Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself."
           control={
             <Checkbox
               disabled={!canWrite}
