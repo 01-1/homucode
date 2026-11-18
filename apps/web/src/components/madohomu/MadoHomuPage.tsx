@@ -3,11 +3,7 @@ import { toastManager } from "../ui/toast";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { type ReactNode, useEffect } from "react";
-import {
-  SquareArrowDownLeftIcon,
-  SquareArrowOutUpRightIcon,
-  SquarePenIcon,
-} from "lucide-react";
+import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatView from "../ChatView";
@@ -173,7 +169,11 @@ function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) 
           <p className="text-xs text-muted-foreground">
             No agent is set up yet, so MadoHomu cannot start a thread.
           </p>
-          <Button variant="outline" size="sm" render={<Link to="/settings/providers" search={{ environmentId }} />}>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link to="/settings/providers" search={{ environmentId }} />}
+          >
             Open provider settings
           </Button>
         </>

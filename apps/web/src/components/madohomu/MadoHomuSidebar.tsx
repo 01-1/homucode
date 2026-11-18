@@ -508,7 +508,8 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               label: "Move up",
               icon: "arrow-up",
               separatorBefore: true,
-              disabled: !canEdit || index <= 0 },
+              disabled: !canEdit || index <= 0,
+            },
             {
               id: MENU_DOWN,
               label: "Move down",
@@ -1088,15 +1089,7 @@ function SectionHeading({
 }
 
 /** What follows the pointer while a row is dragged, so it can leave its own section. */
-function DraggedRow({
-  title,
-  icon,
-  color,
-}: {
-  title: string;
-  icon: string | null;
-  color: string;
-}) {
+function DraggedRow({ title, icon, color }: { title: string; icon: string | null; color: string }) {
   return (
     <div className="flex h-full cursor-grabbing items-center gap-2 rounded-md bg-sidebar-row-active px-2 text-sm text-sidebar-foreground shadow-lg">
       <MadoHomuIcon icon={icon} color={color} />
