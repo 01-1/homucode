@@ -1825,7 +1825,7 @@ describe("orchestration v2 provider switching", () => {
             modelSelection,
             responseByRunOrdinal: { [sourceOrdinal]: partialResponse },
             capturedTurns,
-            supportsManualResume: manualResume,
+            supportsManualResume: manualResume === true,
             ...(native && modelSelection.instanceId === targetSelection.instanceId
               ? { injectedHistory }
               : {}),
