@@ -92,15 +92,15 @@ other action for a single message. From a hardware keyboard, `Cmd+Return`
 (`Ctrl+Shift+Return`) when Return inserts a new line. The button only offers
 Steer when the running agent supports it.
 
-In **Settings → Threads → Extra features**, you can opt into **Stop or wait jumps
-the queue**. A message containing only “stop” or “wait” then interrupts the current
+**Settings → Threads → Extra features** has three related options. With **Stop or wait jumps
+the queue**, a message containing only “stop” or “wait” interrupts the current
 turn and goes ahead of queued messages. **Resend unread steers after Stop** covers a
 message you steer to Claude while it runs a tool: Claude reads it only after the tool
-finishes, so pressing Stop first would lose it, and this sends it again for you. **Apply model and effort
+finishes, so pressing Stop first would lose it, and this sends it again for you. It starts on. **Apply model and effort
 changes now** makes a model or effort change on a working thread restart its turn on the
 new setting, and the agent carries on without a new message; otherwise the change waits for
-the next turn. Codex loses most of its prompt cache when effort changes. All three options
-start off.
+the next turn. Codex loses most of its prompt cache when effort changes. The other two
+options start off.
 
 ## Queue messages offline on mobile
 
