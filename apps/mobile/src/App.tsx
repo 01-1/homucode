@@ -111,6 +111,7 @@ import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 import { installAppUpdateChecks } from "./features/updates/app-updates";
 import { installClientSettingsSync } from "./features/settings/settingsSync";
+import { holdTouches, touchesHeld } from "./lib/strayTouchGuard";
 
 import "../global.css";
 
@@ -259,6 +260,7 @@ function SplashScreenCoordinator() {
     if (!canHide || hidden.current) return;
     hidden.current = true;
     settleLaunchSplashHomeRows();
+    holdTouches();
     void SplashScreen.hide();
     handOverLaunchSnapshot();
   }, [isReady, shellCachesRead, homeRowsPending, waitEnded]);
@@ -295,7 +297,7 @@ function AppContent() {
       <SplashScreenCoordinator />
       <SubscriptionUsageCoordinator />
       <ConnectDeviceApprovalCoordinator />
-      <GestureHandlerRootView className="flex-1">
+      <GestureHandlerRootView className="flex-1" onStartShouldSetResponderCapture={touchesHeld}>
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>
             <StatusBar barStyle={themeAppearance === "dark" ? "light-content" : "dark-content"} />

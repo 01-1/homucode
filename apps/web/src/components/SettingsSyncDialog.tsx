@@ -60,7 +60,7 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
         if (!open) deferSettingsSyncPrompt();
       }}
     >
-      <DialogPopup className="sm:max-w-xl">
+      <DialogPopup data-unprompted className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {prompt.firstSetup ? "Set up settings sync" : "Settings changed in two places"}
