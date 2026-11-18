@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   clientSettingsPatchFromSyncedValues,
+  describeSyncedSettingConflict,
   planClientSettingsSync,
   resolveClientSettingsSync,
   syncedValuesFromClientSettings,
@@ -94,5 +95,22 @@ describe("synced client setting values", () => {
     const values = syncedValuesFromClientSettings({ ...DEFAULT_CLIENT_SETTINGS, ...gates });
     for (const key of Object.keys(gates)) expect(values).not.toHaveProperty(key);
     expect(clientSettingsPatchFromSyncedValues(gates)).toEqual({});
+  });
+
+  it("describes conflicting lists by what differs instead of raw JSON", () => {
+    const shared = { provider: "claudeAgent", model: "claude-opus-5-5" };
+    expect(
+      describeSyncedSettingConflict({
+        key: "favorites",
+        local: [shared, { provider: "claudeAgent", model: "claude-fable-5-2" }],
+        remote: [shared, { provider: "codex", model: "gpt-6.2-sol" }],
+      }),
+    ).toEqual({ local: "2 items, incl. claude-fable-5-2", remote: "2 items, incl. gpt-6.2-sol" });
+    expect(
+      describeSyncedSettingConflict({ key: "favorites", local: ["a", "b"], remote: ["b", "a"] }),
+    ).toEqual({ local: "2 items, different order", remote: "2 items, different order" });
+    expect(
+      describeSyncedSettingConflict({ key: "theme", local: "lavender-darker", remote: "lavender" }),
+    ).toEqual({ local: "lavender-darker", remote: "lavender" });
   });
 });

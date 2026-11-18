@@ -160,8 +160,74 @@ export function syncedSettingLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function formatSyncedSettingValue(value: unknown): string {
+function syncedItemLabel(item: unknown): string {
+  if (typeof item === "string") return item || "empty";
+  if (item && typeof item === "object") {
+    const record = item as Record<string, unknown>;
+    for (const field of ["model", "name", "label", "title", "id"]) {
+      const value = record[field];
+      if (typeof value === "string" && value) return value;
+    }
+  }
+  return stableJson(item);
+}
+
+function shorten(text: string, max = 60): string {
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function describeScalar(value: unknown): string {
   if (value === undefined || value === null) return "not set";
-  const text = typeof value === "string" ? value || "empty" : JSON.stringify(value);
-  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+  if (typeof value === "boolean") return value ? "on" : "off";
+  if (typeof value === "string") return shorten(value || "empty");
+  return shorten(stableJson(value));
+}
+
+function countLabel(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function describeList(value: ReadonlyArray<unknown>, extra: ReadonlyArray<string>, same: boolean) {
+  const count = countLabel(value.length, "item");
+  if (same) return `${count}, different order`;
+  return extra.length === 0 ? count : `${count}, incl. ${shorten(extra.join(", "), 48)}`;
+}
+
+/**
+ * Human-readable sides of a conflict. Lists and objects name what differs instead of dumping
+ * JSON, since both sides usually share a long common prefix.
+ */
+export function describeSyncedSettingConflict(conflict: ClientSettingsSyncConflict): {
+  readonly local: string;
+  readonly remote: string;
+} {
+  const { local, remote } = conflict;
+  if (Array.isArray(local) && Array.isArray(remote)) {
+    const localKeys = local.map(stableJson);
+    const remoteKeys = remote.map(stableJson);
+    const onlyIn = (items: ReadonlyArray<unknown>, keys: string[], other: string[]) =>
+      items.filter((_, index) => !other.includes(keys[index]!)).map(syncedItemLabel);
+    const localOnly = onlyIn(local, localKeys, remoteKeys);
+    const remoteOnly = onlyIn(remote, remoteKeys, localKeys);
+    const same = localOnly.length === 0 && remoteOnly.length === 0;
+    return {
+      local: describeList(local, localOnly, same),
+      remote: describeList(remote, remoteOnly, same),
+    };
+  }
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+  if (isRecord(local) && isRecord(remote)) {
+    const differing = [...new Set([...Object.keys(local), ...Object.keys(remote)])].filter(
+      (key) => !syncedValueEquals(local[key], remote[key]),
+    );
+    const describeSide = (side: Record<string, unknown>) =>
+      shorten(
+        differing
+          .map((key) => `${syncedSettingLabel(key)}: ${describeScalar(side[key])}`)
+          .join(", "),
+      );
+    return { local: describeSide(local), remote: describeSide(remote) };
+  }
+  return { local: describeScalar(local), remote: describeScalar(remote) };
 }
