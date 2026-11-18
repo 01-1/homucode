@@ -36,6 +36,18 @@ The confirmation counts the running threads that the restarts will interrupt,
 and how many can resume afterwards. See **Continue threads after restarts**
 below.
 
+## Update automatically when agents are idle
+
+Each machine installs updates on its own once its agents have stopped working
+for five minutes. The desktop app installs a new version, downloading it first
+if needed, once no thread on that machine has run for five minutes. Each
+provider updates once none of that provider's threads on that machine have run
+for five minutes, so a busy Codex thread does not hold back a Claude update.
+Each version is tried once per start, so a failed update waits for you.
+
+It is on by default. Turn it off for a machine under **Settings → Threads →
+Extra features → Update when agents are idle**.
+
 ## Switch between Stable and Nightly
 
 In the desktop app, change **Settings → About → Update track**. T3 Code shows each

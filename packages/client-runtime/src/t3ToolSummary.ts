@@ -294,6 +294,34 @@ export function summarizeT3ToolCalls(
         quantity(countEntities(entityIds("queuedRunId")), "queued message"),
       );
       break;
+    case "queue-start":
+      label = phrase("Started", "start", `queued messages ${times}`);
+      break;
+    case "question-dismiss":
+      label = phrase(
+        "Dismissed",
+        "dismiss",
+        quantity(countEntities(entityIds("requestId")), "pending question request"),
+      );
+      break;
+    case "session-import":
+      label = phrase("Imported", "import", `agent sessions ${times}`);
+      break;
+    case "thread-diff":
+      label = phrase("Read", "read", `thread diffs ${times}`);
+      break;
+    case "keybinding-update":
+      label = phrase("Changed", "change", `keyboard shortcuts ${times}`);
+      break;
+    case "usage-read":
+      label = phrase("Read", "read", `usage ${times}`);
+      break;
+    case "project-from-thread":
+      label = phrase("Created", "create", `projects from threads ${times}`);
+      break;
+    case "worktree-setup":
+      label = phrase("Changed", "change", `worktree setup ${times}`);
+      break;
     case "question-list":
       label = phrase("Listed", "list", `pending questions ${times}`);
       break;

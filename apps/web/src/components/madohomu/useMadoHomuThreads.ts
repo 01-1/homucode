@@ -53,19 +53,19 @@ export function useMadoHomuNewThread(environmentId: EnvironmentId, onOpen?: () =
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
-  const createThread = async () => {
-    if (creatingRef.current) return;
+  const createThread = () => {
+    if (creatingRef.current) return Promise.resolve();
+    onOpen?.();
     creatingRef.current = true;
     setCreating(true);
-    try {
-      onOpen?.();
-      if (!(await startMadoHomuThread(router))) {
-        toastManager.add({ type: "error", title: "Could not create thread" });
-      }
-    } finally {
-      creatingRef.current = false;
-      setCreating(false);
-    }
+    return startMadoHomuThread(router)
+      .then((started) => {
+        if (!started) toastManager.add({ type: "error", title: "Could not create thread" });
+      })
+      .finally(() => {
+        creatingRef.current = false;
+        setCreating(false);
+      });
   };
   return { createThread, creating };
 }

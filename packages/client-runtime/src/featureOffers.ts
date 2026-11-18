@@ -4,12 +4,14 @@ type OfferSetting =
   | "preferNativeSubagents"
   | "bareStopWaitEnabled"
   | "claudeSteersSurviveStop"
+  | "reaskPendingRequestsAfterRestart"
   | "applyModelChangeNow"
   | "messageSentFromEnabled"
   | "threadTitleIncludeProjectName"
   | "stopThreadSubagents"
   | "threadTitleIdPrefix"
   | "backgroundGitEnabled"
+  | "autoUpdateWhenIdle"
   | "buildToolsSettingsVisible"
   | "connectDeviceLongSessions"
   | "claudeHoldBackgroundCommands"
@@ -32,13 +34,6 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     title: "MadoHomu",
     description:
       "A focused view for one project with your threads in sections, its own desktop app and an optional morning brief.",
-  },
-  {
-    id: "autoreview",
-    page: 1,
-    title: "Autoreviewers (not recommended)",
-    description:
-      "Let agents attach reviewer subagents that check a thread's work as it happens. Reviewers can lag behind and report stale findings.",
   },
   {
     id: "quick-model",
@@ -78,10 +73,18 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
     id: "claude-steer-recovery",
     page: 2,
-    title: "Claude steers survive Stop",
+    title: "Resend unread steers after Stop",
     description:
-      "Re-send a steered message that Claude held behind a running tool when you press Stop.",
+      "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, T3 sends it again for you.",
     setting: "claudeSteersSurviveStop",
+  },
+  {
+    id: "reask-after-restart",
+    page: 2,
+    title: "Ask again after a restart",
+    description:
+      "When T3 Code restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
+    setting: "reaskPendingRequestsAfterRestart",
   },
   {
     id: "apply-model-change-now",
@@ -137,11 +140,12 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     setting: "backgroundGitEnabled",
   },
   {
-    id: "work-assistance",
+    id: "auto-update-when-idle",
     page: 2,
-    title: "Work assistance",
+    title: "Update when agents are idle",
     description:
-      "Enable work assistance for a project on one environment. Choose its destination next.",
+      "Install app updates once this machine's agents have been idle for five minutes, and each provider's updates once its own agents have.",
+    setting: "autoUpdateWhenIdle",
   },
   {
     id: "building-t3",
@@ -197,11 +201,10 @@ export function featureOfferPages(
 }
 
 export function enabledFeatureOffers(
-  settings: Pick<ServerSettings, "madohomuEnabled" | "autoreviewEnabled" | "quickModelSelection">,
+  settings: Pick<ServerSettings, "madohomuEnabled" | "quickModelSelection">,
 ): ReadonlySet<string> {
   return new Set([
     ...(settings.madohomuEnabled ? ["madohomu"] : []),
-    ...(settings.autoreviewEnabled ? ["autoreview"] : []),
     ...(settings.quickModelSelection ? ["quick-model"] : []),
   ]);
 }
@@ -215,7 +218,6 @@ export function selectedFeatureOffers(
     ...FEATURE_OFFERS.filter(
       (offer) => offer.setting && settings[offer.setting] === (offer.enabledValue ?? true),
     ).map((offer) => offer.id),
-    ...(settings.workAssistanceTarget ? ["work-assistance"] : []),
     ...(local.settingsSyncEnabled ? ["settings-sync"] : []),
     ...(local.fasterPhoneLaunch ? ["faster-phone-launch"] : []),
   ]);
@@ -244,16 +246,10 @@ export function featureOfferSettingsPatch(
     ...(offered.some((offer) => offer.id === "madohomu") && selected.has("madohomu")
       ? { madohomuEnabled: true }
       : {}),
-    ...(offered.some((offer) => offer.id === "autoreview") && selected.has("autoreview")
-      ? { autoreviewEnabled: true }
-      : {}),
     ...(offered.some((offer) => offer.id === "quick-model") &&
     selected.has("quick-model") &&
     settings.defaultModelSelection
       ? { quickModelSelection: settings.defaultModelSelection }
-      : {}),
-    ...(offered.some((offer) => offer.id === "work-assistance") && !selected.has("work-assistance")
-      ? { workAssistanceTarget: null }
       : {}),
   };
 }

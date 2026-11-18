@@ -22,7 +22,7 @@ import { Route as ChatUsageRouteImport } from './routes/_chat.usage'
 import { Route as ChatSettingsRouteImport } from './routes/_chat.settings'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatNewRouteImport } from './routes/_chat.new'
-import { Route as ChatMadoHomuRouteImport } from './routes/_chat.madohomu'
+import { Route as ChatMadohomuRouteImport } from './routes/_chat.madohomu'
 import { Route as ThreadsEnvironmentIdThreadIdRouteImport } from './routes/threads.$environmentId.$threadId'
 import { Route as ChatSettingsWorktreesRouteImport } from './routes/_chat.settings.worktrees'
 import { Route as ChatSettingsVoiceRouteImport } from './routes/_chat.settings.voice'
@@ -119,7 +119,7 @@ const ChatNewRoute = ChatNewRouteImport.update({
   path: '/new',
   getParentRoute: () => ChatRoute,
 } as any)
-const ChatMadoHomuRoute = ChatMadoHomuRouteImport.update({
+const ChatMadohomuRoute = ChatMadohomuRouteImport.update({
   id: '/madohomu',
   path: '/madohomu',
   getParentRoute: () => ChatRoute,
@@ -294,7 +294,7 @@ export interface FileRoutesByFullPath {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/madohomu': typeof ChatMadoHomuRoute
+  '/madohomu': typeof ChatMadohomuRoute
   '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/settings': typeof ChatSettingsRouteWithChildren
@@ -339,7 +339,7 @@ export interface FileRoutesByTo {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/madohomu': typeof ChatMadoHomuRoute
+  '/madohomu': typeof ChatMadohomuRoute
   '/new': typeof ChatNewRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/settings': typeof ChatSettingsRouteWithChildren
@@ -387,7 +387,7 @@ export interface FileRoutesById {
   '/guest': typeof GuestRoute
   '/pair': typeof PairRoute
   '/welcome': typeof WelcomeRoute
-  '/_chat/madohomu': typeof ChatMadoHomuRoute
+  '/_chat/madohomu': typeof ChatMadohomuRoute
   '/_chat/new': typeof ChatNewRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
   '/_chat/settings': typeof ChatSettingsRouteWithChildren
@@ -677,7 +677,7 @@ declare module '@tanstack/react-router' {
       id: '/_chat/madohomu'
       path: '/madohomu'
       fullPath: '/madohomu'
-      preLoaderRoute: typeof ChatMadoHomuRouteImport
+      preLoaderRoute: typeof ChatMadohomuRouteImport
       parentRoute: typeof ChatRoute
     }
     '/threads/$environmentId/$threadId': {
@@ -967,7 +967,7 @@ const ChatSettingsRouteWithChildren = ChatSettingsRoute._addFileChildren(
 )
 
 interface ChatRouteChildren {
-  ChatMadoHomuRoute: typeof ChatMadoHomuRoute
+  ChatMadohomuRoute: typeof ChatMadohomuRoute
   ChatNewRoute: typeof ChatNewRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
   ChatSettingsRoute: typeof ChatSettingsRouteWithChildren
@@ -978,7 +978,7 @@ interface ChatRouteChildren {
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
-  ChatMadoHomuRoute: ChatMadoHomuRoute,
+  ChatMadohomuRoute: ChatMadohomuRoute,
   ChatNewRoute: ChatNewRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
   ChatSettingsRoute: ChatSettingsRouteWithChildren,
