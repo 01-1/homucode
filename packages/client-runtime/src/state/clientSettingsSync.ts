@@ -186,6 +186,14 @@ function firstDifference(left: unknown, right: unknown, path = ""): [string, str
     }
   }
   const prefix = path ? `${path}: ` : "";
+  if (typeof left === "string" && typeof right === "string") {
+    // Long strings can share a long prefix; start the excerpt just before they part.
+    let index = 0;
+    while (index < left.length && left[index] === right[index]) index++;
+    const from = Math.max(0, index - 10);
+    const excerpt = (text: string) => (from > 0 ? "..." : "") + shorten(text.slice(from), 40);
+    return [`${prefix}${excerpt(left)}`, `${prefix}${excerpt(right)}`];
+  }
   return [`${prefix}${describeScalar(left)}`, `${prefix}${describeScalar(right)}`];
 }
 

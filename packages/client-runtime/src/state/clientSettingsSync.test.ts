@@ -129,6 +129,17 @@ describe("synced client setting values", () => {
       local: "1 item, incl. lav (colors.accent: #a)",
       remote: "1 item, incl. lav (colors.accent: #b)",
     });
+    const css = "x".repeat(80);
+    expect(
+      describeSyncedSettingConflict({
+        key: "customThemes",
+        local: JSON.stringify([{ id: "lav", css: `${css}red` }]),
+        remote: JSON.stringify([{ id: "lav", css: `${css}blue` }]),
+      }),
+    ).toEqual({
+      local: "1 item, incl. lav (css: ...xxxxxxxxxxred)",
+      remote: "1 item, incl. lav (css: ...xxxxxxxxxxblue)",
+    });
     expect(
       describeSyncedSettingConflict({
         key: "customThemes",
