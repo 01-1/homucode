@@ -1,3 +1,4 @@
+import { searchableSetting } from "./settingsSearch";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { BuildToolsRequest, EnvironmentId } from "@t3tools/contracts";

@@ -15,6 +15,7 @@ const { Children, mocks } = vi.hoisted(() => ({
     alert: vi.fn(),
     targets: [] as ReturnType<typeof environment>[],
     readOnly: new Set<string>(),
+    accessWriters: new Set<string>(),
     projectSelected: false,
   },
 }));
@@ -40,7 +41,7 @@ vi.mock("react-native", () => ({
   ),
 }));
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: () => AsyncResult.success({}),
+  useAtomValue: (atom: unknown) => (typeof atom === "boolean" ? atom : AsyncResult.success({})),
   useAtomSet: () => () => {},
 }));
 vi.mock("../../state/preferences", () => ({
@@ -65,7 +66,11 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../../state/server", () => ({
   serverEnvironment: {
-    updateSettings: { permissionAtom: () => true },
+    updateSettings: {
+      permissionAtom: (environmentId: string, input?: { patch: ServerSettingsPatch }) =>
+        input?.patch.connectDeviceLongSessions === undefined ||
+        mocks.accessWriters.has(environmentId),
+    },
     buildToolsState: () => null,
     messageDevices: () => null,
   },
@@ -107,11 +112,6 @@ vi.mock("../../components/ui/Button", () => ({
 vi.mock("./components/SettingsScreen", () => ({ SettingsScreen: Children }));
 vi.mock("../../components/ui/ListToggleRow", () => ({ ListToggleRow: () => null }));
 vi.mock("./MobileAgentMemorySettings", () => ({ MobileAgentMemorySettings: () => null }));
-vi.mock("./SetupBehaviorSettings", () => ({
-  MobileBuildVisibility: () => null,
-  MobileExtraSettings: () => null,
-  MobileThisDeviceName: () => null,
-}));
 vi.mock("./components/SettingsEnvironmentFilterHeader", () => ({
   useSettingsEnvironmentMenu: () => ({
     title: "Filter",
@@ -220,6 +220,7 @@ beforeEach(() => {
   mocks.targets = [environment("local", "Local")];
   mocks.projectSelected = false;
   mocks.readOnly = new Set();
+  mocks.accessWriters = new Set();
   mocks.alert.mockReset();
   mocks.updateSettings.mockReset();
   mocks.updateSettings.mockResolvedValue(AsyncResult.success(undefined));
@@ -230,8 +231,49 @@ afterEach(() => {
 });
 
 describe("SettingsServerControlsRouteScreen", () => {
+  it("renders setup controls and applies Quick model and T3 Connect to their own environments", () => {
+    mocks.targets.push(environment("remote", "Remote"));
+    mocks.accessWriters.add("remote");
+    act(() => root.render(<SettingsHomuCodeRouteScreen />));
+    const buttons = [...container.querySelectorAll("button")];
+    const labels = new Set(buttons.map((button) => button.textContent));
+    for (const offer of FEATURE_OFFERS) {
+      if (offer.page !== 2 || !offer.setting || offer.setting === "buildToolsSettingsVisible")
+        continue;
+      const label =
+        offer.id === "subagents"
+          ? "Use T3 delegation (delegate_task)"
+          : offer.id === "thread-only-stop"
+            ? "Stop stops only this thread"
+            : offer.title;
+      expect(labels, offer.id).toContain(label);
+    }
+
+    act(() => buttons.find((button) => button.textContent === "Quick model")?.click());
+    act(() =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Sol")
+        ?.click(),
+    );
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      environmentId: "local",
+      input: { patch: { quickModelSelection: mocks.model } },
+    });
+
+    const connectSwitches = buttons.filter(
+      (button) => button.textContent === "Stay signed in for 30 days",
+    );
+    expect(connectSwitches.map((button) => button.disabled)).toEqual([true, false]);
+    mocks.updateSettings.mockClear();
+    act(() => connectSwitches[1]?.click());
+    expect(mocks.updateSettings.mock.calls).toEqual([
+      [{ environmentId: "remote", input: { patch: { connectDeviceLongSessions: true } } }],
+    ]);
+  });
+
   it("saves HomuCode server switches across the selected environments", async () => {
     mocks.targets.push(environment("remote", "Remote"));
+    mocks.accessWriters = new Set(["local", "remote"]);
     act(() => root.render(<SettingsHomuCodeRouteScreen />));
 
     for (const [label, key] of [

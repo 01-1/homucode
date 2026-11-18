@@ -187,7 +187,7 @@ describe("searchSettings", () => {
       });
       expect(searchSettings(title, available)[0]).toMatchObject({
         title,
-        to: "/settings/building-t3",
+        to: "/settings/homucode",
       });
     }
   });
@@ -233,7 +233,7 @@ describe("searchSettings", () => {
     });
     expect(searchSettings("stay signed in for 30 days", available)[0]).toMatchObject({
       id: "connect-device-long-sessions",
-      to: "/settings/access",
+      to: "/settings/homucode",
     });
   });
 
@@ -319,7 +319,9 @@ describe("searchSettings", () => {
     (offer) => {
       const row = FEATURE_OFFER_SETTINGS[offer.id];
       expect(row).toBeDefined();
-      expect(searchSettings(offer.title).map((item) => item.id)).toContain(row);
+      expect(searchSettings(offer.title)).toContainEqual(
+        expect.objectContaining({ id: row, to: "/settings/homucode" }),
+      );
     },
   );
 

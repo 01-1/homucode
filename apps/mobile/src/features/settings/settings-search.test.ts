@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 
-import { FEATURE_OFFER_PAGES } from "./featureOfferSettings";
 import { filterSettingsSections } from "./settings-search";
 
 const SECTIONS = [
@@ -77,21 +76,16 @@ describe("filterSettingsSections", () => {
 });
 
 it.each(["Cloud machine type", "Build output folder", "Enable loading AppImages"])(
-  "finds Building T3 by %s",
+  "finds HomuCode’s Building T3 controls by %s",
   (title) => {
-    const row = { id: "SettingsBuildingT3", label: "Building T3" };
+    const row = { id: "SettingsHomuCode", label: "HomuCode" };
     expect(filterSettingsSections([{ rows: [row] }], title)).toEqual([{ rows: [row] }]);
   },
 );
 
 describe("setup-wizard offers", () => {
-  it.each(FEATURE_OFFERS.map((offer) => [offer.id, offer] as const))(
-    "%s has a Settings page that search finds by its title",
-    (id, offer) => {
-      const page = FEATURE_OFFER_PAGES[id];
-      expect(page).toBeDefined();
-      const sections = [{ rows: [{ id: page!, label: "Page" }] }];
-      expect(filterSettingsSections(sections, offer.title)).toHaveLength(1);
-    },
-  );
+  it.each(FEATURE_OFFERS)("$id is searchable under HomuCode", (offer) => {
+    const sections = [{ rows: [{ id: "SettingsHomuCode", label: "HomuCode" }] }];
+    expect(filterSettingsSections(sections, offer.title)).toHaveLength(1);
+  });
 });

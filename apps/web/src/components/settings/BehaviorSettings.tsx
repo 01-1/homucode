@@ -1,10 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
-import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
+import {
+  managedCapabilityDenial,
+  type EnvironmentId,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
+import { useManagedPolicy } from "../../state/managedPolicy";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -12,7 +17,9 @@ import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { FEATURE_OFFER_SETTINGS, searchableSetting } from "./settingsSearch";
+import { SettingsScopeNotice } from "./SettingsScopeNotice";
+import { Switch } from "../ui/switch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
@@ -185,8 +192,7 @@ export function BehaviorSettingsSection() {
           return (
             <SettingsRow
               key={offer.id}
-              id={offer.id}
-              title={offer.title}
+              {...searchableSetting(id)}
               description={offer.description}
               serverScoped
               settingKeys={[key]}
@@ -212,6 +218,18 @@ export function BehaviorSettingsSection() {
           Select one environment to configure work assistance.
         </p>
       )}
+      <SettingsSection
+        title="T3 Connect"
+        {...(!environmentId ? { id: "connect-device-long-sessions" } : {})}
+      >
+        {environmentId ? (
+          <ConnectSessionSetting environmentId={environmentId} />
+        ) : (
+          <SettingsScopeNotice inline target="environment" targetId="connect-device-long-sessions">
+            Choose an environment to change its T3 Connect session length.
+          </SettingsScopeNotice>
+        )}
+      </SettingsSection>
       <SettingsSection {...searchableSetting("device-names")}>
         {environmentId ? (
           <DeviceNamesSettings environmentId={environmentId} />
@@ -229,6 +247,35 @@ export function BehaviorSettingsSection() {
         )}
       </SettingsSection>
     </>
+  );
+}
+
+function ConnectSessionSetting({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const { connectDeviceLongSessions } = useEnvironmentSettings(environmentId);
+  const update = useAtomCommand(serverEnvironment.updateSettings);
+  const canWrite = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId, {
+      patch: { connectDeviceLongSessions: true },
+    }),
+  );
+  const connectDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "connect");
+  return (
+    <SettingsRow
+      {...searchableSetting("connect-device-long-sessions")}
+      settingKeys={["connectDeviceLongSessions"]}
+      description="Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device in Sharing & access to end its access."
+      managed={connectDenial}
+      control={
+        <Switch
+          aria-label="Stay signed in for 30 days"
+          checked={connectDeviceLongSessions}
+          disabled={!canWrite}
+          onCheckedChange={(enabled) =>
+            void update({ environmentId, input: { patch: { connectDeviceLongSessions: enabled } } })
+          }
+        />
+      }
+    />
   );
 }
 
@@ -275,9 +322,6 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
             }
           />
         ) : null}
-      </SettingsSection>
-      <SettingsSection id={searchableSetting("device-names").id} title="Device names">
-        <DeviceNamesSettings environmentId={environmentId} />
       </SettingsSection>
     </>
   );

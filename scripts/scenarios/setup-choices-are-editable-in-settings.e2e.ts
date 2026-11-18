@@ -64,6 +64,9 @@ test(
     for (const query of [...first, ...extra, "Theme", "Device names"]) {
       const label = separateLabels[query] ?? query;
       await openSetting(query, label);
+      await expect(browser).toHaveURL(
+        query === "Theme" ? /\/settings\/appearance/ : /\/settings\/homucode/,
+      );
       const row = `[data-slot="settings-row"]:has(h3:text-is(${JSON.stringify(label)}))`;
       if (query !== "Theme" && query !== "Device names") {
         await expect(browser.locator(row)).toHaveCount(1);
@@ -92,7 +95,7 @@ test(
       return true;
     }, visibility);
     await openSetting("Cloud machine type");
-    await expect(browser).toHaveURL(/\/settings\/building-t3/);
+    await expect(browser).toHaveURL(/\/settings\/homucode/);
     const chooser = '[role="status"] + div button';
     await expect(browser.locator(chooser).first()).toBeVisible();
     await browser.evaluate((selector) => {

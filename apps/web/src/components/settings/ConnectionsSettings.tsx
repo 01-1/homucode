@@ -1311,23 +1311,6 @@ function ConnectionsSettingsContent({
                 }
               />
             ) : null}
-            {accessServerConfig?.settings.connectDeviceLongSessions !== undefined ? (
-              <SettingsRow
-                {...searchableSetting("connect-device-long-sessions")}
-                description="Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device here to end its access."
-                managed={managedCapabilityDenial(accessServerConfig.managedPolicy, "connect")}
-                control={
-                  <Switch
-                    aria-label="Stay signed in for 30 days"
-                    checked={accessServerConfig.settings.connectDeviceLongSessions}
-                    disabled={!canWriteAccess}
-                    onCheckedChange={(enabled) =>
-                      updateAccessSettings({ connectDeviceLongSessions: enabled })
-                    }
-                  />
-                }
-              />
-            ) : null}
             {accessEnvironment ? (
               <details className="group px-3 sm:px-4">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">

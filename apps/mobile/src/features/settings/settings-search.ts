@@ -2,7 +2,6 @@ import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { foldSearchQuery, rankSearchItems, scoreSearchTerms } from "@t3tools/shared/paletteSearch";
 
 import type { SettingsPageTarget } from "./components/settings-page-targets";
-import { FEATURE_OFFER_PAGES } from "./featureOfferSettings";
 
 /** What each page holds besides its row's label, so search finds a setting by its own name. */
 const SETTINGS_SEARCH_TERMS = {
@@ -54,6 +53,17 @@ const SETTINGS_SEARCH_TERMS = {
   ],
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
   SettingsHomuCode: [
+    ...FEATURE_OFFERS.map((offer) => offer.title),
+    "T3 Code checkout",
+    "Boat CLI",
+    "Cloud machine type",
+    "Build output folder",
+    "AppImage build folder",
+    "Enable cloud builds",
+    "Enable Android APK builds",
+    "Enable loading AppImages",
+    "Serve APKs on LAN",
+
     "madohomu",
     "duet",
     "show madohomu threads in t3 code",
@@ -102,17 +112,6 @@ const SETTINGS_SEARCH_TERMS = {
     "new threads",
     "last project",
   ],
-  SettingsBuildingT3: [
-    "T3 Code checkout",
-    "Boat CLI",
-    "Cloud machine type",
-    "Build output folder",
-    "AppImage build folder",
-    "Enable cloud builds",
-    "Enable Android APK builds",
-    "Enable loading AppImages",
-    "Serve APKs on LAN",
-  ],
   SettingsThreads: [
     "new threads",
     "default workspace",
@@ -127,8 +126,6 @@ const SETTINGS_SEARCH_TERMS = {
     "usage limits",
     "auto-resume",
     "thread behavior",
-    "phone name",
-    "device names",
   ],
   SettingsFollowUp: ["follow-ups", "queue", "steer", "while the agent is running"],
   SettingsArchive: ["archive", "archived", "restore", "unarchive"],
@@ -179,15 +176,7 @@ const SETTINGS_SEARCH_TERMS = {
   ],
 } satisfies Partial<Record<SettingsPageTarget | "account", readonly string[]>>;
 const termsById: ReadonlyMap<string, readonly string[]> = new Map(
-  Object.entries(SETTINGS_SEARCH_TERMS).map(([id, terms]) => [
-    id,
-    [
-      ...terms,
-      ...FEATURE_OFFERS.filter((offer) => FEATURE_OFFER_PAGES[offer.id] === id).map(
-        (offer) => offer.title,
-      ),
-    ],
-  ]),
+  Object.entries(SETTINGS_SEARCH_TERMS),
 );
 
 export interface SettingsSearchRow {
