@@ -144,8 +144,9 @@ Enable **Settings → Chat → Status line** to show the thread's status in the 
 its title. Three dials show what runs out: context use, the 5-hour limit and the weekly
 limit, each with the percentage used inside. Beside them are the model, its effort as
 signal bars, and small icons for uptime, cache hits and tokens in and out. When the top
-bar is short of room, the small icons go first, then the captions beside the dials. Hover
-the status line to see every value by name, with the folder and version.
+bar is short of room, the small icons go first, then the time and the captions beside the
+dials. Hover the status line, or focus it with the keyboard, to see every value by name,
+with the folder and version.
 
 To draw your own, set **Status line command** to any shell command: it receives Claude
 Code's status line JSON on stdin and runs in the thread's folder, so a script written for
@@ -154,9 +155,9 @@ place of the dials. Colors take the matching colors of your theme, percentages a
 as bars, and when room is short the version, `user@host` and the directory are left out
 first.
 
-On mobile the status line is a line of text under the composer, from the
-[01-1/statusline](https://github.com/01-1/statusline) script on the thread's machine, which
-needs `bash` and `jq`.
+On mobile the status line is a line of text under the composer: your command's output, or
+without one the [01-1/statusline](https://github.com/01-1/statusline) script on the thread's
+machine, which needs `bash` and `jq`.
 
 ## Quote an assistant response
 
