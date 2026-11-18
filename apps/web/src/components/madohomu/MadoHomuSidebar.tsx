@@ -30,6 +30,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
 import {
+  AuthOrchestrationOperateScope,
   MADOHOMU_SECTION_NAME_MAX_LENGTH,
   type EnvironmentId,
   type MadoHomuSection,
@@ -60,6 +61,7 @@ import {
 } from "../../hooks/threadFolderMenu";
 import { readLocalApi } from "../../localApi";
 import { useServerConfigs } from "../../state/entities";
+import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { useThreadSelectionStore } from "../../threadSelectionStore";
@@ -162,6 +164,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
   const selectedId = useMadoHomuSelectedThreadId(environmentId);
   const threadMenu = useMadoHomuThreadMenu(environmentId);
   const { canEdit, fileThread } = threadMenu;
+  const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
   const closeSheet = () => {
@@ -332,16 +335,17 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       configLoaded && selected.every((t) => canSnooze(t, { now: snoozeNow.toISOString() }));
     const presets = resolveSnoozePresets(snoozeNow, timestampFormat, environmentId);
     const pinned = selected.filter((t) => isMadoHomuThreadPinned(settings.madohomuThreads[t.id]));
-    const regeneratable = configLoaded ? selected.filter((t) => t.titleRegeneration == null) : [];
+    const canRun = configLoaded && canOperate;
+    const regeneratable = canRun ? selected.filter((t) => t.titleRegeneration == null) : [];
     const titleItem = buildBulkTitleRegenerationContextMenuItem({
-      supportedCount: configLoaded ? count : 0,
+      supportedCount: canRun ? count : 0,
       actionableCount: regeneratable.length,
     });
     const selectedIds = selected.map((t) => t.id);
     const folderItems = buildMultiSelectFolderMenuItems({
       environmentId,
       threadIds: selectedIds,
-      canOperate: configLoaded,
+      canOperate: canRun,
     }).map((item) =>
       item.id === "folder"
         ? { ...item, label: MADOHOMU_THREAD_MENU_LABELS.folder }
@@ -401,7 +405,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const choice = clicked.value;
     clearSelection();
     if (isThreadFolderMenuId(choice)) {
-      runThreadFolderMenuAction(choice, { environmentId, threadIds: selectedIds });
+      if (canRun) runThreadFolderMenuAction(choice, { environmentId, threadIds: selectedIds });
     } else if (choice === "regenerate-title") {
       const toast = titleRegenerationToast(
         await Promise.all(
@@ -1149,7 +1153,9 @@ function CustomSectionHeader({
         }}
         onKeyDown={handleKeyDown}
         onBlur={(event) => {
-          if (!settledRef.current) onRename(event.currentTarget.value);
+          if (settledRef.current) return;
+          if (event.relatedTarget === null) setFocusHeading(true);
+          onRename(event.currentTarget.value);
         }}
         className="w-full rounded-sm bg-card px-1 text-xs font-medium outline-none ring-1 ring-inset ring-input focus:ring-foreground"
       />
