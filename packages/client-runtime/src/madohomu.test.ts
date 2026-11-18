@@ -20,7 +20,7 @@ import {
   findUntouchedMadoHomuThread,
   madohomuListedThreads,
   pageMadoHomuRows,
-  selectMadoHomuThread,
+  resolveMadoHomuSelection,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
   selectMadoHomuEnvironment,
@@ -250,7 +250,7 @@ describe("MadoHomu sections", () => {
     ]);
   });
 
-  it("lists filed subagents and the open one, and opens the URL thread or the first row", () => {
+  it("lists filed subagents and the open one", () => {
     const sub = (id: string) => ({
       id: ThreadId.make(id),
       lineage: { relationshipToParent: "subagent" as const },
@@ -262,13 +262,45 @@ describe("MadoHomu sections", () => {
       ThreadId.make("open"),
     );
     expect(listed.map((t: { id: string }) => t.id)).toEqual(["top", "a", "open"]);
-    const groups = groupMadoHomuThreads(
-      [shell("a", "2026-11-10"), shell("outside", "2026-11-14")] as never,
-      settings,
-      { now: "2026-11-17T00:00:00.000Z" },
+  });
+
+  it("keeps the named thread open and falls back only once it is gone", () => {
+    const project = ProjectId.make("p");
+    const live = { projectId: project, deletedAt: null, archivedAt: null };
+    const base = {
+      namedId: ThreadId.make("named"),
+      projectId: project,
+      listLoaded: true,
+      firstId: ThreadId.make("first"),
+    };
+    const fallback = { threadId: "first", loading: false, replace: true };
+    // Hidden by the list's filtering, but still in the project: it stays.
+    expect(resolveMadoHomuSelection({ ...base, named: live })).toEqual({
+      threadId: "named",
+      loading: false,
+      replace: false,
+    });
+    // Not loaded yet: loading, never another thread.
+    expect(resolveMadoHomuSelection({ ...base, named: null, listLoaded: false })).toEqual({
+      threadId: null,
+      loading: true,
+      replace: false,
+    });
+    // Absent once the list has loaded, deleted, archived or moved: the first row replaces it.
+    expect(resolveMadoHomuSelection({ ...base, named: null })).toEqual(fallback);
+    expect(resolveMadoHomuSelection({ ...base, named: { ...live, deletedAt: "x" } })).toEqual(
+      fallback,
     );
-    expect(selectMadoHomuThread(groups, ThreadId.make("outside"))?.id).toBe("outside");
-    expect(selectMadoHomuThread(groups, ThreadId.make("missing"))?.id).toBe("a");
+    expect(resolveMadoHomuSelection({ ...base, named: { ...live, archivedAt: "x" } })).toEqual(
+      fallback,
+    );
+    expect(
+      resolveMadoHomuSelection({ ...base, named: { ...live, projectId: ProjectId.make("q") } }),
+    ).toEqual(fallback);
+    // No thread named: the first row goes into the URL.
+    expect(resolveMadoHomuSelection({ ...base, namedId: undefined, named: null })).toEqual(
+      fallback,
+    );
   });
 
   it("reopens an untouched New thread instead of making another", () => {
