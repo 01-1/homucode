@@ -94,7 +94,7 @@ const timestampedPrompt = (text: string, sent: DateTime.Utc) => {
   const local = DateTime.formatIso(
     DateTime.add(sent, { minutes: -DateTime.toDateUtc(sent).getTimezoneOffset() }),
   ).slice(0, 19);
-  return `${local}: ${text}`;
+  return `${local}: ${text}\n\n[T3] Sent from: unknown device. A human sent this message.`;
 };
 
 describe("CodexAdapterV2 context usage", () => {

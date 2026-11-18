@@ -1,6 +1,6 @@
 import { assert } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
-import { timestampedPrompt } from "../../ReplayMessageTimestamps.ts";
+import { timestampedPrompt, UNKNOWN_DEVICE_HUMAN_LINE } from "../../ReplayMessageTimestamps.ts";
 import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
@@ -34,8 +34,22 @@ export function assertPiMessageSteeringOutput(
   assert.deepEqual(
     prompts.map((frame) => [frameField(frame, "message"), frameField(frame, "streamingBehavior")]),
     [
-      [timestampedPrompt(MESSAGE_STEERING_INITIAL_PROMPT, DateTime.makeUnsafe(0)), "steer"],
-      [timestampedPrompt(MESSAGE_STEERING_STEER_PROMPT, DateTime.makeUnsafe(0)), "steer"],
+      [
+        timestampedPrompt(
+          MESSAGE_STEERING_INITIAL_PROMPT,
+          DateTime.makeUnsafe(0),
+          UNKNOWN_DEVICE_HUMAN_LINE,
+        ),
+        "steer",
+      ],
+      [
+        timestampedPrompt(
+          MESSAGE_STEERING_STEER_PROMPT,
+          DateTime.makeUnsafe(0),
+          UNKNOWN_DEVICE_HUMAN_LINE,
+        ),
+        "steer",
+      ],
     ],
   );
   assert.isFalse(
