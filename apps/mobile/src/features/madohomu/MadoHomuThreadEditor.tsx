@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { MADOHOMU_ICON_COLORS, madohomuIconColor } from "@t3tools/client-runtime/madohomu";
+import {
+  isMadoHomuThreadPinned,
+  MADOHOMU_ICON_COLORS,
+  madohomuIconColor,
+} from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   DEFAULT_MADOHOMU_ICON,
@@ -48,7 +52,8 @@ export function MadoHomuThreadEditor(props: {
         !(await actions.save({
           madohomuThreads: {
             [props.thread.id]: {
-              ...actions.settings.madohomuThreads[props.thread.id],
+              ...entry,
+              pinned: isMadoHomuThreadPinned(entry),
               icon: icon.trim() || null,
               color,
               prompt: prompt.trim(),
