@@ -100,7 +100,7 @@ function EnvironmentMadoHomuSettings(props: {
   readonly onSwitchEnvironment: () => void;
 }) {
   const actions = useMadoHomuActions(props.environmentId);
-  const projectSelection = useMadoHomuProjectSelection(props.environmentId);
+  const projectSelection = useMadoHomuProjectSelection();
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -140,7 +140,8 @@ function EnvironmentMadoHomuSettings(props: {
       <MadoHomuProjectPicker
         environmentId={props.environmentId}
         projectId={actions.settings.madohomuProjectId}
-        environments={projectSelection.eligible}
+        environments={projectSelection.linked}
+        selectionIssue={projectSelection.selectionIssue}
         disabled={busy || projectSelection.isSelecting}
         canClear={actions.canWrite}
         onChange={(project) =>

@@ -5,9 +5,11 @@ import {
   isMadoHomuThreadPinned,
   madohomuListedThreads,
   madohomuRuntimeMode,
-  selectMadoHomuEnvironment,
+  resolveMadoHomuDestination,
+  writeMadoHomuProject,
   resolveMadoHomuSelection,
 } from "@t3tools/client-runtime/madohomu";
+import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import type {
@@ -28,6 +30,8 @@ import {
 } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
+import * as Schema from "effect/Schema";
+import { environmentCatalog } from "./connection/catalog";
 import { composerDraftHasUserContent, useComposerDraftStore } from "./composerDraftStore";
 import {
   readLocalStorageValue,
@@ -53,6 +57,7 @@ import { providerInstanceEntriesFor } from "./providerInstances";
 import { resolveSidebarThreadStatus } from "./components/Sidebar.logic";
 
 const DEVICE_DESTINATION_KEY = "t3code:madohomu-destination";
+const DEVICE_DESKTOP_LAUNCHER_ENABLED_KEY = "t3code:madohomu-desktop-launcher-enabled";
 
 const deviceDestinationAtom = Atom.make((get): EnvironmentId | null => {
   const read = () => readLocalStorageValue(DEVICE_DESTINATION_KEY, null, EnvironmentId);
@@ -62,39 +67,57 @@ const deviceDestinationAtom = Atom.make((get): EnvironmentId | null => {
   return read();
 });
 
-export const madohomuSavedDestinationEnvironmentIdAtom = Atom.make((get) => {
-  const primary = get(primaryEnvironmentIdAtom);
-  if (primary !== null) {
-    return (
-      get(environmentServerConfigsAtom).get(primary)?.settings.madohomuDestinationEnvironmentId ??
-      null
+const deviceDesktopLauncherEnabledAtom = Atom.make((get) => {
+  const read = () =>
+    readLocalStorageValue(DEVICE_DESKTOP_LAUNCHER_ENABLED_KEY, false, Schema.Boolean);
+  if (typeof window !== "undefined") {
+    get.addFinalizer(
+      subscribeLocalStorageKey(DEVICE_DESKTOP_LAUNCHER_ENABLED_KEY, () => get.setSelf(read())),
     );
   }
-  // Hosted web and desktop with its local server disabled have no primary.
-  return expectsPrimaryEnvironment() ? null : get(deviceDestinationAtom);
+  return read();
 });
 
-export const madohomuDestinationEnvironmentIdAtom = Atom.make((get) => {
-  const saved = get(madohomuSavedDestinationEnvironmentIdAtom);
-  if (saved !== null) return saved;
-  const configs = get(environmentServerConfigsAtom);
+export const madohomuDesktopLauncherEnabledAtom = Atom.make((get) => {
   const primary = get(primaryEnvironmentIdAtom);
-  return selectMadoHomuEnvironment(
-    primary,
-    [...configs].map(([environmentId, config]) => ({
+  if (primary !== null) {
+    return get(environmentServerConfigsAtom).get(primary)?.settings.madohomuDesktopAppEnabled;
+  }
+  return expectsPrimaryEnvironment() ? undefined : get(deviceDesktopLauncherEnabledAtom);
+});
+
+export const canUpdateMadoHomuDesktopLauncherAtom = Atom.make((get) => {
+  if (get(madohomuDesktopLauncherEnabledAtom) === undefined) return false;
+  const primary = get(primaryEnvironmentIdAtom);
+  return primary === null || get(serverEnvironment.updateSettings.permissionAtom(primary));
+});
+
+export const madohomuDestinationAtom = Atom.make((get) => {
+  const catalog = get(environmentCatalog.catalogValueAtom);
+  const configs = get(environmentServerConfigsAtom);
+  return resolveMadoHomuDestination(
+    [...enabledEnvironmentIds(catalog)].map((environmentId) => ({
       environmentId,
-      madohomuEnabled: config.settings.madohomuEnabled,
-      madohomuDesktopAppEnabled: config.settings.madohomuDesktopAppEnabled,
+      settings: configs.get(environmentId)?.settings ?? null,
     })),
   );
 });
 
+export const madohomuSavedDestinationEnvironmentIdAtom = Atom.make(
+  (get) => get(madohomuDestinationAtom).savedEnvironmentId,
+);
+
+export const madohomuDestinationEnvironmentIdAtom = Atom.make((get) => {
+  const destination = get(madohomuDestinationAtom);
+  // Read a legacy browser selection only before this client has any shared settings host.
+  return destination.anchorEnvironmentId === null && !expectsPrimaryEnvironment()
+    ? get(deviceDestinationAtom)
+    : destination.environmentId;
+});
+
 export const madohomuDefaultEnvironmentIdAtom = Atom.make(
   (get) =>
-    get(madohomuDestinationEnvironmentIdAtom) ??
-    get(primaryEnvironmentIdAtom) ??
-    get(environmentServerConfigsAtom).keys().next().value ??
-    null,
+    get(madohomuDestinationEnvironmentIdAtom) ?? get(madohomuDestinationAtom).anchorEnvironmentId,
 );
 
 export const canOpenMadoHomuAtom = Atom.make((get) => {
@@ -114,69 +137,44 @@ async function writeMadoHomuSettings(environmentId: EnvironmentId, patch: Server
   throw squashAtomCommandFailure(result);
 }
 
-/** Write the owning machine before changing the launch destination. */
+export async function saveMadoHomuDesktopLauncherEnabled(enabled: boolean) {
+  if (!appAtomRegistry.get(canUpdateMadoHomuDesktopLauncherAtom)) return false;
+  const primary = appAtomRegistry.get(primaryEnvironmentIdAtom);
+  if (primary === null) {
+    setLocalStorageItem(DEVICE_DESKTOP_LAUNCHER_ENABLED_KEY, enabled, Schema.Boolean);
+    appAtomRegistry.refresh(deviceDesktopLauncherEnabledAtom);
+  } else {
+    await writeMadoHomuSettings(primary, { madohomuDesktopAppEnabled: enabled });
+  }
+  return true;
+}
+
 export async function saveMadoHomuProject(
   environmentId: EnvironmentId,
   projectId: ProjectId | null,
 ): Promise<boolean> {
   if (appAtomRegistry.get(madohomuProjectSelectionPendingAtom)) return false;
-  const primary = appAtomRegistry.get(primaryEnvironmentIdAtom);
-  const setDestination =
-    projectId !== null &&
-    environmentId !== appAtomRegistry.get(madohomuSavedDestinationEnvironmentIdAtom);
-  const canWrite = (id: EnvironmentId) =>
-    readEnvironment(id)?.connection.phase === "connected" &&
-    appAtomRegistry.get(serverEnvironment.updateSettings.permissionAtom(id));
-
-  if (!canWrite(environmentId)) {
-    throw new Error("Changing this project requires settings access on its machine.");
-  }
-  if (setDestination && primary === null && expectsPrimaryEnvironment()) {
-    throw new Error("Reconnect the primary machine to change where MadoHomu opens.");
-  }
-  if (setDestination && primary !== null && !canWrite(primary)) {
-    throw new Error(
-      "Changing where MadoHomu opens requires settings access on the primary machine.",
+  const destination = appAtomRegistry.get(madohomuDestinationAtom);
+  const readHost = (id: EnvironmentId) => {
+    const host = readEnvironment(id);
+    return (
+      host && {
+        label: host.label,
+        connected: host.connection.phase === "connected",
+        settingsLoaded: host.serverConfig !== null,
+        canWrite: appAtomRegistry.get(serverEnvironment.updateSettings.permissionAtom(id)),
+      }
     );
-  }
+  };
 
   appAtomRegistry.set(madohomuProjectSelectionPendingAtom, true);
   try {
-    const ownerPatch = {
-      madohomuProjectId: projectId,
-      ...(projectId !== null ? { madohomuEnabled: true } : {}),
-      ...(setDestination && primary === environmentId
-        ? { madohomuDestinationEnvironmentId: environmentId }
-        : {}),
-    };
-    const owner = await writeMadoHomuSettings(environmentId, ownerPatch);
-    if (owner.madohomuProjectId !== projectId || (projectId !== null && !owner.madohomuEnabled)) {
-      throw new Error("The project’s machine did not save the selection.");
-    }
-    if (!setDestination) return true;
-
-    try {
-      if (primary === null) {
-        setLocalStorageItem(DEVICE_DESTINATION_KEY, environmentId, EnvironmentId);
-        appAtomRegistry.refresh(deviceDestinationAtom);
-      } else {
-        const saved =
-          primary === environmentId
-            ? owner
-            : await writeMadoHomuSettings(primary, {
-                madohomuDestinationEnvironmentId: environmentId,
-              });
-        if (saved.madohomuDestinationEnvironmentId !== environmentId) {
-          throw new Error("Update the primary machine to save a MadoHomu destination.");
-        }
-      }
-    } catch (error) {
-      const reason = error instanceof Error ? ` ${error.message}` : "";
-      throw new Error(
-        `The project was saved on its machine, but the launch destination could not be saved.${reason}`,
-        { cause: error },
-      );
-    }
+    await writeMadoHomuProject(
+      destination,
+      { environmentId, projectId },
+      readHost,
+      writeMadoHomuSettings,
+    );
     return true;
   } finally {
     appAtomRegistry.set(madohomuProjectSelectionPendingAtom, false);

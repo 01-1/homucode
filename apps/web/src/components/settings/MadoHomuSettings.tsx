@@ -3,7 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { type EnvironmentId, type ServerSettings } from "@t3tools/contracts";
 import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
-import { madohomuDestinationEnvironmentIdAtom } from "../../madohomu";
+import {
+  canUpdateMadoHomuDesktopLauncherAtom,
+  madohomuDestinationEnvironmentIdAtom,
+  madohomuDesktopLauncherEnabledAtom,
+  saveMadoHomuDesktopLauncherEnabled,
+} from "../../madohomu";
 import { isElectron } from "../../env";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
@@ -15,6 +20,7 @@ import { searchableSetting } from "./settingsSearch";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { toastManager } from "../ui/toast";
 
 const CODE_VISIBILITY_LABELS = {
   hidden: "None",
@@ -248,24 +254,44 @@ function EnvironmentMadoHomuSettings({
               <p className="text-sm text-error">{actions.taskQuery.error}</p>
             ) : null}
           </SettingsRow>
-          {isElectron ? (
-            <SettingsRow
-              {...searchableSetting("madohomu-desktop-app")}
-              description="Add MadoHomu to this desktop's app launcher. Opens a separate window."
-              control={
-                <Switch
-                  aria-label="MadoHomu desktop app"
-                  checked={actions.settings.madohomuDesktopAppEnabled}
-                  disabled={busy || !actions.canWrite}
-                  onCheckedChange={(enabled) =>
-                    void run(() => actions.save({ madohomuDesktopAppEnabled: enabled }))
-                  }
-                />
-              }
-            />
-          ) : null}
         </>
       ) : null}
+      {isElectron ? <MadoHomuDesktopLauncherSetting busy={busy} run={run} /> : null}
     </SettingsSection>
+  );
+}
+
+function MadoHomuDesktopLauncherSetting({
+  busy,
+  run,
+}: {
+  busy: boolean;
+  run: (action: () => Promise<boolean>) => Promise<void>;
+}) {
+  const launcherEnabled = useAtomValue(madohomuDesktopLauncherEnabledAtom);
+  const canWrite = useAtomValue(canUpdateMadoHomuDesktopLauncherAtom);
+  return (
+    <SettingsRow
+      {...searchableSetting("madohomu-desktop-app")}
+      description="Add MadoHomu to this desktop's app launcher. Opens a separate window."
+      control={
+        <Switch
+          aria-label="MadoHomu desktop app"
+          checked={launcherEnabled === true}
+          disabled={busy || !canWrite}
+          onCheckedChange={(enabled) =>
+            void run(() =>
+              saveMadoHomuDesktopLauncherEnabled(enabled).catch(() => {
+                toastManager.add({
+                  type: "error",
+                  title: "Could not save the MadoHomu desktop preference",
+                });
+                return false;
+              }),
+            )
+          }
+        />
+      }
+    />
   );
 }

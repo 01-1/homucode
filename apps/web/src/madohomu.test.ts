@@ -1,11 +1,18 @@
+import {
+  PrimaryConnectionTarget,
+  RelayConnectionTarget,
+  type ConnectionCatalogEntry,
+} from "@t3tools/client-runtime/connection";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { MADOHOMU_NEW_THREAD_TITLE } from "@t3tools/client-runtime/madohomu";
 import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
-import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
+import * as Option from "effect/Option";
+import { AsyncResult, AtomRegistry } from "effect/reactivity";
 import { expect, it, onTestFinished, vi } from "vite-plus/test";
 
+import { environmentCatalog } from "./connection/catalog";
 import { useComposerDraftStore } from "./composerDraftStore";
 import {
   madohomuNamedThread,
@@ -16,7 +23,6 @@ import {
 import { appAtomRegistry } from "./rpc/atomRegistry";
 import * as entities from "./state/entities";
 import * as environments from "./state/environments";
-import { primaryEnvironmentIdAtom } from "./state/primaryEnvironment";
 import { environmentServerConfigsAtom, serverEnvironment } from "./state/server";
 import { environmentThreadShells } from "./state/threads";
 import { makeThreadFixture } from "./test-fixtures";
@@ -25,7 +31,34 @@ const primary = EnvironmentId.make("local");
 const remote = EnvironmentId.make("remote");
 const sharedProjectId = ProjectId.make("shared-project-id");
 
-it("uses the saved launch destination while a thread URL stays on its own machine", () => {
+function linkedCatalog(localId: EnvironmentId | null) {
+  const ids = localId === remote ? [remote, primary] : [primary, remote];
+  return {
+    isReady: true,
+    entries: new Map<EnvironmentId, ConnectionCatalogEntry>(
+      ids.map((environmentId) => {
+        const identity = { environmentId, label: environmentId };
+        return [
+          environmentId,
+          {
+            enabled: true,
+            profile: Option.none(),
+            target:
+              environmentId === localId
+                ? new PrimaryConnectionTarget({
+                    ...identity,
+                    httpBaseUrl: "http://localhost:3773",
+                    wsBaseUrl: "ws://localhost:3773",
+                  })
+                : new RelayConnectionTarget(identity),
+          },
+        ];
+      }),
+    ),
+  };
+}
+
+it("uses the same saved destination across primaries while a thread URL stays on its own machine", () => {
   const settings = {
     ...DEFAULT_SERVER_SETTINGS,
     madohomuEnabled: true,
@@ -34,7 +67,7 @@ it("uses the saved launch destination while a thread URL stays on its own machin
   const local = { settings: { ...settings, madohomuDestinationEnvironmentId: remote } };
   const configs = new Map([
     [primary, local],
-    [remote, { settings }],
+    [remote, { settings: { ...settings, madohomuDestinationEnvironmentId: primary } }],
   ]);
   using _projects = vi
     .spyOn(entities, "readProjects")
@@ -46,10 +79,10 @@ it("uses the saved launch destination while a thread URL stays on its own machin
           >[number],
       ),
     );
-  const registryFor = (online: boolean) =>
+  const registryFor = (localId: EnvironmentId | null, online = true) =>
     AtomRegistry.make({
       initialValues: [
-        [primaryEnvironmentIdAtom, primary, { skipInitialRun: true }],
+        [environmentCatalog.catalogValueAtom, linkedCatalog(localId), { skipInitialRun: true }],
         [
           environmentServerConfigsAtom,
           online ? configs : new Map([[primary, local]]),
@@ -57,10 +90,14 @@ it("uses the saved launch destination while a thread URL stays on its own machin
         ],
       ],
     });
-  const online = registryFor(true);
-  const offline = registryFor(false);
+  const online = registryFor(primary);
+  const otherPrimary = registryFor(remote);
+  const hosted = registryFor(null);
+  const offline = registryFor(primary, false);
   onTestFinished(() => {
     online.dispose();
+    otherPrimary.dispose();
+    hosted.dispose();
     offline.dispose();
   });
   using atoms = vi.spyOn(appAtomRegistry, "get").mockImplementation(online.get.bind(online));
@@ -72,70 +109,58 @@ it("uses the saved launch destination while a thread URL stays on its own machin
     readMadoHomuContext(router({ environmentId: primary, threadId: ThreadId.make("thread") }))
       ?.project.environmentId,
   ).toBe(primary);
+  atoms.mockImplementation(otherPrimary.get.bind(otherPrimary));
+  expect(readMadoHomuContext(router({}))?.project.environmentId).toBe(remote);
+  atoms.mockImplementation(hosted.get.bind(hosted));
+  expect(readMadoHomuContext(router({}))?.project.environmentId).toBe(remote);
   atoms.mockImplementation(offline.get.bind(offline));
   expect(readMadoHomuContext(router({}))).toBeNull();
 });
 
-it.each(["remote", "local", "read-only primary", "older primary"] as const)(
-  "saves only to the settings that own the project and destination (%s)",
-  async (scenario) => {
-    const target = scenario === "local" ? primary : remote;
-    using _environments = vi.spyOn(environments, "readEnvironment").mockReturnValue({
-      connection: { phase: "connected", error: null, traceId: null },
-    } as environments.EnvironmentPresentation);
-    const get = appAtomRegistry.get.bind(appAtomRegistry);
-    using _atoms = vi
-      .spyOn(appAtomRegistry, "get")
-      .mockImplementation(<A>(atom: Atom.Atom<A>): A => {
-        if (atom === primaryEnvironmentIdAtom) return primary as A;
-        if (atom === environmentServerConfigsAtom) return new Map() as A;
-        if (atom === serverEnvironment.updateSettings.permissionAtom(primary)) {
-          return (scenario !== "read-only primary") as A;
-        }
-        if (atom === serverEnvironment.updateSettings.permissionAtom(remote)) return true as A;
-        return get(atom);
-      });
+it.each([primary, remote, null])(
+  "persists the same destination on the shared server with primary %s",
+  async (localId) => {
+    const registry = AtomRegistry.make({
+      initialValues: [
+        [environmentCatalog.catalogValueAtom, linkedCatalog(localId), { skipInitialRun: true }],
+        [environmentServerConfigsAtom, new Map(), { skipInitialRun: true }],
+        [serverEnvironment.updateSettings.permissionAtom(primary), true, { skipInitialRun: true }],
+        [serverEnvironment.updateSettings.permissionAtom(remote), true, { skipInitialRun: true }],
+      ],
+    });
+    onTestFinished(() => registry.dispose());
+    using _environment = vi.spyOn(environments, "readEnvironment").mockImplementation(
+      (id) =>
+        ({
+          label: id,
+          connection: { phase: "connected", error: null, traceId: null },
+          serverConfig: { settings: DEFAULT_SERVER_SETTINGS },
+        }) as environments.EnvironmentPresentation,
+    );
+    using _get = vi.spyOn(appAtomRegistry, "get").mockImplementation(registry.get.bind(registry));
+    using _set = vi.spyOn(appAtomRegistry, "set").mockImplementation(registry.set.bind(registry));
     using update = vi
       .spyOn(serverEnvironment.updateSettings, "run")
-      .mockImplementation(async (_registry, { environmentId, input: { patch } }) =>
+      .mockImplementation(async (_registry, { input: { patch } }) =>
         AsyncResult.success({
           ...DEFAULT_SERVER_SETTINGS,
           madohomuEnabled: patch.madohomuEnabled ?? false,
           madohomuProjectId: patch.madohomuProjectId ?? null,
-          madohomuDestinationEnvironmentId:
-            environmentId === primary && scenario === "older primary"
-              ? null
-              : (patch.madohomuDestinationEnvironmentId ?? null),
+          madohomuDestinationEnvironmentId: patch.madohomuDestinationEnvironmentId ?? null,
         }),
       );
-    const selection = saveMadoHomuProject(target, sharedProjectId);
-    if (scenario === "read-only primary") {
-      await expect(selection).rejects.toThrow("settings access on the primary machine");
-      expect(update).not.toHaveBeenCalled();
-      return;
-    }
-    if (scenario === "older primary") {
-      await expect(selection).rejects.toThrow("project was saved on its machine");
-    } else {
-      await expect(selection).resolves.toBe(true);
-    }
-    const ownerPatch = { madohomuEnabled: true, madohomuProjectId: sharedProjectId };
-    expect(update.mock.calls.map(([, command]) => command)).toEqual(
-      target === primary
-        ? [
-            {
-              environmentId: primary,
-              input: { patch: { ...ownerPatch, madohomuDestinationEnvironmentId: primary } },
-            },
-          ]
-        : [
-            { environmentId: remote, input: { patch: ownerPatch } },
-            {
-              environmentId: primary,
-              input: { patch: { madohomuDestinationEnvironmentId: remote } },
-            },
-          ],
-    );
+
+    await expect(saveMadoHomuProject(remote, sharedProjectId)).resolves.toBe(true);
+    expect(update.mock.calls.map(([, command]) => command)).toEqual([
+      {
+        environmentId: remote,
+        input: { patch: { madohomuEnabled: true, madohomuProjectId: sharedProjectId } },
+      },
+      {
+        environmentId: primary,
+        input: { patch: { madohomuDestinationEnvironmentId: remote } },
+      },
+    ]);
   },
 );
 

@@ -7,6 +7,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ScheduledTaskId,
+  type ServerSettingsPatch,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -24,7 +25,9 @@ import {
   resolveMadoHomuSelection,
   isMadoHomuThreadPinned,
   MORNING_BRIEF_PROMPT,
-  selectMadoHomuEnvironment,
+  madoHomuProjectSelectionIssue,
+  resolveMadoHomuDestination,
+  writeMadoHomuProject,
 } from "./madohomu.ts";
 
 it("keeps MadoHomu entries pinned by default and treats other project threads as unpinned", () => {
@@ -106,27 +109,154 @@ it("starts MadoHomu threads in the project's default permission mode, like new t
   ).toBe("approval-required");
 });
 
-it("chooses an enabled remote MadoHomu destination with a disabled primary or no primary, and removes it when disabled", () => {
-  const local = {
-    environmentId: EnvironmentId.make("local"),
-    madohomuEnabled: false,
-    madohomuDesktopAppEnabled: false,
-  };
-  const remote = {
-    environmentId: EnvironmentId.make("remote"),
-    madohomuEnabled: true,
-    madohomuDesktopAppEnabled: true,
-  };
-  expect(selectMadoHomuEnvironment(local.environmentId, [local, remote])).toBe(
-    remote.environmentId,
-  );
-  expect(selectMadoHomuEnvironment(null, [local, remote])).toBe(remote.environmentId);
-  expect(
-    selectMadoHomuEnvironment(local.environmentId, [local, { ...remote, madohomuEnabled: false }]),
-  ).toBeNull();
-  expect(
-    selectMadoHomuEnvironment(local.environmentId, [{ ...local, madohomuEnabled: true }, remote]),
-  ).toBe(remote.environmentId);
+describe("MadoHomu destination", () => {
+  const a = EnvironmentId.make("a-machine");
+  const b = EnvironmentId.make("b-machine");
+  const c = EnvironmentId.make("c-machine");
+  const projectId = ProjectId.make("same-project-id");
+  const project = (environmentId: EnvironmentId) => ({ environmentId, projectId });
+  const host = (id: EnvironmentId) => ({
+    label: id,
+    connected: true,
+    settingsLoaded: true,
+    canWrite: true,
+  });
+
+  it("falls back to an enabled legacy host and keeps an explicit destination when its host is offline", () => {
+    const legacy = { ...DEFAULT_SERVER_SETTINGS, madohomuEnabled: true };
+    const environments = [
+      { environmentId: c, settings: legacy },
+      { environmentId: b, settings: legacy },
+      { environmentId: a, settings: null },
+    ];
+    expect(resolveMadoHomuDestination(environments)).toEqual({
+      anchorEnvironmentId: a,
+      savedEnvironmentId: null,
+      environmentId: b,
+    });
+    expect(resolveMadoHomuDestination([...environments].reverse()).environmentId).toBe(b);
+    expect(
+      resolveMadoHomuDestination([{ environmentId: a, settings: null }]).environmentId,
+    ).toBeNull();
+
+    expect(
+      resolveMadoHomuDestination([
+        ...environments.slice(0, 2),
+        { environmentId: a, settings: { ...legacy, madohomuDestinationEnvironmentId: a } },
+      ]).savedEnvironmentId,
+    ).toBe(a);
+    expect(
+      resolveMadoHomuDestination([
+        { environmentId: c, settings: legacy },
+        { environmentId: b, settings: null },
+        { environmentId: a, settings: { ...legacy, madohomuDestinationEnvironmentId: b } },
+      ]).environmentId,
+    ).toBe(b);
+  });
+
+  it("keeps the recorded settings host through successive project switches", async () => {
+    const settings = new Map([
+      [a, { ...DEFAULT_SERVER_SETTINGS, madohomuEnabled: true, madohomuProjectId: projectId }],
+      [b, { ...DEFAULT_SERVER_SETTINGS }],
+      [c, { ...DEFAULT_SERVER_SETTINGS }],
+    ]);
+    const destination = () =>
+      resolveMadoHomuDestination(
+        [c, b, a].map((environmentId) => ({
+          environmentId,
+          settings: settings.get(environmentId)!,
+        })),
+      );
+    const writes: Array<{ environmentId: EnvironmentId; patch: ServerSettingsPatch }> = [];
+    const save = async (environmentId: EnvironmentId, patch: ServerSettingsPatch) => {
+      writes.push({ environmentId, patch });
+      const previous = settings.get(environmentId)!;
+      const saved = {
+        ...previous,
+        madohomuEnabled: patch.madohomuEnabled ?? previous.madohomuEnabled,
+        madohomuProjectId: patch.madohomuProjectId ?? previous.madohomuProjectId,
+        madohomuDestinationEnvironmentId:
+          patch.madohomuDestinationEnvironmentId ?? previous.madohomuDestinationEnvironmentId,
+      };
+      settings.set(environmentId, saved);
+      return saved;
+    };
+
+    expect(destination().environmentId).toBe(a);
+    await writeMadoHomuProject(destination(), project(b), host, save);
+    expect(destination().environmentId).toBe(b);
+    await writeMadoHomuProject(destination(), project(c), host, save);
+    expect(destination().environmentId).toBe(c);
+    await writeMadoHomuProject(destination(), project(c), host, save);
+    expect(writes).toEqual([
+      { environmentId: b, patch: { madohomuEnabled: true, madohomuProjectId: projectId } },
+      { environmentId: a, patch: { madohomuDestinationEnvironmentId: b } },
+      { environmentId: c, patch: { madohomuEnabled: true, madohomuProjectId: projectId } },
+      { environmentId: a, patch: { madohomuDestinationEnvironmentId: c } },
+      { environmentId: c, patch: { madohomuEnabled: true, madohomuProjectId: projectId } },
+    ]);
+  });
+
+  it("names the machine that needs a connection or settings write access", () => {
+    const destination = { anchorEnvironmentId: a, savedEnvironmentId: b, environmentId: b };
+    const readHost = (id: EnvironmentId) => ({
+      ...host(id),
+      connected: id !== c,
+      canWrite: id !== a,
+    });
+
+    expect(madoHomuProjectSelectionIssue(destination, c, readHost)).toBe(
+      "Connect to c-machine to change the project.",
+    );
+    expect(
+      madoHomuProjectSelectionIssue(destination, c, (id) => ({
+        ...readHost(id),
+        connected: true,
+      })),
+    ).toBe("Settings write access on a-machine is required to save the launch destination.");
+    expect(
+      madoHomuProjectSelectionIssue(destination, c, (id) => ({
+        ...host(id),
+        connected: id !== a,
+      })),
+    ).toBe("Connect to a-machine to save the launch destination.");
+    expect(madoHomuProjectSelectionIssue(destination, b, readHost)).toBeNull();
+  });
+
+  it("reports a destination failure after saving the project and stops when the project write fails", async () => {
+    const oldSettings = { ...DEFAULT_SERVER_SETTINGS, madohomuDestinationEnvironmentId: b };
+    const destination = resolveMadoHomuDestination([{ environmentId: a, settings: oldSettings }]);
+    const writes: EnvironmentId[] = [];
+    await expect(
+      writeMadoHomuProject(destination, project(c), host, async (id) => {
+        writes.push(id);
+        if (id === a) throw new Error("Connection closed");
+        return { ...DEFAULT_SERVER_SETTINGS, madohomuEnabled: true, madohomuProjectId: projectId };
+      }),
+    ).rejects.toThrow(
+      "The project was saved on its machine. The launch destination could not be saved on a-machine. Connection closed",
+    );
+    expect(writes).toEqual([c, a]);
+
+    writes.length = 0;
+    await expect(
+      writeMadoHomuProject(destination, project(c), host, async (id) => {
+        writes.push(id);
+        return DEFAULT_SERVER_SETTINGS;
+      }),
+    ).rejects.toThrow("c-machine did not save the project selection.");
+    expect(writes).toEqual([c]);
+
+    await expect(
+      writeMadoHomuProject(destination, project(a), host, async () => ({
+        ...oldSettings,
+        madohomuProjectId: projectId,
+        madohomuEnabled: true,
+      })),
+    ).rejects.toThrow(
+      "The project was saved on its machine. The launch destination could not be saved on a-machine.",
+    );
+  });
 });
 
 describe("MadoHomu sections", () => {

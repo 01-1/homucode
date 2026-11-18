@@ -2,13 +2,15 @@ import { View } from "react-native";
 
 import { ListActionRow } from "../../components/ui/ListActionRow";
 import { rootNavigationRef } from "../../lib/rootNavigation";
-import { madoHomuEntryEnvironments } from "./madohomuDestination";
 import { useMadoHomuDestination } from "./useMadoHomuDestination";
 
 export function useMadoHomuEnvironments() {
-  const { candidates, linked, primaryEnvironmentId } = useMadoHomuDestination();
-  const destinations = madoHomuEntryEnvironments(candidates, primaryEnvironmentId);
-  return linked.filter((environment) => destinations.includes(environment.environmentId));
+  const { destination, linked } = useMadoHomuDestination();
+  return linked.filter(
+    (environment) =>
+      environment.environmentId === destination.environmentId &&
+      environment.serverConfig?.settings.madohomuEnabled !== false,
+  );
 }
 
 export function openMadoHomu(environmentId: string) {
