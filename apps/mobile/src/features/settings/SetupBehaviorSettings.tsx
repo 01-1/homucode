@@ -11,8 +11,11 @@ import {
 import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
+import { ListActionRow } from "../../components/ui/ListActionRow";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import { Sheet } from "../../components/ui/Sheet";
+import { buildModelOptions } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
@@ -191,7 +194,10 @@ export function MobileExtraSettings({
       patch: { connectDeviceLongSessions: true },
     }),
   );
-  if (!settings) return null;
+  if (!config) return null;
+  const { settings } = config;
+  const isManaged = (key: keyof ServerSettings) =>
+    config.managedPolicy !== undefined && isManagedSettingPath(config.managedPolicy, key);
   return (
     <SettingsSection title={`Extra features · ${label}`}>
       {FEATURE_OFFERS.filter(

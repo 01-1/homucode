@@ -13,6 +13,7 @@ import { isWslSettingsRowVisible } from "./ConnectionsSettings.logic";
 import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.logic";
 import {
   filterAvailableSettingsSearchItems,
+  getBuildingT3SearchAvailability,
   getThreadAutoSettlementSearchAvailability,
 } from "./settingsSearch";
 
@@ -73,5 +74,6 @@ export function useAvailableSettingsSearchItems() {
     hasFastWorktreeCheckoutEnvironment,
     hasTextGeneratorsEnvironment,
     hasPrimaryEnvironment: primaryEnvironmentId !== null,
+    hasBuildingT3: getBuildingT3SearchAvailability(environments).eligibleEnvironmentIds.length > 0,
   });
 }

@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import {
   FEATURE_OFFER_SETTINGS,
   filterAvailableSettingsSearchItems,
+  getBuildingT3SearchAvailability,
   getSettingsSearchTargetScope,
   getThreadAutoSettlementSearchAvailability,
   isSettingsSearchScopeAvailable,
@@ -169,6 +170,57 @@ describe("searchSettings", () => {
     expect(available.map((item) => item.id).filter((id) => gatedIds.has(id))).toEqual([]);
   });
 
+  it("finds Building T3 fields only when an environment enables the page", () => {
+    const availability = {
+      hasCloudPublicConfig: false,
+      hasEnvironment: true,
+      hasProviderSettingsEnvironment: false,
+      canManageLocalBackend: false,
+      isWslSettingsRowVisible: false,
+      hasThreadAutoSettlement: false,
+    };
+    for (const title of ["Cloud machine type", "Build output folder", "Enable cloud builds"]) {
+      expect(searchSettings(title, filterAvailableSettingsSearchItems(availability))).toEqual([]);
+      const available = filterAvailableSettingsSearchItems({
+        ...availability,
+        hasBuildingT3: true,
+      });
+      expect(searchSettings(title, available)[0]).toMatchObject({
+        title,
+        to: "/settings/building-t3",
+      });
+    }
+  });
+
+  it("targets only connected environments with Building T3 enabled", () => {
+    const enabled = EnvironmentId.make("enabled");
+    const disabled = EnvironmentId.make("disabled");
+    const offline = EnvironmentId.make("offline");
+    const environments = [
+      {
+        environmentId: enabled,
+        connection: { phase: "connected" },
+        serverConfig: { settings: { buildToolsSettingsVisible: true } },
+      },
+      {
+        environmentId: disabled,
+        connection: { phase: "connected" },
+        serverConfig: { settings: { buildToolsSettingsVisible: false } },
+      },
+      {
+        environmentId: offline,
+        connection: { phase: "offline" },
+        serverConfig: { settings: { buildToolsSettingsVisible: true } },
+      },
+    ] as const;
+
+    expect(getBuildingT3SearchAvailability(environments, disabled)).toEqual({
+      eligibleEnvironmentIds: [enabled],
+      isTargetAvailable: false,
+    });
+    expect(getBuildingT3SearchAvailability(environments, enabled).isTargetAvailable).toBe(true);
+  });
+
   it("finds the T3 Connect session setting before the environment links a tunnel", () => {
     const available = filterAvailableSettingsSearchItems({
       hasCloudPublicConfig: false,
@@ -270,6 +322,17 @@ describe("searchSettings", () => {
       expect(searchSettings(offer.title).map((item) => item.id)).toContain(row);
     },
   );
+
+  it.each([
+    "claude-steer-recovery",
+    "claude-hold-background-commands",
+    "show-building-t3",
+    "device-names",
+  ])("opens %s from the all-environments scope", (id) => {
+    const requiredScope = getSettingsSearchTargetScope(id)?.scope;
+    expect(requiredScope).toBe("environment-defaults");
+    expect(isSettingsSearchScopeAvailable(requiredScope ?? null, "all")).toBe(true);
+  });
 
   it("keeps catalog result ids unique", () => {
     const ids = SETTINGS_SEARCH_ITEMS.map((item) => item.id);

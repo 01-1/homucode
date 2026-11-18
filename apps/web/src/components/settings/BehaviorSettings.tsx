@@ -100,13 +100,9 @@ export function DeviceNamesSettings({
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const known = currentOnly
-    ? query.data?.current
-      ? [query.data.current]
-      : []
-    : (query.data?.devices ?? []);
   const devices = [
-    ...known,
+    ...(query.data?.current ? [query.data.current] : []),
+    ...(!currentOnly ? (query.data?.devices ?? []) : []),
     ...(!currentOnly ? (query.data?.rules ?? settings.deviceNames) : []),
   ].filter(
     (device, index, all) =>
@@ -171,7 +167,7 @@ export function DeviceNamesSettings({
 }
 
 export function BehaviorSettingsSection() {
-  const { targets, scope } = useSettingsScope();
+  const { targets, scope, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const update = useUpdateScopedSettings();
   const environmentId =
@@ -184,7 +180,8 @@ export function BehaviorSettingsSection() {
         {FEATURE_OFFERS.map((offer) => {
           const id = FEATURE_OFFER_SETTINGS[offer.id];
           const key = offer.setting;
-          if (offer.page !== 2 || !key || id !== offer.id) return null;
+          if (offer.page !== 2 || !key || key === "claudeHoldBackgroundCommands" || id !== offer.id)
+            return null;
           return (
             <SettingsRow
               key={offer.id}
@@ -212,9 +209,25 @@ export function BehaviorSettingsSection() {
         <EnvironmentBehaviorSettings environmentId={environmentId} />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Select one environment to configure work assistance and device names.
+          Select one environment to configure work assistance.
         </p>
       )}
+      <SettingsSection {...searchableSetting("device-names")}>
+        {environmentId ? (
+          <DeviceNamesSettings environmentId={environmentId} />
+        ) : (
+          <SettingsScopeNotice
+            inline
+            target="environment"
+            targetId="device-names"
+            {...(scope.kind === "all"
+              ? { eligibleEnvironmentIds: connectedEnvironments.map((env) => env.environmentId) }
+              : {})}
+          >
+            Choose an environment to edit device names.
+          </SettingsScopeNotice>
+        )}
+      </SettingsSection>
     </>
   );
 }

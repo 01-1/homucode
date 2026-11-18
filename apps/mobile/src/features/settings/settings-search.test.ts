@@ -76,6 +76,14 @@ describe("filterSettingsSections", () => {
   });
 });
 
+it.each(["Cloud machine type", "Build output folder", "Enable loading AppImages"])(
+  "finds Building T3 by %s",
+  (title) => {
+    const row = { id: "SettingsBuildingT3", label: "Building T3" };
+    expect(filterSettingsSections([{ rows: [row] }], title)).toEqual([{ rows: [row] }]);
+  },
+);
+
 describe("setup-wizard offers", () => {
   it.each(FEATURE_OFFERS.map((offer) => [offer.id, offer] as const))(
     "%s has a Settings page that search finds by its title",

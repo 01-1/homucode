@@ -102,6 +102,17 @@ const SETTINGS_SEARCH_TERMS = {
     "new threads",
     "last project",
   ],
+  SettingsBuildingT3: [
+    "T3 Code checkout",
+    "Boat CLI",
+    "Cloud machine type",
+    "Build output folder",
+    "AppImage build folder",
+    "Enable cloud builds",
+    "Enable Android APK builds",
+    "Enable loading AppImages",
+    "Serve APKs on LAN",
+  ],
   SettingsThreads: [
     "new threads",
     "default workspace",

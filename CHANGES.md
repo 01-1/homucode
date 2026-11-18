@@ -48,7 +48,7 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 - **Offers for opt-in features.** Setup offers MadoHomu, quick model, settings sync and the status line on page 1, with HomuTheme preselected in a theme picker on first install. Page 2, "Extra features", offers delegation, Stop and steering behavior, asking again after a restart, message attribution, title options, background Git and building T3 Code. After an update, users are shown a selection page with new features (`featureOffersSeen`); when either list has fewer than three, both share a page. Device naming and optional Building T3 setup follow. Mobile also offers its device-local Faster phone launch, tracking that offer on each phone. Page 2 also offers staying signed in to T3 Connect for 30 days and keeping Claude threads working during background commands. Settings stays the way to change every choice.
 
-- **Find setup choices in Settings.** Search web and desktop Settings for the options offered during setup. On mobile, Settings → Threads also lets you turn Quick model on or off, change T3 Connect's 30-day sessions, and control whether Claude background commands keep threads working.
+- **Find setup choices in Settings.** Search web and desktop Settings for the options offered during setup. On mobile, Settings → Threads also lets you choose or turn off Quick model, change T3 Connect's 30-day sessions, and control whether Claude background commands keep threads working.
 
 ## Queue and steering
 
