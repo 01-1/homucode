@@ -104,7 +104,7 @@ function layoutOf(
     slots.push({ y, sectionId: section.id, index: count });
   }
   const geometry = items.map((item) => `${item.key}@${item.offset}`).join("|");
-  return { items, slots, version: `${rowHeight}:${headerHeight}:${geometry}` };
+  return { items, slots, end: y, version: `${rowHeight}:${headerHeight}:${geometry}` };
 }
 
 /** The slot whose landing spot, once the rows between close the gap, is nearest the dragged row. */
@@ -204,7 +204,9 @@ export function MadoHomuReorderList(props: {
   const fresh = layoutOf(props.sections, rowHeight, headerHeight);
   const { version } = fresh;
   // oxlint-disable-next-line react/memo-dependencies -- the geometry gestures and worklets read changes only with `version`; titles render from `fresh`
-  const { items, slots } = useMemo(() => fresh, [version]);
+  const { items, slots, end } = useMemo(() => fresh, [version]);
+  // The dimmed sections start where the manual ones end; a row released over them goes back.
+  const dimmedFrom = props.dimmed.length > 0 ? end : Number.POSITIVE_INFINITY;
   const scrollRef = useAnimatedRef<Reanimated.ScrollView>();
   const contentRef = useAnimatedRef<Reanimated.View>();
   const dragVersion = useSharedValue("");
@@ -229,12 +231,18 @@ export function MadoHomuReorderList(props: {
     () => () => {
       "worklet";
       const center = source.get() + rowHeight / 2 + translation.get() + scrolled.get();
+      if (center >= dimmedFrom) {
+        if (slot.get() < 0) return;
+        slot.set(-1);
+        insertion.set(source.get());
+        return;
+      }
       const next = nearestSlot(slots, source.get(), rowHeight, center);
       if (next < 0 || next === slot.get()) return;
       slot.set(next);
       insertion.set(slots[next]!.y);
     },
-    [slots, rowHeight, source, translation, scrolled, slot, insertion],
+    [slots, dimmedFrom, rowHeight, source, translation, scrolled, slot, insertion],
   );
 
   const onFrame = useCallback(

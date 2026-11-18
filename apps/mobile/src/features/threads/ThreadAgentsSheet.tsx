@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { AppText as Text } from "../../components/ui/AppText";
 import { environmentThreadDetails } from "../../state/threads";
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 import { useEnvironments } from "../../state/environments";
 import { SubagentRow } from "./SubagentRow";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
@@ -80,6 +82,7 @@ export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
       StackActions.replace("Thread", {
         environmentId: child.environmentId,
         threadId: child.threadId,
+        ...madohomuLinkFlag(rootStackState(navigation), child),
       }),
     );
   };

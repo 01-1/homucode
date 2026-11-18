@@ -2,7 +2,12 @@ import { ThreadId, type ServerSettings } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { makeThreadShellFixture } from "../../test-fixtures";
-import { buildMadoHomuListRows, dropMadoHomuThread, moveMadoHomuThread } from "./madohomuList";
+import {
+  buildMadoHomuListRows,
+  dropMadoHomuThread,
+  madohomuPlacePatch,
+  moveMadoHomuThread,
+} from "./madohomuList";
 
 const NOW = "2026-06-02T00:00:00.000Z";
 const a = ThreadId.make("a");
@@ -49,6 +54,7 @@ describe("buildMadoHomuListRows", () => {
       "section:work",
       c,
       "section:empty",
+      "empty:empty",
       "section:scratch",
       s,
     ]);
@@ -159,10 +165,58 @@ describe("buildMadoHomuListRows", () => {
       "section:pinned",
       "empty:pinned",
       "section:work",
+      "empty:work",
       "section:empty",
+      "empty:empty",
       "section:scratch",
       s,
     ]);
+  });
+
+  it("never files a thread waiting on the user, a guest included, under Working", () => {
+    const w = ThreadId.make("w");
+    const g = ThreadId.make("g");
+    const rows = buildMadoHomuListRows({
+      threads: [
+        ...threads,
+        makeThreadShellFixture({ id: w, title: "W" }),
+        // pendingGuestMessageCount makes the row read "Request".
+        ...threads
+          .filter((thread) => thread.id === s)
+          .map((thread) => ({ ...thread, id: g, pendingGuestMessageCount: 1 })),
+      ],
+      settings,
+      now: NOW,
+      toggled: new Set(),
+      isWorking: (thread) => thread.id === w || thread.id === g,
+    });
+    const ids = summary(rows);
+    expect(ids.slice(ids.indexOf("section:working"))).toEqual([
+      "section:working",
+      w,
+      "section:scratch",
+      g,
+      s,
+    ]);
+  });
+});
+
+describe("madohomuPlacePatch", () => {
+  it("files a moved thread at the end of its new section and keeps an unmoved one in place", () => {
+    expect(madohomuPlacePatch(settings, a, { section: "work" })).toEqual({
+      madohomuThreads: { [a]: { icon: null, prompt: "", pinned: true, section: "work" } },
+      madohomuThreadOrder: [b, c, a],
+    });
+    expect(madohomuPlacePatch(settings, s, { section: null })).toEqual({
+      madohomuThreads: { [s]: { icon: null, prompt: "", pinned: true, section: null } },
+      madohomuThreadOrder: [b, a, c, s],
+    });
+    expect(madohomuPlacePatch(settings, c, { section: "work" })).toEqual({
+      madohomuThreads: { [c]: { icon: null, prompt: "", pinned: true, section: "work" } },
+    });
+    expect(madohomuPlacePatch(settings, a, null)).toEqual({
+      madohomuThreads: { [a]: { icon: null, prompt: "", pinned: false, section: null } },
+    });
   });
 });
 

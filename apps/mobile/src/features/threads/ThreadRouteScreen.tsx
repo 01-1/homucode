@@ -14,6 +14,7 @@ import {
 } from "@react-navigation/native";
 import {
   createContext,
+  type ComponentProps,
   use,
   useEffect,
   useEffectEvent,
@@ -115,6 +116,7 @@ import {
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
 import { ThreadHeader } from "./ThreadHeader";
+import { MadoHomuThreadHeader } from "../madohomu/MadoHomuThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
   useAndroidWorkspaceBack,
@@ -998,6 +1000,19 @@ function ThreadRouteContent(
   }
 
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
+  const threadHeaderProps = {
+    title: selectedThread.title,
+    subtitle: threadSyncLabel ?? headerSubtitle,
+    gitControls: threadGitControlProps,
+    hasThreadCwd: selectedThreadCwd !== null,
+    inspectorMode,
+    onOpenFilesInspector: handleOpenFilesInspector,
+    ...(props.onReturnToThread ? { onReturnToThread: props.onReturnToThread } : {}),
+    onFindInThread:
+      serverConfig?.threadFind === true
+        ? () => openThreadFind(scopedThreadKey(selectedThread.environmentId, selectedThread.id))
+        : undefined,
+  } satisfies ComponentProps<typeof ThreadHeader>;
   const renderThreadRouteBody = () => (
     <>
       <GitActionProgressOverlay
@@ -1009,24 +1024,14 @@ function ThreadRouteContent(
       <>
         <ThreadScreenBinding
           header={
-            props.inspectorPresentation ? null : (
-              <ThreadHeader
-                title={selectedThread.title}
-                subtitle={threadSyncLabel ?? headerSubtitle}
-                gitControls={threadGitControlProps}
-                hasThreadCwd={selectedThreadCwd !== null}
-                inspectorMode={inspectorMode}
-                onOpenFilesInspector={handleOpenFilesInspector}
-                onReturnToThread={props.onReturnToThread}
-                onFindInThread={
-                  serverConfig?.threadFind === true
-                    ? () =>
-                        openThreadFind(
-                          scopedThreadKey(selectedThread.environmentId, selectedThread.id),
-                        )
-                    : undefined
-                }
+            props.inspectorPresentation ? null : params.madohomu === true ? (
+              <MadoHomuThreadHeader
+                environmentId={selectedThread.environmentId}
+                threadId={selectedThread.id}
+                {...threadHeaderProps}
               />
+            ) : (
+              <ThreadHeader {...threadHeaderProps} />
             )
           }
           canOperateThread={canOperateThread}

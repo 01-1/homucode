@@ -1,6 +1,8 @@
 import { StackActions, useNavigation, useRoute, type Route } from "@react-navigation/native";
 import { use } from "react";
 import { linkedThreadStep } from "../../lib/android-workspace-navigation";
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 import {
   ThreadInspectorNavigationContext,
   useOpenThreadInspector,
@@ -30,6 +32,12 @@ export function useOpenLinkedThread() {
     )
       return;
     if (step === "pop") navigation.dispatch(StackActions.pop());
-    else if (step === "push") navigation.dispatch(StackActions.push("Thread", target));
+    else if (step === "push")
+      navigation.dispatch(
+        StackActions.push("Thread", {
+          ...target,
+          ...madohomuLinkFlag(rootStackState(navigation), target),
+        }),
+      );
   };
 }
