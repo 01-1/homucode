@@ -502,27 +502,23 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
           ? { confirm: { label: "Done", onPress: () => setReordering(false) } }
           : {})}
         actions={
-          reorderMode
-            ? []
-            : [
-                ...(settings.madohomuEnabled && actions.project && canEdit
-                  ? [
-                      {
-                        icon: "line.3.horizontal" as const,
-                        accessibilityLabel: "Reorder pinned threads",
-                        onPress: () => {
-                          openSwipeableRef.current?.close();
-                          setReordering(true);
-                        },
-                      },
-                      {
-                        icon: "folder.badge.plus" as const,
-                        accessibilityLabel: "New section",
-                        onPress: addSection,
-                      },
-                    ]
-                  : []),
+          !reorderMode && settings.madohomuEnabled && actions.project && canEdit
+            ? [
+                {
+                  icon: "line.3.horizontal" as const,
+                  accessibilityLabel: "Reorder pinned threads",
+                  onPress: () => {
+                    openSwipeableRef.current?.close();
+                    setReordering(true);
+                  },
+                },
+                {
+                  icon: "folder.badge.plus" as const,
+                  accessibilityLabel: "New section",
+                  onPress: addSection,
+                },
               ]
+            : []
         }
         menus={
           reorderMode

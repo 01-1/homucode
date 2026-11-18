@@ -1,14 +1,16 @@
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { type ReactNode } from "react";
-import { CombineIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
+import { type ReactNode, useEffect, useRef } from "react";
+import { SquareArrowDownLeftIcon, SquareArrowOutUpRightIcon, SquarePenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useThreadShell } from "../../state/entities";
 import { useMadoHomuActions } from "./useMadoHomuActions";
 import { useMadoHomuEnvironmentId } from "./useMadoHomuEnvironmentId";
 import { MadoHomuNoProject } from "./MadoHomuProjectPicker";
@@ -39,32 +41,45 @@ function MadoHomuWindowModeButton({
   if (!bridge?.setMadoHomuWindowMode) return null;
   const split = bridge.isMadoHomuWindow?.() === true;
   const label = split ? "Merge MadoHomu into the main window" : "Open MadoHomu in its own window";
-  const Icon = split ? CombineIcon : SquareArrowOutUpRightIcon;
+  // One pop-out arrow, pointing out to split and back in to merge.
+  const Icon = split ? SquareArrowDownLeftIcon : SquareArrowOutUpRightIcon;
+  const toggle = () =>
+    void bridge
+      .setMadoHomuWindowMode?.({
+        mode: split ? "merged" : "split",
+        environmentId,
+        ...(threadId ? { threadId } : {}),
+      })
+      .catch(() => toastManager.add({ type: "error", title: "Could not move MadoHomu" }));
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            aria-label={label}
-            className="shrink-0 [-webkit-app-region:no-drag]"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() =>
-              void bridge
-                .setMadoHomuWindowMode?.({
-                  mode: split ? "merged" : "split",
-                  environmentId,
-                  ...(threadId ? { threadId } : {}),
-                })
-                .catch(() => toastManager.add({ type: "error", title: "Could not move MadoHomu" }))
-            }
-          />
-        }
+    <>
+      <Button
+        aria-label={label}
+        className="hidden shrink-0 [-webkit-app-region:no-drag] min-[700px]:inline-flex"
+        size="sm"
+        variant="ghost"
+        onClick={toggle}
       >
         <Icon className="size-3.5" />
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">{label}</TooltipPopup>
-    </Tooltip>
+        {split ? "Merge" : "Split"}
+      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              aria-label={label}
+              className="shrink-0 [-webkit-app-region:no-drag] min-[700px]:hidden"
+              size="icon-sm"
+              variant="ghost"
+              onClick={toggle}
+            />
+          }
+        >
+          <Icon className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">{label}</TooltipPopup>
+      </Tooltip>
+    </>
   );
 }
 
@@ -72,6 +87,30 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
   const { settings, project } = useMadoHomuThreads(environmentId);
   const selectedId = useMadoHomuSelectedThreadId(environmentId);
   const threadMenu = useMadoHomuThreadMenu(environmentId);
+  const search = useSearch({ from: "/_chat/madohomu" });
+  const navigate = useNavigate();
+  const named = useThreadShell(
+    search.threadId ? scopeThreadRef(environmentId, search.threadId) : null,
+  );
+  // A named thread a filter hides keeps its URL; one deleted, archived or moved is replaced.
+  const namedLeft =
+    named !== null &&
+    (named.deletedAt !== null || named.archivedAt !== null || named.projectId !== project?.id);
+  const namedId = named?.id ?? null;
+  // The last named thread that was here: one not loaded yet (just made) is not one that is gone.
+  const seenThreadId = useRef<ThreadId | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the shown thread into the URL, so the live list reordering cannot swap the open chat.
+  useEffect(() => {
+    if (namedId !== null && !namedLeft) seenThreadId.current = namedId;
+    if (selectedId === null || search.threadId === selectedId) return;
+    const namedGone = namedId === null ? seenThreadId.current === search.threadId : namedLeft;
+    if (search.threadId !== undefined && !namedGone) return;
+    void navigate({
+      to: "/madohomu",
+      search: (prev) => ({ ...prev, threadId: selectedId }),
+      replace: true,
+    });
+  }, [namedId, namedLeft, navigate, search.threadId, selectedId]);
   if (!settings.madohomuEnabled)
     return (
       <MadoHomuMessage>
@@ -128,6 +167,20 @@ function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) 
         <SquarePenIcon aria-hidden />
         New thread
       </Button>
+      {!actions.modelSelection ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            No agent is set up yet, so MadoHomu cannot start a thread.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link to="/settings/providers" search={{ environmentId }} />}
+          >
+            Open provider settings
+          </Button>
+        </>
+      ) : null}
     </div>
   );
 }
