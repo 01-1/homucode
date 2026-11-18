@@ -3,7 +3,8 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   clientSettingsPatchFromSyncedValues,
-  describeSyncedSettingConflict,
+  formatSyncedSettingValue,
+  syncedSettingValuePreview,
   planClientSettingsSync,
   resolveClientSettingsSync,
   syncedValuesFromClientSettings,
@@ -97,58 +98,18 @@ describe("synced client setting values", () => {
     expect(clientSettingsPatchFromSyncedValues(gates)).toEqual({});
   });
 
-  it("describes conflicting lists by what differs instead of raw JSON", () => {
-    const shared = { provider: "claudeAgent", model: "claude-opus-5-5" };
-    expect(
-      describeSyncedSettingConflict({
-        key: "favorites",
-        local: [shared, { provider: "claudeAgent", model: "claude-fable-5-2" }],
-        remote: [shared, { provider: "codex", model: "gpt-6.2-sol" }],
-      }),
-    ).toEqual({ local: "2 items, incl. claude-fable-5-2", remote: "2 items, incl. gpt-6.2-sol" });
-    expect(
-      describeSyncedSettingConflict({ key: "favorites", local: ["a", "b"], remote: ["b", "a"] }),
-    ).toEqual({ local: "2 items, from #1: a, b", remote: "2 items, from #1: b, a" });
-    expect(
-      describeSyncedSettingConflict({
-        key: "favorites",
-        local: [{ provider: "claudeAgent", model: "m" }],
-        remote: [{ provider: "claudeWork", model: "m" }],
-      }),
-    ).toEqual({
-      local: "1 item, incl. m (provider: claudeAgent)",
-      remote: "1 item, incl. m (provider: claudeWork)",
-    });
-    expect(
-      describeSyncedSettingConflict({
-        key: "customThemes",
-        local: JSON.stringify([{ id: "lav", colors: { accent: "#a" } }]),
-        remote: JSON.stringify([{ id: "lav", colors: { accent: "#b" } }]),
-      }),
-    ).toEqual({
-      local: "1 item, incl. lav (colors.accent: #a)",
-      remote: "1 item, incl. lav (colors.accent: #b)",
-    });
-    const css = "x".repeat(80);
-    expect(
-      describeSyncedSettingConflict({
-        key: "customThemes",
-        local: JSON.stringify([{ id: "lav", css: `${css}red` }]),
-        remote: JSON.stringify([{ id: "lav", css: `${css}blue` }]),
-      }),
-    ).toEqual({
-      local: "1 item, incl. lav (css: ...xxxxxxxxxxred)",
-      remote: "1 item, incl. lav (css: ...xxxxxxxxxxblue)",
-    });
-    expect(
-      describeSyncedSettingConflict({
-        key: "customThemes",
-        local: JSON.stringify([{ id: "lavender" }]),
-        remote: JSON.stringify([{ id: "lavender" }, { id: "mint" }]),
-      }),
-    ).toEqual({ local: "1 item", remote: "2 items, incl. mint" });
-    expect(
-      describeSyncedSettingConflict({ key: "theme", local: "lavender-darker", remote: "lavender" }),
-    ).toEqual({ local: "lavender-darker", remote: "lavender" });
+  it("shows whole synced values, never shortened", () => {
+    const favorites = Array.from({ length: 5 }, (_, index) => ({
+      provider: "claudeAgent",
+      model: `claude-model-${index}`,
+    }));
+    expect(formatSyncedSettingValue(favorites)).toBe(JSON.stringify(favorites, null, 2));
+    const themes = [{ id: "lavender", css: "x".repeat(200) }];
+    expect(formatSyncedSettingValue(JSON.stringify(themes))).toBe(JSON.stringify(themes, null, 2));
+    expect(formatSyncedSettingValue("lavender-darker")).toBe("lavender-darker");
+    expect(syncedSettingValuePreview("a\nb")).toBeNull();
+    expect(syncedSettingValuePreview(formatSyncedSettingValue(favorites))).toBe(
+      JSON.stringify(favorites, null, 2).split("\n").slice(0, 8).join("\n"),
+    );
   });
 });

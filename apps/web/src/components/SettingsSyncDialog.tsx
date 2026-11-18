@@ -1,6 +1,7 @@
 import {
   type ClientSettingsSyncChoice,
-  describeSyncedSettingConflict,
+  formatSyncedSettingValue,
+  syncedSettingValuePreview,
   syncedSettingLabel,
 } from "@t3tools/client-runtime/state/client-settings-sync";
 import { useId, useState } from "react";
@@ -42,6 +43,13 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
   );
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpanded = (key: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const chooseAll = (choice: ClientSettingsSyncChoice) =>
     setChoices(Object.fromEntries(prompt.conflicts.map(({ key }) => [key, choice])));
 
@@ -75,9 +83,14 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
             </div>
             <ul className="flex flex-col divide-y divide-border">
               {prompt.conflicts.map((conflict) => {
-                const described = describeSyncedSettingConflict(conflict);
                 const localId = `${descriptionId}-${conflict.key}-local`;
                 const remoteId = `${descriptionId}-${conflict.key}-remote`;
+                const local = formatSyncedSettingValue(conflict.local);
+                const remote = formatSyncedSettingValue(conflict.remote);
+                const localPreview = syncedSettingValuePreview(local);
+                const remotePreview = syncedSettingValuePreview(remote);
+                const isLong = localPreview !== null || remotePreview !== null;
+                const isExpanded = expanded.has(conflict.key);
                 return (
                   <li key={conflict.key} className="flex flex-col gap-2 py-2">
                     <span className="text-sm font-medium">{syncedSettingLabel(conflict.key)}</span>
@@ -100,13 +113,24 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
                       </Toggle>
                     </ToggleGroup>
                     <div className="grid grid-cols-2 gap-2 text-muted-foreground text-xs">
-                      <p id={localId} className="break-words">
-                        {described.local}
-                      </p>
-                      <p id={remoteId} className="break-words">
-                        {described.remote}
-                      </p>
+                      <pre id={localId} className="whitespace-pre-wrap break-all font-mono">
+                        {isExpanded ? local : (localPreview ?? local)}
+                      </pre>
+                      <pre id={remoteId} className="whitespace-pre-wrap break-all font-mono">
+                        {isExpanded ? remote : (remotePreview ?? remote)}
+                      </pre>
                     </div>
+                    {isLong ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="self-start"
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleExpanded(conflict.key)}
+                      >
+                        {isExpanded ? "Show less" : "Read more"}
+                      </Button>
+                    ) : null}
                   </li>
                 );
               })}

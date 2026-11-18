@@ -1,6 +1,7 @@
 import type { ClientSettingsSyncChoice } from "@t3tools/client-runtime/state/client-settings-sync";
 import {
-  describeSyncedSettingConflict,
+  formatSyncedSettingValue,
+  syncedSettingValuePreview,
   syncedSettingLabel,
 } from "@t3tools/client-runtime/state/client-settings-sync";
 import type { SettingsSyncPrompt } from "@t3tools/client-runtime/state/client-settings-sync-runner";
@@ -71,6 +72,13 @@ function SettingsSyncChoices(props: {
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
   );
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpanded = (key: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const chooseAll = (choice: ClientSettingsSyncChoice) =>
     setChoices(Object.fromEntries(prompt.conflicts.map(({ key }) => [key, choice])));
 
@@ -105,20 +113,36 @@ function SettingsSyncChoices(props: {
         </View>
       </View>
       {prompt.conflicts.map((conflict) => {
-        const described = describeSyncedSettingConflict(conflict);
+        const local = formatSyncedSettingValue(conflict.local);
+        const remote = formatSyncedSettingValue(conflict.remote);
+        const localPreview = syncedSettingValuePreview(local);
+        const remotePreview = syncedSettingValuePreview(remote);
+        const isLong = localPreview !== null || remotePreview !== null;
+        const isExpanded = expanded.has(conflict.key);
         return (
           <SettingsSection key={conflict.key} title={syncedSettingLabel(conflict.key)}>
             <ListChoiceRow
-              label={`This phone: ${described.local}`}
+              label="This phone"
+              description={isExpanded ? local : (localPreview ?? local)}
               selected={choices[conflict.key] === "local"}
               onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "local" }))}
             />
             <ListChoiceRow
-              label={`Synced: ${described.remote}`}
+              label="Synced"
+              description={isExpanded ? remote : (remotePreview ?? remote)}
               selected={choices[conflict.key] !== "local"}
               separated
               onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "remote" }))}
             />
+            {isLong ? (
+              <Button
+                label={isExpanded ? "Show less" : "Read more"}
+                tone="text"
+                size="compact"
+                fullWidth
+                onPress={() => toggleExpanded(conflict.key)}
+              />
+            ) : null}
           </SettingsSection>
         );
       })}
