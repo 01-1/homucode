@@ -92,7 +92,7 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
 ) {
   const text = yield* readLayerSource(repositoryRoot, "prod", "text.svg");
   const paths = (text.match(/<path[^>]*\/>/g) ?? []).map((path) =>
-    monochrome ? path.replace(/fill="[^"]*"/, 'fill="#FFFFFF"') : path,
+    monochrome ? path.replace(/(fill|stroke)="#[^"]*"/g, '$1="#FFFFFF"') : path,
   );
   return yield* rasterize(
     "foreground",
