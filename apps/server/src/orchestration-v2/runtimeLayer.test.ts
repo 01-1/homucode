@@ -10872,11 +10872,12 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
   );
 
   it.effect(
-    "changes an idle thread's folder to the destination project's, refusing a busy one",
+    "changes an idle thread's folder after a membership-only move and detaches its provider",
     () =>
       Effect.gen(function* () {
         const projects = yield* ProjectService.ProjectService;
         const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
         const { folder, createThread } = yield* setup("project-cd");
         const threadId = yield* createThread("main", folder);
         const destination = yield* projects.create({
@@ -10894,11 +10895,89 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
             changeDirectory: true,
           });
 
-        yield* move("idle");
+        const now = yield* DateTime.now;
+        const sessionId = ProviderSessionId.make("project-cd-session");
+        const checkout = (yield* orchestrator.getThreadProjection(threadId)).thread;
+        const watched = { host: "github.com", repository: "owner/source", number: 7 };
+        const url = "https://github.com/owner/source/pull/7";
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make("project-cd-checkout"),
+              type: "thread.metadata-updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                ...checkout,
+                branch: "work",
+                branchPullRequest: { projectId: checkout.projectId, ...watched, url },
+              },
+            },
+            {
+              id: EventId.make("project-cd-attached"),
+              type: "provider-session.attached",
+              threadId,
+              driver,
+              occurredAt: now,
+              payload: {
+                id: sessionId,
+                driver,
+                providerInstanceId: modelSelection.instanceId,
+                status: "ready",
+                cwd: folder,
+                model: modelSelection.model,
+                capabilities: CodexProviderCapabilitiesV2,
+                createdAt: now,
+                updatedAt: now,
+                lastError: null,
+              },
+            },
+          ],
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("project-cd-legacy-move"),
+          threadId,
+          projectId: destination.id,
+        });
+        assert.equal((yield* shellOf(threadId))?.worktreePath, folder);
+
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.watch",
+          commandId: CommandId.make("project-cd-watch"),
+          threadId,
+          ...watched,
+          watching: true,
+          link: { url, source: "agent" },
+        });
+        const blocked = yield* move("checks-pending").pipe(Effect.flip);
+        assert.equal(blocked._tag, "OrchestratorDispatchError");
+        const watch = (yield* shellOf(threadId))?.pullRequests?.[0]?.watch;
+        assert.isDefined(watch);
+        if (watch === undefined) return;
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request-watch.sync",
+          commandId: CommandId.make("project-cd-watch-passive"),
+          threadId,
+          ...watched,
+          startedAt: watch.startedAt,
+          watch: { ...watch, checksPending: false },
+        });
+
+        const changed = yield* move("idle");
+        assert.isTrue(
+          changed.storedEvents.some(
+            ({ event }) =>
+              event.type === "provider-session.detached" &&
+              event.payload.providerSessionId === sessionId,
+          ),
+        );
         const moved = yield* shellOf(threadId);
         assert.equal(moved?.projectId, destination.id);
         assert.isNull(moved?.worktreePath);
         assert.equal(moved?.workspaceRoot, destination.workspaceRoot);
+        assert.isNull(moved?.branchPullRequest ?? null);
+        assert.isFalse(moved?.pullRequests?.[0]?.watch?.checksPending);
         assert.equal((yield* move("again")).storedEvents.length, 0);
 
         yield* orchestrator.dispatch({

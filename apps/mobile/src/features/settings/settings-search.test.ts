@@ -17,7 +17,7 @@ const SECTIONS = [
     title: "Interface",
     rows: [
       { id: "SettingsAppearance", label: "Appearance" },
-      { id: "SettingsHomuCode", label: "HomuCode" },
+      { id: "SettingsHomuCode", label: "Homu Code" },
       { id: "SettingsKeyboard", label: "Keyboard" },
       { id: "SettingsVoice", label: "Voice" },
     ],
@@ -51,9 +51,9 @@ describe("filterSettingsSections", () => {
     { query: "appear", expected: [["Interface", ["Appearance"]]] },
     { query: "KEYBOARD", expected: [["Interface", ["Keyboard"]]] },
     { query: "dark mode", expected: [["Interface", ["Appearance"]]] },
-    { query: "settings sync", expected: [["Interface", ["HomuCode"]]] },
-    { query: "building t3", expected: [["Interface", ["HomuCode"]]] },
-    { query: "morning brief", expected: [["Interface", ["HomuCode"]]] },
+    { query: "settings sync", expected: [["Interface", ["Homu Code"]]] },
+    { query: "building homu", expected: [["Interface", ["Homu Code"]]] },
+    { query: "morning brief", expected: [["Interface", ["Homu Code"]]] },
     { query: "microphone", expected: [["Interface", ["Voice"]]] },
     { query: "agent credits", expected: [["Server settings", ["Source control"]]] },
     {
@@ -76,16 +76,16 @@ describe("filterSettingsSections", () => {
 });
 
 it.each(["Cloud machine type", "Build output folder", "Enable loading AppImages"])(
-  "finds HomuCode’s Building T3 controls by %s",
+  "finds Homu Code’s Building Homu controls by %s",
   (title) => {
-    const row = { id: "SettingsHomuCode", label: "HomuCode" };
+    const row = { id: "SettingsHomuCode", label: "Homu Code" };
     expect(filterSettingsSections([{ rows: [row] }], title)).toEqual([{ rows: [row] }]);
   },
 );
 
 describe("setup-wizard offers", () => {
-  it.each(FEATURE_OFFERS)("$id is searchable under HomuCode", (offer) => {
-    const sections = [{ rows: [{ id: "SettingsHomuCode", label: "HomuCode" }] }];
+  it.each(FEATURE_OFFERS)("$id is searchable under Homu Code", (offer) => {
+    const sections = [{ rows: [{ id: "SettingsHomuCode", label: "Homu Code" }] }];
     expect(filterSettingsSections(sections, offer.title)).toHaveLength(1);
   });
 });

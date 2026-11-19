@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `homura-ai/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
+HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `homura-ai/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. The app displays the name Homu Code and the command is `t3`. Upstream's guidance below applies unless a section here says otherwise.
 
 What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summarized in the [README](README.md#changes-compared-to-t3-code). Keep the fork's changes easy to carry across upstream merges: prefer small, contained edits to upstream code over rewrites.
 

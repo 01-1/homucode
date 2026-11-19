@@ -206,29 +206,13 @@ export const layerExecutor: Layer.Layer<
                 ),
               );
           case "provider-session.apply-model-selection":
-            return providerTurnControl
-              .applyModelSelection({
-                threadId: effect.threadId,
-                providerSessionId: effect.request.providerSessionId,
-                providerThreadId: effect.request.providerThreadId,
-                modelSelection: effect.request.modelSelection,
-              })
-              .pipe(
-                Effect.asVoid,
-                Effect.mapError(
-                  (cause) =>
-                    new OrchestrationEffectExecutionError({
-                      effectId: effect.id,
-                      effectType: effect.request.type,
-                      cause,
-                    }),
-                ),
-              );
           case "run.apply-model-selection-now":
             return applyModelSelectionNow({
               effectId: effect.id,
               threadId: effect.threadId,
-              runId: effect.request.runId,
+              ...(effect.request.type === "run.apply-model-selection-now"
+                ? { restartRunId: effect.request.runId }
+                : {}),
               providerSessionId: effect.request.providerSessionId,
               providerThreadId: effect.request.providerThreadId,
               modelSelection: effect.request.modelSelection,

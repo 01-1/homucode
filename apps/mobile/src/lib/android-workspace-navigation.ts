@@ -1,6 +1,6 @@
 import type { NavigationState } from "@react-navigation/native";
 import { isSettingsRoute } from "../features/settings/settings-navigation";
-import { resetRootStack, type RootStackNavigation } from "./root-stack-reset";
+import { resetRootStack, workspaceStackRoot, type RootStackNavigation } from "./root-stack-reset";
 
 // Back follows history; Git confirmations can stack copies of the current thread, so skip those too.
 function androidWorkspaceBackTarget(state: NavigationState) {
@@ -14,8 +14,7 @@ function androidWorkspaceBackTarget(state: NavigationState) {
 
 /** The root stack with only the workspace list. */
 export function androidWorkspaceNavigationState(state: NavigationState) {
-  const home = state.routes.find((route) => route.name === "Home") ?? { name: "Home" };
-  return { ...state, index: 0, routes: [home] };
+  return { ...state, index: 0, routes: [workspaceStackRoot(state.routes)] };
 }
 
 export function resetAndroidWorkspace(navigation: RootStackNavigation) {

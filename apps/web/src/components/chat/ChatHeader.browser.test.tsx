@@ -24,7 +24,7 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
 import { render, stubGlobal } from "../../../test/render";
 import { ChatHeader } from "./ChatHeader";
 
-function header(title: string) {
+function header(title: string, statusLineKey?: string) {
   return (
     <>
       <ChatHeader
@@ -36,12 +36,18 @@ function header(title: string) {
         parentThreadLink={null}
         onOpenThread={() => {}}
         rightPanelOpen={false}
+        statusLineKey={statusLineKey}
         onNewThreadInProject={() => {}}
       />
       <div tabIndex={0}>Outside rename</div>
     </>
   );
 }
+
+it("shows the time in the header without a status line", async () => {
+  await using screen = await render(header("New thread", "environment/thread"));
+  await expect.element(screen.getByRole("time")).toBeVisible();
+});
 
 it.each(["blur", "Enter"] as const)(
   "preserves a concurrent title update when an untouched rename ends with %s",

@@ -4,6 +4,7 @@ import {
   dispatchRootStackReset,
   resetRootStack,
   rootStackState,
+  workspaceStackRoot,
   type RootStackNavigation,
 } from "../../lib/root-stack-reset";
 
@@ -66,9 +67,9 @@ type RouteLike = { readonly name: string; readonly key?: string; readonly params
 
 /**
  * Settings pages sit on the root stack above Home, under a `Settings` route that keeps the
- * Settings list as the workspace's primary content. Opening a page replaces whatever was above
- * Home, so the tab always starts from its list and Back returns there. Routes already on screen
- * keep their keys, so reopening the open page doesn't rebuild it.
+ * Settings list as the workspace's primary content. In the dedicated MadoHomu task, Settings
+ * returns to MadoHomu. Routes already on screen keep their keys, so reopening the open page
+ * doesn't rebuild it.
  */
 export function settingsNavigationState<State extends { readonly routes: readonly RouteLike[] }>(
   state: State,
@@ -76,7 +77,7 @@ export function settingsNavigationState<State extends { readonly routes: readonl
   params?: object,
   key?: string,
 ) {
-  const home = state.routes.find((route) => route.name === "Home") ?? { name: "Home" };
+  const root = workspaceStackRoot(state.routes);
   const list = state.routes.find((route) => route.name === "Settings") ?? { name: "Settings" };
   const current = page
     ? state.routes.find(
@@ -84,7 +85,7 @@ export function settingsNavigationState<State extends { readonly routes: readonl
       )
     : undefined;
   const routes = [
-    home,
+    root,
     list,
     ...(page ? [current ?? (key ? { key, name: page, params } : { name: page, params })] : []),
   ];

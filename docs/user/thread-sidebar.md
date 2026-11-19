@@ -51,10 +51,10 @@ get branch and diff controls.
 ### Move a thread to another project
 
 On web or desktop, choose **Move to project** from the thread's menu, then select
-an existing project on the same machine or **New project…**. The thread and its
-children move together, including archived children. Their history, schedules,
-working folders and running turns stay attached. Moving changes where the thread
-is organized; the agent continues working in its original checkout.
+an existing project on the same machine or **New project…**. The thread must be
+idle. Files opens the destination folder, and the provider resumes the conversation
+in that folder on the next turn. The thread's children move with it in the sidebar
+and keep their own working folders.
 
 The menu also lists projects on other connected machines you can operate. Moving to one
 rebuilds the conversation there and archives the original; **Undo** restores the original.
@@ -81,7 +81,7 @@ Pin a thread from its menu to keep it above your active work. Thread and project
 pins belong to the device you are using, including their pinned order. Pinning or
 unpinning on your phone does not change your desktop pins.
 
-New subagents start unpinned. Turn on **Settings → HomuCode → Subagents →
+New subagents start unpinned. Turn on **Settings → Homu Code → Subagents →
 Subagents inherit parent pin** to pin new subagents on the same server on each
 device where their parent is pinned.
 
@@ -354,7 +354,7 @@ layouts with an inspector, its thread opens beside the parent. Maximize it to
 fill the screen; close the full-screen view to return to the parent and inspector.
 Stop ends only the current thread by default. Shift-click Stop, use background Stop,
 or send `/stopall` to stop its subagents too. To make ordinary Stop include subagents,
-change **Stop behavior** in **Settings → HomuCode → Extra features**.
+change **Stop behavior** in **Settings → Homu Code → Extra features**.
 Before archiving the parent, wait for its delegated tasks to finish or cancel them.
 
 Provider-native subagents can't take messages; message the parent thread instead.

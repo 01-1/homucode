@@ -148,7 +148,7 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
       {query.error ? (
         <Text className="text-foreground-muted">
           {
-            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
+            "Couldn't load devices from this server. If it runs an older Homu Code, restart it to update."
           }
         </Text>
       ) : null}
@@ -166,7 +166,7 @@ export function MobileBuildVisibility({
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   return (
     <SettingsSwitchRow
-      label="Show Building T3 settings"
+      label="Show Building Homu settings"
       subtitle="Configure cloud builds, APK builds and loading AppImages on this environment."
       disabled={!canWrite}
       value={settings?.buildToolsSettingsVisible ?? false}
@@ -277,7 +277,7 @@ export function MobileExtraSettings({
             key={offer.id}
             label={
               offer.id === "subagents"
-                ? "Use T3 delegation (delegate_task)"
+                ? "Use Homu delegation (delegate_task)"
                 : offer.id === "thread-only-stop"
                   ? "Stop stops only this thread"
                   : offer.title
@@ -319,7 +319,7 @@ export function MobileExtraSettings({
       <Text>Work assistance (not recommended)</Text>
       <Text className="text-foreground-muted">
         Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
-        that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
+        that has worked nonstop for over 5 minutes. Homu Code never starts helpers by itself.
       </Text>
       <MobileWorkAssistancePicker
         environmentId={environmentId}
@@ -344,7 +344,7 @@ export function MobileExtraSettings({
 export function SettingsBuildingT3RouteScreen() {
   const { selectedTargets } = useSettingsEnvironmentFilter();
   return (
-    <SettingsScreen title="Building T3">
+    <SettingsScreen title="Building Homu">
       <ScreenScrollView contentContainerClassName="gap-6 p-5">
         {selectedTargets
           .filter((target) => target.serverConfig?.settings.buildToolsSettingsVisible)
@@ -390,7 +390,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
     <View className="gap-4">
       {(
         [
-          ["buildRepoPath", "T3 Code checkout"],
+          ["buildRepoPath", "Homu Code checkout"],
           ["buildBoatCliPath", "Boat CLI"],
           ["buildMachineType", "Cloud machine type"],
           ["buildOutputFolder", "Build output folder"],
@@ -518,7 +518,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
         <View className="gap-2">
           <Text>
             {confirm === "load"
-              ? "This restarts T3, with automatic rollback if it fails to return."
+              ? "This restarts Homu, with automatic rollback if it fails to return."
               : "This starts a cloud machine on your boat.dev account."}
           </Text>
           <Button

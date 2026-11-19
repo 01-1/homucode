@@ -46,7 +46,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
-import { ThreadHeaderStatusLine } from "./ThreadStatusBar";
+import { ThreadHeaderStatus } from "./ThreadStatusBar";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -434,7 +434,7 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      {statusLineKey ? <ThreadHeaderStatusLine statusLineKey={statusLineKey} /> : null}
+      <ThreadHeaderStatus statusLineKey={statusLineKey} />
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
       {trailingControls}
     </div>

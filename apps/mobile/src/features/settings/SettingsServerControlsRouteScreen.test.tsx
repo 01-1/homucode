@@ -242,7 +242,7 @@ describe("SettingsServerControlsRouteScreen", () => {
         continue;
       const label =
         offer.id === "subagents"
-          ? "Use T3 delegation (delegate_task)"
+          ? "Use Homu delegation (delegate_task)"
           : offer.id === "thread-only-stop"
             ? "Stop stops only this thread"
             : offer.title;

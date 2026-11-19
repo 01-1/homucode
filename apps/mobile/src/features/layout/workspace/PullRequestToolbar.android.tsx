@@ -1,6 +1,6 @@
+import { useTaskHardwareBack } from "../../../lib/backHandler";
 import { useNavigation } from "@react-navigation/native";
-import { useEffect } from "react";
-import { BackHandler, Keyboard } from "react-native";
+import { Keyboard } from "react-native";
 import { AppBar } from "../../../components/ui/AppBar";
 import { appBarMenuItemsFromActions } from "../../../components/ui/menuActionItems";
 import { useHardwareKeyboardCommand } from "../../keyboard/hardwareKeyboardCommands";
@@ -37,27 +37,22 @@ export function PullRequestToolbar(props: {
     recordScrollOffset("pullRequests", tab.searchEntryOffset);
     dispatch({ type: "cancel", tab: "pullRequests" });
   };
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to BackHandler while searching to close the PR search on Android back
-  useEffect(() => {
-    if (!searching) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // Frozen Home screens stay mounted under a detail route or another tab,
-      // so back only applies while the PR list is in front.
-      const state = navigation.getState();
-      if (!state || state.routes[state.index]?.name !== "Home" || !isTabActive("pullRequests"))
-        return false;
-      if (Keyboard.isVisible()) Keyboard.dismiss();
-      else closeSearch();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [searching, closeSearch, navigation, isTabActive]);
+  useTaskHardwareBack(searching, () => {
+    // Frozen Home screens stay mounted under a detail route or another tab,
+    // so back only applies while the PR list is in front.
+    const state = navigation.getState();
+    if (!state || state.routes[state.index]?.name !== "Home" || !isTabActive("pullRequests"))
+      return false;
+    if (Keyboard.isVisible()) Keyboard.dismiss();
+    else closeSearch();
+    return true;
+  });
   return (
     <AppBar
-      title="T3 Code"
+      title="Homu Code"
       titleContent={
         <WorkspaceBrandTitle
-          accessibilityLabel="T3 Code, Pull requests"
+          accessibilityLabel="Homu Code, Pull requests"
           onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
         />
       }

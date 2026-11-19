@@ -50,9 +50,10 @@ and other phone-only settings ignore the filter.
 
 ## Settings sync
 
-**Settings → General → Settings sync** is off on new web, desktop, and mobile devices; turn it on
-on each device you want in step. It keeps supported client preferences, including themes, appearance, chat, and sidebar settings, in step
-through every connected server. Mobile syncs the preferences it shares with web and desktop.
+Open **Settings → Homu Code → Settings sync** on each device you want to sync. Sync is off on
+new web, desktop, and mobile devices. It keeps supported client preferences, including themes,
+appearance, chat, and sidebar settings, in step through every connected server. Mobile syncs
+the preferences it shares with web and desktop.
 Turn it off on a device to keep that device's preferences separate. This does not sync
 server settings or project overrides; those still use the environment selection above.
 

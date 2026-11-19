@@ -50,7 +50,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
       <SettingsSection title="Build folder and launcher">
         {(
           [
-            ["buildRepoPath", "build-repo-path", "Path to this machine's HomuCode checkout"],
+            ["buildRepoPath", "build-repo-path", "Path to this machine's Homu Code checkout"],
             ["buildBoatCliPath", "build-boat-cli", "boat"],
             ["buildMachineType", "build-machine-type", "large"],
             ["buildOutputFolder", "build-output-folder", "~/hold/t3-builds"],
@@ -173,7 +173,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           {...searchableSetting("enable-loading-builds")}
           description={
             state?.appImageAvailable
-              ? "Verify a staged AppImage and restart T3 on it, with automatic rollback if it fails to return."
+              ? "Verify a staged AppImage and restart Homu on it, with automatic rollback if it fails to return."
               : "Not available: this server is not running inside an AppImage install."
           }
           control={
@@ -216,7 +216,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         <div className="grid gap-2">
           <p className="text-sm">
             {confirmation === "load"
-              ? "This restarts T3 Code. The loader restores the previous build if the new one fails."
+              ? "This restarts Homu Code. The loader restores the previous build if the new one fails."
               : "This starts a disposable cloud machine using your boat.dev account."}
           </p>
           <div className="flex gap-2">

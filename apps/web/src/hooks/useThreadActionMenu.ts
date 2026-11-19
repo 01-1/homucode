@@ -56,7 +56,10 @@ import {
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
-import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import {
+  threadCanChangeProjectDirectory,
+  threadRuntimeCanArchive,
+} from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import {
   buildMoveToFolderMenuItem,
@@ -202,6 +205,7 @@ export function useThreadActionMenu(input: {
           canOperate,
         }),
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        projectDirectoryChangeBlocked: !threadCanChangeProjectDirectory(thread),
         moveProjectOptions: projects
           .filter(
             (project) =>

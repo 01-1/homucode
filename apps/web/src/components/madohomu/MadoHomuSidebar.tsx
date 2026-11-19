@@ -465,7 +465,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       item.id === "folder"
         ? { ...item, label: MADOHOMU_THREAD_MENU_LABELS.folder }
         : item.id === "folder:new-from-selection"
-          ? { ...item, label: `New T3 Code folder from selection (${count})` }
+          ? { ...item, label: `New Homu Code folder from selection (${count})` }
           : item,
     );
     const clicked = await settlePromise(() =>
@@ -1187,7 +1187,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       <SidebarFooter>
         <Link to="/" className={cn(QUIET_BUTTON_CLASS, "text-sm")}>
           <AppWindowIcon aria-hidden className="size-4" />
-          Open T3 Code
+          Open Homu Code
         </Link>
       </SidebarFooter>
       {threadMenu.editor}

@@ -101,6 +101,8 @@ import { resolveCdCommand } from "./composerCdCommand";
 import { projectEnvironment } from "../../state/projects";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { inferProjectTitleFromPath } from "@t3tools/client-runtime/state/projects";
+import { threadCanChangeProjectDirectory } from "@t3tools/client-runtime/state/models";
+import { readThreadShell } from "../../state/entities";
 import { environmentPresentations } from "../../state/presentation";
 import {
   approvalRedirectNotice,
@@ -827,6 +829,17 @@ export function useComposerSend(input: ComposerSendInput) {
             description: error instanceof Error ? error.message : String(error),
           }),
         );
+      if (isServerThread) {
+        const shell = readThreadShell(scopeThreadRef(activeThread.environmentId, activeThread.id));
+        if (shell === null || !threadCanChangeProjectDirectory(shell)) {
+          reportCdFailure(
+            shell === null
+              ? "This thread is unavailable."
+              : "The thread still has work in progress. Finish or stop it first.",
+          );
+          return;
+        }
+      }
       const ensured = await ensureProject({
         environmentId: activeThread.environmentId,
         input: {
@@ -857,7 +870,7 @@ export function useComposerSend(input: ComposerSendInput) {
       if (isServerThread) {
         const moved = await moveThreadToProject({
           environmentId: activeThread.environmentId,
-          input: { threadId: activeThread.id, projectId: project.id, changeDirectory: true },
+          input: { threadId: activeThread.id, projectId: project.id },
         });
         if (moved._tag === "Failure") {
           if (!isAtomCommandInterrupted(moved)) reportCdFailure(squashAtomCommandFailure(moved));
