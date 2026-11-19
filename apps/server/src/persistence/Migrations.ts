@@ -109,6 +109,7 @@ import HomuMigration98 from "./Migrations/098_ProjectRouterNotices.ts";
 import HomuMigration99 from "./Migrations/099_ThreadFolders.ts";
 import HomuMigration100 from "./Migrations/100_ThreadFolderRules.ts";
 import HomuMigration101 from "./Migrations/101_ThreadTitleIdIndex.ts";
+import RepairStaleTitleRegeneration from "./Migrations/102_RepairStaleTitleRegeneration.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -213,6 +214,7 @@ const migrationEntries = [
   [99, "ThreadFolders", HomuMigration99],
   [100, "ThreadFolderRules", HomuMigration100],
   [101, "ThreadTitleIdIndex", HomuMigration101],
+  [102, "RepairStaleTitleRegeneration", RepairStaleTitleRegeneration],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -302,6 +304,15 @@ const LEGACY_HOMU_MIGRATIONS = new Map<number, string>([
 export function reconciledHomuMigrationHistory(
   recorded: ReadonlyArray<{ readonly id: number; readonly name: string }>,
 ) {
+  const upstreamRepair = recorded.find(
+    ({ id, name }) => id === 96 && name === "RepairStaleTitleRegeneration",
+  );
+  if (upstreamRepair !== undefined) {
+    const upstream = recorded.filter((row) => row !== upstreamRepair);
+    if (upstream.every(({ id }) => id <= 95) && skippedV2Migrations(upstream).length === 0)
+      return upstream;
+    return recorded;
+  }
   const kept = recorded.filter(({ id, name }) => LEGACY_HOMU_MIGRATIONS.get(id) !== name);
   if (
     recorded.length - kept.length !== LEGACY_HOMU_MIGRATIONS.size ||
@@ -328,7 +339,12 @@ const reconcileHomuMigrationHistory = Effect.fn("reconcileHomuMigrationHistory")
     Effect.gen(function* () {
       const current = yield* history;
       if (reconciledHomuMigrationHistory(current) === current) return;
-      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id BETWEEN 82 AND 86`;
+      const reconciled = reconciledHomuMigrationHistory(current);
+      for (const row of current) {
+        if (!reconciled.includes(row)) {
+          yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = ${row.id} AND name = ${row.name}`;
+        }
+      }
     }),
   );
 });

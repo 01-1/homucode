@@ -9,6 +9,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { migrationManifest, runMigrations } from "./Migrations.ts";
 
+import RepairStaleTitleRegeneration from "./Migrations/102_RepairStaleTitleRegeneration.ts";
 import HomuCompletion from "./Migrations/096_ThreadCompletionOutbox.ts";
 import HomuAssistance from "./Migrations/097_WorkAssistanceContinuity.ts";
 import HomuRouter from "./Migrations/098_ProjectRouterNotices.ts";
@@ -126,6 +127,28 @@ describe("runMigrations", () => {
         assert.deepStrictEqual(completions, [{ thread_id: "thread:legacy" }]);
         const folders = yield* sql`SELECT name, sort_key FROM thread_folders`;
         assert.deepStrictEqual(folders, [{ name: "Kept folder", sort_key: 23 }]);
+        yield* sql`PRAGMA query_only = ON`;
+        assert.deepStrictEqual(yield* runMigrations(), []);
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect.each(["upstream", "homu"] as const)(
+    "upgrades the shipped %s migration ledger into the combined history",
+    (source) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* runMigrations({ toMigrationInclusive: source === "upstream" ? 95 : 101 });
+        if (source === "upstream") {
+          yield* sql.withTransaction(
+            RepairStaleTitleRegeneration.pipe(
+              Effect.andThen(
+                sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (96, 'RepairStaleTitleRegeneration')`,
+              ),
+            ),
+          );
+        }
+        yield* runMigrations();
+        assert.deepStrictEqual(yield* history, migrationManifest);
         yield* sql`PRAGMA query_only = ON`;
         assert.deepStrictEqual(yield* runMigrations(), []);
       }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),

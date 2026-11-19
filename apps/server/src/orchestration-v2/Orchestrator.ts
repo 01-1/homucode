@@ -10854,6 +10854,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       remoteChild,
       status: command.status,
       result: command.result,
+      ...(command.executedModel === undefined ? {} : { executedModel: command.executedModel }),
       completedAt: now,
       updatedAt: now,
     };
@@ -15345,6 +15346,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           turnItemTypes: [
             "assistant_message",
             "error",
+            "system_notice",
             "run_interrupt_request",
             "run_interrupt_result",
           ],
@@ -16812,6 +16814,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ),
   );
 
+  // One thread's reactions run in event order; a reaction waiting on one thread's lock must
+  // not hold up another thread's.
+  const threadReactions = yield* KeyedLock.makeRunner<ThreadId>();
+
   // Projections already contain historical terminals; replaying them delays startup queue promotion with database size.
   const terminalEventsAfterSequence = yield* eventSink.latestSequence().pipe(Effect.orDie);
   // Filter run updates before buffering so blocked queue promotion does not retain unrelated tool bodies.
@@ -16834,7 +16840,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             stored.event.payload.status === "cancelled" ||
             stored.event.payload.status === "rolled_back"),
       ),
-      Stream.runForEach(handleRunUpdate),
+      Stream.runForEach((stored) =>
+        threadReactions.run(stored.event.threadId, handleRunUpdate(stored)),
+      ),
       Effect.forkScoped,
     );
 
@@ -16896,6 +16904,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           Effect.catchCause((cause) =>
             Effect.logWarning("Failed to deliver deferred steering", { cause }),
           ),
+          (effect, stored) => threadReactions.run(stored.event.threadId, effect),
         ),
       ),
       Effect.forkScoped,
@@ -16925,18 +16934,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ).pipe(
     Stream.filter(settlesChildWork),
     Stream.runForEach((stored) =>
-      Effect.gen(function* () {
-        const childThreadId = stored.event.threadId;
-        const parentThreadId = yield* appOwnedSubagentParentThreadId(childThreadId);
-        if (parentThreadId === undefined) return;
-        yield* threadDispatch.withLock(parentThreadId, finalizeAppOwnedSubagent(childThreadId));
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("Failed to finalize a delegated child after its work settled", {
-            threadId: stored.event.threadId,
-            sequence: stored.sequence,
-            cause,
-          }),
+      threadReactions.run(
+        stored.event.threadId,
+        Effect.gen(function* () {
+          const childThreadId = stored.event.threadId;
+          const parentThreadId = yield* appOwnedSubagentParentThreadId(childThreadId);
+          if (parentThreadId === undefined) return;
+          yield* threadDispatch.withLock(parentThreadId, finalizeAppOwnedSubagent(childThreadId));
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("Failed to finalize a delegated child after its work settled", {
+              threadId: stored.event.threadId,
+              sequence: stored.sequence,
+              cause,
+            }),
+          ),
         ),
       ),
     ),
@@ -17100,7 +17112,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         return;
       yield* threadDispatch.withLock(
         parentThreadId,
-        offerDelegatedCompletionDeliveries(parentThreadId).pipe(
+        Effect.gen(function* () {
+          // A task's wake lives on the run that requested it; the parent's other wakes are not this child's.
+          const { subagents } = yield* projectionStore.getThreadRecords(
+            parentThreadId,
+            ["subagents"],
+            { subagentChildThreadIds: [threadId] },
+          );
+          const parentRunIds = new Set(
+            subagents.flatMap((task) =>
+              task.childThreadId === threadId && task.runId !== null ? [task.runId] : [],
+            ),
+          );
+          for (const parentRunId of parentRunIds) {
+            yield* offerDelegatedCompletionDelivery(parentThreadId, parentRunId);
+          }
+        }).pipe(
           Effect.andThen(
             finalizeAppOwnedSubagent(
               threadId,

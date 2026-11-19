@@ -41,6 +41,7 @@ export {
 } from "@t3tools/shared/themeColors";
 
 import { appAtomRegistry, subscribeAtomChanges } from "./rpc/atomRegistry";
+import { applyThemeBackground } from "./themeBackground";
 import { applyThemeCss } from "./themeCss";
 import { themeServerEnvironmentThemesAtom } from "./state/server";
 
@@ -859,6 +860,7 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   setThemePreviewAppearance(null);
   const palette = getThemeDefinition(theme);
   applyThemeCss(palette?.css);
+  applyThemeBackground(palette?.id);
 
   if (palette) {
     root.dataset.themeId = palette.id;

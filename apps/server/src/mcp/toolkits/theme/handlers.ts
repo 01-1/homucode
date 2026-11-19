@@ -12,6 +12,7 @@ import { ThemeToolkit } from "./tools.ts";
 /** `t3_theme_read`'s answer for what the theme service read. */
 export const themeReadResult = ({
   current,
+  themesDir,
   themes,
   theme,
 }: EnvironmentTheme.EnvironmentThemeRead) => ({
@@ -22,7 +23,13 @@ export const themeReadResult = ({
         currentNote: `No environment theme is set, so each client shows its own pick: ${DEFAULT_THEME_ID}, the default, unless the user chose another there.`,
       }),
   builtIn: BUILT_IN_THEME_IDS,
-  published: themes.map(({ id, name, css }) => ({ id, name, hasCss: Boolean(css) })),
+  published: themes.map(({ id, name, css, background }) => ({
+    id,
+    name,
+    hasCss: Boolean(css),
+    hasBackground: background !== undefined,
+  })),
+  ...(themesDir === undefined ? {} : { themesDir }),
   ...(theme === undefined ? {} : { theme }),
   guide: THEME_GUIDE,
 });
@@ -40,7 +47,7 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
           ServerSettingsError: () => Effect.fail(unavailable()),
         }),
       );
-      return themeReadResult(read);
+      return { ...themeReadResult(read), themesDir: read.themesDir };
     }),
   ),
   t3_theme_set: McpToolAccess.writesEnvironment(

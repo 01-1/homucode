@@ -3,6 +3,7 @@ import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
@@ -29,6 +30,7 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import {
   AuthOrchestrationOperateScope,
+  type ContextMenuSource,
   type EnvironmentId,
   type EnvironmentMachineKind,
   type ScopedThreadRef,
@@ -603,8 +605,12 @@ type SidebarThreadRowProps = {
   onCancelRename: () => void;
   isRenaming: boolean;
   renamingTitle: string;
-  onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
-  /** A "…" button that opens the same menu as right-click: shown on hover and focus, always on touch. */
+  onContextMenu: (
+    threadRef: ScopedThreadRef,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => void;
+  /** Opens the thread menu on hover, focus, and touch. */
   showActionsButton?: boolean | undefined;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
@@ -897,13 +903,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   };
   const handleContextMenu = (event: ReactMouseEvent) => {
     event.preventDefault();
-    onContextMenu(threadRef, { x: event.clientX, y: event.clientY });
+    onContextMenu(threadRef, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
   };
   const handleActionsClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
-    onContextMenu(threadRef, { x: rect.left, y: rect.bottom + 4 });
+    onContextMenu(threadRef, { x: rect.left, y: rect.bottom + 4 }, contextMenuSourceOf(event));
   };
   const actionsButton =
     props.showActionsButton && !isRenaming && !props.sortable?.isDragging ? (

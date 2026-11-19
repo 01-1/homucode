@@ -1,8 +1,8 @@
 # Building the mobile Screens dependency
 
 The mobile v5 stack uses a committed tarball from the
-[T3 Screens fork](https://github.com/pingdotgg/react-native-screens/tree/t3-v5.0.0-t3.50).
-The fork owns the integration changes; the app does not patch this package.
+[T3 Screens fork](https://github.com/homura-ai/react-native-screens/tree/4af7d8e30a9b0307344492e20baa4b24591dda4e).
+HomuCode ships 5.0.0-t3.58-homu.1, which adds its Android form-sheet centering and late scroll-content layout fixes to upstream t3.58. The fork owns the integration changes; the app does not patch this package.
 Each archive includes compiled JavaScript, declarations, native source and
 `t3-fork.json` recording its version, source commit and upstream base.
 

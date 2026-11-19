@@ -1830,6 +1830,7 @@ const make = Effect.gen(function* () {
         turnItemTypes: [
           "assistant_message",
           "error",
+          "system_notice",
           "run_interrupt_request",
           "run_interrupt_result",
         ],
@@ -2109,7 +2110,7 @@ const make = Effect.gen(function* () {
       hasPendingChildRuns: false,
       providerInstanceId: task.providerInstanceId,
       model: task.model,
-      executedModel: null,
+      executedModel: task.executedModel ?? null,
       summary: task.result,
       resultContextTransferId: null,
       latestTerminalRunId: null,
