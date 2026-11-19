@@ -57,7 +57,7 @@ their rounded-square silhouette gets framed again and the wordmark is cropped. T
 is instead rendered from the same Icon Composer SVG sources by `vp run icons:export:android`:
 
 - `apps/mobile/assets/android-icon-foreground.png`: the shared transparent mark, with its 128-unit
-  canvas mapped onto the visible 72dp and shrunk to 88% so round masks keep its tips
+  canvas mapped onto the visible 72dp and shrunk to 86% and raised 1 unit so round masks keep its tips
 - `apps/mobile/assets/android-icon-background-dev.png` and `-nightly.png`: full-bleed variant
   artwork. Development and production use a solid color; nightly uses its night sky and clouds.
 - `apps/mobile/assets/android-splash-icon-*.png`: the two layers composed into one 288dp image, so
