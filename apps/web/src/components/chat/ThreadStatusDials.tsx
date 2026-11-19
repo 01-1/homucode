@@ -15,9 +15,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { usePrimarySettings } from "../../hooks/useSettings";
-import { formatShortTimestamp } from "../../timestampFormat";
-
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 const EFFORT_BAR_HEIGHTS = ["h-1", "h-1.5", "h-2", "h-2.5", "h-3"];
 
@@ -193,8 +190,8 @@ function Stat(props: {
 
 /**
  * The status line as gauges in the top bar. What runs out (context and the usage limits) is a
- * dial; the rest are small icons. As the bar narrows the icons leave first, then the clock and the
- * captions, and the dials last.
+ * dial; the rest are small icons. As the bar narrows the icons leave first, then the captions,
+ * and the dials last.
  */
 export function StatusDialStrip(props: {
   readonly stats: StatusLineStats;
@@ -202,7 +199,6 @@ export function StatusDialStrip(props: {
   readonly nowMs: number;
 }) {
   const { stats, nowMs } = props;
-  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const uptime = uptimeText(props.createdAt, nowMs);
   const context = stats.contextTokens === null ? null : formatStatusLineTokens(stats.contextTokens);
   const hasDial = stats.contextPercent !== null || stats.fiveHour !== null || stats.weekly !== null;
@@ -280,9 +276,6 @@ export function StatusDialStrip(props: {
             {formatStatusLineTokens(stats.outputTokens ?? 0)}
           </Stat>
         )}
-        <span className="ms-auto shrink-0 ps-1 text-2xs @max-[33rem]/dials:hidden">
-          {formatShortTimestamp(new Date(nowMs).toISOString(), timestampFormat)}
-        </span>
       </div>
     </div>
   );
