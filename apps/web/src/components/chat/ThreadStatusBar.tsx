@@ -28,6 +28,8 @@ import {
 } from "react";
 
 import { useNowMinuteMs } from "../../hooks/useNowMinute";
+import { usePrimarySettings } from "../../hooks/useSettings";
+import { formatShortTimestamp } from "../../timestampFormat";
 import { observeResize } from "~/lib/observeResize";
 import { serverEnvironment } from "../../state/server";
 import { StatusDialCard, StatusDialStrip } from "./ThreadStatusDials";
@@ -48,7 +50,7 @@ type StatusLineResult =
   | { readonly stats: StatusLineStats; readonly createdAt: string | null };
 
 // The runner sits in the chat view, which has its input; the top bar reads the result from here.
-const statusLineResultAtom = Atom.family((_key: string) =>
+const statusLineResultAtom = Atom.family((_key: string | undefined) =>
   Atom.make<StatusLineResult | null>(null),
 );
 
@@ -208,12 +210,11 @@ function Separator(props: { readonly item: StatusLineItem }) {
  */
 function StatusLineSlot(props: {
   readonly item: StatusLineItem;
-  readonly beforeClock: boolean;
   readonly modelName: string | null;
 }) {
   return (
     <span
-      data-status-line-item={props.beforeClock ? "before-clock" : "after-clock"}
+      data-status-line-item="value"
       className={`inline-grid ${ITEM_GAP} ${DROPPED[props.item.dropAt]}`}
     >
       <span className="col-start-1 row-start-1">
@@ -245,10 +246,10 @@ const FITS = [
 // What a shortened directory keeps: room for a name or two.
 const DIRECTORY_FLOOR_PX = 72;
 
-function itemsWidth(row: HTMLElement, kinds: ReadonlyArray<string>): number {
-  const selector = kinds.map((kind) => `[data-status-line-item="${kind}"]`).join(",");
+function itemsWidth(row: HTMLElement, kind: string): number {
   let width = 0;
-  for (const item of row.querySelectorAll(selector)) width += item.getBoundingClientRect().width;
+  for (const item of row.querySelectorAll(`[data-status-line-item="${kind}"]`))
+    width += item.getBoundingClientRect().width;
   return width;
 }
 
@@ -259,38 +260,26 @@ function keepBodyFont(element: HTMLElement | null | undefined) {
   if (element.style.fontFamily !== fontFamily) element.style.fontFamily = fontFamily;
 }
 
-// Picks the roomiest fit the whole line has room for. Past the last one the tail is cut, and the
-// clock stays only while everything before it in the line still fits. DOM attributes, so no
-// re-render.
+// Picks the roomiest fit the line has room for, cutting the tail if needed.
 function fitRow(row: HTMLElement) {
   // The row's effect runs before its parent's, so the font is set here, ahead of measuring.
   keepBodyFont(row.parentElement);
-  row.dataset.clock = "shown";
   // A pixel short of the edge, so rounding never clips the last item.
   const space = row.getBoundingClientRect().width - 1;
   for (const [labels, room, drop, shorten] of FITS) {
     row.dataset.labels = labels;
     row.dataset.room = room;
     row.dataset.drop = String(drop);
-    const directory = itemsWidth(row, ["directory"]);
-    const rest = itemsWidth(row, ["before-clock", "after-clock", "clock"]);
+    const directory = itemsWidth(row, "directory");
+    const rest = itemsWidth(row, "value");
     const floor = Math.min(directory, DIRECTORY_FLOOR_PX);
     row.style.setProperty("--status-line-directory-floor", `${floor}px`);
     if ((shorten ? floor : directory) + rest <= space) return;
   }
-  // The cut tail ends in an ellipsis, which needs up to 1em beside the items before the clock.
-  const ellipsis = Number.parseFloat(getComputedStyle(row).fontSize);
-  if (itemsWidth(row, ["directory", "before-clock", "clock"]) + ellipsis > space) {
-    row.dataset.clock = "hidden";
-  }
 }
 
-/**
- * The status line on one row: the directory, which shortens before anything is cut, then each item
- * in its slot, then the clock at the right edge.
- */
 function StatusLineRow(props: {
-  readonly lines: ReadonlyArray<ReadonlyArray<AnsiSegment>>;
+  readonly items: ReadonlyArray<StatusLineItem>;
   readonly modelName: string | null;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -304,10 +293,8 @@ function StatusLineRow(props: {
     if (row === null) return;
     return observeResize(row, () => fitRow(row));
   }, []);
-  const items = props.lines.flatMap(splitStatusLineItems);
+  const { items } = props;
   const directory = items[0]?.kind === "directory" ? items[0] : null;
-  const clock = items.find((item) => item.kind === "clock");
-  const clockIndex = clock === undefined ? -1 : items.indexOf(clock);
   return (
     <div
       ref={rowRef}
@@ -323,7 +310,7 @@ function StatusLineRow(props: {
             </span>
           </div>
           <div
-            data-status-line-item="before-clock"
+            data-status-line-item="value"
             className={`shrink-0 ${ITEM_GAP} ${DROPPED[directory.dropAt]}`}
           >
             <Separator item={directory} />
@@ -332,25 +319,16 @@ function StatusLineRow(props: {
       )}
       <div className="min-w-0 overflow-hidden text-ellipsis">
         {items.map((item, index) =>
-          item === directory || item === clock ? null : (
+          item === directory ? null : (
             <StatusLineSlot
               // oxlint-disable-next-line react/no-array-index-key -- items have no identity beyond order
               key={index}
               item={item}
-              beforeClock={index < clockIndex}
               modelName={props.modelName}
             />
           ),
         )}
       </div>
-      {clock === undefined ? null : (
-        <div
-          data-status-line-item="clock"
-          className="ms-auto shrink-0 group-data-[clock=hidden]/status-line:hidden"
-        >
-          <Segments line={clock.segments} />
-        </div>
-      )}
     </div>
   );
 }
@@ -450,17 +428,36 @@ export function ThreadStatusLineRunner(props: {
 const PANEL =
   "absolute top-full z-50 rounded-md rounded-t-none border border-t-0 bg-popover text-popover-foreground shadow-lg before:absolute before:inset-x-0 before:bottom-full before:h-6";
 
-/** The status line in the thread's top bar. On hover or keyboard focus it opens in full under the bar. */
-export function ThreadHeaderStatusLine(props: { readonly statusLineKey: string }) {
-  const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
-  if (result === null) return null;
-  const drawn = "stats" in result;
-  if (!drawn && result.lines.length === 0 && result.error === null) return null;
-  // Keyed by what is drawn, so an open panel does not carry over when that changes.
-  return <HeaderStatusLine key={drawn ? "dials" : "text"} result={result} />;
+function LocalHeaderTime() {
+  const now = new Date(useNowMinuteMs()).toISOString();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  return <time dateTime={now}>{formatShortTimestamp(now, timestampFormat)}</time>;
 }
 
-function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
+export function ThreadHeaderStatus(props: { readonly statusLineKey: string | undefined }) {
+  const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
+  const custom = result !== null && "lines" in result ? result : null;
+  const items = custom?.lines.flatMap(splitStatusLineItems) ?? [];
+  const clock = items.find((item) => item.kind === "clock");
+  const values = items.filter((item) => item !== clock);
+  const showStatusLine =
+    result !== null && (custom === null || values.length > 0 || custom.error !== null);
+  return (
+    <>
+      {showStatusLine ? (
+        <HeaderStatusLine key={custom === null ? "dials" : "text"} result={result} items={values} />
+      ) : null}
+      <span className="ms-auto shrink-0 whitespace-nowrap pe-3 font-sans text-muted-foreground text-2xs tabular-nums">
+        {clock === undefined ? <LocalHeaderTime /> : <Segments line={clock.segments} />}
+      </span>
+    </>
+  );
+}
+
+function HeaderStatusLine(props: {
+  readonly result: StatusLineResult;
+  readonly items: ReadonlyArray<StatusLineItem>;
+}) {
   const { result } = props;
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -507,7 +504,7 @@ function HeaderStatusLine(props: { readonly result: StatusLineResult }) {
       ) : failed ? (
         <div className="truncate">Status line failed: {result.error}</div>
       ) : (
-        <StatusLineRow lines={result.lines} modelName={result.modelName} />
+        <StatusLineRow items={props.items} modelName={result.modelName} />
       )}
       {failed || !(hovered || focused) ? null : drawn ? (
         <div
