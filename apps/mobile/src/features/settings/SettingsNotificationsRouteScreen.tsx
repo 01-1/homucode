@@ -353,7 +353,7 @@ function ConfiguredSettingsNotificationsRouteScreen() {
 
     Dialog.alert(
       "Disable notifications",
-      "Open system Settings to disable notifications for Homu Code.",
+      "Open system Settings to disable notifications for HomuCode.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Open Settings", onPress: () => void Linking.openSettings() },
@@ -485,7 +485,7 @@ function ConfiguredSettingsNotificationsRouteScreen() {
                 void openAndroidLiveUpdateSettings().catch(() => {
                   Dialog.alert(
                     "Couldn't open Settings",
-                    "Open Android Settings, select Homu Code, then enable Live Updates in Notifications.",
+                    "Open Android Settings, select HomuCode, then enable Live Updates in Notifications.",
                   );
                 });
               }}

@@ -25,13 +25,13 @@ const CODE_VISIBILITY_OPTIONS: ReadonlyArray<{
   readonly label: string;
   readonly description: string;
 }> = [
-  { value: "hidden", label: "None", description: "Homu Code lists none of them." },
+  { value: "hidden", label: "None", description: "HomuCode lists none of them." },
   {
     value: "scratch",
     label: `${MADOHOMU_SCRATCH_LABEL} only`,
-    description: "Homu Code lists the threads not pinned in MadoHomu.",
+    description: "HomuCode lists the threads not pinned in MadoHomu.",
   },
-  { value: "all", label: "All", description: "Homu Code lists every thread of the project." },
+  { value: "all", label: "All", description: "HomuCode lists every thread of the project." },
 ];
 
 const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
@@ -158,7 +158,7 @@ function EnvironmentMadoHomuSettings(props: {
       {actions.settings.madohomuEnabled ? (
         <>
           <Text className="px-4 pt-3 text-sm text-foreground-muted">
-            Show MadoHomu threads in Homu Code
+            Show MadoHomu threads in HomuCode
           </Text>
           {CODE_VISIBILITY_OPTIONS.map((option, index) => (
             <ListChoiceRow

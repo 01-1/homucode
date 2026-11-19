@@ -381,7 +381,7 @@ export function startDesktopUpdateLaunchNotice(): () => void {
         stackedThreadToast({
           type: "error",
           title: "Update did not apply",
-          description: `Homu Code is still on ${APP_VERSION}. Install ${notAppliedVersion} again from the update button.`,
+          description: `HomuCode is still on ${APP_VERSION}. Install ${notAppliedVersion} again from the update button.`,
         }),
       );
     },

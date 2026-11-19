@@ -282,6 +282,12 @@ export const layerAssistance = McpToolAccess.toLayer(AssistanceToolkit, {
 });
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
+  t3_thread_id: McpToolAccess.readsAsCaller(() =>
+    McpInvocationContext.McpInvocationContext.pipe(
+      Effect.flatMap((scope) => McpInvocationContext.requireThreadScope(scope, "t3_thread_id")),
+      Effect.map(({ thread }) => ({ threadId: thread.threadId })),
+    ),
+  ),
   run_scheduled_task_now: McpToolAccess.writesEnvironment(
     (input) =>
       Effect.gen(function* () {

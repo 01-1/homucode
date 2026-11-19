@@ -145,7 +145,7 @@ function ReclaimRow({
       toastManager.add({
         type: "success",
         title: `Reclaiming ${amount} on ${label}`,
-        description: `Homu Code there restarts and is back in about ${minutes} min.`,
+        description: `HomuCode there restarts and is back in about ${minutes} min.`,
       });
       return;
     }
@@ -163,7 +163,7 @@ function ReclaimRow({
       title={`${amount} on ${label}`}
       description={
         status.reclaimFailure === undefined
-          ? `Restarts Homu Code there. It will be offline for about ${minutes} min.`
+          ? `Restarts HomuCode there. It will be offline for about ${minutes} min.`
           : `The last attempt failed: ${status.reclaimFailure}`
       }
       control={
@@ -184,7 +184,7 @@ function ReclaimRow({
                   Reclaim {amount} on {label}?
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  Homu Code on {label} stops, rebuilds its database, and starts again. It will be
+                  HomuCode on {label} stops, rebuilds its database, and starts again. It will be
                   offline for about {minutes} min. Running agents stop when it restarts.
                 </AlertDialogDescription>
               </AlertDialogHeader>

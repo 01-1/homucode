@@ -1,6 +1,6 @@
 import { RegistryContext } from "@effect/atom-react";
 import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
-import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import {
   formatComposerContextReference,
@@ -84,6 +84,11 @@ import "~/index.css";
 import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/threads";
 
 import { act, render as renderUi } from "../../../test/render";
+import {
+  __setClientSettingsForTests,
+  getClientSettings,
+  persistClientSettingsUpdate,
+} from "../../hooks/useSettings";
 import { makeStreamingTimelineFixture, makeThreadProjectionFixture } from "../../test-fixtures";
 import { QueuedRunsControl, type QueuedRunsControlHandle } from "./QueuedRunsControl";
 import { ExpandedImageDialog } from "./ExpandedImageDialog";
@@ -237,8 +242,12 @@ it("previews assistant quotes as readable text and preserves the citation when e
   );
 });
 
-it("shows who sent a queued message and folds automation and agent prompts", async () => {
+it("respects sender label visibility and folds queued automation and agent prompts", async () => {
   setup();
+  const settings = getClientSettings();
+  using cleanup = new DisposableStack();
+  cleanup.defer(() => __setClientSettingsForTests(settings));
+  __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
   const message = (id: string, fields: Record<string, unknown>) => ({
     id,
     role: "user",
@@ -314,7 +323,15 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
   await page.getByRole("button", { name: "Open thread" }).nth(1).click({ force: true });
   expect(onOpenThread).toHaveBeenLastCalledWith("thread:linked-lead", "environment:linked");
 
-  await expect.element(page.getByText("Automatic · Homu Code")).toBeVisible();
+  const senderLabel = page.getByText("Automatic · HomuCode");
+  await expect.element(senderLabel).not.toBeInTheDocument();
+  await act(() =>
+    persistClientSettingsUpdate(
+      (current) => ({ ...current, showMessageSenderLabels: true }),
+      async () => {},
+    ),
+  );
+  await expect.element(senderLabel).toBeVisible();
   await expect.element(page.getByText("Continue where you left off.")).toBeVisible();
 });
 

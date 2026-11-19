@@ -108,6 +108,7 @@ import HomuMigration97 from "./Migrations/097_WorkAssistanceContinuity.ts";
 import HomuMigration98 from "./Migrations/098_ProjectRouterNotices.ts";
 import HomuMigration99 from "./Migrations/099_ThreadFolders.ts";
 import HomuMigration100 from "./Migrations/100_ThreadFolderRules.ts";
+import HomuMigration101 from "./Migrations/101_ThreadTitleIdIndex.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -211,6 +212,7 @@ const migrationEntries = [
   [98, "ProjectRouterNotices", HomuMigration98],
   [99, "ThreadFolders", HomuMigration99],
   [100, "ThreadFolderRules", HomuMigration100],
+  [101, "ThreadTitleIdIndex", HomuMigration101],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

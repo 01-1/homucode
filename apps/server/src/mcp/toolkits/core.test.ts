@@ -1111,6 +1111,38 @@ it.effect("an MCP pin lands above every existing pin, as a client pin does", () 
   );
 });
 
+it.effect("returns the app thread id for root and delegated MCP callers", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const identify = (invocation: McpInvocationContext.McpInvocationScope) =>
+      server
+        .callTool({ name: "t3_thread_id", arguments: {} })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+    const childId = ThreadId.make("mcp-core-child");
+    expect((yield* identify(scope)).structuredContent).toEqual({ threadId });
+    expect(
+      (yield* identify({
+        ...scope,
+        thread: { ...scope.thread!, threadId: childId, subagent: true },
+      })).structuredContent,
+    ).toEqual({ threadId: childId });
+    expect(yield* identify(clientScope("auto")).pipe(Effect.flip)).toBeInstanceOf(
+      McpSchema.InvalidParams,
+    );
+  }).pipe(
+    Effect.provide(
+      layerThreadToolkit.pipe(
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+        Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+        Layer.provide(NodeCrypto.layer),
+      ),
+    ),
+  ),
+);
+
 it.effect("search names the calling thread, so an agent can tell its own match apart", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;

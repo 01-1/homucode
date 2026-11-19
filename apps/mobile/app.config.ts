@@ -87,7 +87,7 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "Homu Code Dev",
+    appName: "HomuCode Dev",
     scheme: "t3code-dev",
     iosBundleIdentifier: "com.t3tools.t3code.dev",
     androidPackage: "com.t3tools.t3code.dev",
@@ -95,7 +95,7 @@ const VARIANT_CONFIG = {
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "Homu Code Preview",
+    appName: "HomuCode Preview",
     scheme: "t3code-preview",
     iosBundleIdentifier: "com.t3tools.t3code.preview",
     androidPackage: "com.t3tools.t3code.preview",
@@ -103,7 +103,7 @@ const VARIANT_CONFIG = {
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "Homu Code",
+    appName: "HomuCode",
     scheme: "t3code",
     iosBundleIdentifier: "com.t3tools.t3code",
     androidPackage: "com.t3tools.t3code",
@@ -151,7 +151,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected Homu Code environments.",
+        description: "Subscription quotas from your connected HomuCode environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -201,7 +201,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active Homu Code agents.",
+        description: "Shows the current state of active HomuCode agents.",
         android: null,
         ios: {
           supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
@@ -286,8 +286,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow Homu Code to connect to Homu Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow Homu Code to save images to your photo library.",
+        "Allow HomuCode to connect to HomuCode servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow HomuCode to save images to your photo library.",
       // System picture in picture needs background audio to start and survive outside the app.
       UIBackgroundModes: ["audio"],
       ITSAppUsesNonExemptEncryption: false,
@@ -395,7 +395,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow Homu Code to use your microphone for voice input.",
+        microphonePermission: "Allow HomuCode to use your microphone for voice input.",
         recordAudioAndroid: true,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -404,7 +404,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow Homu Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow HomuCode to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -415,7 +415,7 @@ const config: ExpoConfig = {
       {
         photosPermission: false,
         // `false` makes this plugin add RECORD_AUDIO to blockedPermissions, breaking Android dictation.
-        microphonePermission: "Allow Homu Code to use your microphone for voice input.",
+        microphonePermission: "Allow HomuCode to use your microphone for voice input.",
       },
     ],
     [

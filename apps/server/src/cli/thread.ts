@@ -22,6 +22,7 @@ import {
   type OrchestratorMcpThreadTimelineItem,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -755,6 +756,22 @@ const decodeThreadId = (value: string) =>
     Effect.mapError(() => new ThreadUsageError({ detail: `'${value}' is not a thread id.` })),
   );
 
+const threadIdCommand = Command.make("id", { json: jsonFlag }).pipe(
+  Command.withDescription("Print the current agent's T3 thread ID."),
+  Command.withHandler(({ json }) =>
+    Effect.gen(function* () {
+      const value = yield* Config.String("T3CODE_THREAD_ID").pipe(Config.option);
+      if (Option.isNone(value) || value.value.trim() === "") {
+        return yield* new ThreadUsageError({
+          detail: "This shell has no T3 thread ID. Inside a T3 agent, you can use t3_thread_id.",
+        });
+      }
+      const threadId = yield* decodeThreadId(value.value);
+      yield* json ? printJson({ threadId }) : Console.log(threadId);
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 const threadListCommand = Command.make("list", {
   ...projectLocationFlags,
   project: Flag.String("project").pipe(
@@ -1386,6 +1403,7 @@ const threadAssistCommand = Command.make("assist", {
 export const threadCommand = Command.make("thread").pipe(
   Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
+    threadIdCommand,
     threadListCommand,
     threadActivityCommand,
     threadAssistCommand,

@@ -10,7 +10,6 @@ import {
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
-import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -20,23 +19,25 @@ import * as Stream from "effect/Stream";
 import * as ServerSettings from "../serverSettings.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
+import { ProjectionStoreV2, type ProjectionStoreV2Error } from "./ProjectionStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { reconcileThreadTitleId } from "./threadTitleId.ts";
 
 type ReconcileError =
   | Orchestrator.OrchestratorV2Error
+  | ProjectionStoreV2Error
   | ServerSettingsError
   | ThreadManagementService.ThreadManagementProviderInstanceDisabledError;
 
 /**
  * Keeps every thread's title ID in line with its title, settled state and project, so IDs stay
- * unique within a project. It is driven by thread events and kept in memory only: nothing it
+ * unique across the server. It is driven by thread events and kept in memory only: nothing it
  * does is queued in the outbox, so an older build can always read the database back.
  */
 export class ThreadTitleIdReconciler extends Context.Service<
   ThreadTitleIdReconciler,
   {
-    /** Reconciles one thread against the rest of its project. */
+    /** Reconciles one thread against every assigned title ID. */
     readonly reconcile: (threadId: ThreadId) => Effect.Effect<void, ReconcileError>;
     /** Reconciles every active thread in the given projects, or in all projects. */
     readonly reconcileAll: (
@@ -59,8 +60,9 @@ const logSkipped =
 
 const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService.ThreadManagementService;
+  const projection = yield* ProjectionStoreV2;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
-  // One project pass at a time, so two threads can never pick the same free ID.
+  // Keep startup and settings passes from making decisions from each other's partial results.
   const lock = yield* Semaphore.make(1);
   // Command receipts outlive the process, so each run gets its own command IDs.
   const runId = yield* (yield* SecureRandom.SecureRandom).uuidV4();
@@ -71,41 +73,33 @@ const make = Effect.gen(function* () {
     { readonly titleId: string | null; readonly title: string; readonly settled: boolean }
   >();
 
-  const reconcileProject = Effect.fn("ThreadTitleIdReconciler.reconcileProject")(function* (
-    projectId: ProjectId,
-    only: ThreadId | undefined,
+  const reconcileThreads = Effect.fn("ThreadTitleIdReconciler.reconcileThreads")(function* (
+    threadId?: ThreadId,
+    projectIds?: ReadonlySet<ProjectId>,
   ) {
-    const enabled = resolveProjectSettings(yield* serverSettings.getSettings, projectId).settings
-      .threadTitleIdPrefix;
-    // The active location holds settled threads, side chats and subagents too; archives drop
-    // their ID when archived.
-    const snapshot = yield* threads.getShellSnapshot({ location: "active", projectId });
-    const ids = new Map(snapshot.threads.map((thread) => [thread.id, thread.titleId ?? null]));
+    const rows = yield* projection.listActiveThreadTitles();
+    const projects = new Set(rows.map((thread) => thread.projectId));
+    const enabled = enabledProjects(yield* serverSettings.getSettings, projects);
+    const taken = new Map<string, number>();
+    const reserve = (id: string) => taken.set(id, (taken.get(id) ?? 0) + 1);
+    for (const { titleId } of rows) if (titleId !== null) reserve(titleId);
     // Newest first, so when two threads share an ID the older one keeps it.
-    const ordered = snapshot.threads
-      .filter((thread) => only === undefined || thread.id === only)
-      .toSorted(
-        (a, b) => DateTime.toEpochMillis(b.createdAt) - DateTime.toEpochMillis(a.createdAt),
-      );
-    for (const thread of ordered) {
-      const current = ids.get(thread.id) ?? null;
-      const settled = thread.settledOverride === "settled";
-      const next = enabled
-        ? reconcileThreadTitleId({
-            current,
-            title: thread.title,
-            settled,
-            taken: new Set(
-              [...ids].flatMap(([id, titleId]) =>
-                id !== thread.id && titleId !== null ? [titleId] : [],
-              ),
-            ),
-          })
+    for (const thread of rows) {
+      if (threadId !== undefined && thread.id !== threadId) continue;
+      if (projectIds !== undefined && !projectIds.has(thread.projectId)) continue;
+      const { title, titleId: current, settled } = thread;
+      if (current !== null) {
+        const count = taken.get(current) ?? 0;
+        if (count === 1) taken.delete(current);
+        else taken.set(current, count - 1);
+      }
+      const next = enabled.get(thread.projectId)
+        ? reconcileThreadTitleId({ current, title, settled, taken })
         : null;
+      if (next !== null) reserve(next);
       if (next === current) continue;
       sequence += 1;
-      ids.set(thread.id, next);
-      ownWrites.set(thread.id, { titleId: next, title: thread.title, settled });
+      ownWrites.set(thread.id, { titleId: next, title, settled });
       const written = yield* threads
         .dispatch({
           type: "thread.metadata.update",
@@ -125,7 +119,8 @@ const make = Effect.gen(function* () {
           ),
         );
       if (!written) {
-        ids.set(thread.id, current);
+        if (next !== null) taken.delete(next);
+        if (current !== null) reserve(current);
         ownWrites.delete(thread.id);
       }
     }
@@ -133,28 +128,11 @@ const make = Effect.gen(function* () {
 
   const reconcile: ThreadTitleIdReconciler["Service"]["reconcile"] = Effect.fn(
     "ThreadTitleIdReconciler.reconcile",
-  )(function* (threadId) {
-    yield* lock.withPermits(1)(
-      Effect.gen(function* () {
-        const { thread } = yield* threads.getThreadRecords(threadId, []);
-        if (thread.archivedAt !== null || thread.deletedAt !== null) return;
-        yield* reconcileProject(thread.projectId, threadId);
-      }),
-    );
-  });
+  )((threadId) => lock.withPermits(1)(reconcileThreads(threadId)));
 
   const reconcileAll: ThreadTitleIdReconciler["Service"]["reconcileAll"] = Effect.fn(
     "ThreadTitleIdReconciler.reconcileAll",
-  )(function* (projectIds) {
-    const snapshot = yield* threads.getShellSnapshot({ location: "active" });
-    const all = new Set(snapshot.threads.map((thread) => thread.projectId));
-    for (const projectId of all) {
-      if (projectIds !== undefined && !projectIds.has(projectId)) continue;
-      yield* lock
-        .withPermits(1)(reconcileProject(projectId, undefined))
-        .pipe(logSkipped(undefined));
-    }
-  });
+  )((projectIds) => lock.withPermits(1)(reconcileThreads(undefined, projectIds)));
 
   const isOwnWrite: ThreadTitleIdReconciler["Service"]["isOwnWrite"] = (event) => {
     if (event.type !== "thread.metadata-updated") return false;
@@ -190,7 +168,7 @@ const enabledProjects = (settings: ServerSettingsValue, projectIds: Iterable<Pro
 export const layerReactor = Layer.effectDiscard(
   Effect.gen(function* () {
     const engine = yield* Orchestrator.OrchestratorV2;
-    const threads = yield* ThreadManagementService.ThreadManagementService;
+    const projection = yield* ProjectionStoreV2;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const reconciler = yield* ThreadTitleIdReconciler;
     // Events wait for the startup pass, so it decides which of two threads sharing an ID keeps it.
@@ -211,11 +189,11 @@ export const layerReactor = Layer.effectDiscard(
     let enabled = new Map<ProjectId, boolean>();
     yield* forkParked(
       Stream.runForEach(settingsChanges, (settings) =>
-        threads.getShellSnapshot({ location: "active" }).pipe(
-          Effect.flatMap((snapshot) => {
+        projection.listActiveThreadTitles().pipe(
+          Effect.flatMap((rows) => {
             const next = enabledProjects(
               settings,
-              snapshot.threads.map((thread) => thread.projectId),
+              rows.map((thread) => thread.projectId),
             );
             const changed = new Set(
               [...next].flatMap(([projectId, on]) =>
@@ -232,10 +210,10 @@ export const layerReactor = Layer.effectDiscard(
     // Startup: give existing threads their IDs and repair anything a shutdown left half done.
     yield* forkParked(
       Effect.gen(function* () {
-        const snapshot = yield* threads.getShellSnapshot({ location: "active" });
+        const rows = yield* projection.listActiveThreadTitles();
         enabled = enabledProjects(
           yield* serverSettings.getSettings,
-          snapshot.threads.map((thread) => thread.projectId),
+          rows.map((thread) => thread.projectId),
         );
         yield* reconciler.reconcileAll();
       }).pipe(logSkipped(undefined), Effect.ensuring(Deferred.succeed(startupDone, undefined))),

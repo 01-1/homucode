@@ -161,7 +161,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       if (saved._tag === "Success" && apply && offers.some((offer) => offer.id === "settings-sync"))
         await updateClientSettings({ settingsSyncEnabled: selected.has("settings-sync") });
     } catch {
-      toastManager.add({ type: "error", title: "Could not save Homu Code features" });
+      toastManager.add({ type: "error", title: "Could not save HomuCode features" });
     }
     setBusy(false);
   };
@@ -173,7 +173,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
         ? "Name this device"
         : pages[step]?.[0]?.page === 2
           ? "Extra features"
-          : "Homu Code features";
+          : "HomuCode features";
   return (
     <Dialog
       open

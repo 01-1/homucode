@@ -61,7 +61,7 @@ const make = Effect.gen(function* () {
     stagedBuilds: initialStaged,
     undoneAs: null,
     phase: "idle",
-    message: "Enable a build tool and configure a Homu Code checkout to begin.",
+    message: "Enable a build tool and configure a HomuCode checkout to begin.",
     output: "",
     artifactPath: null,
     lanUrl: null,

@@ -223,6 +223,8 @@ it.effect(
           countThreads: () => Effect.die("unused countThreads"),
           listActiveShellIndex: () => Effect.die("unused listActiveShellIndex"),
           listActiveThreads: () => Effect.die("unused listActiveThreads"),
+          listActiveThreadTitles: () => Effect.die("unused listActiveThreadTitles"),
+          readConflictingThreadTitleIds: () => Effect.die("unused readConflictingThreadTitleIds"),
           listOlderSettledThreads: () => Effect.die("unused listOlderSettledThreads"),
           readShellSnapshot: () => Effect.die("unused readShellSnapshot"),
           getThreadShell: () => Effect.die("unused getThreadShell"),

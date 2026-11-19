@@ -178,7 +178,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open Homu Code in the desktop app to use the in-app preview.",
+              description: "Open HomuCode in the desktop app to use the in-app preview.",
             }),
           );
           return;

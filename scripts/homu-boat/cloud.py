@@ -343,21 +343,20 @@ def vp():
     except sp.CalledProcessError:
         root = None
     homucode = root and (root / "scripts/homu-android/build.sh").is_file()
-    pbox = socket.gethostname().split(".")[0] == "pbox"
     try:
-        if pbox and homucode and os.environ.get("HOMU_BOAT_FALLBACK") != "1":
+        if homucode and os.environ.get("HOMU_BOAT_FALLBACK") != "1":
             if offload(args):
                 if any(arg == "--fix" or arg.startswith("--fix-") for arg in args) and (
                     args[0] in ("lint", "check") or "lint" in args[1:]
                 ):
-                    log("running fixes locally under the pbox check lock")
+                    log("running fixes locally under the local check lock")
                     local_check(root, args)
                 try:
                     return run_remote(root, args.copy())
                 except BoatUnavailable as error:
                     if os.environ.get("HOMU_BOAT_NO_FALLBACK") == "1":
                         raise
-                    log(f"Boat unavailable ({error}); waiting for the pbox check lock")
+                    log(f"Boat unavailable ({error}); waiting for the local check lock")
                     local_check(root, args)
             if args[:1] == ["staged"]:
                 os.environ["HOMU_VP_SHIM"] = str(HERE / "vp")

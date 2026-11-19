@@ -83,7 +83,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     page: 2,
     title: "Ask again after a restart",
     description:
-      "When Homu Code restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
+      "When HomuCode restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
     setting: "reaskPendingRequestsAfterRestart",
   },
   {
@@ -151,7 +151,7 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
   {
     id: "building-t3",
     page: 2,
-    title: "Set up building Homu Code",
+    title: "Set up building HomuCode",
     description:
       "Configure cloud builds, Android APK builds and loading AppImages on the next page.",
     setting: "buildToolsSettingsVisible",

@@ -255,7 +255,7 @@ export function SnapShotSettings() {
   const shortcutStatus = recording
     ? "Press your shortcut. Esc cancels."
     : candidateConflict
-      ? `Homu Code already uses this for "${commandLabel(candidateConflict)}".`
+      ? `HomuCode already uses this for "${commandLabel(candidateConflict)}".`
       : shortcutCheck.status === "checking"
         ? "Checking shortcut…"
         : shortcutCheck.availability

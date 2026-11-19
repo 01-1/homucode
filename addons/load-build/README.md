@@ -1,12 +1,15 @@
 # load-build
 
-`t3-load-build` loads a staged T3 Code build: it verifies the file, restarts T3 on it, wakes an agent thread, and rolls back by itself if the new build doesn't come up. It replaces hand-written one-off restart scripts.
+`t3-load-build` verifies a staged T3 Code build, restarts T3 on it, and wakes an
+agent thread. It rolls back if the build fails to start or the wake command
+returns failure twice.
 
 ```sh
 t3-load-build <staged-file> <sha256> <wake-message-file> [--detach] [--live PATH] [--settle SECONDS]
 ```
 
-The app calls this script from **Settings → Building T3** on AppImage installs.
+On AppImage installs, enable **Show Building T3 settings** in **Settings → HomuCode**
+and use **Building T3** to load a build.
 `T3_BUILD_FOLDER` selects the folder whose newest AppImage the loader starts; the app
 passes its configured AppImage folder. Without this variable, it
 needs a launcher at `~/.local/bin/t3code` (not part of T3 Code) that starts the newest

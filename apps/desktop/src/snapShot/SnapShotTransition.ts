@@ -114,7 +114,7 @@ function createWindow(
     resizable: false,
     show: false,
     skipTaskbar: true,
-    title: "Homu Code Snapshot Animation",
+    title: "HomuCode Snapshot Animation",
     transparent: true,
     webPreferences: {
       backgroundThrottling: false,

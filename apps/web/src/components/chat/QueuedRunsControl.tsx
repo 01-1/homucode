@@ -36,6 +36,7 @@ import {
 } from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
+import { useClientSettings } from "../../hooks/useSettings";
 import { threadEnvironment } from "../../state/threads";
 import { useQuietThreadProjection, useQuietThreadShell } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
@@ -481,6 +482,7 @@ function QueuedMessage(props: {
   readonly children: ReactNode;
   readonly onImageExpand: (preview: ExpandedImagePreview) => void;
 }) {
+  const showSenderLabel = useClientSettings((settings) => settings.showMessageSenderLabels);
   const presentation = props.message ? resolveUserMessagePresentation(props.message) : null;
   const attribution = presentation?.attribution ?? null;
   const scheduledTaskId = presentation?.scheduledTaskId;
@@ -514,11 +516,11 @@ function QueuedMessage(props: {
 
   return (
     <>
-      {props.message === undefined ? null : (
+      {showSenderLabel && props.message !== undefined ? (
         <p className="me-1 text-2xs text-muted-foreground/70">
           {messageSourceLabel(props.message)}
         </p>
-      )}
+      ) : null}
       {presentation?.guestName === undefined ? null : (
         <GuestMessageName name={presentation.guestName} />
       )}

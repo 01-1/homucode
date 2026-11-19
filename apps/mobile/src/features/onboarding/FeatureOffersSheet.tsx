@@ -146,7 +146,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
       });
       if (result._tag === "Success") savePreferences(preferencesPatch);
     } catch {
-      setError("Could not save Homu Code features. Try again.");
+      setError("Could not save HomuCode features. Try again.");
     }
     pending.current = false;
     setBusy(false);
@@ -162,7 +162,7 @@ function EnvironmentFeatureOffers({ environmentId }: { readonly environmentId: E
         ? "Name this device"
         : pages[step]?.[0]?.page === 2
           ? "Extra features"
-          : "Homu Code features";
+          : "HomuCode features";
   // Saved on the phone: a dropped connection closes this sheet, and reopening it restores them.
   const keep = (next: { readonly selected: ReadonlySet<string>; readonly step: number }) =>
     savePreferences({

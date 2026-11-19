@@ -43,7 +43,7 @@ export function SettingsHomuCodeRouteScreen() {
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
 
   return (
-    <SettingsScreen title="Homu Code" menus={[menu]}>
+    <SettingsScreen title="HomuCode" menus={[menu]}>
       <ScreenScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"

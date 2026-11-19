@@ -612,6 +612,20 @@ export interface ProjectionStoreV2Shape {
   readonly listActiveThreads: (
     projectId?: ProjectId,
   ) => Effect.Effect<ReadonlyArray<ActiveThreadListEntry>, ProjectionStoreV2Error>;
+  readonly listActiveThreadTitles: () => Effect.Effect<
+    ReadonlyArray<{
+      readonly id: ThreadId;
+      readonly projectId: ProjectId;
+      readonly title: string;
+      readonly titleId: string | null;
+      readonly settled: boolean;
+    }>,
+    ProjectionStoreV2Error
+  >;
+  readonly readConflictingThreadTitleIds: (
+    threadId: ThreadId,
+    requested: string,
+  ) => Effect.Effect<ReadonlySet<string> | null, ProjectionStoreV2Error>;
   /** Older settled thread ids below a cursor, newest settle first, and per-project counts. */
   readonly listOlderSettledThreads: (
     query: OlderSettledThreadsQuery,
@@ -9144,6 +9158,52 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       }));
     }, Effect.mapError(shellSnapshotReadError));
 
+    const listActiveThreadTitles = Effect.fn("ProjectionStore.listActiveThreadTitles")(
+      function* () {
+        const rows = yield* sql<{
+          readonly thread_id: string;
+          readonly project_id: string;
+          readonly title: string;
+          readonly title_id: string | null;
+          readonly settled: number;
+        }>`
+        SELECT thread_id, project_id, title,
+          json_extract(payload_json, '$.titleId') AS title_id,
+          json_extract(payload_json, '$.settledOverride') IS 'settled' AS settled
+        FROM orchestration_v2_projection_threads
+        WHERE deleted_at IS NULL AND archived_at IS NULL AND json_valid(payload_json)
+        ORDER BY created_at DESC, thread_id DESC
+      `;
+        return rows.map((row) => ({
+          id: ThreadId.make(row.thread_id),
+          projectId: ProjectId.make(row.project_id),
+          title: row.title,
+          titleId: row.title_id,
+          settled: row.settled === 1,
+        }));
+      },
+      Effect.mapError(shellSnapshotReadError),
+    );
+
+    const readConflictingThreadTitleIds = Effect.fn(
+      "ProjectionStore.readConflictingThreadTitleIds",
+    )(function* (threadId: ThreadId, requested: string) {
+      // Match the partial expression index from ThreadTitleIdIndex.
+      const titleId = sql`CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.titleId') END`;
+      const otherThreads = sql`deleted_at IS NULL AND archived_at IS NULL AND thread_id <> ${threadId}`;
+      const existing = yield* sql`
+          SELECT 1 FROM orchestration_v2_projection_threads
+          WHERE ${otherThreads} AND ${titleId} = ${requested}
+          LIMIT 1
+        `;
+      if (existing.length === 0) return null;
+      const rows = yield* sql<{ readonly title_id: string }>`
+          SELECT ${titleId} AS title_id FROM orchestration_v2_projection_threads
+          WHERE ${otherThreads} AND ${titleId} IS NOT NULL
+        `;
+      return new Set(rows.map((row) => row.title_id));
+    }, Effect.mapError(shellSnapshotReadError));
+
     const getThreadLinkMetadata = Effect.fn("ProjectionStore.getThreadLinkMetadata")(function* (
       threadIds: ReadonlyArray<ThreadId>,
     ) {
@@ -9336,6 +9396,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       countThreads: readOnReader(countThreads),
       listActiveShellIndex: readOnReader(listActiveShellIndex),
       listActiveThreads: readOnReader(listActiveThreads),
+      listActiveThreadTitles: readOnReader(listActiveThreadTitles),
+      readConflictingThreadTitleIds: readOnReader(readConflictingThreadTitleIds),
       readShellSnapshot: readOnReader(readShellSnapshot),
       listOlderSettledThreads: readOnReader(listOlderSettledThreads),
       getThreadShell: readOnReader(getThreadShell),

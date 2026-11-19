@@ -160,7 +160,7 @@ export function DeviceNamesSettings({
       {query.error ? (
         <p className="text-muted-foreground">
           {
-            "Couldn't load devices from this server. If it runs an older Homu Code, restart it to update."
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
           }
         </p>
       ) : null}
@@ -300,7 +300,7 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
       <SettingsSection id={searchableSetting("work-assistance").id} title="Work assistance">
         <SettingsRow
           title="Enable work assistance (not recommended)"
-          description="Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. Homu Code never starts helpers by itself."
+          description="Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself."
           control={
             <Checkbox
               disabled={!canWrite}

@@ -133,7 +133,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       version: null,
       status: "disabled",
       auth: { status: "unknown" },
-      message: "Codex is disabled in Homu Code settings.",
+      message: "Codex is disabled in HomuCode settings.",
     });
 
     assert.deepStrictEqual(

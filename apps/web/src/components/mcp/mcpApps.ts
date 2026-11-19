@@ -51,7 +51,7 @@ export const MCP_APPS: readonly McpApp[] = [
     logo: pokeLogo,
     handoff: {
       kind: "open",
-      link: (url) => `https://poke.com/integrations/new?name=Homu%20Code&url=${encoded(url)}`,
+      link: (url) => `https://poke.com/integrations/new?name=HomuCode&url=${encoded(url)}`,
     },
     steps: ["Open poke.com/integrations/new.", "Paste the URL and add the integration."],
     docs: "https://poke.com/docs/mcp-servers",
@@ -63,7 +63,7 @@ export const MCP_APPS: readonly McpApp[] = [
     handoff: {
       kind: "open",
       link: (url) =>
-        `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Homu%20Code&connectorUrl=${encoded(url)}`,
+        `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=HomuCode&connectorUrl=${encoded(url)}`,
     },
     steps: [
       "In Claude, open Customize, then Connectors.",

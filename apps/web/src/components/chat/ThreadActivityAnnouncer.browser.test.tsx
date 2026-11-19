@@ -129,9 +129,9 @@ describe("ThreadActivityAnnouncer", () => {
 
     expect(heard).toEqual([
       ["Working", ""],
-      ["Working", "Homu Code: Checking the repo"],
-      ["Needs approval", "Homu Code: Checking the repo"],
-      ["Needs approval", "Homu Code: Checking the repo"],
+      ["Working", "HomuCode: Checking the repo"],
+      ["Needs approval", "HomuCode: Checking the repo"],
+      ["Needs approval", "HomuCode: Checking the repo"],
       ["Needs approval", "Running rg"],
     ]);
   });
@@ -151,7 +151,7 @@ describe("ThreadActivityAnnouncer", () => {
       }),
     );
 
-    await expect.element(detail).toHaveTextContent("Homu Code: Checking the repo. Needs approval");
+    await expect.element(detail).toHaveTextContent("HomuCode: Checking the repo. Needs approval");
     await expect.element(status).toHaveTextContent("Working");
   });
 });

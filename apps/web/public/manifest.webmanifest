@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Homu Code",
-  "short_name": "Homu Code",
+  "name": "HomuCode",
+  "short_name": "HomuCode",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
