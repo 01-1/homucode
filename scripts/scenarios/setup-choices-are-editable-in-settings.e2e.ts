@@ -9,7 +9,7 @@ const separateLabels: Readonly<Partial<Record<string, string>>> = {
   Subagents: "Prefer native subagents",
   "Project name in thread titles": "Project name in title prompt",
   "Thread title ID prefix": "Thread title IDs",
-  "Set up building T3 Code": "Show Building T3 settings",
+  "Set up building Homu Code": "Show Building Homu settings",
   "Keep Claude threads working during background commands":
     "Keep Claude threads working while background commands run",
 };
@@ -36,8 +36,8 @@ test(
         });
       }, heading);
 
-    await expect(screen.getByRole("heading", "HomuCode features")).toBeVisible();
-    const first = await readOffers("HomuCode features");
+    await expect(screen.getByRole("heading", "Homu Code features")).toBeVisible();
+    const first = await readOffers("Homu Code features");
     await screen.getByRole("button", "Next").tap();
     await expect(screen.getByRole("heading", "Extra features")).toBeVisible();
     const extra = await readOffers("Extra features");
@@ -85,7 +85,7 @@ test(
       }
     }
 
-    await openSetting("Set up building T3 Code", "Show Building T3 settings");
+    await openSetting("Set up building Homu Code", "Show Building Homu settings");
     const visibility = '#show-building-t3 [role="switch"]';
     await expect(browser.locator(visibility)).toBeVisible();
     await browser.evaluate((selector) => {

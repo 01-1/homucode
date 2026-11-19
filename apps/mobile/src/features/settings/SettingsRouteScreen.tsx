@@ -272,7 +272,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
     {
       rows: [
         page("SettingsOrganization", "gearshape", gt("General")),
-        page("SettingsHomuCode", "slider.horizontal.3", gt("HomuCode")),
+        page("SettingsHomuCode", "slider.horizontal.3", gt("Homu Code")),
         page("SettingsAppearance", "paintbrush", gt("Appearance")),
         page("SettingsLanguage", "globe", gt("Language"), {
           value: SUPPORTED_LOCALES.includes(language)

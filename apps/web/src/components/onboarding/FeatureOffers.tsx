@@ -61,7 +61,7 @@ export function FeatureOfferChoices({
         };
         const options =
           offer.id === "subagents"
-            ? ["T3 delegation (delegate_task)", "Provider native subagents"]
+            ? ["Homu delegation (delegate_task)", "Provider native subagents"]
             : offer.id === "thread-only-stop"
               ? ["Only the current thread", "Current thread and its subagents"]
               : null;
@@ -161,19 +161,19 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       if (saved._tag === "Success" && apply && offers.some((offer) => offer.id === "settings-sync"))
         await updateClientSettings({ settingsSyncEnabled: selected.has("settings-sync") });
     } catch {
-      toastManager.add({ type: "error", title: "Could not save HomuCode features" });
+      toastManager.add({ type: "error", title: "Could not save Homu Code features" });
     }
     setBusy(false);
   };
   if (!available || !canWrite || offers.length === 0) return null;
   const title =
     followup === "building-t3"
-      ? "Building T3"
+      ? "Building Homu"
       : followup === "device-name"
         ? "Name this device"
         : pages[step]?.[0]?.page === 2
           ? "Extra features"
-          : "HomuCode features";
+          : "Homu Code features";
   return (
     <Dialog
       open

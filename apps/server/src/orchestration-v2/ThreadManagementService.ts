@@ -397,6 +397,7 @@ export interface ThreadManagementServiceShape {
   readonly ensureLegacyTranscript: (
     threadId: ThreadId,
   ) => Effect.Effect<void, LegacyV1ThreadImporter.LegacyV1ThreadImportError>;
+  readonly withMessageIntake: Orchestrator.OrchestratorV2["Service"]["withMessageIntake"];
   readonly dispatch: (
     command: OrchestrationV2ServerCommand,
   ) => Effect.Effect<
@@ -1341,8 +1342,8 @@ const make = Effect.gen(function* () {
         const commandId = CommandId.make(
           `server:force-stop:${run.id}:${yield* Clock.currentTimeMillis}`,
         );
-        yield* providerTurn === undefined && !active
-          ? Effect.void
+        const settled = yield* providerTurn === undefined && !active
+          ? Effect.succeed(null)
           : providerTurn === undefined
             ? orchestrator.dispatch({
                 type: "run.interrupt",
@@ -1359,6 +1360,26 @@ const make = Effect.gen(function* () {
                 providerTurnId: providerTurn.id,
                 reason: forceStopReason,
               });
+        // The terminal-event worker also promotes the queue. Let the follow-up claim its session
+        // before Force stop decides whether to release it.
+        if (
+          settled?.storedEvents.some(
+            ({ event }) =>
+              event.type === "run.updated" &&
+              event.payload.id === run.id &&
+              event.payload.status === "interrupted",
+          )
+        ) {
+          yield* orchestrator.startQueuedFollowUp(input.threadId, run.id).pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("Failed to start the queued follow-up after Force stop", {
+                threadId: input.threadId,
+                runId: run.id,
+                cause,
+              }),
+            ),
+          );
+        }
       }
       const ownProviderThreadIds = records.providerThreads.flatMap((providerThread) =>
         providerThread.appThreadId === input.threadId ? [providerThread.id] : [],
@@ -1690,6 +1711,7 @@ const make = Effect.gen(function* () {
         Effect.andThen(orchestrator.searchThread(input)),
       );
     }),
+    withMessageIntake: orchestrator.withMessageIntake,
     dispatch,
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {

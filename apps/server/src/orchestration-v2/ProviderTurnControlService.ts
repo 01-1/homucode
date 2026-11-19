@@ -9,6 +9,7 @@ import {
   ProviderThreadId,
   ProviderTurnId,
   RunAttemptId,
+  type RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import type * as DateTime from "effect/DateTime";
@@ -77,15 +78,16 @@ export interface ProviderTurnControlServiceV2Shape {
   }) => Effect.Effect<void, ProviderTurnControlError>;
   /**
    * Best effort: a turn that ended or moved sessions picks the selection up when it next starts.
-   * True when the running turn now uses it.
+   * Returns the running turn when the provider applies the selection.
    */
   readonly applyModelSelection: (input: {
     readonly threadId: ThreadId;
+    readonly expectedRunId?: RunId;
     readonly providerSessionId: ProviderSessionId;
     readonly providerThreadId: ProviderThreadId;
     readonly modelSelection: ModelSelection;
   }) => Effect.Effect<
-    boolean,
+    { readonly runId: RunId; readonly providerTurnId: ProviderTurnId } | undefined,
     | ProjectionStore.ProjectionStoreV2Error
     | ProviderSessionManager.ProviderSessionManagerV2Error
     | ProviderAdapter.ProviderAdapterV2Error
@@ -248,23 +250,26 @@ export const layer: Layer.Layer<
     return ProviderTurnControlServiceV2.of({
       applyModelSelection: Effect.fn("ProviderTurnControlService.applyModelSelection")(
         function* (input) {
-          const { providerThread, providerTurn } = yield* projections.getRunningTurnContext(
+          const { run, providerThread, providerTurn } = yield* projections.getRunningTurnContext(
             input.threadId,
           );
           if (
+            run === undefined ||
+            (input.expectedRunId !== undefined && run.id !== input.expectedRunId) ||
             providerThread?.id !== input.providerThreadId ||
             providerThread.providerSessionId !== input.providerSessionId ||
             providerTurn === undefined
           ) {
-            return false;
+            return undefined;
           }
           const session = yield* sessions.get(input.providerSessionId);
           if (Option.isNone(session) || session.value.applyModelSelection === undefined)
-            return false;
-          return yield* session.value.applyModelSelection({
+            return undefined;
+          const applied = yield* session.value.applyModelSelection({
             providerThread,
             modelSelection: input.modelSelection,
           });
+          return applied ? { runId: run.id, providerTurnId: providerTurn.id } : undefined;
         },
       ),
       applyThreadTitle: Effect.fn("ProviderTurnControlService.applyThreadTitle")(function* (input) {

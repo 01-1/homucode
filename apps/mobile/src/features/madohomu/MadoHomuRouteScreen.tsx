@@ -74,7 +74,7 @@ export function MadoHomuRouteScreen(props: StaticScreenProps<{ readonly environm
   return <MadoHomuWorkspace key={environmentId} environmentId={environmentId} />;
 }
 
-const T3_PIN_MENU_TITLES = { pin: "Pin in T3 Code", unpin: "Unpin in T3 Code" } as const;
+const T3_PIN_MENU_TITLES = { pin: "Pin in Homu Code", unpin: "Unpin in Homu Code" } as const;
 
 // Sections flipped from their default open state, kept while the app runs so leaving the screen
 // keeps them.

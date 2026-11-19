@@ -43,7 +43,7 @@ export function SettingsHomuCodeRouteScreen() {
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
 
   return (
-    <SettingsScreen title="HomuCode" menus={[menu]}>
+    <SettingsScreen title="Homu Code" menus={[menu]}>
       <ScreenScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -95,7 +95,7 @@ export function SettingsHomuCodeRouteScreen() {
             disabled={selectedTargets.length === 0}
           />
         </SettingsSection>
-        <SettingsSection title="Building T3">
+        <SettingsSection title="Building Homu">
           {selectedTargets.map((target) => (
             <MobileBuildVisibility
               key={target.environmentId}
@@ -105,7 +105,7 @@ export function SettingsHomuCodeRouteScreen() {
           {selectedTargets.some(
             (target) => target.serverConfig.settings.buildToolsSettingsVisible,
           ) ? (
-            <SettingsRow icon="hammer" label="Building T3" target="SettingsBuildingT3" />
+            <SettingsRow icon="hammer" label="Building Homu" target="SettingsBuildingT3" />
           ) : null}
         </SettingsSection>
         <HomuCodeServerSettings />

@@ -240,7 +240,7 @@ export function WelcomePage({
             patch: featureOfferSettingsPatch(offerSettings, offered, selectedOffers),
           },
         });
-        if (saved._tag !== "Success") throw new Error("Could not save HomuCode features.");
+        if (saved._tag !== "Success") throw new Error("Could not save Homu Code features.");
       }
       await updateClientSettings({ settingsSyncEnabled: selectedOffers.has("settings-sync") });
       await completeOnboarding();
@@ -342,7 +342,7 @@ export function WelcomePage({
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Welcome to T3 Code
+              Welcome to Homu Code
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Setting up <span className="text-foreground">{label}</span>.
@@ -361,7 +361,7 @@ export function WelcomePage({
                     projectImport={projectImport}
                     isImporting={isImporting}
                   />
-                  <WelcomeSection title="HomuCode features">
+                  <WelcomeSection title="Homu Code features">
                     <FeatureOfferChoices
                       selected={selectedOffers}
                       onChange={setSelectedOffers}
@@ -402,7 +402,7 @@ export function WelcomePage({
                       ? "Extra features"
                       : followup === "device-name"
                         ? "Name this device"
-                        : "Building T3"
+                        : "Building Homu"
                   }
                 >
                   {offerStep === 1 ? (
@@ -467,7 +467,7 @@ function TelemetryNotice({ environmentId }: { readonly environmentId: Environmen
   const telemetryOff = managedTelemetryOffMessage(useManagedPolicy(environmentId));
   return (
     <p className="mt-auto pt-12 text-2xs leading-relaxed text-muted-foreground/70">
-      {telemetryOff ?? "T3 Code collects anonymous usage data to improve the app."}{" "}
+      {telemetryOff ?? "Homu Code collects anonymous usage data to improve the app."}{" "}
       {telemetryOff === undefined ? "To opt out, see the" : "See the"}{" "}
       <a
         className="underline decoration-current/40 underline-offset-2 hover:text-muted-foreground"
@@ -1062,7 +1062,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
             <SmartphoneIcon className="size-4" />
           </RowIcon>
           <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-            Use T3 Code on your phone
+            Use the mobile app on your phone
           </span>
           <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
             {open ? "Hide" : "Set up"}

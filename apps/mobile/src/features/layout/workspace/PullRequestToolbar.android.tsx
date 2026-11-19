@@ -49,10 +49,10 @@ export function PullRequestToolbar(props: {
   });
   return (
     <AppBar
-      title="T3 Code"
+      title="Homu Code"
       titleContent={
         <WorkspaceBrandTitle
-          accessibilityLabel="T3 Code, Pull requests"
+          accessibilityLabel="Homu Code, Pull requests"
           onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
         />
       }
