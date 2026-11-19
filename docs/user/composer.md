@@ -422,9 +422,8 @@ complete T3 Code tells you and leaves the chip for you to remove or replace. A c
 context is no longer available shows the same dashed outline; hover it for what to do.
 
 Copying a message with the copy button, or copying text out of it, gives other apps readable
-Markdown with a link in place of each chip. Older messages that were sent before chips still
-show their context. Stashing a prompt keeps its chips and what they point to; restoring brings
-them back.
+Markdown with a link in place of each chip. Stashing and restoring a prompt keeps its chips
+and their context.
 
 On mobile, tap a chip to inspect its content. File references open the current file; attached
 files show the copy that was attached to the message.

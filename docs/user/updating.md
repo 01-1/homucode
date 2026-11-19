@@ -66,8 +66,7 @@ Extra features → Update when agents are idle**.
 In the desktop app, change **Settings → About → Update track**. T3 Code shows each
 connected machine it will move and each one it skips, then moves them in one
 step. Remote servers install the latest release on the new track. Remote desktop
-apps reinstall on the new track. This app reinstalls last. Your threads,
-settings, and data stay.
+apps reinstall on the new track. This app reinstalls last.
 
 A background service cannot move to an older release remotely. When Stable is
 older than its Nightly, run `t3 update --channel stable --allow-downgrade` on
@@ -87,13 +86,13 @@ checks.
 ## Before you update
 
 Server updates restart the connection and can interrupt active agents and
-terminal commands. Saved threads, settings, and project files remain.
+terminal commands.
 
 **Settings → Maintenance → Continue threads after restarts** is on by default.
 It resumes supported active threads after an update, crash, or machine
-restart. Changes are saved to connected environments that support this setting;
-update older servers first. If a supported environment was offline or has a
-different value, use **Apply to all** in Settings after it connects.
+restart. Changes are saved to connected environments that support this setting.
+If a supported environment was offline or has a different value, use **Apply
+to all** in Settings after it connects.
 T3 Code must start again on that machine;
 the setting does not enable automatic startup. Terminal commands may still be
 interrupted, and threads without saved provider resume state need a new message.
@@ -108,10 +107,6 @@ while it is archived, snoozed, or settled. After three consecutive crash recover
 of an unfinished turn, the thread waits for your next message, even when crashes
 are more than five minutes apart. A completed turn or a planned shutdown resets
 that limit.
-
-Updates from the previous orchestration system preserve conversation transcripts but cannot carry
-every kind of runtime history forward. Read [Threads from older T3 Code versions](./thread-migration.md)
-before continuing an important older thread.
 
 ## When versions don't match
 
@@ -147,10 +142,6 @@ asks before restarting the background service; if you decline, run
 stop it and start it again afterwards with your usual options such as `--host`
 or `--tailscale-serve`.
 
-If you decline the restart for a background service installed by an older
-release, the service can stay down after a crash or reboot until you run
-`t3 service restart`.
-
 If you run the server with `npx` rather than an installed `t3`, there is
 nothing to update on the host: stop the server and relaunch it as
 `npx t3@<client-version>` with the same subcommand and options.
@@ -167,19 +158,6 @@ update can roll back to the previous version. If the update still fails:
 Only one server can use a T3 home directory at a time. If startup reports that
 another server owns it, stop that server before retrying, or use a separate home
 directory and pair with the running server.
-
-### macOS app does not reopen after an Alpha update
-
-Updating an older **T3 Code (Alpha)** installation can replace it with
-**T3 Code (Beta)** without reopening the app. Open **T3 Code (Beta)** from
-Applications, or run:
-
-```sh
-open "/Applications/T3 Code (Beta).app"
-```
-
-If an old Dock shortcut no longer opens the app, remove it and add the Beta app
-from Applications again.
 
 ## If the desktop app does not start
 

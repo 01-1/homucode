@@ -106,9 +106,8 @@ It is a JSON array of rules:
 ]
 ```
 
-T3 Code creates the file with its defaults and adds new defaults on later startups.
-New defaults do not replace commands you customized. If a new default overlaps one
-of your shortcuts, [rule order](#precedence) decides which runs.
+T3 Code creates the file with default keybindings and keeps your custom rules.
+[Rule order](#precedence) decides which runs when shortcuts overlap.
 Invalid rules are ignored; if the file cannot be parsed, T3 Code uses defaults.
 
 ## Rule shape
@@ -160,8 +159,7 @@ Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 ## Find in the current thread
 
 `chat.find` searches conversation messages and proposed plans in the active thread. Entering a
-query searches the entire thread, including older messages. Thread search requires server support;
-update an older server to enable it. Select **Retry** if a search fails. It defaults to
+query searches the entire thread. Select **Retry** if a search fails. It defaults to
 `mod+f` outside terminals and previews. Press **Enter** or **Shift+Enter** to move between matches,
 and **Escape** to close find.
 

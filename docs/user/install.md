@@ -6,8 +6,14 @@ desktop, web, or mobile app. Set up the machine where the agents will work first
 ## HomuCode builds
 
 For HomuCode on Linux x86_64, download `T3-Code-x86_64.AppImage` from
-[HomuCode releases](https://github.com/homura-ai/homucode/releases/latest), make it executable,
-and launch it as shown under [Linux](#linux). These builds use the fork's update feed.
+[HomuCode releases](https://github.com/homura-ai/homucode/releases/latest). In the download folder, run:
+
+```bash
+chmod +x ./T3-Code-x86_64.AppImage
+./T3-Code-x86_64.AppImage
+```
+
+The AppImage uses the HomuCode update feed.
 For other platforms, [build from this repository](../operations/development.md#desktop-artifacts).
 
 The installers, package managers, and app-store links below install upstream T3 Code.
@@ -63,12 +69,9 @@ command it names and open the pairing URL to connect to that server. Stop it
 before starting a replacement, or use a different `--base-dir` for an
 independent server.
 
-To try T3 Code once without installing it, run `npx t3@latest` instead (needs
-Node.js for `npx`). It offers to install the `t3` command first. If you say no,
-it asks again at the next minor release, and `npx t3 install` installs it later.
-`npx t3` always runs the version npm picked, even when a `t3` is installed. On
-the nightly train, run your installed `t3` (for example `t3 connect`), not
-`npx t3`, which runs the latest stable release.
+To try the stable release without installing the command, run `npx t3@latest`
+(requires Node.js) and decline the install prompt. To install the command
+afterwards, run `npx t3 install`. For Nightly, run the installed `t3` command.
 
 ### Intel Macs
 
@@ -148,7 +151,7 @@ Nix manages both the desktop app and the bundled
 ### The `t3` command
 
 The desktop app includes the `t3` command-line tool. A new install sets it up
-on first launch; after an update, or any time, choose **Install** next to
+on first launch. To install it manually, choose **Install** next to
 **t3 command** in **Settings → About**. On macOS and Linux it adds a `t3` link
 in `~/.local/bin` (or `~/bin`); on Windows it adds the app's command folder to
 your `PATH`. Open a new terminal afterwards. If the folder is not on your

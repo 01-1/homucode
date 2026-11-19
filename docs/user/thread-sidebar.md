@@ -103,15 +103,10 @@ scroll position instead of following the thread to its new place in the list.
 A thread pinned on any device is protected from automatic settlement. Explicitly
 settling a thread clears its pins on every device.
 
-Pins saved before device-specific pins were introduced remain a shared compatibility
-membership. Each device initially shows those pins and can hide them independently.
-The old shared membership continues to protect the thread from automatic settlement
-until a shared unpin command or explicit settlement clears it.
-
-Pin commands that do not name a device, such as an agent's `t3_thread_organize`, the
-`t3` CLI and older app versions, apply to every device: a shared pin shows on every
-device again, including ones that had hidden the thread, and a shared unpin removes
-the thread's pins on every device.
+Pin commands that do not name a device, such as the `t3` CLI, apply to every
+device. Each device can hide a shared pin independently. A shared pin protects
+the thread from automatic settlement, and a shared unpin clears the thread's
+pins on every device.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
@@ -149,8 +144,7 @@ position until you move it again. Thread activity does not change the order. The
 continues to use settlement time.
 
 If dragging is unavailable for one environment, update the T3 Code server running in that
-environment. Pinned and active reordering require server support. Threads from older servers keep
-their default order until the server is updated.
+environment.
 
 To generate a fresh title from the conversation, open a thread's menu and choose
 **Regenerate title**. The action is unavailable while title generation is in progress
@@ -292,9 +286,8 @@ Change these rules in **Settings → Threads**.
 They continue to run when your apps are closed. On web and desktop, choose an environment at the
 top to change only its rules, or **All environments** to update connected environments together.
 Mixed values show where the selected environments disagree. Mobile applies these
-rules to connected environments that support shared settings. Offline environments
-and older servers keep their previous values. Changing a rule does not reopen
-already settled threads.
+rules to connected environments that support shared settings. Changing a rule does
+not reopen settled threads.
 
 ## Link a pull request
 

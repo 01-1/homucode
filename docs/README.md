@@ -1,7 +1,6 @@
 # HomuCode docs
 
-These guides describe the T3 Code interface with HomuCode’s changes. For fork builds, start with
-[Install HomuCode](./user/install.md#homucode-builds); upstream downloads do not include the fork’s features.
+Start with [Install HomuCode](./user/install.md#homucode-builds).
 
 ## Using T3 Code
 
