@@ -1437,11 +1437,19 @@ export const OrchestrationV2NotificationSource = kindUnionWithFallback(
 );
 export type OrchestrationV2NotificationSource = typeof OrchestrationV2NotificationSource.Type;
 
+/** A same-harness model or effort change that took effect in the timeline. */
+export const OrchestrationV2ModelSwitch = Schema.Struct({
+  from: ModelSelection,
+  to: ModelSelection,
+});
+export type OrchestrationV2ModelSwitch = typeof OrchestrationV2ModelSwitch.Type;
+
 export const OrchestrationV2Notification = Schema.Struct({
   source: OrchestrationV2NotificationSource,
   outcome: OrchestrationV2NotificationOutcome,
   summary: TrimmedNonEmptyString,
   detail: Schema.optional(Schema.String),
+  modelSwitch: Schema.optional(OrchestrationV2ModelSwitch),
 });
 export type OrchestrationV2Notification = typeof OrchestrationV2Notification.Type;
 
@@ -1655,13 +1663,6 @@ export type OrchestrationV2UserMessageInputIntent =
 
 /** Notices without a level predate it and are warnings. */
 const OrchestrationV2SystemNoticeLevel = Schema.Literals(["info", "warning", "error"]);
-
-/** A same-harness model or effort change that took effect with this message. */
-export const OrchestrationV2ModelSwitch = Schema.Struct({
-  from: ModelSelection,
-  to: ModelSelection,
-});
-export type OrchestrationV2ModelSwitch = typeof OrchestrationV2ModelSwitch.Type;
 
 const AssistantMessagePhase = Schema.Literals(["commentary", "partial_answer", "final_answer"]);
 
@@ -1905,6 +1906,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     type: Schema.Literal("system_notice"),
     message: Schema.String,
     level: Schema.optional(OrchestrationV2SystemNoticeLevel),
+    modelSwitch: Schema.optional(OrchestrationV2ModelSwitch),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2792,6 +2794,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     type: Schema.Literal("system_notice"),
     message: Schema.String,
     level: Schema.optional(OrchestrationV2SystemNoticeLevel),
+    modelSwitch: Schema.optional(OrchestrationV2ModelSwitch),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -3842,6 +3845,14 @@ const OrchestrationV2InternalCommand = Schema.Union([
     threadId: ThreadId,
     requestId: CommandId,
     message: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("run.live-model-selection.record"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    runId: RunId,
+    providerTurnId: ProviderTurnId,
+    modelSelection: ModelSelection,
   }),
   /** Delivering the answer to request `requestId` failed on its last attempt. */
   Schema.Struct({

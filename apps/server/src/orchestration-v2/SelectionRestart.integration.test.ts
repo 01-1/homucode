@@ -18,6 +18,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -601,6 +602,7 @@ it.live.each([
   "in place",
   "as the next turn",
   "after a live change",
+  "overlapping restart",
   "changed and back",
   "off",
 ] as const)("applyModelChangeNow restarts a running turn on a new effort (%s)", (mode) =>
@@ -616,6 +618,8 @@ it.live.each([
       closedSessionCount: 0,
       failedReplacementOpen: false,
     });
+    const liveSetEntered = yield* Deferred.make<void>();
+    const finishLiveSet = yield* Deferred.make<void>();
     const turns: Array<{ selection: ModelSelection; text: string }> = [];
     // Claude stops the turn and starts the restart as the next run.
     const base = makeRestartAdapter(
@@ -634,10 +638,17 @@ it.live.each([
           Effect.map((session) => ({
             ...session,
             // Like Claude, which applies some effort changes to the running turn.
-            ...(mode === "after a live change"
+            ...(mode === "after a live change" || mode === "overlapping restart"
               ? {
-                  applyModelSelection: ({ modelSelection }: { modelSelection: ModelSelection }) =>
-                    Effect.succeed(modelSelection.options?.[0]?.value === "medium"),
+                  applyModelSelection: ({ modelSelection }: { modelSelection: ModelSelection }) => {
+                    const canApply = modelSelection.options?.[0]?.value === "medium";
+                    return mode === "overlapping restart" && canApply
+                      ? Deferred.succeed(liveSetEntered, undefined).pipe(
+                          Effect.andThen(Deferred.await(finishLiveSet)),
+                          Effect.as(true),
+                        )
+                      : Effect.succeed(canApply);
+                  },
                 }
               : {}),
             startTurn: (turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
@@ -694,6 +705,37 @@ it.live.each([
       });
       yield* worker.drain();
       yield* Fiber.join(firstRunning);
+      if (mode === "overlapping restart") {
+        yield* orchestrator.dispatch({
+          type: "thread.model-selection.set",
+          commandId: CommandId.make(`${name}:live-effort`),
+          threadId,
+          modelSelection: medium,
+        });
+        const drain = yield* worker.drain().pipe(Effect.forkScoped);
+        yield* Deferred.await(liveSetEntered);
+        const current = yield* orchestrator.getThreadProjection(threadId);
+        const replacementRunning = yield* turnRunning();
+        const restart = yield* orchestrator
+          .dispatch({
+            type: "message.dispatch",
+            commandId: CommandId.make(`${name}:replacement`),
+            threadId,
+            messageId: MessageId.make(`${name}:replacement`),
+            text: "Replace the running turn",
+            attachments: [],
+            modelSelection: target,
+            dispatchMode: { type: "restart_active", targetRunId: current.runs[0]!.id },
+            createdBy: "user",
+            creationSource: "web",
+          })
+          .pipe(Effect.forkScoped({ startImmediately: true }));
+        yield* Deferred.succeed(finishLiveSet, undefined);
+        yield* Fiber.join(restart);
+        yield* Fiber.join(drain);
+        yield* Fiber.join(replacementRunning);
+        return yield* orchestrator.getThreadProjection(threadId);
+      }
       if (mode === "after a live change") {
         yield* orchestrator.dispatch({
           type: "thread.model-selection.set",
@@ -702,7 +744,14 @@ it.live.each([
           modelSelection: medium,
         });
         yield* worker.drain();
-        assert.lengthOf((yield* orchestrator.getThreadProjection(threadId)).attempts, 1);
+        const live = yield* orchestrator.getThreadProjection(threadId);
+        assert.lengthOf(live.attempts, 1);
+        const marker = live.turnItems.find((item) => item.type === "system_notice");
+        assert.deepInclude(marker, {
+          runId: live.runs[0]!.id,
+          providerTurnId: live.providerTurns[0]!.id,
+          modelSwitch: { from: high, to: medium },
+        });
       }
       if (mode === "changed and back") {
         // Both picks land before either effect runs.
@@ -735,6 +784,22 @@ it.live.each([
     );
 
     assert.deepEqual(projection.thread.modelSelection, target);
+    if (mode === "overlapping restart") {
+      const liveMarker = projection.turnItems.find((item) => item.type === "system_notice");
+      const restartMarker = projection.turnItems.find(
+        (item) => item.type === "user_message" && item.modelSwitch !== undefined,
+      );
+      assert.deepInclude(liveMarker, {
+        nodeId: projection.attempts[0]!.rootNodeId,
+        modelSwitch: { from: high, to: medium },
+      });
+      assert.deepInclude(restartMarker, {
+        nodeId: projection.attempts[1]!.rootNodeId,
+        modelSwitch: { from: medium, to: target },
+      });
+      assert.isBelow(liveMarker!.ordinal, restartMarker!.ordinal);
+      return;
+    }
     if (!applyModelChangeNow || mode === "changed and back") {
       assert.deepEqual(
         turns.map((turn) => turn.selection),
@@ -768,6 +833,12 @@ it.live.each([
     );
     assert.include(turns[1]?.text, "Continue the task you were working on.");
     const notice = projection.messages.find((message) => message.notification !== undefined);
+    const marker = projection.turnItems.find((item) => item.type === "notification");
+    assert.deepInclude(marker, {
+      runId: projection.runs.at(-1)!.id,
+      nodeId: projection.runs.at(-1)!.rootNodeId,
+      modelSwitch: { from: mode === "after a live change" ? medium : high, to: target },
+    });
     assert.equal(
       notice?.notification?.summary,
       `Restarted on restart-model-a (reasoningEffort ${target.options[0]!.value})`,

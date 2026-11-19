@@ -49,7 +49,7 @@ import { cn } from "~/lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { FetchedToolOutput, V2ItemInspector } from "./V2ItemInspector";
 import { QuestionOptionsHistory } from "./QuestionOptionsHistory";
-import { SubagentNotificationLink } from "./V2LifecycleRow";
+import { ModelSwitchRow, SubagentNotificationLink } from "./V2LifecycleRow";
 import {
   TimelineRowCtx,
   TimelineRowActivityCtx,
@@ -158,6 +158,17 @@ type WorkEntryRowProps = {
 export const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: WorkEntryRowProps) {
   const ctx = use(TimelineRowCtx);
   const item = props.workEntry.projectedItem?.item;
+  if ((item?.type === "system_notice" || item?.type === "notification") && item.modelSwitch) {
+    return (
+      <>
+        <ModelSwitchRow
+          environmentId={ctx.activeThreadEnvironmentId}
+          modelSwitch={item.modelSwitch}
+        />
+        {item.type === "notification" ? <WorkEntryLogRow {...props} /> : null}
+      </>
+    );
+  }
   const childThreadId =
     item?.type === "notification" ? notificationChildThreadId(item.source) : undefined;
   if (item?.type !== "notification" || childThreadId === undefined) {
