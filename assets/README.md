@@ -12,6 +12,8 @@ Run `vp run icons:export` from the repository root to regenerate the tracked iOS
 
 Exporting requires Icon Composer 2 or newer on macOS. The script selects the newest compatible exporter from Xcode or a standalone Icon Composer installation and pins design generation 26. Set `ICON_COMPOSER_TOOL` to the full path of `Icon Composer.app/Contents/Executables/ictool` to override automatic discovery.
 
+The current development and production exports were rendered flat from `text.svg` and the fill colour without a Mac, so they lack Icon Composer's glass and shadow; rerunning the export on a Mac replaces them.
+
 ## macOS exports
 
 Icon Composer's command-line exporter does not expose the `macOS pre-Tahoe` preset. A plain command-line `macOS` export is full bleed and is not suitable for the desktop app, so the export script intentionally leaves the tracked macOS PNGs unchanged and prints a reminder after every run.
