@@ -11,3 +11,7 @@ In headers and other places where the full name is shown, render **HomuCode** as
 ## Compact icon
 
 Use the approved app icon for small marks beside an action, including running Homu actions such as creating a thread or sending to a thread. Keep the action text beside the icon. A row that says “Sending to a Homu thread” uses the icon in its small leading slot. A header that spells out HomuCode uses the text wordmark.
+
+## App icon source
+
+The next app icon export uses `assets/brand-marks/yc.svg`, the newest 炎 drawing. It replaces y1, from which the current icons were made.
