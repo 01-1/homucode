@@ -58,7 +58,7 @@ afterEach(() => {
   for (const root of projectRoots.splice(0)) NodeFS.rmSync(root, { recursive: true, force: true });
 });
 
-async function prebuildAndroid() {
+async function prebuildAndroid(mainActivity = MAIN_ACTIVITY) {
   const projectRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "madohomu-launcher-"));
   projectRoots.push(projectRoot);
   const sourceRoot = NodePath.join(projectRoot, "android/app/src/main");
@@ -67,7 +67,7 @@ async function prebuildAndroid() {
   NodeFS.mkdirSync(NodePath.join(sourceRoot, "res/values"), { recursive: true });
   NodeFS.writeFileSync(NodePath.join(sourceRoot, "res/values/colors.xml"), "<resources/>");
   NodeFS.writeFileSync(NodePath.join(sourceRoot, "AndroidManifest.xml"), MANIFEST);
-  NodeFS.writeFileSync(NodePath.join(activityDir, "MainActivity.kt"), MAIN_ACTIVITY);
+  NodeFS.writeFileSync(NodePath.join(activityDir, "MainActivity.kt"), mainActivity);
 
   // Registered first like in app.config.ts, so it copies the other plugins' MainActivity.
   const config = withAndroidTabletOrientation(
@@ -147,5 +147,20 @@ describe("withAndroidMadoHomuLauncher", () => {
       '<item name="ic_madohomu" type="mipmap">@mipmap/ic_launcher</item>',
     );
     expect(colors).toContain('name="madohomu_icon_background"');
+  });
+
+  it("adds Back reporting when an existing build already reports window focus", async () => {
+    const clean = await prebuildAndroid();
+    const focusOnly = clean.mainActivity.replace(
+      /\n  @Suppress\("DEPRECATION", "OVERRIDE_DEPRECATION"\)\n  override fun onBackPressed\(\) \{[\s\S]*?\n  \}\n/,
+      "",
+    );
+    expect(focusOnly).not.toContain("onActivityBackPressed");
+
+    const upgraded = await prebuildAndroid(focusOnly);
+    for (const activity of [upgraded.mainActivity, upgraded.madohomuActivity]) {
+      expect(Array.from(activity.matchAll(/onActivityBackPressed\(this\)/g))).toHaveLength(1);
+      expect(Array.from(activity.matchAll(/onActivityFocused\(this\)/g))).toHaveLength(1);
+    }
   });
 });
