@@ -4,6 +4,8 @@ On web and desktop, choose a project in Settings → Homu Code → MadoHomu. Pro
 
 On mobile, use Settings → Homu Code → MadoHomu to enable it, choose its project and configure the morning brief. Open MadoHomu from the home thread list, or on Android wide layouts such as an unfolded phone, from MadoHomu in the navigation rail. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
 
+On Android, enabling MadoHomu adds a MadoHomu icon to the app launcher. Use it to open your selected workspace in its own Recents task. You can keep Homu Code and MadoHomu open side by side in Android split screen. The launcher icon disappears when you disable MadoHomu on your last enabled environment.
+
 MadoHomu is one thread list in sections, and threads use your normal chat and composer.
 
 - **Pinned** holds the threads you make in MadoHomu, on all your devices. This is independent of sidebar pins. Drag to reorder them. On mobile, choose Reorder in the gear menu or a thread's menu first, or use Move up and Move down in the thread menu.
