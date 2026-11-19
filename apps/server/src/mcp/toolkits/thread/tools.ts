@@ -37,13 +37,25 @@ import {
 } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTaskService from "../../../scheduledTasks/ScheduledTaskService.ts";
 import * as ThreadFolderService from "../../../threadFolders/ThreadFolderService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+
+const ThreadIdTool = Tool.make("t3_thread_id", {
+  description: "Return the calling agent's T3 Code thread ID. Works in root and delegated threads.",
+  success: Schema.Struct({ threadId: ThreadId }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [McpInvocationContext.McpInvocationContext],
+})
+  .annotate(Tool.Title, "Get your thread ID")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
@@ -336,6 +348,7 @@ const ThreadAssistTool = Tool.make("t3_thread_assist", {
 export const AssistanceToolkit = Toolkit.make(ThreadActivityTool, ThreadAssistTool);
 
 export const ThreadToolkit = Toolkit.make(
+  ThreadIdTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadConfigureTool,

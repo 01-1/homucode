@@ -18,7 +18,7 @@ Every section folds from its heading. A folded section that holds threads waitin
 
 On web and desktop, the thread keyboard shortcuts move through MadoHomu's rows, and links to threads in the project open inside MadoHomu.
 
-The thread menu (right-click or the row's … button, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt, and Move to. On mobile, the open thread's header menu has Move to and Edit too. New thread on a branch, started from a MadoHomu thread, files the new thread in Pinned. Inside MadoHomu, T3 Code's own pin and folders are labelled "Pin in T3 Code" and "Move to T3 Code folder". Icons can come from Lucide or be custom emojis. The agent receives the current title, icon and prompt privately on each turn.
+The thread menu (right-click or the row's … button, or long-press on mobile) has everything the normal thread list has, plus Edit, which changes a thread's title, icon, icon color and short prompt, and Move to. On mobile, the open thread's header menu has Move to and Edit too. New thread on a branch, started from a MadoHomu thread, files the new thread in Pinned. Inside MadoHomu, T3 Code's own pin and folders are labelled "Pin in T3 Code" and "Move to T3 Code folder". Icons can come from Lucide or be custom emojis. The agent receives the current title, T3 thread ID, icon and prompt privately on each turn.
 
 MadoHomu's threads are hidden from the T3 Code thread list. To see them there too, set "Show MadoHomu threads in Homu Code" in MadoHomu settings to Scratch only or All. Search and links still open hidden threads.
 
