@@ -74,6 +74,11 @@ function withWindowFocusReporting(source) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus) ${REPORT_WINDOW_FOCUS}
   }
+
+  @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+  override fun onBackPressed() {
+    if (!T3MadoHomuLauncherModule.onActivityBackPressed(this)) invokeDefaultOnBackPressed()
+  }
 `,
     );
 }

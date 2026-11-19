@@ -111,7 +111,6 @@ import {
   attachMadoHomuNavigation,
   attachMainNavigation,
   hasAndroidTaskRouting,
-  MadoHomuBackRouting,
   MadoHomuLauncherSync,
   syncMadoHomuLauncherDestination,
   taskNavigationState,
@@ -409,7 +408,6 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
                     onStateChange={handleNavigationStateChange}
                   />
                 )}
-                <MadoHomuBackRouting />
                 <Dialog.Host />
                 <ThreadArrangementHost />
                 <ProjectChipIconRasterizer />

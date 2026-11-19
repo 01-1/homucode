@@ -19,16 +19,20 @@ const launcherModule =
     ? requireOptionalNativeModule<{
         setEnabled(enabled: boolean): boolean;
         foregroundSurface(): AndroidTaskSurface;
-        exitFocusedTask(): void;
+        completeTaskBack(id: number, handled: boolean): void;
+        exitFocusedTask(surface: AndroidTaskSurface): void;
         addListener(
           event: "onForegroundSurfaceChange",
           listener: (event: { surface: AndroidTaskSurface }) => void,
+        ): EventSubscription;
+        addListener(
+          event: "onTaskBackPress",
+          listener: (event: { id: number; surface: AndroidTaskSurface }) => void,
         ): EventSubscription;
       }>("T3MadoHomuLauncher")
     : null;
 
 const containers = new Map<AndroidTaskSurface, RootNavigation>();
-const attachListeners = new Set<() => void>();
 let foregroundSurface: AndroidTaskSurface = launcherModule?.foregroundSurface() ?? "main";
 
 // A foreground task without a mounted navigator clears the ref, so global navigation queues.
@@ -37,12 +41,14 @@ launcherModule?.addListener("onForegroundSurfaceChange", ({ surface }) => {
   focusRootNavigation(containers.get(surface) ?? null);
 });
 
-// Deferred past the commit's effects, where navigators and screens add their Back listeners.
-function reRegisterBackRouting() {
-  setTimeout(() => {
-    for (const listener of attachListeners) listener();
-  }, 0);
-}
+launcherModule?.addListener("onTaskBackPress", ({ id, surface }) => {
+  let handled = false;
+  try {
+    handled = routeHardwareBack(surface);
+  } finally {
+    launcherModule.completeTaskBack(id, handled);
+  }
+});
 
 function attachSurfaceNavigation(surface: AndroidTaskSurface) {
   return (navigation: RootNavigation | null) => {
@@ -51,7 +57,6 @@ function attachSurfaceNavigation(surface: AndroidTaskSurface) {
     containers.set(surface, navigation);
     foregroundSurface = launcherModule?.foregroundSurface() ?? foregroundSurface;
     focusRootNavigation(containers.get(foregroundSurface) ?? null);
-    reRegisterBackRouting();
     return () => {
       if (containers.get(surface) === navigation) containers.delete(surface);
       detach();
@@ -106,35 +111,15 @@ export function syncMadoHomuLauncherDestination(environmentId: string) {
   if (navigation && action) navigation.dispatch(action);
 }
 
-function routeHardwareBack(): boolean {
-  const surface = launcherModule?.foregroundSurface() ?? foregroundSurface;
+function routeHardwareBack(surface: AndroidTaskSurface): boolean {
   if (dispatchTaskHardwareBack(surface)) return true;
   const navigation = containers.get(surface);
-  if (navigation?.isReady() && navigation.canGoBack()) navigation.goBack();
-  else launcherModule?.exitFocusedTask();
+  if (!navigation?.isReady() || !navigation.canGoBack()) return false;
+  navigation.goBack();
   return true;
 }
 
-/**
- * React Navigation registers an unscoped listener for each root. Register after navigation
- * mounts so Back goes through the foreground task's screen handlers and then its navigator.
- */
-export function MadoHomuBackRouting() {
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the native hardware Back event
-  useEffect(() => {
-    if (!hasAndroidTaskRouting) return;
-    // React Native deduplicates by callback identity. Each root owns its subscription.
-    const onBack = () => routeHardwareBack();
-    let subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
-    const reRegister = () => {
-      subscription.remove();
-      subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
-    };
-    attachListeners.add(reRegister);
-    return () => {
-      attachListeners.delete(reRegister);
-      subscription.remove();
-    };
-  }, []);
-  return null;
+export function exitAndroidTask(surface: AndroidTaskSurface | null) {
+  if (surface && launcherModule) launcherModule.exitFocusedTask(surface);
+  else BackHandler.exitApp();
 }

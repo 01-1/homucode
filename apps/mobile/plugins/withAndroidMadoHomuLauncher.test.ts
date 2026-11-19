@@ -129,6 +129,9 @@ describe("withAndroidMadoHomuLauncher", () => {
       expect(activity).toMatch(
         /override fun onWindowFocusChanged\(hasFocus: Boolean\) \{[\s\S]*?if \(hasFocus\) T3MadoHomuLauncherModule\.onActivityFocused\(this\)/,
       );
+      expect(activity).toContain(
+        "if (!T3MadoHomuLauncherModule.onActivityBackPressed(this)) invokeDefaultOnBackPressed()",
+      );
     }
   });
 
