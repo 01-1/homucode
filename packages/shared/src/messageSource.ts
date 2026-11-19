@@ -139,7 +139,7 @@ export function messageSourceLine(message: MessageSourceFields): string {
 export function messageSourceLabel(message: MessageSourceFields): string {
   const source = messageSource(message);
   if (source.kind === "automatic") {
-    return `Automatic · ${source.label === "T3 Code" ? "Homu Code" : source.label}`;
+    return `Automatic · ${source.label === "T3 Code" ? "HomuCode" : source.label}`;
   }
   const who = source.guestName === undefined ? "Human" : "Human guest";
   const sentFrom = message.context?.sentFrom;

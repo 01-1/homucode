@@ -337,7 +337,7 @@ export function SettingsVoiceRouteScreen() {
             <Text className="px-2 text-sm text-foreground-muted">
               {permission === "ask"
                 ? "Allow microphone access to record and to see your microphones."
-                : "Turn on microphone access for Homu Code in Settings to use voice input."}
+                : "Turn on microphone access for HomuCode in Settings to use voice input."}
             </Text>
           </>
         ) : null}

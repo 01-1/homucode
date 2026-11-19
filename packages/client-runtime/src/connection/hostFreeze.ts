@@ -20,6 +20,6 @@ export function hostFreezeNotice(
     description:
       loadAverage !== undefined && loadAverage > cpuCount
         ? `Its CPU is overloaded (load ${Math.round(loadAverage)} on ${cpuCount} cores).`
-        : `Homu Code on ${hostLabel} was too busy to answer.`,
+        : `HomuCode on ${hostLabel} was too busy to answer.`,
   };
 }

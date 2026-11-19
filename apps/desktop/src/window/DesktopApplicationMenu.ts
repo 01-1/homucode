@@ -65,7 +65,7 @@ const runMainContentsCommand = Effect.fn("desktop.menu.runMainContentsCommand")(
 });
 
 const describeUpdate = (version: string | null) =>
-  version === null ? "A new version of Homu Code" : `Homu Code ${version}`;
+  version === null ? "A new version of HomuCode" : `HomuCode ${version}`;
 
 const checkForUpdatesFromMenu = Effect.gen(function* () {
   const updates = yield* DesktopUpdates.DesktopUpdates;
@@ -77,7 +77,7 @@ const checkForUpdatesFromMenu = Effect.gen(function* () {
     yield* electronDialog.showMessageBox({
       type: "info",
       title: "You're up to date!",
-      message: `Homu Code ${updateState.currentVersion} is currently the newest version available.`,
+      message: `HomuCode ${updateState.currentVersion} is currently the newest version available.`,
       buttons: ["OK"],
     });
   } else if (updateState.status === "available") {
@@ -85,7 +85,7 @@ const checkForUpdatesFromMenu = Effect.gen(function* () {
       type: "info",
       title: "Update available",
       message: `${describeUpdate(updateState.availableVersion)} is available.`,
-      detail: `You're running Homu Code ${updateState.currentVersion}.`,
+      detail: `You're running HomuCode ${updateState.currentVersion}.`,
       buttons: ["Download", "Later"],
       defaultId: 0,
       cancelId: 1,
@@ -103,7 +103,7 @@ const checkForUpdatesFromMenu = Effect.gen(function* () {
       type: "info",
       title: "Update ready",
       message: `${describeUpdate(updateState.downloadedVersion ?? updateState.availableVersion)} is ready to install.`,
-      detail: "Homu Code will restart to install it. Any running tasks will be interrupted.",
+      detail: "HomuCode will restart to install it. Any running tasks will be interrupted.",
       buttons: ["Restart", "Later"],
       defaultId: 0,
       cancelId: 1,

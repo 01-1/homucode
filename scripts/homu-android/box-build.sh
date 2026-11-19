@@ -20,8 +20,7 @@ fi
 python3 - "$app_name" <<'PY'
 import json,pathlib,re,sys
 p=pathlib.Path('apps/mobile/app.config.ts')
-name = "Homu Code" if sys.argv[1] == "HomuCode" else sys.argv[1]
-s,n=re.subn(r'appName: "(?:T3|Homu) Code[^"]*"', lambda _: "appName: " + json.dumps(name), p.read_text())
+s,n=re.subn(r'appName: "(?:T3 Code|Homu ?Code)[^"]*"', lambda _: "appName: " + json.dumps(sys.argv[1]), p.read_text())
 assert n==3, n
 p.write_text(s)
 PY

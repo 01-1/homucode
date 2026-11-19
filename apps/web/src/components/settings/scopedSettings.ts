@@ -688,7 +688,7 @@ async function persistScopedSettingsPlan(
       return [
         {
           ...environment,
-          message: "This environment does not support this setting. Update Homu Code on it.",
+          message: "This environment does not support this setting. Update HomuCode on it.",
         },
       ];
     }

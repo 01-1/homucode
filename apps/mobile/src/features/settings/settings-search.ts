@@ -54,7 +54,7 @@ const SETTINGS_SEARCH_TERMS = {
   SettingsScheduledTasks: ["automations", "schedule", "cron", "recurring", "webhook"],
   SettingsHomuCode: [
     ...FEATURE_OFFERS.map((offer) => offer.title),
-    "Homu Code checkout",
+    "HomuCode checkout",
     "Boat CLI",
     "Cloud machine type",
     "Build output folder",

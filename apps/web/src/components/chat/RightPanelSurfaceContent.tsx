@@ -124,7 +124,7 @@ export function RightPanelSurfaceContent(props: {
         return (
           <PullRequestsUnavailableState
             title="Pull requests unavailable"
-            error="Update this environment's Homu Code server to browse pull requests."
+            error="Update this environment's HomuCode server to browse pull requests."
           />
         );
       }

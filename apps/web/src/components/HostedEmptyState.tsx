@@ -28,8 +28,15 @@ export function HostedEmptyState() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground md:text-muted-foreground/60">
-              {APP_DISPLAY_NAME}
+            <span className="text-sm font-medium text-muted-foreground">
+              {APP_DISPLAY_NAME.startsWith("HomuCode") ? (
+                <>
+                  <span className="text-foreground">Homu</span>
+                  {APP_DISPLAY_NAME.slice("Homu".length)}
+                </>
+              ) : (
+                APP_DISPLAY_NAME
+              )}
             </span>
           </div>
         </WorkspacePageHeader>
@@ -44,7 +51,7 @@ export function HostedEmptyState() {
                 ? "Turn it back on, or connect a different computer."
                 : cloudEnabled
                   ? "Your agents run on your computer."
-                  : "Your agents run on your computer. Start Homu Code there first."}
+                  : "Your agents run on your computer. Start HomuCode there first."}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>

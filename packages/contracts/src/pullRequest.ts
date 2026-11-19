@@ -1019,7 +1019,7 @@ export class PullRequestUnavailableError extends Schema.TaggedError<PullRequestU
       case "provider-unsupported":
         return "Change requests cannot be browsed for this project's host yet.";
       case "repository-without-project":
-        return `${this.repository ?? "This repository"} is not a project in Homu Code. Add it as a project to read its change requests.`;
+        return `${this.repository ?? "This repository"} is not a project in HomuCode. Add it as a project to read its change requests.`;
     }
   }
 }

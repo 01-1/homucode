@@ -264,9 +264,9 @@ function FullDiskAccessStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Let Homu Code read {source.name}&rsquo;s cookies</DialogTitle>
+        <DialogTitle>Let HomuCode read {source.name}&rsquo;s cookies</DialogTitle>
         <DialogDescription>
-          To import cookies from {source.name}, Homu Code needs Full Disk Access. Turn it on in
+          To import cookies from {source.name}, HomuCode needs Full Disk Access. Turn it on in
           System Settings, then come back to finish the import. You can revoke it again once the
           import is done.
         </DialogDescription>
@@ -298,8 +298,8 @@ function FullDiskAccessStep({
         {!permission.isReady(["fullDiskAccess"]) ? (
           <p className="mt-3 text-xs text-muted-foreground">
             {stillRequired
-              ? "Access is still required. Quit and reopen Homu Code if you just allowed it, then retry the import."
-              : "If access doesn't update after you allow it, quit and reopen Homu Code, then retry the import."}
+              ? "Access is still required. Quit and reopen HomuCode if you just allowed it, then retry the import."
+              : "If access doesn't update after you allow it, quit and reopen HomuCode, then retry the import."}
           </p>
         ) : null}
       </DialogPanel>

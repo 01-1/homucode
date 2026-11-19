@@ -734,7 +734,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     armAgentAwarenessLiveActivityForLocalWork({
       environmentId: props.environmentId,
       threadTitle: props.selectedThread.title,
-      projectTitle: props.environmentLabel ?? "Homu Code",
+      projectTitle: props.environmentLabel ?? "HomuCode",
     });
   };
 

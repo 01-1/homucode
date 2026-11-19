@@ -336,7 +336,7 @@ public final class T3NativeControlsModule: Module {
         promise.reject(NSError(
           domain: "T3NativePhotos",
           code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "Allow Homu Code to add photos in Settings."]
+          userInfo: [NSLocalizedDescriptionKey: "Allow HomuCode to add photos in Settings."]
         ))
         return
       }

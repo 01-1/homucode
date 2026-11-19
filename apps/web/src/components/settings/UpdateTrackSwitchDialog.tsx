@@ -177,7 +177,7 @@ function SwitchPlan({
           ? ["This app's updates are off here, so reinstall it yourself to switch."]
           : []),
         ...(switchesLocal && isMacPlatform(navigator.platform)
-          ? ["If Homu Code does not reopen after it restarts, open it again."]
+          ? ["If HomuCode does not reopen after it restarts, open it again."]
           : []),
       ]}
       restarts={everything.restarts}

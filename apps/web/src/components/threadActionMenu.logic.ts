@@ -570,7 +570,7 @@ export function arrangeThreadActionMenu(
 
 /** MadoHomu has its own pinning and sections, so T3's own items say whose they are. */
 export const MADOHOMU_THREAD_MENU_LABELS = {
-  pin: "Pin in Homu Code",
-  unpin: "Unpin in Homu Code",
-  folder: "Move to Homu Code folder",
+  pin: "Pin in HomuCode",
+  unpin: "Unpin in HomuCode",
+  folder: "Move to HomuCode folder",
 } as const;

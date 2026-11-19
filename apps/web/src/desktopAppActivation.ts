@@ -85,7 +85,7 @@ export async function handleDesktopAppActivationRequest(
       return failure(
         request.requestId,
         "project-create-failed",
-        errorMessage(error, "Homu Code could not add the project."),
+        errorMessage(error, "HomuCode could not add the project."),
       );
     }
   }
@@ -99,7 +99,7 @@ export async function handleDesktopAppActivationRequest(
       return failure(
         request.requestId,
         "thread-open-failed",
-        "Homu Code could not open a new thread for the project.",
+        "HomuCode could not open a new thread for the project.",
       );
     }
     return {
@@ -113,7 +113,7 @@ export async function handleDesktopAppActivationRequest(
     return failure(
       request.requestId,
       "thread-open-failed",
-      errorMessage(error, "Homu Code could not open a new thread for the project."),
+      errorMessage(error, "HomuCode could not open a new thread for the project."),
     );
   }
 }
