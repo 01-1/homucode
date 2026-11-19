@@ -12,18 +12,18 @@ with the details.
 
 **`cloud-build/`** builds or tests one committed T3 Code revision on a disposable
 [boat.dev](https://boat.dev) box, brings back the AppImage (checked against `SHA256SUMS`) or the
-test logs, and deletes the box. Status: a real cold build has worked; the warm dependency-cache
-path is covered only by unit tests. Tests: `cd cloud-build && python3 -m unittest -v test_boat_t3_build`.
+test logs, and deletes the box.
 
 **`load-build/`** has `t3-load-build`, which loads a staged T3 Code build: it verifies the file
-and checksum, restarts T3 on it, wakes an agent thread, and rolls back to the previous build by
-itself if T3 doesn't come up. It needs a `~/.local/bin/t3code` launcher that starts the newest
-AppImage in the build folder (not part of T3 Code). Status: tested with fakes only. Tests:
-`python3 -m unittest discover -s load-build -p 'test_*.py' -v`.
+and checksum, restarts T3 on it, and wakes an agent thread. If T3 fails to start or
+waking the thread fails twice, it rolls back. The command-line tool can use a
+`~/.local/bin/t3code` launcher that starts the newest AppImage in the build folder.
 
 ## In-app builds
 
 Building T3 also runs `scripts/homu-android/build.sh` for a committed ref (default `origin/main`).
+For refs that support EAS updates, configure the EAS owner and project ID on the T3 server
+as described in [Android builds](../AGENTS.md#android-builds).
 It shows the APK path and can serve the APK folder on the LAN, with an explicit off switch;
 the HTTP server stops with T3. Cloud and Android builds need a signed-in boat CLI on the server.
 Loading builds is available only on AppImage installs and restarts T3, with checksum verification
@@ -32,7 +32,6 @@ the build tools are hidden. All tools start disabled.
 
 ## Install
 
-There is no package. Either run the scripts from their folders under `addons/` or copy them into
-place, as each folder's README shows (for example
-`install -m 755 load-build/t3-load-build ~/.local/bin/`). All tests are offline: they use a fake
-`boat`, temporary directories and fakes for T3, and never touch a running T3.
+For command-line use, run the scripts from their folders under `addons/`. See the
+[cloud builder](./cloud-build/README.md) and [build loader](./load-build/README.md) guides
+for commands and requirements.

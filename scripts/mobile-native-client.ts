@@ -710,6 +710,7 @@ const build = Effect.fn("nativeClient.build")(function* (
   abi: string | null,
   target: string,
   expected: string,
+  onBoat: boolean,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -724,7 +725,6 @@ const build = Effect.fn("nativeClient.build")(function* (
     ["exec", "expo", "prebuild", "--clean", "--platform", platform, "--no-install"],
     true,
   ).pipe(Effect.asVoid);
-  const onBoat = platform === "android" && (yield* HostProcess.Hostname).split(".")[0] === "pbox";
   const onEas = platform === "ios" && !(yield* hasXcode);
   if (platform === "android") {
     if (!onBoat) yield* prebuildAndroid(mobile, prebuild);
@@ -1023,7 +1023,8 @@ export const resolveArtifact = Effect.fn("nativeClient.resolveArtifact")(functio
       return { ...artifact, source: "remote" as const, buildMs: yield* readBuildMs(directory) };
     }
   }
-  const onBoat = platform === "android" && (yield* HostProcess.Hostname).split(".")[0] === "pbox";
+  const onBoat =
+    platform === "android" && (yield* fs.exists(path.join(home, ".local/lib/homucode-checks/vp")));
   if (
     remote &&
     !onBoat &&
@@ -1037,7 +1038,7 @@ export const resolveArtifact = Effect.fn("nativeClient.resolveArtifact")(functio
     `No cached client for ${key}. Building it ${onBoat ? "on Boat" : "here"} once for every machine${log ? `. Log: ${log}` : ""}`,
   );
   const started = yield* Clock.currentTimeMillis;
-  yield* build(platform, abi, directory, fingerprint);
+  yield* build(platform, abi, directory, fingerprint, onBoat);
   yield* writeBuildMs(directory, (yield* Clock.currentTimeMillis) - started);
   yield* prune(path.dirname(directory), fingerprint);
   if (remote && (yield* HostProcess.Environment).T3_NATIVE_CLIENT_CACHE !== "read") {
