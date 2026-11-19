@@ -82,10 +82,13 @@ const readLayerSource = Effect.fn("androidIcons.readLayerSource")(function* (
   );
 });
 
+const NOTIFICATION_ICON_SIZE = 96;
+
 const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
   repositoryRoot: string,
   size: number,
   monochrome = false,
+  transform = wordmarkTransform(size),
 ) {
   const text = yield* readLayerSource(repositoryRoot, "prod", "text.svg");
   const paths = (text.match(/<path[^>]*\/>/g) ?? []).map((path) =>
@@ -93,7 +96,7 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
   );
   return yield* rasterize(
     "foreground",
-    canvasSvg(size, `<g transform="${wordmarkTransform(size)}">${paths.join("")}</g>`),
+    canvasSvg(size, `<g transform="${transform}">${paths.join("")}</g>`),
     size,
   );
 });
@@ -179,6 +182,15 @@ const exportAndroidIcons = Effect.gen(function* () {
   const outputs = [
     ["android-icon-foreground.png", yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS)],
     ["android-icon-mark.png", yield* renderForeground(repositoryRoot, ADAPTIVE_CANVAS, true)],
+    [
+      "android-notification-icon.png",
+      yield* renderForeground(
+        repositoryRoot,
+        NOTIFICATION_ICON_SIZE,
+        true,
+        `scale(${NOTIFICATION_ICON_SIZE / 128})`,
+      ),
+    ],
     ["android-icon-background-dev.png", yield* renderDevelopmentBackground(ADAPTIVE_CANVAS)],
     [
       "android-icon-background-nightly.png",

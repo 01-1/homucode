@@ -6,7 +6,7 @@ The three Icon Composer projects are the source of truth for full application ic
 - `nightly/app-icon.icon`
 - `prod/app-icon.icon`
 
-Each project uses `text.svg` for the 炎 mark, drawn on a 128-unit canvas that the icon fills edge to edge, and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
+Each project uses `text.svg` for its mark (炎 for development and production; nightly still has the T3 mark), drawn on a 128-unit canvas that the icon fills edge to edge, and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
 
 Run `vp run icons:export` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon, web app manifest icons, and splash screen. Run `vp run icons:check` to verify that the generated assets and public copies match their sources without changing files.
 
@@ -63,7 +63,7 @@ is instead rendered from the same Icon Composer SVG sources by `vp run icons:exp
 - `apps/mobile/assets/android-splash-icon-*.png`: the two layers composed into one 288dp image, so
   the splash mask reproduces the launcher icon's framing.
 
-- `apps/mobile/assets/android-icon-mark.png`: a white silhouette of the mark for Android's
-  monochrome themed icon.
+- `apps/mobile/assets/android-icon-mark.png` and `android-notification-icon.png`: white
+  silhouettes of the mark for Android's monochrome themed icon and notifications.
 
 Rerun the export after changing a layer SVG.
