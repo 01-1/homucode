@@ -81,6 +81,7 @@ async function prebuildAndroid() {
   const read = (path: string) => NodeFS.readFileSync(NodePath.join(sourceRoot, path), "utf8");
   return {
     manifest: read("AndroidManifest.xml"),
+    mainActivity: read("java/com/t3tools/t3code/MainActivity.kt"),
     madohomuActivity: read("java/com/t3tools/t3code/MadoHomuActivity.kt"),
     adaptiveIcon: read("res/mipmap-anydpi-v26/ic_madohomu.xml"),
     legacyIcon: read("res/values/madohomu_launcher.xml"),
@@ -115,7 +116,7 @@ describe("withAndroidMadoHomuLauncher", () => {
   });
 
   it("copies the finished MainActivity and opens MadoHomu in its React root", async () => {
-    const { madohomuActivity } = await prebuildAndroid();
+    const { mainActivity, madohomuActivity } = await prebuildAndroid();
 
     expect(madohomuActivity).toContain("class MadoHomuActivity : ReactActivity()");
     expect(madohomuActivity).not.toContain("class MainActivity");
@@ -124,6 +125,11 @@ describe("withAndroidMadoHomuLauncher", () => {
     );
     // Other MainActivity plugins ran first, so the fold/orientation handling is copied too.
     expect(madohomuActivity).toContain("applyTabletOrientation()");
+    for (const activity of [mainActivity, madohomuActivity]) {
+      expect(activity).toMatch(
+        /override fun onWindowFocusChanged\(hasFocus: Boolean\) \{[\s\S]*?if \(hasFocus\) T3MadoHomuLauncherModule\.onActivityFocused\(this\)/,
+      );
+    }
   });
 
   it("derives the icon from the app's adaptive icon layers", async () => {

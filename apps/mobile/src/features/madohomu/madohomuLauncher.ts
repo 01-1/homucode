@@ -19,6 +19,7 @@ const launcherModule =
     ? requireOptionalNativeModule<{
         setEnabled(enabled: boolean): boolean;
         foregroundSurface(): AndroidTaskSurface;
+        exitFocusedTask(): void;
         addListener(
           event: "onForegroundSurfaceChange",
           listener: (event: { surface: AndroidTaskSurface }) => void,
@@ -106,10 +107,11 @@ export function syncMadoHomuLauncherDestination(environmentId: string) {
 }
 
 function routeHardwareBack(): boolean {
-  if (dispatchTaskHardwareBack(foregroundSurface)) return true;
-  const navigation = containers.get(foregroundSurface);
+  const surface = launcherModule?.foregroundSurface() ?? foregroundSurface;
+  if (dispatchTaskHardwareBack(surface)) return true;
+  const navigation = containers.get(surface);
   if (navigation?.isReady() && navigation.canGoBack()) navigation.goBack();
-  else BackHandler.exitApp();
+  else launcherModule?.exitFocusedTask();
   return true;
 }
 
