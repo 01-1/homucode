@@ -52,7 +52,7 @@ def frames(*args, timeout=45):
 
 @contextlib.contextmanager
 def lease(state):
-    # One warm slot and one overflow slot for all local worktrees.
+    # One warm slot and one overflow slot across all pbox worktrees.
     with (state / "warm.lock").open("a") as warm, (state / "extra.lock").open("a") as extra:
         waiting = False
         while True:

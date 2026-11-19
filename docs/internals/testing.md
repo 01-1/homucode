@@ -2,7 +2,7 @@
 
 Rules for writing tests, and for asking for them in review. AGENTS.md carries the same writing rules under Verifying; change both together.
 
-The optional [Vite+ wrapper](../../AGENTS.md#verifying) sends test commands to Boat.
+On pbox, the [Vite+ wrapper](../../AGENTS.md#verifying) sends test commands to Boat.
 
 ## What to test
 

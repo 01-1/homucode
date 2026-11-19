@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a signed HomuCode Android APK on a fresh boat.dev box, brings it back, and deletes the box.
 # MODE=ota instead publishes REF's JS as an over-the-air update to installed APKs (see ota.sh).
-# Usage: scripts/homu-android/build.sh [REF]   (default origin/main)
+# Usage: scripts/homu-android/build.sh [REF]   (default origin/main; run from pbox)
 # Env: MODE (apk), VARIANT (development), APP_NAME (HomuCode), OUT (~/app/mobile),
 #      SIGNING_DIR (~/credentials/android-signing), EXPO_TOKEN_FILE (~/credentials/expo/token),
 #      WORK (~/hold/homu-android), HOMUCODE_ANDROID_ENV (config file with EAS owner and project ID)
