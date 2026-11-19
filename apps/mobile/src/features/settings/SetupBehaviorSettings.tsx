@@ -11,7 +11,10 @@ import {
   type ServerConfig,
   type ServerSettings,
 } from "@t3tools/contracts";
-import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
+import {
+  FEATURE_OFFERS,
+  getBuildToolsUnavailableReason,
+} from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { ListActionRow } from "../../components/ui/ListActionRow";
@@ -161,15 +164,18 @@ export function MobileBuildVisibility({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
-  const settings = useEnvironmentServerConfig(environmentId)?.settings;
+  const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const reason = getBuildToolsUnavailableReason(config?.environment, canWrite);
   return (
     <SettingsSwitchRow
       label="Show Building Homu settings"
-      subtitle="Configure cloud builds, APK builds and loading AppImages on this environment."
-      disabled={!canWrite}
-      value={settings?.buildToolsSettingsVisible ?? false}
+      subtitle={
+        reason ?? "Configure cloud builds, APK builds and loading AppImages on this environment."
+      }
+      disabled={reason !== null}
+      value={config?.settings.buildToolsSettingsVisible ?? false}
       onValueChange={(buildToolsSettingsVisible) =>
         void update({ environmentId, input: { patch: { buildToolsSettingsVisible } } })
       }
@@ -246,8 +252,9 @@ export function MobileExtraSettings({
   const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const buildStatusReason = getBuildToolsUnavailableReason(config?.environment, canWrite);
   const query = useEnvironmentQuery(
-    serverEnvironment.buildToolsState({ environmentId, input: {} }),
+    buildStatusReason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
   const canSetLongSessions = useAtomValue(
     serverEnvironment.updateSettings.permissionAtom(environmentId, {
@@ -309,12 +316,15 @@ export function MobileExtraSettings({
         );
       })}
       <Text>
-        Background Git is currently {query.data?.backgroundGitEnabled ? "on" : "off"}.{" "}
-        {query.data?.backgroundGitOverridden
-          ? "T3CODE_BACKGROUND_GIT overrides the saved choice."
-          : query.data && query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
-            ? "Restart to apply your saved choice."
-            : "Restart to apply changes."}
+        {query.data
+          ? `Background Git is currently ${query.data.backgroundGitEnabled ? "on" : "off"}. ${
+              query.data.backgroundGitOverridden
+                ? "T3CODE_BACKGROUND_GIT overrides the saved choice."
+                : query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
+                  ? "Restart to apply your saved choice."
+                  : "Restart to apply changes."
+            }`
+          : `Background Git status · ${buildStatusReason ?? query.error ?? "Loading…"}`}
       </Text>
       <Text>Work assistance (not recommended)</Text>
       <Text className="text-foreground-muted">
@@ -359,20 +369,23 @@ export function SettingsBuildingT3RouteScreen() {
 }
 
 export function MobileBuildTools({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const settings = useEnvironmentServerConfig(environmentId)?.settings;
-  const query = useEnvironmentQuery(
-    serverEnvironment.buildToolsState({ environmentId, input: {} }),
-  );
+  const config = useEnvironmentServerConfig(environmentId);
+  const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const canRun = useAtomValue(serverEnvironment.buildToolsRun.permissionAtom(environmentId));
+  const reason = getBuildToolsUnavailableReason(config?.environment, canWrite);
+  const query = useEnvironmentQuery(
+    reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
+  );
   const [ref, setRef] = useState("origin/main");
   const [testFile, setTestFile] = useState("");
   const [stagedFile, setStagedFile] = useState("");
   const [sha256, setSha256] = useState("");
   const [confirm, setConfirm] = useState<BuildToolsRequest["action"] | null>(null);
-  const action = (action: BuildToolsRequest["action"]) =>
+  const action = (action: BuildToolsRequest["action"]) => {
+    if (reason || !canRun || query.error) return;
     void run({
       environmentId,
       input: {
@@ -384,10 +397,14 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
         undoneAs: query.data?.undoneAs ?? "",
       },
     });
+  };
   const busy = query.data?.phase === "running";
+  if (reason) return <Text>{reason}</Text>;
+  if (query.error) return <Text selectable>{query.error}</Text>;
   if (!settings) return null;
   return (
     <View className="gap-4">
+      {!canRun ? <Text>This connection cannot run build tools.</Text> : null}
       {(
         [
           ["buildRepoPath", "HomuCode checkout"],
@@ -531,7 +548,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
           <Button label="Cancel" tone="text" onPress={() => setConfirm(null)} />
         </View>
       ) : null}
-      <Text selectable>{query.error ?? query.data?.message ?? "Loading status…"}</Text>
+      <Text selectable>{query.data?.message ?? "Loading status…"}</Text>
       {query.data?.artifactPath ? <Text selectable>{query.data.artifactPath}</Text> : null}
       {query.data?.output ? <Text selectable>{query.data.output}</Text> : null}
     </View>

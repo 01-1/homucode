@@ -5,6 +5,7 @@ import {
   featureOfferSettingsPatch,
   unseenFeatureOffers,
   featureOfferPages,
+  getHomuSetupSupport,
 } from "./featureOffers.ts";
 
 it("marks every displayed offer seen while applying only opt-ins and preserving future offers", () => {
@@ -76,4 +77,49 @@ it.each([
   const grouped = featureOfferPages(offers);
   expect(grouped).toHaveLength(pages);
   expect(grouped.flat()).toEqual(offers);
+});
+
+it("keeps device-local choices available on upstream and read-only connections", () => {
+  const upstream = getHomuSetupSupport({
+    serverVersion: "0.1.10",
+    capabilities: { repositoryIdentity: true },
+  });
+  expect([...upstream.supportedFeatureIds]).toEqual(["settings-sync", "faster-phone-launch"]);
+  expect(upstream.unavailableFeatureReasons.get("building-t3")).toContain("does not support");
+
+  const advertised = {
+    serverVersion: "0.1.10",
+    capabilities: { repositoryIdentity: true, homuSetup: true, buildTools: true, statusLine: true },
+  };
+  const readOnly = getHomuSetupSupport(advertised, { canWrite: false });
+  expect(readOnly.supportedFeatureIds).toEqual(upstream.supportedFeatureIds);
+  expect(readOnly.buildToolsUnavailableReason).toContain("read-only");
+
+  const restricted = getHomuSetupSupport(advertised, {
+    canWrite: true,
+    canWriteAccess: false,
+    canRunBuildTools: false,
+  });
+  expect(restricted.supportedFeatureIds.has("building-t3")).toBe(true);
+  expect(restricted.unavailableFeatureReasons.get("connect-long-sessions")).toContain("access");
+  expect(restricted.buildToolsUnavailableReason).toContain("cannot run build tools");
+});
+
+it("uses the tagged legacy HomuCode support and honors explicit capability denial", () => {
+  const capabilities = { repositoryIdentity: true, statusLine: true };
+  const old = getHomuSetupSupport({ serverVersion: "0.1.10-homu.31", capabilities });
+  expect(old.buildToolsUnavailableReason).toContain("0.1.10-homu.31");
+  const firstBuild = getHomuSetupSupport({ serverVersion: "0.1.10-homu.32", capabilities });
+  expect(firstBuild.supportedFeatureIds.has("building-t3")).toBe(true);
+  expect(firstBuild.unavailableFeatureReasons.get("reask-after-restart")).toContain("Update");
+
+  const supported = getHomuSetupSupport({ serverVersion: "0.1.10-homu.98", capabilities });
+  expect(supported.buildToolsUnavailableReason).toBeNull();
+  expect(supported.supportedFeatureIds).toEqual(new Set(FEATURE_OFFERS.map((offer) => offer.id)));
+  const denied = getHomuSetupSupport({
+    serverVersion: "0.1.10-homu.98",
+    capabilities: { ...capabilities, buildTools: false },
+  });
+  expect(denied.supportedFeatureIds.has("building-t3")).toBe(false);
+  expect(denied.supportedFeatureIds.has("background-git")).toBe(true);
 });

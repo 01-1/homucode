@@ -1,3 +1,5 @@
+import { getBuildToolsUnavailableReason } from "@t3tools/client-runtime/feature-offers";
+import { useEnvironment } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
 import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -43,15 +45,22 @@ export function StagedBuildSettingsRow({
 }: { readonly environmentId?: EnvironmentId } = {}) {
   const bridge = stagedBuilds();
   const query = useEnvironmentQuery(bridge ? stagedBuildsStateAtom : null);
+  const environment = useEnvironment(environmentId ?? null);
+  const canWrite = useAtomValue(
+    serverEnvironment.updateSettings.permissionAtom(environmentId ?? null),
+  );
+  const reason = getBuildToolsUnavailableReason(environment?.serverConfig?.environment, canWrite);
   const remote = useEnvironmentQuery(
-    environmentId ? serverEnvironment.buildToolsState({ environmentId, input: {} }) : null,
+    environmentId && !reason
+      ? serverEnvironment.buildToolsState({ environmentId, input: {} })
+      : null,
   );
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
   const canRun = useAtomValue(
     serverEnvironment.buildToolsRun.permissionAtom(environmentId ?? null),
   );
   const remoteAction = async (action: "undo" | "redo", undoneAs = "") => {
-    if (!environmentId) return null;
+    if (!environmentId || reason || !canRun || remote.error) return null;
     const result = await run({
       environmentId,
       input: { action, undoneAs, ref: "origin/main", testFiles: [], stagedFile: "", sha256: "" },
@@ -60,6 +69,8 @@ export function StagedBuildSettingsRow({
   };
   const [pending, setPending] = useState(false);
   const state = environmentId ? remote.data?.stagedBuilds : query.data;
+  if (environmentId && (reason || remote.error))
+    return <p className="text-sm text-muted-foreground">{reason ?? remote.error}</p>;
   if (!state)
     return environmentId ? (
       <p className="text-sm text-muted-foreground">

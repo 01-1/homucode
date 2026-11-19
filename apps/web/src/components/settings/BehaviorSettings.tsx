@@ -5,10 +5,13 @@ import {
   type EnvironmentId,
   type ServerSettings,
 } from "@t3tools/contracts";
-import { FEATURE_OFFERS } from "@t3tools/client-runtime/feature-offers";
+import {
+  FEATURE_OFFERS,
+  getBuildToolsUnavailableReason,
+} from "@t3tools/client-runtime/feature-offers";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useProjects } from "../../state/entities";
-import { useEnvironments } from "../../state/environments";
+import { useEnvironment, useEnvironments } from "../../state/environments";
 import { useManagedPolicy } from "../../state/managedPolicy";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -283,19 +286,24 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const environment = useEnvironment(environmentId);
+  const reason = getBuildToolsUnavailableReason(environment?.serverConfig?.environment, canWrite);
   const query = useEnvironmentQuery(
-    serverEnvironment.buildToolsState({ environmentId, input: {} }),
+    reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
   const [choosingWork, setChoosingWork] = useState(false);
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        Background Git is currently {query.data?.backgroundGitEnabled ? "on" : "off"}.
-        {query.data?.backgroundGitOverridden
-          ? " T3CODE_BACKGROUND_GIT overrides the saved choice."
-          : query.data && query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
-            ? " Restart to apply your saved choice."
-            : " Restart to apply changes."}
+        {query.data
+          ? `Background Git is currently ${query.data.backgroundGitEnabled ? "on" : "off"}. ${
+              query.data.backgroundGitOverridden
+                ? "T3CODE_BACKGROUND_GIT overrides the saved choice."
+                : query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
+                  ? "Restart to apply your saved choice."
+                  : "Restart to apply changes."
+            }`
+          : `Background Git status · ${reason ?? query.error ?? "Loading…"}`}
       </p>
       <SettingsSection id={searchableSetting("work-assistance").id} title="Work assistance">
         <SettingsRow

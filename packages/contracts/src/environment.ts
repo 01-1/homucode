@@ -111,6 +111,10 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   secretSourceCheck: Schema.optionalKey(Schema.Boolean),
   /** Serves `server.renderStatusLine` and the statusLine settings. */
   statusLine: Schema.optionalKey(Schema.Boolean),
+  /** Persists the HomuCode setup choices and feature-offer acknowledgements. */
+  homuSetup: Schema.optionalKey(Schema.Boolean),
+  /** Serves `server.buildToolsState` and `server.buildToolsRun`. */
+  buildTools: Schema.optionalKey(Schema.Boolean),
   projectWorktreeCleanup: Schema.optionalKey(Schema.Boolean),
   settledWorktreeCleanup: Schema.optionalKey(Schema.Boolean),
   worktreesDirectory: Schema.optionalKey(Schema.Boolean),

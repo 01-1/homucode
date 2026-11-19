@@ -1,4 +1,4 @@
-import type { ServerSettings } from "@t3tools/contracts";
+import type { ExecutionEnvironmentDescriptor, ServerSettings } from "@t3tools/contracts";
 
 type OfferSetting =
   | "preferNativeSubagents"
@@ -173,6 +173,86 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
       "A Claude thread stays Working while a command it started in the background is still running, unless the agent releases it. A dev server left running keeps the thread Waiting until it ends.",
   },
 ];
+
+// The tagged 0.1.10 HomuCode builds introduced these patch fields separately.
+const LEGACY_SETUP_INTRODUCED: Readonly<Record<string, number>> = {
+  "apply-model-change-now": 36,
+  madohomu: 37,
+  "auto-update-when-idle": 52,
+  "reask-after-restart": 53,
+};
+
+type HomuSetupEnvironment = Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "capabilities">;
+
+function homuUnavailableReason(environment: HomuSetupEnvironment | null | undefined): string {
+  if (!environment) return "Waiting for server information.";
+  if (/-homu\./.test(environment.serverVersion)) {
+    return `HomuCode ${environment.serverVersion} lacks support for this feature. Update the server to use it.`;
+  }
+  return "This server does not support this HomuCode feature.";
+}
+
+export function getBuildToolsUnavailableReason(
+  environment: HomuSetupEnvironment | null | undefined,
+  canWrite?: boolean,
+): string | null {
+  const legacyRelease = legacyHomuRelease(environment?.serverVersion);
+  if (!(environment?.capabilities.buildTools ?? legacyRelease >= 32)) {
+    return homuUnavailableReason(environment);
+  }
+  return canWrite === false ? "This connection is read-only for build settings." : null;
+}
+
+function legacyHomuRelease(version: string | undefined): number {
+  const release = Number(version?.match(/^v?0\.1\.10-homu\.(\d+)$/)?.[1] ?? 0);
+  return release <= 98 ? release : 0;
+}
+
+export function getHomuSetupSupport(
+  environment: HomuSetupEnvironment | null | undefined,
+  permissions: {
+    readonly canWrite?: boolean;
+    readonly canWriteAccess?: boolean;
+    readonly canRunBuildTools?: boolean;
+  } = {},
+): {
+  readonly supportedFeatureIds: ReadonlySet<string>;
+  readonly unavailableFeatureReasons: ReadonlyMap<string, string>;
+  readonly buildToolsUnavailableReason: string | null;
+} {
+  const legacyRelease = legacyHomuRelease(environment?.serverVersion);
+  const buildStatusReason = getBuildToolsUnavailableReason(environment, permissions.canWrite);
+  const supportedFeatureIds = new Set<string>();
+  const unavailableFeatureReasons = new Map<string, string>();
+  for (const offer of FEATURE_OFFERS) {
+    if (offer.id === "faster-phone-launch" || offer.id === "settings-sync") {
+      supportedFeatureIds.add(offer.id);
+      continue;
+    }
+    const supportsSetup =
+      environment?.capabilities.homuSetup ??
+      legacyRelease >= (LEGACY_SETUP_INTRODUCED[offer.id] ?? 32);
+    let reason = null;
+    if (!supportsSetup || (offer.id === "status-line" && !environment?.capabilities.statusLine)) {
+      reason = homuUnavailableReason(environment);
+    } else if (offer.id === "building-t3" && buildStatusReason) {
+      reason = buildStatusReason;
+    } else if (permissions.canWrite === false) {
+      reason = "This connection is read-only for server settings.";
+    } else if (offer.id === "connect-long-sessions" && permissions.canWriteAccess === false) {
+      reason = "This connection cannot change access settings.";
+    }
+    if (reason) unavailableFeatureReasons.set(offer.id, reason);
+    else supportedFeatureIds.add(offer.id);
+  }
+  return {
+    supportedFeatureIds,
+    unavailableFeatureReasons,
+    buildToolsUnavailableReason:
+      buildStatusReason ??
+      (permissions.canRunBuildTools === false ? "This connection cannot run build tools." : null),
+  };
+}
 
 export function unseenFeatureOffers(
   settings: Pick<ServerSettings, "featureOffersSeen">,

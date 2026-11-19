@@ -240,6 +240,8 @@ export const make = Effect.gen(function* () {
       otlpEndpointCheck: true,
       secretSourceCheck: true,
       statusLine: true,
+      homuSetup: true,
+      buildTools: true,
       projectWorktreeCleanup: true,
       settledWorktreeCleanup: true,
       worktreesDirectory: true,

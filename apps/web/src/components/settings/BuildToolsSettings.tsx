@@ -2,6 +2,8 @@ import { searchableSetting } from "./settingsSearch";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { BuildToolsRequest, EnvironmentId } from "@t3tools/contracts";
+import { getBuildToolsUnavailableReason } from "@t3tools/client-runtime/feature-offers";
+import { useEnvironment } from "../../state/environments";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -18,8 +20,10 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const canRun = useAtomValue(serverEnvironment.buildToolsRun.permissionAtom(environmentId));
+  const environment = useEnvironment(environmentId);
+  const reason = getBuildToolsUnavailableReason(environment?.serverConfig?.environment, canWrite);
   const query = useEnvironmentQuery(
-    serverEnvironment.buildToolsState({ environmentId, input: {} }),
+    reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
   const state = query.data;
   const [ref, setRef] = useState("origin/main");
@@ -27,7 +31,8 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   const [stagedFile, setStagedFile] = useState("");
   const [sha256, setSha256] = useState("");
   const [confirmation, setConfirmation] = useState<BuildToolsRequest["action"] | null>(null);
-  const action = (action: BuildToolsRequest["action"]) =>
+  const action = (action: BuildToolsRequest["action"]) => {
+    if (reason || !canRun || query.error) return;
     void run({
       environmentId,
       input: {
@@ -42,11 +47,14 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         undoneAs: "",
       },
     });
+  };
   const patch = (patch: Parameters<typeof update>[0]["input"]["patch"]) =>
     void update({ environmentId, input: { patch } });
   const busy = state?.phase === "running";
+  if (reason || query.error) return <p role="status">{reason ?? query.error}</p>;
   return (
     <div className="grid gap-6">
+      {!canRun ? <p>This connection cannot run build tools.</p> : null}
       <SettingsSection title="Build folder and launcher">
         {(
           [
@@ -235,7 +243,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         </div>
       ) : null}
       <div role="status" className="grid gap-2 text-sm">
-        <p>{query.error ?? state?.message ?? "Loading build tool status…"}</p>
+        <p>{state?.message ?? "Loading build tool status…"}</p>
         {state?.artifactPath ? <p className="break-all">{state.artifactPath}</p> : null}
         {state?.output ? (
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{state.output}</pre>
