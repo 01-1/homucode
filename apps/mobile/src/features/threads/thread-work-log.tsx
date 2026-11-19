@@ -63,7 +63,6 @@ import {
 } from "@t3tools/client-runtime/work-log/command-label";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { T3Wordmark } from "../../components/T3Wordmark";
 import { BrowserAppIcon } from "./BrowserAppIcon";
 import { useAppActive, useReduceMotionEnabled } from "../../lib/appState";
 import { cn } from "../../lib/cn";
@@ -133,7 +132,11 @@ function WorkLogIcon(props: {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
   if (props.icon === "t3-code") {
     return (
-      <T3Wordmark height={10} {...(colorClassName ? { colorClassName } : { color: props.color })} />
+      <Image
+        source={require("../../../../../assets/prod/t3-black-web-apple-touch-180.png")}
+        style={{ width: 14, height: 14, borderRadius: 2 }}
+        accessible={false}
+      />
     );
   }
   if (props.icon === "computer") {
