@@ -1,6 +1,6 @@
 # HomuCode
 
-HomuCode is a fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
+HomuCode is Homura's fork of [T3 Code](https://github.com/pingdotgg/t3code), changed for running many coding agents at once. It lives at `01-1/homucode` (`origin`) and merges `pingdotgg/t3code` (`upstream`) from time to time. Inside the app, the `t3` command, and most of this file it is still called T3 Code, and upstream's guidance below still applies unless a section here says otherwise.
 
 What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summarized in the [README](README.md#changes-compared-to-t3-code). Keep the fork's changes easy to carry across upstream merges: prefer small, contained edits to upstream code over rewrites.
 
@@ -53,7 +53,7 @@ Of note: Most HomuCode contributions will come from HomuCode itself, often contr
 We need to be on the same page with terminology. When communicating, use this language:
 
 - **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean the HomuCode maintainer, GitHub `@01-1`. This is who you are talking to now.
+- **we, us, and maintainers** mean Homura (GitHub `01-1`), who maintains HomuCode. This is who you are talking to now.
 - **upstream maintainers** mean Theo, Julius and the people building T3 Code at `pingdotgg/t3code`.
 - **user** means the person using T3 Code to direct coding agents.
 - **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
@@ -104,7 +104,7 @@ The most common defect in this repo is a change that works on the path you teste
 - For refs with EAS update support, set `T3CODE_EAS_PROJECT_ID` and `T3CODE_EAS_OWNER` as unquoted values in `${XDG_CONFIG_HOME:-$HOME/.config}/homucode/android.env`, or point `HOMUCODE_ANDROID_ENV` to that file. Use the same project as your installed APKs so they keep receiving updates.
 - Keep the default `VARIANT=development` (package `com.t3tools.t3code.dev`): T3's Clerk instance allows that package's sign-in callback, so Connect sign-in works. `APP_NAME` (default `HomuCode`) is the launcher name.
 - It signs with the `t3-preview` key in `~/credentials/android-signing/`. Keep that key, or installed builds stop updating in place. The version code is the build's UTC date and hour, so each build installs over the last.
-- To put it on the maintainer's phone, serve it on the LAN: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <host LAN IPv4> --directory ~/hold/lan-apk`. Open `http://<ip>:8767/<apk>` from the phone. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule above.
+- To put it on Homura's phone, serve it on the LAN: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <host LAN IPv4> --directory ~/hold/lan-apk`. Give her `http://<ip>:8767/<apk>`. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule above.
 
 ## Test data
 
