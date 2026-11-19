@@ -1,6 +1,10 @@
 import { expect, it } from "vite-plus/test";
 
-import { compactionBlocksSteering, resolveComposerDispatchMode } from "./composerDispatch.ts";
+import {
+  compactionBlocksSteering,
+  composerRunsDraftLocally,
+  resolveComposerDispatchMode,
+} from "./composerDispatch.ts";
 
 it("blocks steering for explicit compaction, and for automatic compaction unless the provider takes steers then", () => {
   const during = (
@@ -61,4 +65,28 @@ it("keeps a steer as a steer while compaction blocks steering, and queues a rest
   expect(blocked("queue")).toBe("queue");
   expect(blocked("queue", true)).toBe("steer");
   expect(blocked("restart")).toBe("queue");
+});
+
+it("treats only the commands the composer runs itself as local", () => {
+  const none = {
+    holdsOnlyText: true,
+    sideChat: false,
+    usageLimits: false,
+    codexFeedback: false,
+    freshSession: false,
+  };
+  const all = {
+    ...none,
+    sideChat: true,
+    usageLimits: true,
+    codexFeedback: true,
+    freshSession: true,
+  };
+  for (const text of ["/btw why?", "/usage-limits", "/feedback slow", "/clear"]) {
+    expect(composerRunsDraftLocally({ ...all, text })).toBe(true);
+    expect(composerRunsDraftLocally({ ...none, text })).toBe(false);
+  }
+  expect(composerRunsDraftLocally({ ...all, text: "fix the bug" })).toBe(false);
+  expect(composerRunsDraftLocally({ ...all, holdsOnlyText: false, text: "/clear" })).toBe(false);
+  expect(composerRunsDraftLocally({ ...all, holdsOnlyText: false, text: "/side why?" })).toBe(true);
 });

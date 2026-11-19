@@ -8,6 +8,7 @@ import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
+import { isListedThreadLineage } from "@t3tools/contracts";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
   threadPullRequestSearchTerms,
@@ -26,7 +27,6 @@ import {
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import {
-  isListedThreadLineage,
   type ContextMenuItem,
   type EnvironmentId,
   type ResolvedKeybindingsConfig,
@@ -891,6 +891,9 @@ export function resolveThreadLastVisitedAt(
 
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   if (!thread.latestRun?.completedAt) return false;
+  if (thread.latestRun.status === "interrupted" || thread.latestRun.status === "cancelled") {
+    return false;
+  }
   const completedAt = Date.parse(thread.latestRun.completedAt);
   if (Number.isNaN(completedAt)) return false;
   if (!thread.lastVisitedAt) return false;
