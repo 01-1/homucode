@@ -12,7 +12,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
@@ -35,6 +35,7 @@ import { ScreenContent } from "../../components/ui/ScreenContent";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { useAssetUrl } from "../../state/assets";
 import { useQuietThreadShell } from "../../state/entities";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { assetImageSource } from "../../lib/assetImageSource";
@@ -133,6 +134,9 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const workflow = useThreadQueueWorkflow(target);
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const showSenderLabels =
+    AsyncResult.isSuccess(preferences) && preferences.value.showMessageSenderLabels === true;
   const threadKey = scopedThreadKey(target.environmentId, target.threadId);
   const editing = useQueuedRunEdit(threadKey);
   const pendingRequests = useAtomValue(environmentThreadDetails.pendingRequestsAtom(target));
@@ -330,7 +334,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                       onPressPreview={setPreviewFile}
                     />
                     <View className="min-w-0 flex-1 gap-0.5">
-                      {message ? (
+                      {showSenderLabels && message ? (
                         <QueuedRunSender environmentId={target.environmentId} message={message} />
                       ) : null}
                       <Text
