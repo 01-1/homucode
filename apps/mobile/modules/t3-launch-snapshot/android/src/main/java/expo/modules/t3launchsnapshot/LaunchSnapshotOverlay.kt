@@ -112,6 +112,7 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
     main.post {
       val store = store
       if (activity == null || store == null) return@post
+      if (activity.javaClass.simpleName != "MainActivity") return@post
       // Never a picture of the picture, of the splash, or of a window that is going away.
       if (launch != null || !splashGone() || activity.isDestroyed) return@post
       val decor = activity.window.peekDecorView()
@@ -156,7 +157,8 @@ internal object LaunchSnapshotOverlay : Application.ActivityLifecycleCallbacks {
     val first = !launchSeen
     launchSeen = true
     val store = store
-    if (!first || store == null) return
+    val mainActivity = activity.javaClass.simpleName == "MainActivity"
+    if (!first || store == null || !mainActivity) return
     val header = pictureFor(activity, savedInstanceState, store) ?: return
     val starting = Launch(activity, header)
     launch = starting

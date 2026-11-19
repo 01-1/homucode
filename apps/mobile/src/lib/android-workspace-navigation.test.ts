@@ -1,5 +1,7 @@
 import * as NodeModule from "node:module";
 import { describe, expect, it } from "vite-plus/test";
+import { madohomuLauncherDestinationAction } from "../features/madohomu/madohomuLauncherState";
+import { settingsNavigationState } from "../features/settings/settings-navigation";
 import {
   androidWorkspaceTabNavigationState,
   type AndroidWorkspaceNavigationTab,
@@ -28,6 +30,8 @@ const router = StackRouter({});
 const options = {
   routeNames: [
     "Home",
+    "MadoHomu",
+    "SettingsMadoHomu",
     "Thread",
     "ThreadFiles",
     "ThreadTerminal",
@@ -85,6 +89,49 @@ function names(state: ReturnType<typeof router.getInitialState>) {
 }
 
 describe("Android workspace navigation", () => {
+  it("returns from Settings to the same MadoHomu launcher route", () => {
+    const launcher = {
+      key: "launcher",
+      name: "MadoHomu",
+      params: { environmentId: "environment-b" },
+    };
+    let state = apply(router.getInitialState(options), CommonActions.reset({ routes: [launcher] }));
+    state = apply(state, CommonActions.reset(settingsNavigationState(state, "SettingsMadoHomu")));
+    expect(names(state)).toEqual(["MadoHomu", "Settings", "SettingsMadoHomu"]);
+
+    // This is the split-screen Settings Back path.
+    resetAndroidWorkspace({
+      dispatch: (action) => {
+        state = apply(state, action);
+      },
+      getParent: () => undefined,
+      getState: () => state,
+    });
+    expect(state.routes).toEqual([launcher]);
+  });
+
+  it("retargets the launcher while keeping routes above it mounted", () => {
+    const launcher = {
+      key: "launcher",
+      name: "MadoHomu",
+      params: { environmentId: "environment-a" },
+    };
+    const initial = apply(
+      router.getInitialState(options),
+      CommonActions.reset({ routes: [launcher] }),
+    );
+    const state = apply(initial, StackActions.push(thread.name, thread.params));
+    const action = madohomuLauncherDestinationAction(state, "environment-b");
+    expect(action).toBeDefined();
+    const next = apply(state, action!);
+    expect(next.index).toBe(1);
+    expect(next.routes).toEqual([
+      { ...launcher, params: { environmentId: "environment-b" } },
+      state.routes[1],
+    ]);
+    expect(madohomuLauncherDestinationAction(next, "environment-b")).toBeUndefined();
+  });
+
   it("returns to the previous page, otherwise to the workspace list", () => {
     const parent = withThread();
     let state = apply(

@@ -18,7 +18,7 @@ import {
   type ScopedProjectRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useContext, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +32,7 @@ import { Menu } from "../../components/ui/Menu";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { Sheet } from "../../components/ui/Sheet";
 import { useBarOverlap } from "../../components/ui/useBarInset";
+import { AndroidTaskSurfaceContext } from "../../lib/backHandler";
 import { uuidv4 } from "../../lib/uuid";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useThreadShells, useVisibleThreadShells } from "../../state/entities";
@@ -53,6 +54,7 @@ import {
 import { useThreadRowProviderInstanceResolver } from "../threads/thread-provider-instance";
 import { useOpenThreadPullRequests } from "../threads/use-open-thread-pull-requests";
 import { useThreadListNow } from "../threads/use-thread-list-now";
+import { exitAndroidTask } from "./madohomuLauncher";
 import {
   buildMadoHomuListRows,
   dropMadoHomuThread,
@@ -108,6 +110,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
   const projectSelection = useMadoHomuProjectSelection();
   const listActions = useThreadListActions();
   const navigation = useNavigation();
+  const taskSurface = useContext(AndroidTaskSurfaceContext);
   const insets = useSafeAreaInsets();
   // The bar covers the top of the body on iOS, so the fixed block clears it itself.
   const barOverlap = useBarOverlap();
@@ -534,7 +537,7 @@ function MadoHomuWorkspace({ environmentId }: { readonly environmentId: Environm
     <View className="flex-1 bg-screen">
       <AppBar
         title="MadoHomu"
-        onBack={() => navigation.goBack()}
+        onBack={() => (navigation.canGoBack() ? navigation.goBack() : exitAndroidTask(taskSurface))}
         {...(reorderMode
           ? { confirm: { label: "Done", onPress: () => setReordering(false) } }
           : {})}

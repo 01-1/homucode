@@ -12,6 +12,13 @@ export interface RootStackNavigation {
   readonly getRootState?: () => NavigationState | undefined;
 }
 
+export function workspaceStackRoot<Route extends { readonly name: string }>(
+  routes: readonly Route[],
+) {
+  if (routes[0]?.name === "MadoHomu") return routes[0];
+  return routes.find((route) => route.name === "Home") ?? { name: "Home" };
+}
+
 /**
  * The root stack's state, read from anywhere. The sidebar and rail render in the root layout,
  * where `useNavigation()` is the container, so walk up to the root navigator.

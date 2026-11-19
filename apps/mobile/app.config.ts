@@ -335,6 +335,8 @@ const config: ExpoConfig = {
     favicon: variant.assets.appIcon,
   },
   plugins: [
+    // First, so its MainActivity copy runs after every other MainActivity mod.
+    "./plugins/withAndroidMadoHomuLauncher.cjs",
     "expo-asset",
     [
       "expo-font",
