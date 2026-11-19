@@ -16,6 +16,8 @@ type IconVariant = "dev" | "nightly" | "prod";
 const ADAPTIVE_CANVAS = 432;
 const SPLASH_CANVAS = 1152;
 const VISIBLE_FRACTION = 72 / 108;
+// Round launcher masks and the Android 12+ splash circle would clip the mark's outer tips.
+const MARK_CIRCLE_FIT = 0.88;
 const COMPOSER_CANVAS_PT = 1024;
 const SVG_DENSITY = 300;
 const OUTPUT_DIRECTORY = "apps/mobile/assets";
@@ -28,7 +30,7 @@ export class AndroidIconRenderError extends Schema.TaggedError<AndroidIconRender
 ) {}
 
 const wordmarkTransform = (size: number) => {
-  const scale = (size * VISIBLE_FRACTION) / 128;
+  const scale = (size * VISIBLE_FRACTION * MARK_CIRCLE_FIT) / 128;
   const offset = size / 2 - 64 * scale;
   return `translate(${offset.toFixed(3)} ${offset.toFixed(3)}) scale(${scale.toFixed(4)})`;
 };
