@@ -641,7 +641,6 @@ export const reorderActiveThread = Effect.fn("EnvironmentCommands.reorderActiveT
 export const moveThreadToProject = Effect.fn("EnvironmentCommands.moveThreadToProject")(function* (
   input: ThreadCommandInput & {
     readonly projectId: import("@t3tools/contracts").ProjectId;
-    readonly changeDirectory?: boolean;
   },
 ) {
   return yield* dispatch({
@@ -649,7 +648,7 @@ export const moveThreadToProject = Effect.fn("EnvironmentCommands.moveThreadToPr
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
     projectId: input.projectId,
-    ...(input.changeDirectory === undefined ? {} : { changeDirectory: input.changeDirectory }),
+    changeDirectory: true,
   });
 });
 

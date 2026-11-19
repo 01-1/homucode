@@ -113,6 +113,12 @@ const PULL_REQUEST_WATCH_TASK_ID = "pull-request-watch:";
 export const isPullRequestWatchTask = (task: Pick<PendingBackgroundWorkTask, "taskId">) =>
   task.taskId.startsWith(PULL_REQUEST_WATCH_TASK_ID);
 
+export function backgroundWorkBlocksWorkspaceChange(
+  tasks: ReadonlyArray<Pick<PendingBackgroundWorkTask, "taskId" | "awaited">>,
+): boolean {
+  return tasks.some((task) => task.awaited === true || !isPullRequestWatchTask(task));
+}
+
 /**
  * A monitor wakes the agent once per line, so a progress wake run's completion waits for the
  * monitor to end. A pull request watch wakes only on news and holds while its checks run.

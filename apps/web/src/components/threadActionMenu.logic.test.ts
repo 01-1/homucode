@@ -37,7 +37,7 @@ const baseState: ThreadActionMenuState = {
 };
 
 describe("buildThreadActionMenuItems", () => {
-  it("offers project moves while working and enforces operation permission", () => {
+  it("disables project moves while working and enforces operation permission", () => {
     const state = {
       ...baseState,
       isRunning: true,
@@ -45,10 +45,16 @@ describe("buildThreadActionMenuItems", () => {
     };
     const move = buildThreadActionMenuItems(state).find((item) => item.id === "move-to-project");
     expect(move?.disabled).not.toBe(true);
-    expect(move?.children?.map((item) => item.id)).toEqual([
-      "move-to-project:destination",
-      "move-to-new-project",
+    expect(move?.children).toMatchObject([
+      { id: "move-to-project:destination", disabled: true },
+      { id: "move-to-new-project", disabled: true },
     ]);
+    const busyInBackground = buildThreadActionMenuItems({
+      ...state,
+      isRunning: false,
+      projectDirectoryChangeBlocked: true,
+    }).find((item) => item.id === "move-to-project");
+    expect(busyInBackground?.children?.every((item) => item.disabled)).toBe(true);
     const elsewhereItems = buildThreadActionMenuItems({
       ...state,
       copyProjectOptions: { environmentId: "here", projects: [{ id: "local", title: "Local" }] },

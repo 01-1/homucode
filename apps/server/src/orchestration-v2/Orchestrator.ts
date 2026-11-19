@@ -94,6 +94,7 @@ import { isPlaceholderThreadTitle } from "./placeholderThreadTitle.ts";
 import { combinePullRequestWatchWakes, type PullRequestWatchWake } from "./pullRequestWatch.ts";
 import { recordThreadOpen } from "@t3tools/shared/paletteSearch";
 import {
+  backgroundWorkBlocksWorkspaceChange,
   backgroundWorkHoldsCompletion,
   derivePendingBackgroundWork,
   pendingBackgroundTurnItems,
@@ -5717,23 +5718,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ) {
         return yield* reject("The destination project is missing or archived.");
       }
-      const rootSessions =
-        command.changeDirectory === true
-          ? yield* projectionStore
+      const directoryChange = command.changeDirectory === true;
+      const rootSessions = directoryChange
+        ? yield* Effect.gen(function* () {
+            const records = yield* projectionStore
               .getThreadRecords(root.id, ["runs", "runtimeRequests", "providerSessions"], {
                 turnItemTypes: [],
               })
-              .pipe(
-                mapDispatchError(command),
-                Effect.flatMap((records) =>
-                  threadHasUnfinishedWork(records)
-                    ? Effect.fail(
-                        reject("The thread still has work in progress. Finish or stop it first."),
-                      )
-                    : Effect.succeed(records.providerSessions),
-                ),
-              )
-          : [];
+              .pipe(mapDispatchError(command));
+            const shell = yield* projectionStore
+              .getThreadShell(root.id)
+              .pipe(mapDispatchError(command));
+            if (
+              threadHasUnfinishedWork(records) ||
+              backgroundWorkBlocksWorkspaceChange(shell?.pendingBackgroundTasks ?? [])
+            ) {
+              return yield* reject(
+                "The thread still has work in progress. Finish or stop it first.",
+              );
+            }
+            return records.providerSessions;
+          })
+        : [];
       const family = yield* Effect.forEach(["active", "archive"] as const, (location) =>
         projectionStore.getShellSnapshot({ location, familyOf: root.id }),
       ).pipe(mapDispatchError(command));
@@ -5762,11 +5768,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           id === root.id
             ? root
             : yield* projectionStore.getThread(id).pipe(mapDispatchError(command));
-        if (id === root.id && command.changeDirectory === true) {
+        if (id === root.id && directoryChange) {
           if (
             thread.projectId === command.projectId &&
             thread.worktreePath === null &&
-            (thread.workspaceRoot ?? target.value.workspaceRoot) === target.value.workspaceRoot
+            thread.workspaceRoot === target.value.workspaceRoot
           ) {
             continue;
           }
@@ -5784,6 +5790,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               workspaceRoot: target.value.workspaceRoot,
               worktreePath: null,
               branch: null,
+              branchPullRequest: null,
+              ...(thread.projectId === command.projectId ? {} : { titleId: null }),
               updatedAt: now,
             },
           });

@@ -117,8 +117,8 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
   /** Where the thread can be re-parented to, or null when it cannot move. */
   readonly move?: ThreadMoveOptions | null;
-  /** The thread has running subagents, which plain Stop leaves running. */
   readonly moveProjectOptions?: ReadonlyArray<{ readonly id: string; readonly title: string }>;
+  readonly projectDirectoryChangeBlocked?: boolean;
   /** Projects on other connected environments; moving there copies the conversation. */
   readonly moveEnvironmentOptions?: ReadonlyArray<{
     readonly environmentId: string;
@@ -354,8 +354,13 @@ export function buildThreadActionMenuItems(
               ...state.moveProjectOptions.map((project) => ({
                 id: `move-to-project:${project.id}` as const,
                 label: project.title,
+                disabled: state.projectDirectoryChangeBlocked ?? state.isRunning,
               })),
-              { id: "move-to-new-project" as const, label: "New project…" },
+              {
+                id: "move-to-new-project" as const,
+                label: "New project…",
+                disabled: state.projectDirectoryChangeBlocked ?? state.isRunning,
+              },
               ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
                 id: `move-to-environment:${environment.environmentId}` as const,
                 label: `On ${environment.label}`,

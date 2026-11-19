@@ -1,4 +1,7 @@
-import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import {
+  backgroundWorkBlocksWorkspaceChange,
+  backgroundWorkHoldsCompletion,
+} from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestsOf } from "../threadPullRequests.ts";
 import type {
   ThreadLinkedPullRequest,
@@ -137,6 +140,20 @@ function threadRunStatusIsActive(status: ThreadRuntimeSummary["status"]): boolea
     status === "starting" ||
     status === "running" ||
     status === "waiting"
+  );
+}
+
+export function threadCanChangeProjectDirectory(
+  thread: Pick<
+    EnvironmentThreadShell,
+    "runtime" | "hasPendingApprovals" | "hasPendingUserInput" | "pendingBackgroundTasks"
+  >,
+): boolean {
+  return (
+    !threadRuntimeIsActive(thread.runtime) &&
+    !thread.hasPendingApprovals &&
+    !thread.hasPendingUserInput &&
+    !backgroundWorkBlocksWorkspaceChange(thread.pendingBackgroundTasks ?? [])
   );
 }
 

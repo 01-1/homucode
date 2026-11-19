@@ -51,10 +51,10 @@ get branch and diff controls.
 ### Move a thread to another project
 
 On web or desktop, choose **Move to project** from the thread's menu, then select
-an existing project on the same machine or **New project…**. The thread and its
-children move together, including archived children. Their history, schedules,
-working folders and running turns stay attached. Moving changes where the thread
-is organized; the agent continues working in its original checkout.
+an existing project on the same machine or **New project…**. The thread must be
+idle. Files opens the destination folder, and the provider resumes the conversation
+in that folder on the next turn. The thread's children move with it in the sidebar
+and keep their own working folders.
 
 ### Start in the background
 
