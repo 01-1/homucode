@@ -14,6 +14,7 @@ export function madohomuThreadContext(
   if (entry === undefined && thread.title.trim() === "") return "";
   return [
     `MadoHomu thread ${JSON.stringify(thread.title)}`,
+    `T3 thread ID: ${thread.id}`,
     `Icon: ${entry?.icon ?? DEFAULT_MADOHOMU_ICON}`,
     entry?.prompt.trim() ?? "",
   ]

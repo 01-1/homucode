@@ -135,6 +135,12 @@ Any agent that supports remote MCP servers over HTTP with OAuth can connect. Giv
 it the MCP URL and choose OAuth, and the agent finds the sign-in settings itself.
 Agents without OAuth support cannot connect.
 
+## Find your thread ID
+
+Inside T3 Code, use the MCP tool `t3_thread_id` with no arguments to get your
+current thread ID. This also works inside a delegated thread. In an agent shell
+that carries `T3CODE_THREAD_ID`, run `t3 thread id` or `t3 thread id --json`.
+
 ## Scripts on the host
 
 On the machine that runs the environment, `t3 thread` uses the same tools

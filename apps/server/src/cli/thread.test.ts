@@ -52,6 +52,23 @@ vi.mock("../auth/EnvironmentAuth.ts", async (importOriginal) => {
 const threadId = ThreadId.make("thread-1");
 const runId = RunId.make("run-1");
 
+it.effect("reads the calling agent's thread id without a running server", () =>
+  Effect.gen(function* () {
+    const run = (env: Record<string, string>, ...flags: string[]) =>
+      Command.runWith(threadCommand, { version: "0.0.0" })(["id", ...flags]).pipe(
+        Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))),
+      );
+    yield* run({ T3CODE_THREAD_ID: "thread-root" });
+    yield* run({ T3CODE_THREAD_ID: "thread-child" }, "--json");
+    assert.deepStrictEqual((yield* TestConsole.logLines).slice(-2), [
+      "thread-root",
+      '{"threadId":"thread-child"}',
+    ]);
+    const error = yield* run({}).pipe(Effect.flip);
+    assert.strictEqual(error._tag, "ThreadUsageError");
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))),
+);
+
 it.effect(
   "start resolves home-relative project paths while preserving ids and relative paths",
   () =>

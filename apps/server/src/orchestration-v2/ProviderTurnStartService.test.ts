@@ -3251,7 +3251,7 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
 }
 
 effectIt.effect(
-  "adds MadoHomu title and prompt only to provider context, leaving the transcript untouched",
+  "adds MadoHomu title, thread ID and prompt only to provider context, leaving the transcript untouched",
   () =>
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
@@ -3265,6 +3265,7 @@ effectIt.effect(
       expect(delivered?.message.text).toContain(
         `MadoHomu thread ${JSON.stringify(harness.projection().thread.title)}`,
       );
+      expect(delivered?.message.text).toContain(`T3 thread ID: ${harness.projection().thread.id}`);
       expect(delivered?.message.text).toContain("Keep the garden healthy");
       expect(delivered?.message.text).toContain("Icon: lucide:leaf");
       expect(delivered?.inlineContextLength).toBeGreaterThan(0);

@@ -14,7 +14,7 @@ it("scopes MadoHomu context to enabled project threads, including title-only thr
     madohomuThreads: {},
   };
   expect(madohomuThreadContext(settings, thread)).toBe(
-    'MadoHomu thread "Garden"\nIcon: lucide:message-circle',
+    'MadoHomu thread "Garden"\nT3 thread ID: madohomu\nIcon: lucide:message-circle',
   );
   expect(madohomuThreadContext({ ...settings, madohomuEnabled: false }, thread)).toBe("");
   expect(
@@ -26,5 +26,7 @@ it("scopes MadoHomu context to enabled project threads, including title-only thr
       { ...settings, madohomuThreads: { [thread.id]: { icon: null, prompt: "  Water plants  " } } },
       thread,
     ),
-  ).toBe('MadoHomu thread "Garden"\nIcon: lucide:message-circle\nWater plants');
+  ).toBe(
+    'MadoHomu thread "Garden"\nT3 thread ID: madohomu\nIcon: lucide:message-circle\nWater plants',
+  );
 });
