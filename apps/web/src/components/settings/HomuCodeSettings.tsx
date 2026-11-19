@@ -225,7 +225,7 @@ function HomuCodeEnvironmentSettings() {
           serverScoped
           {...searchableSetting("prefer-native-subagents")}
           settingKeys={["preferNativeSubagents"]}
-          description="Use provider-native subagents for same-provider work. Off routes every subagent through Homu Code. Applies next turn; providers that load instructions at startup need a thread restart."
+          description="Use provider-native subagents for same-provider work. Off routes every subagent through HomuCode. Applies next turn; providers that load instructions at startup need a thread restart."
           control={
             <ScopedSwitch
               settingKeys={["preferNativeSubagents"]}

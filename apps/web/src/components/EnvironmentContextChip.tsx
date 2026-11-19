@@ -33,7 +33,7 @@ export function EnvironmentContextChip(props: {
         }
       />
       <TooltipPopup side="top">
-        {environment ? "Homu Code environment" : "Machine not in this app"}
+        {environment ? "HomuCode environment" : "Machine not in this app"}
       </TooltipPopup>
     </Tooltip>
   );

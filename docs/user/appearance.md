@@ -6,7 +6,7 @@ the corresponding preview within each theme. Appearance preferences are saved se
 device or browser.
 
 To keep shared preferences the same across web, desktop and phone, opt into
-**Settings → Homu Code → Settings sync** on each device. If two devices change the
+**Settings → HomuCode → Settings sync** on each device. If two devices change the
 same preference, choose which value to keep in the sync dialog. Device-specific
 choices, including the sync switch and Faster phone launch, stay on that device.
 

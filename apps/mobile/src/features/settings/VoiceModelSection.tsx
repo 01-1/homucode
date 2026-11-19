@@ -316,7 +316,7 @@ export function LocalModelChoice(props: {
             ? `Local model · ${formatBytes(active.size)}`
             : voice.canManage
               ? "No model installed · Choose one to download"
-              : `No model installed · Add one using Homu Code on ${props.label}`
+              : `No model installed · Add one using HomuCode on ${props.label}`
       }
       selected={props.selected}
       onPress={() => {

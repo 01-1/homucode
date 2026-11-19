@@ -567,7 +567,7 @@ export const captureViewport = async (
           new ServerBrowserOperationError({
             tag: "PreviewAutomationExecutionError",
             message:
-              "The browser is not producing screenshot frames. For a desktop tab, show or restore the Homu Code window and try again.",
+              "The browser is not producing screenshot frames. For a desktop tab, show or restore the HomuCode window and try again.",
           }),
         ),
       SCREENSHOT_TIMEOUT_MS,

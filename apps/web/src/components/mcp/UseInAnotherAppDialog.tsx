@@ -76,7 +76,7 @@ export function UseInAnotherAppDialogHost() {
 
 function UseInAnotherAppDialog({ requested }: { readonly requested: EnvironmentId | null }) {
   const { environment, label } = useAccessEnvironment(requested);
-  const title = `Use Homu Code in another app (MCP) · ${label ?? "Homu Code"}`;
+  const title = `Use HomuCode in another app (MCP) · ${label ?? "HomuCode"}`;
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : close())}>
       <WizardPopup>
@@ -411,7 +411,7 @@ function GateScreen({
         </GateMessage>
       );
     case "update":
-      return <GateMessage title={`Update Homu Code on ${name}`} />;
+      return <GateMessage title={`Update HomuCode on ${name}`} />;
     case "no-relay-read":
       return (
         <GateMessage
@@ -470,7 +470,7 @@ function GateScreen({
           ) : (
             <div className="space-y-2 text-sm">
               <CommandBlock command="t3 connect link" />
-              <p>Restart Homu Code on {name}.</p>
+              <p>Restart HomuCode on {name}.</p>
               {checkAgain}
             </div>
           )}

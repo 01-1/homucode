@@ -70,7 +70,7 @@ export function useOpenLocalWorkspace() {
         });
         if (result._tag === "Failure") {
           const error = squashAtomCommandFailure(result);
-          throw error instanceof Error ? error : new Error("Homu Code could not add the project.");
+          throw error instanceof Error ? error : new Error("HomuCode could not add the project.");
         }
         return projectId;
       },

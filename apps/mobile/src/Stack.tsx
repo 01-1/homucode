@@ -231,7 +231,7 @@ const SETTINGS_SCREENS = {
   SettingsHomuCode: createNativeStackScreen({
     screen: SettingsHomuCodeRouteScreen,
     linking: "settings/homucode",
-    options: settingsPage("Homu Code"),
+    options: settingsPage("HomuCode"),
   }),
   SettingsBuildingT3: createNativeStackScreen({
     screen: SettingsBuildingT3RouteScreen,

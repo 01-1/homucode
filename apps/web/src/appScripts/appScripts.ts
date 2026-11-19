@@ -60,12 +60,12 @@ async function runAppScript(input: {
     if (!isLocalAppWindow({ electron: isElectron, hostname: window.location.hostname })) {
       throw new AppScriptRefusedError({
         reason:
-          "App scripts run only in the desktop app or in a browser on the same machine as Homu Code.",
+          "App scripts run only in the desktop app or in a browser on the same machine as HomuCode.",
       });
     }
   };
   ensureAllowed();
-  if (api === null) throw new Error("Homu Code is still starting.");
+  if (api === null) throw new Error("HomuCode is still starting.");
   const code =
     input.script.kind === "name" ? await loadNamedScript(input.script.name) : input.script.code;
   ensureAllowed();

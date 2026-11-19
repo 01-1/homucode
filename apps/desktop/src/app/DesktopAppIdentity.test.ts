@@ -202,7 +202,7 @@ describe("DesktopAppIdentity", () => {
         assert.isDefined(runtimeName);
         assert.equal(runtimeName, `T3 Code ${stage}`);
         assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `Homu Code (${stage})`);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `HomuCode (${stage})`);
       }),
       { calls, environment },
     );

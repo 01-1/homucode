@@ -112,7 +112,7 @@ describe("collectServerUpdateTargets", () => {
         entry.label,
         entry.reason,
       ]),
-    ).toEqual([["off", "Example Corp manages Homu Code updates."]]);
+    ).toEqual([["off", "Example Corp manages HomuCode updates."]]);
     expect(
       collectServerUpdateTargets(
         machines.map((entry) => ({
@@ -242,7 +242,7 @@ describe("collectChannelSwitchTargets", () => {
       ["old-desktop", "needs a newer desktop app"],
       [
         "no-nightly",
-        "Example Corp manages Homu Code updates. Only stable releases can be installed.",
+        "Example Corp manages HomuCode updates. Only stable releases can be installed.",
       ],
     ]);
   });

@@ -156,7 +156,7 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
   it.effect("refuses to update when updates are off", () =>
     Effect.gen(function* () {
       const error = yield* runWithPolicy({ mode: "off" });
-      assert.equal(error.message, "Example Corp manages Homu Code updates.");
+      assert.equal(error.message, "Example Corp manages HomuCode updates.");
     }),
   );
 
@@ -173,7 +173,7 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
       for (const error of [byChannel, byVersion]) {
         assert.equal(
           error.message,
-          "Example Corp manages Homu Code updates. Only stable releases can be installed.",
+          "Example Corp manages HomuCode updates. Only stable releases can be installed.",
         );
       }
     }),

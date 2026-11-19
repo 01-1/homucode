@@ -90,9 +90,9 @@ describe("searchSettings", () => {
     });
   });
 
-  it("finds moved settings on the Homu Code page", () => {
+  it("finds moved settings on the HomuCode page", () => {
     for (const query of [
-      "Homu Code",
+      "HomuCode",
       "Quick model",
       "Device names",
       "App scripts",

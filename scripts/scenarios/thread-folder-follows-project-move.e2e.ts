@@ -31,7 +31,7 @@ test(
       );
 
     await t3.open(thread);
-    const offers = screen.getByRole("dialog", "Homu Code features");
+    const offers = screen.getByRole("dialog", "HomuCode features");
     await offers.getByRole("button", "Not now").waitFor();
     await click('[role="dialog"] button', "Notnow");
     await offers.waitFor({ state: "hidden" });

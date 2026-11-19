@@ -18,7 +18,7 @@ const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3code";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
-const LAUNCHER_VERSION = 21;
+const LAUNCHER_VERSION = 22;
 const developmentMacIconPngPath = NodePath.join(
   repoRoot,
   "assets",
@@ -262,14 +262,14 @@ function ensureMacIconIcns(runtimeDir) {
 
 function resolveMacBundleInfoPlistStrings(executableName) {
   return {
-    CFBundleDisplayName: APP_DISPLAY_NAME.replace("T3 Code", "Homu Code"),
+    CFBundleDisplayName: APP_DISPLAY_NAME.replace("T3 Code", "HomuCode"),
     CFBundleName: APP_DISPLAY_NAME,
     CFBundleIdentifier: APP_BUNDLE_ID,
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "Homu Code captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "Homu Code reads project files you open in the desktop app.",
+      "HomuCode captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "HomuCode reads project files you open in the desktop app.",
   };
 }
 

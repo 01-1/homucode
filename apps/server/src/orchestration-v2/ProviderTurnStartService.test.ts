@@ -1613,7 +1613,7 @@ effectIt.effect(
           failure: {
             class: "unknown",
             message:
-              "Homu Code could not start this turn. Send the message again; if it keeps failing, check the server logs.",
+              "HomuCode could not start this turn. Send the message again; if it keeps failing, check the server logs.",
           },
         },
       ]);

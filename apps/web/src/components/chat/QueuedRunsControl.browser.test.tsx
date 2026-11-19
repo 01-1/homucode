@@ -323,7 +323,7 @@ it("respects sender label visibility and folds queued automation and agent promp
   await page.getByRole("button", { name: "Open thread" }).nth(1).click({ force: true });
   expect(onOpenThread).toHaveBeenLastCalledWith("thread:linked-lead", "environment:linked");
 
-  const senderLabel = page.getByText("Automatic · Homu Code");
+  const senderLabel = page.getByText("Automatic · HomuCode");
   await expect.element(senderLabel).not.toBeInTheDocument();
   await act(() =>
     persistClientSettingsUpdate(

@@ -148,7 +148,7 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
       {query.error ? (
         <Text className="text-foreground-muted">
           {
-            "Couldn't load devices from this server. If it runs an older Homu Code, restart it to update."
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
           }
         </Text>
       ) : null}
@@ -319,7 +319,7 @@ export function MobileExtraSettings({
       <Text>Work assistance (not recommended)</Text>
       <Text className="text-foreground-muted">
         Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
-        that has worked nonstop for over 5 minutes. Homu Code never starts helpers by itself.
+        that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
       </Text>
       <MobileWorkAssistancePicker
         environmentId={environmentId}
@@ -390,7 +390,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
     <View className="gap-4">
       {(
         [
-          ["buildRepoPath", "Homu Code checkout"],
+          ["buildRepoPath", "HomuCode checkout"],
           ["buildBoatCliPath", "Boat CLI"],
           ["buildMachineType", "Cloud machine type"],
           ["buildOutputFolder", "Build output folder"],

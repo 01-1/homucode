@@ -106,7 +106,7 @@ function headline(host: string, located: Located, failure: ConnectionAttemptErro
     case "signed_out":
       return "This device is not signed in to T3 Connect";
     case "outdated":
-      return `${host} runs an older Homu Code`;
+      return `${host} runs an older HomuCode`;
     case "clock_skew":
       return "This device's clock is off";
     case "not_linked":
@@ -121,9 +121,9 @@ function headline(host: string, located: Located, failure: ConnectionAttemptErro
     case "tunnel_down":
       return `${host}'s tunnel is offline`;
     case "origin_unreachable":
-      return `Tunnel works, but Homu Code on ${host} did not answer`;
+      return `Tunnel works, but HomuCode on ${host} did not answer`;
     case "invalid_response":
-      return `Homu Code on ${host} sent an unexpected answer`;
+      return `HomuCode on ${host} sent an unexpected answer`;
     case "dns":
       return `${host}'s tunnel address did not resolve`;
     case "tls":
@@ -152,8 +152,8 @@ function headline(host: string, located: Located, failure: ConnectionAttemptErro
         : `T3 Connect could not reach ${host}'s tunnel`;
     case "server":
       return failure?.reason === "authentication" || failure?.reason === "permission"
-        ? `Homu Code on ${host} did not accept this device`
-        : `Homu Code on ${host} did not answer`;
+        ? `HomuCode on ${host} did not accept this device`
+        : `HomuCode on ${host} did not answer`;
   }
 }
 
@@ -161,11 +161,11 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
   const checkHost = `On ${host}, check Settings > Sharing & access or run \`t3 connect status\`.`;
   switch (located.cause) {
     case "offline":
-      return ["Connect this device to the internet. Homu Code reconnects on its own."];
+      return ["Connect this device to the internet. HomuCode reconnects on its own."];
     case "session_pending":
       return [
-        "Wait a moment. Homu Code retries on its own.",
-        "If it keeps waiting, reload or restart Homu Code on this device.",
+        "Wait a moment. HomuCode retries on its own.",
+        "If it keeps waiting, reload or restart HomuCode on this device.",
       ];
     case "approval_pending": {
       const code =
@@ -179,10 +179,10 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
     case "signed_out":
       return [
         "Sign in to T3 Connect on this device, with the same account as the host.",
-        "Homu Code reconnects once you sign in.",
+        "HomuCode reconnects once you sign in.",
       ];
     case "outdated":
-      return [`Update Homu Code on ${host}.`];
+      return [`Update HomuCode on ${host}.`];
     case "clock_skew":
       return [`Turn on automatic date and time on this device and on ${host}, then retry.`];
     case "not_linked":
@@ -191,10 +191,10 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
         `On ${host}, open Settings > Sharing & access and turn T3 Connect on.`,
       ];
     case "tunnel_pending":
-      return ["Wait a minute. Homu Code retries on its own.", checkHost];
+      return ["Wait a minute. HomuCode retries on its own.", checkHost];
     case "relay_error":
       return [
-        "Wait a few minutes. Homu Code retries on its own.",
+        "Wait a few minutes. HomuCode retries on its own.",
         "If it keeps failing, copy the diagnostics and report it.",
       ];
     case "tunnel_not_enabled":
@@ -202,13 +202,13 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
     case "released":
     case "tunnel_down":
       return [
-        `Make sure ${host} is awake and Homu Code is running on it.`,
+        `Make sure ${host} is awake and HomuCode is running on it.`,
         checkHost,
         `A VPN or Tailscale exit node on ${host} can block the tunnel (port 7844). Turn it off or allow the tunnel.`,
       ];
     case "origin_unreachable":
     case "invalid_response":
-      return [`Open or restart Homu Code on ${host}.`, checkHost];
+      return [`Open or restart HomuCode on ${host}.`, checkHost];
     // The relay saw these on its way to the host, so the fix is on the host.
     case "dns":
     case "tls":
@@ -222,7 +222,7 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
   switch (located.hop) {
     case "device":
       return [
-        "Restart Homu Code on this device.",
+        "Restart HomuCode on this device.",
         `If it keeps failing, remove ${host} from this device and add it again.`,
       ];
     case "relay":
@@ -243,7 +243,7 @@ function steps(host: string, located: Located, failure: ConnectionAttemptError |
         : [`Make sure ${host} is awake and online.`, checkHost];
     case "server":
       return [
-        `Make sure Homu Code is running on ${host}.`,
+        `Make sure HomuCode is running on ${host}.`,
         "Retry. If it keeps failing, copy the diagnostics.",
       ];
   }
@@ -318,7 +318,7 @@ function hopLabel(hop: ConnectionHop, host: string): string {
     case "tunnel":
       return `${host} tunnel`;
     case "server":
-      return `Homu Code on ${host}`;
+      return `HomuCode on ${host}`;
   }
 }
 
@@ -389,7 +389,7 @@ const HOP_MARK = { ok: "ok", failed: "FAILED", unchecked: "not checked" } as con
 /** One plain-text block for bug reports. */
 export function connectionDiagnosisText(hostLabel: string, diagnosis: ConnectionDiagnosis): string {
   return [
-    `Homu Code connection to ${hostLabel}: ${diagnosis.headline}`,
+    `HomuCode connection to ${hostLabel}: ${diagnosis.headline}`,
     "",
     ...diagnosis.hops.map((hop) => `${hop.label}: ${HOP_MARK[hop.result]}`),
     "",

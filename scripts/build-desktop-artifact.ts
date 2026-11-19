@@ -2827,7 +2827,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const productName = resolveDesktopProductName(version);
-  const displayName = productName.replace("T3 Code", "Homu Code");
+  const displayName = productName.replace("T3 Code", "HomuCode");
   const buildConfig: Record<string, unknown> = {
     afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
     appId: DESKTOP_APP_ID,
@@ -2886,19 +2886,19 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
         CFBundleDisplayName: displayName,
         NSLocalNetworkUsageDescription:
-          "Homu Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
+          "HomuCode connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
         NSCalendarsUsageDescription:
-          "Commands you run in Homu Code may need access to your calendars.",
+          "Commands you run in HomuCode may need access to your calendars.",
         NSCalendarsFullAccessUsageDescription:
-          "Commands you run in Homu Code may need to read and write your calendar events.",
+          "Commands you run in HomuCode may need to read and write your calendar events.",
         NSCalendarsWriteOnlyAccessUsageDescription:
-          "Commands you run in Homu Code may need to add events to your calendars.",
+          "Commands you run in HomuCode may need to add events to your calendars.",
         NSScreenCaptureUsageDescription:
-          "Homu Code captures the active window when you use the window capture shortcut.",
+          "HomuCode captures the active window when you use the window capture shortcut.",
         NSCameraUsageDescription:
-          "Homu Code lets commands run by terminals and coding agents use the camera.",
+          "HomuCode lets commands run by terminals and coding agents use the camera.",
         NSMicrophoneUsageDescription:
-          "Homu Code lets commands run by terminals and coding agents use the microphone.",
+          "HomuCode lets commands run by terminals and coding agents use the microphone.",
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2912,7 +2912,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: "Homu Code",
+          name: "HomuCode",
           schemes: ["t3code", "t3code-dev"],
         },
         {
@@ -2965,7 +2965,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
         {
-          name: "Homu Code",
+          name: "HomuCode",
           schemes: ["t3code", "t3code-dev"],
         },
       ],

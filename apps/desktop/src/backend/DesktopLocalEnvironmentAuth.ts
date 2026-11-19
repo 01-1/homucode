@@ -106,7 +106,7 @@ export const make = Effect.gen(function* () {
           httpBaseUrl: config.httpBaseUrl.href,
           credential,
           clientMetadata: {
-            label: "Homu Code Desktop",
+            label: "HomuCode Desktop",
             deviceType: "desktop",
           },
         }).pipe(

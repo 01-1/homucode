@@ -299,7 +299,7 @@ export const make = Effect.gen(function* () {
       // PATH would split the folder at the `;`, leaving two wrong entries behind.
       if (binDirectory.includes(";")) {
         return yield* fail(
-          `Homu Code cannot put ${binDirectory} on PATH because it has a ";". Run ${launcher} directly.`,
+          `HomuCode cannot put ${binDirectory} on PATH because it has a ";". Run ${launcher} directly.`,
         );
       }
       const entries = pathEntries(yield* readUserPath, ";");
@@ -398,11 +398,11 @@ export const make = Effect.gen(function* () {
       return yield* fail("Install the t3 command first.");
     }
     const setup = startupLine(installed.value);
-    if (setup === undefined) return yield* fail("Homu Code cannot add t3 to this shell's PATH.");
+    if (setup === undefined) return yield* fail("HomuCode cannot add t3 to this shell's PATH.");
     const shadowedBy = yield* foreignFirstOnPath;
     if (Option.isSome(shadowedBy)) {
       return yield* fail(
-        `Another t3 at ${shadowedBy.value} runs first; Homu Code leaves it in place.`,
+        `Another t3 at ${shadowedBy.value} runs first; HomuCode leaves it in place.`,
       );
     }
     if (!(yield* folderOnPath(installed.value)) && !(yield* hasLine(setup))) {
