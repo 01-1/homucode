@@ -1,4 +1,6 @@
-# T3 Code docs
+# HomuCode docs
+
+Start with [Install HomuCode](./user/install.md#homucode-builds).
 
 ## Using T3 Code
 

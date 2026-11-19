@@ -56,6 +56,13 @@ idle. Files opens the destination folder, and the provider resumes the conversat
 in that folder on the next turn. The thread's children move with it in the sidebar
 and keep their own working folders.
 
+The menu also lists projects on other connected machines you can operate. Moving to one
+rebuilds the conversation there and archives the original; **Undo** restores the original.
+The source must be idle before a move to another machine. **Copy to project** rebuilds the
+conversation in a project on this machine or another and leaves the original alone.
+Copies carry your messages and the agent's replies, not tool activity, attachments, child
+threads, or the worktree. The destination agent receives the conversation on its first turn.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
@@ -96,15 +103,10 @@ scroll position instead of following the thread to its new place in the list.
 A thread pinned on any device is protected from automatic settlement. Explicitly
 settling a thread clears its pins on every device.
 
-Pins saved before device-specific pins were introduced remain a shared compatibility
-membership. Each device initially shows those pins and can hide them independently.
-The old shared membership continues to protect the thread from automatic settlement
-until a shared unpin command or explicit settlement clears it.
-
-Pin commands that do not name a device, such as an agent's `t3_thread_organize`, the
-`t3` CLI and older app versions, apply to every device: a shared pin shows on every
-device again, including ones that had hidden the thread, and a shared unpin removes
-the thread's pins on every device.
+Pin commands that do not name a device, such as the `t3` CLI, apply to every
+device. Each device can hide a shared pin independently. A shared pin protects
+the thread from automatic settlement, and a shared unpin clears the thread's
+pins on every device.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
@@ -142,8 +144,7 @@ position until you move it again. Thread activity does not change the order. The
 continues to use settlement time.
 
 If dragging is unavailable for one environment, update the T3 Code server running in that
-environment. Pinned and active reordering require server support. Threads from older servers keep
-their default order until the server is updated.
+environment.
 
 To generate a fresh title from the conversation, open a thread's menu and choose
 **Regenerate title**. The action is unavailable while title generation is in progress
@@ -176,8 +177,8 @@ To keep threads watching a pull request in **Working** after their checks finish
 **Settings → General → Keep watched pull requests in Working**. The option is off by default.
 
 The Working section is on by default. Turn it off with **Settings → General → Working section** on web and desktop,
-or **Settings → General → Working section** on iOS and Android. Each device keeps its own
-choice.
+or **Settings → General → Working section** on iOS and Android. This choice follows
+[Settings sync](./project-settings.md#settings-sync).
 
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
@@ -192,12 +193,12 @@ close it. A closed folder shows how many threads it holds, and a dot when one of
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
 can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
-section is off. Each device keeps its own choice.
+section is off. This choice follows [Settings sync](./project-settings.md#settings-sync).
 
 ## Thread folders
 
-Folders group threads from one environment. They show above **Pinned** and work the same on
-every device connected to that environment.
+Folders group threads from one environment on web and desktop. They show above **Pinned**
+and are shared by those clients. Mobile does not show thread folders.
 
 To make a folder, right-click empty space in the sidebar and choose **New folder**, open a
 thread's menu and choose **Move to folder → New folder…**, or press `mod+g` on the open thread.
@@ -285,9 +286,8 @@ Change these rules in **Settings → Threads**.
 They continue to run when your apps are closed. On web and desktop, choose an environment at the
 top to change only its rules, or **All environments** to update connected environments together.
 Mixed values show where the selected environments disagree. Mobile applies these
-rules to connected environments that support shared settings. Offline environments
-and older servers keep their previous values. Changing a rule does not reopen
-already settled threads.
+rules to connected environments that support shared settings. Changing a rule does
+not reopen settled threads.
 
 ## Link a pull request
 
@@ -357,9 +357,9 @@ or send `/stopall` to stop its subagents too. To make ordinary Stop include suba
 change **Stop behavior** in **Settings → HomuCode → Extra features**.
 Before archiving the parent, wait for its delegated tasks to finish or cancel them.
 
-Subagent threads started by the agent can't take messages; message the parent
-thread instead. When such a subagent needs an approval or an answer, the parent
-thread asks for it.
+Provider-native subagents can't take messages; message the parent thread instead.
+T3-delegated subagents have their own threads and can receive messages. Their approval
+requests and questions also appear in the parent conversation.
 
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it

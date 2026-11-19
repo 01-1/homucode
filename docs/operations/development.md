@@ -29,6 +29,9 @@ Prefer a container? See [Dev container](../internals/devcontainer.md) for VS Cod
 
 ## Forge mirror (optional)
 
+This mirror is for upstream T3 Code, not HomuCode. Keep HomuCode’s `origin` pointed at
+`homura-ai/homucode`; use the following only in an upstream checkout.
+
 GitHub is the source of truth. [source.tanstack.com/@pingdotgg/t3code](https://source.tanstack.com/@pingdotgg/t3code)
 is a two-way synced mirror built for many agents working at once. You never need it to contribute.
 
@@ -60,7 +63,9 @@ Running `vp run dev` through an agent's own shell tool does not attach it to thi
 ### State and ports
 
 Linked worktrees default to their own `.t3/userdata`, even when `T3CODE_HOME` is set.
-The main checkout defaults to `~/.t3/dev`. An explicit `--home-dir` wins in both cases.
+The main checkout uses `T3CODE_HOME` when set, otherwise `~/.t3`, which is the live data directory.
+Use `T3CODE_HOME=$PWD/.t3 vp run dev` there to keep development state separate.
+An explicit `--home-dir` wins in both cases.
 The first start in a worktree seeds its empty database from a read-only copy of
 `~/.t3/userdata/statev2.sqlite` if the source is at most 500 MiB. Larger sources warn
 and dev starts with an empty database. `--no-seed` or `T3CODE_DEV_SEED=0` skips seeding.

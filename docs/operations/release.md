@@ -2,7 +2,18 @@
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+## HomuCode releases
+
+[Homu desktop (Linux)](../../.github/workflows/homu-desktop-linux.yml) builds a Linux x86_64
+AppImage on pushes to `main` and manual dispatches in `homura-ai/homucode`. It publishes a
+GitHub release with the AppImage and `latest-linux.yml`, and embeds this fork's update feed.
+PRs changing that workflow build without publishing. A rerun of an older build does not replace
+a newer release as latest. Other platforms can be [built locally](./development.md#desktop-artifacts).
+
+## Upstream release workflow
+
+The rest of this document covers upstream's unified stable and nightly release workflow.
+Its `resolve_commit` job is gated to `pingdotgg/t3code`, so it does not publish HomuCode releases.
 
 Beta is the product label, not a release channel or version suffix. Release channels
 remain stable and nightly. To ship 0.1.0 Beta, use `channel=stable` and

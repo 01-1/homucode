@@ -22,8 +22,9 @@ does the same. Change these shortcuts in **Settings → Keybindings** under
 **Composer: Opposite Queue or Steer Action**, **Composer: Start in Background**,
 or **Composer: Send and Start New Thread**. These bindings take priority over the
 send shortcut. Click the send button to use the configured follow-up behavior.
-A message that is only "stop" or "wait" stops the running turn either way and
-goes to the agent before anything else in the queue.
+With **Stop or wait jumps the queue** on in **Settings → HomuCode → Extra features**,
+a message that is only "stop" or "wait" stops the running turn either way and goes to
+the agent before anything else in the queue.
 
 When a thread has queued messages, `mod+Shift+Enter` sends the first one as a steer
 while a turn is running, or as a new turn when the thread is stopped. Change it under
@@ -105,9 +106,8 @@ It is a JSON array of rules:
 ]
 ```
 
-T3 Code creates the file with its defaults and adds new defaults on later startups.
-New defaults do not replace commands you customized. If a new default overlaps one
-of your shortcuts, [rule order](#precedence) decides which runs.
+T3 Code creates the file with default keybindings and keeps your custom rules.
+[Rule order](#precedence) decides which runs when shortcuts overlap.
 Invalid rules are ignored; if the file cannot be parsed, T3 Code uses defaults.
 
 ## Rule shape
@@ -159,8 +159,7 @@ Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 ## Find in the current thread
 
 `chat.find` searches conversation messages and proposed plans in the active thread. Entering a
-query searches the entire thread, including older messages. Thread search requires server support;
-update an older server to enable it. Select **Retry** if a search fails. It defaults to
+query searches the entire thread. Select **Retry** if a search fails. It defaults to
 `mod+f` outside terminals and previews. Press **Enter** or **Shift+Enter** to move between matches,
 and **Escape** to close find.
 
