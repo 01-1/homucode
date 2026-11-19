@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 
@@ -32,6 +33,7 @@ import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
 import * as EventSink from "./EventSink.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import * as ThreadTitleIdReconciler from "./ThreadTitleIdReconciler.ts";
@@ -42,6 +44,7 @@ import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAda
 import * as SecureRandom from "effect/crypto/SecureRandom";
 
 const projectId = ProjectId.make("project:title-regeneration");
+const otherProjectId = ProjectId.make("project:title-regeneration-other");
 const modelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5.1-codex",
@@ -85,9 +88,9 @@ function makeHarness(
   const layerProjectedProjects = Layer.mock(ProjectStore.ProjectStoreV2)({
     get: (requestedProjectId) =>
       Effect.succeed(
-        requestedProjectId === projectId
+        requestedProjectId === projectId || requestedProjectId === otherProjectId
           ? Option.some({
-              projectId,
+              projectId: requestedProjectId,
               title: "Project",
               workspaceRoot: "/repo",
               defaultModelSelection: modelSelection,
@@ -123,7 +126,12 @@ function makeHarness(
   );
   const layerTitleIdReconciler = ThreadTitleIdReconciler.layer.pipe(
     Layer.provide(
-      Layer.mergeAll(layerThreadManagement, layerServerSettings, SecureRandom.layerWebCrypto),
+      Layer.mergeAll(
+        layerThreadManagement,
+        layerServerSettings,
+        ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
+        SecureRandom.layerWebCrypto,
+      ),
     ),
   );
   return {
@@ -144,6 +152,7 @@ function makeHarness(
 function createThread(input: {
   readonly command: string;
   readonly thread: string;
+  readonly projectId?: ProjectId;
   readonly worktreePath?: string;
 }) {
   return Effect.gen(function* () {
@@ -153,7 +162,7 @@ function createThread(input: {
       type: "thread.create",
       commandId: CommandId.make(input.command),
       threadId,
-      projectId,
+      projectId: input.projectId ?? projectId,
       title: "Seed title",
       modelSelection,
       runtimeMode: "full-access",
@@ -576,7 +585,7 @@ describe("ThreadTitleRegenerationService", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("keeps title IDs unique per project as threads settle, unsettle and rename", () =>
+  it.effect("keeps title IDs unique across projects", () =>
     Effect.gen(function* () {
       const harness = makeHarness({
         generateTitle: () => Effect.succeed({ title: "Fix login bug" }),
@@ -610,7 +619,11 @@ describe("ThreadTitleRegenerationService", () => {
             `command:title:id:${name}:${settled ? "settle" : "unsettle"}`,
           );
           if (settled) {
-            yield* threads.dispatch({ type: "thread.settle", commandId, threadId: threadId(name) });
+            yield* threads.dispatch({
+              type: "thread.settle",
+              commandId,
+              threadId: threadId(name),
+            });
           } else {
             yield* threads.dispatch({
               type: "thread.unsettle",
@@ -625,6 +638,8 @@ describe("ThreadTitleRegenerationService", () => {
           yield* createThread({
             command: `command:title:id:${name}:create`,
             thread: `thread:title:id:${name}`,
+            projectId:
+              name === "first" || name === "third" || name === "fifth" ? otherProjectId : projectId,
           });
           yield* dispatchUserMessage({
             command: `command:title:id:${name}:message`,
@@ -634,6 +649,12 @@ describe("ThreadTitleRegenerationService", () => {
         }
 
         assert.equal(yield* regenerate("first", 1), "F Fix login bug");
+        yield* threads.dispatch({
+          type: "thread.snooze",
+          commandId: CommandId.make("command:title:id:first:snooze"),
+          threadId: threadId("first"),
+          snoozedUntil: DateTime.formatIso(DateTime.add(yield* DateTime.now, { hours: 1 })),
+        });
         assert.equal(yield* regenerate("second", 1), "F1 Fix login bug");
         assert.equal(yield* regenerate("first", 2), "F Fix login bug");
         const last = harness.generateThreadTitle.mock.calls.at(-1)?.[0];
@@ -668,12 +689,39 @@ describe("ThreadTitleRegenerationService", () => {
         );
         assert.sameMembers(ids, ["F1", "F3"]);
 
-        // A full pass repairs a duplicate, such as one left by a shutdown mid-reconcile.
+        // An explicit write requesting another thread's ID gets reassigned too.
         yield* threads.dispatch({
           type: "thread.metadata.update",
           commandId: CommandId.make("command:title:id:fifth:duplicate"),
           threadId: threadId("fifth"),
           titleId: ids[0] ?? null,
+        });
+        const fifth = (yield* threads.getThreadProjection(threadId("fifth"))).thread;
+        assert.equal(fifth.titleId, ids[1]);
+
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO orchestration_v2_projection_threads (
+            thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+            created_at, updated_at, payload_json
+          )
+          SELECT 'thread:title:id:unreadable', project_id, title, default_provider,
+            runtime_mode, interaction_mode, created_at, updated_at, '{'
+          FROM orchestration_v2_projection_threads WHERE thread_id = ${fifth.id}
+        `;
+
+        // Older builds could have persisted the same ID in two projects.
+        const eventSink = yield* EventSink.EventSinkV2;
+        yield* eventSink.write({
+          events: [
+            {
+              id: EventId.make("legacy:duplicate-title-id"),
+              type: "thread.metadata-updated",
+              threadId: fifth.id,
+              occurredAt: yield* DateTime.now,
+              payload: { ...fifth, titleId: ids[0] ?? null },
+            },
+          ],
         });
         yield* reconciler.reconcileAll();
         const repaired = yield* Effect.forEach(["fourth", "fifth"], (name) =>
@@ -689,6 +737,41 @@ describe("ThreadTitleRegenerationService", () => {
         });
         const archived = yield* threads.getThreadProjection(threadId("fourth"));
         assert.isNull(archived.thread.titleId ?? null);
+
+        // Two commands for different threads can request the same free ID concurrently.
+        const concurrentIds = ["first", "second"] as const;
+        yield* Effect.forEach(
+          concurrentIds,
+          (name) =>
+            threads.dispatch({
+              type: "thread.metadata.update",
+              commandId: CommandId.make(`command:title:id:${name}:concurrent-write`),
+              threadId: threadId(name),
+              titleId: "F99",
+            }),
+          { concurrency: "unbounded" },
+        );
+        const assigned = yield* Effect.forEach(concurrentIds, (name) =>
+          threads.getThreadProjection(threadId(name)).pipe(Effect.map((p) => p.thread.titleId)),
+        );
+        assert.include(assigned, "F99");
+        assert.equal(new Set(assigned).size, 2);
+
+        yield* threads.dispatch({
+          type: "thread.unarchive",
+          commandId: CommandId.make("command:title:id:fourth:unarchive"),
+          threadId: threadId("fourth"),
+        });
+        yield* threads.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("command:title:id:fourth:placeholder-write"),
+          threadId: threadId("fourth"),
+          title: "New thread",
+          titleId: "F99",
+        });
+        const placeholder = (yield* threads.getThreadProjection(threadId("fourth"))).thread;
+        assert.match(placeholder.titleId ?? "", /^F\d*$/);
+        assert.notInclude(assigned, placeholder.titleId);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

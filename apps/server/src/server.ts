@@ -694,7 +694,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
   layerAutoSteerQueuedWorker,
-  ThreadTitleIdReconciler.layerReactor,
+  ThreadTitleIdReconciler.layerReactor.pipe(Layer.provide(ProjectionStoreV2.layer)),
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   DatabaseStorage.layer.pipe(
     Layer.provide(ProjectionMaintenance.layer),

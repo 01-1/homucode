@@ -1,4 +1,4 @@
-/** The thread's short project-unique handle, shown before its title. */
+/** The thread's short handle, unique on its server and shown before its title. */
 export function ThreadTitleIdBadge({ titleId }: { readonly titleId?: string | null | undefined }) {
   if (!titleId) return null;
   return (
