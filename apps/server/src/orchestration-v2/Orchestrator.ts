@@ -17161,11 +17161,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   return OrchestratorV2.of({
     resumeQueuedRuns,
-    startQueuedFollowUp: (threadId, endedRunId) =>
-      messageIntake.withLock(
-        threadId,
-        threadDispatch.withLock(threadId, startNextQueuedRun(threadId, { endedRunId })),
-      ),
+    startQueuedFollowUp: Effect.fn("OrchestratorV2.startQueuedFollowUp")(
+      function (threadId, endedRunId) {
+        return messageIntake
+          .withLock(
+            threadId,
+            threadDispatch.withLock(threadId, startNextQueuedRun(threadId, { endedRunId })),
+          )
+          .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+      },
+    ),
     recoverDelegatedTasks,
     recoverDelegatedTask,
     cancelDelegatedTask,
