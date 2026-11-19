@@ -447,7 +447,7 @@ export function ThreadHeaderStatus(props: { readonly statusLineKey: string | und
       {showStatusLine ? (
         <HeaderStatusLine key={custom === null ? "dials" : "text"} result={result} items={values} />
       ) : null}
-      <span className="ms-auto shrink-0 whitespace-nowrap pe-3 font-sans text-muted-foreground text-2xs tabular-nums">
+      <span className="ms-auto shrink-0 whitespace-nowrap pe-2 font-sans text-muted-foreground text-2xs tabular-nums">
         {clock === undefined ? <LocalHeaderTime /> : <Segments line={clock.segments} />}
       </span>
     </>
