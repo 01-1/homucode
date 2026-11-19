@@ -91,6 +91,7 @@ import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { modelSelectionAtRun, modelSwitchBetween, modelSwitchSince } from "./modelSwitch.ts";
 import { isPlaceholderThreadTitle } from "./placeholderThreadTitle.ts";
+import { reconcileThreadTitleId, threadTitleInitial } from "./threadTitleId.ts";
 import { combinePullRequestWatchWakes, type PullRequestWatchWake } from "./pullRequestWatch.ts";
 import { recordThreadOpen } from "@t3tools/shared/paletteSearch";
 import {
@@ -110,6 +111,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
@@ -1625,6 +1627,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+  const titleIdLock = yield* Semaphore.make(1);
   const messageIntake = yield* KeyedLock.make<ThreadId>();
   // Read once: the policy is fixed for the server's life, and dispatch takes it as an input.
   const { managedPolicy } = serverSettings;
@@ -4629,6 +4632,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
 
     const now = yield* DateTime.now;
+    let titleId: string | null | undefined;
+    if (command.type === "thread.metadata.update" && command.titleId !== undefined) {
+      titleId = thread.archivedAt === null ? command.titleId : null;
+      if (titleId !== null) {
+        const taken = yield* projectionStore
+          .readConflictingThreadTitleIds(thread.id, titleId)
+          .pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: thread.id, cause }),
+            ),
+          );
+        if (taken !== null) {
+          titleId = reconcileThreadTitleId({
+            current: thread.titleId ?? titleId,
+            title: command.title ?? thread.title,
+            settled: thread.settledOverride === "settled",
+            taken,
+            fallbackInitial: threadTitleInitial(titleId) ?? titleId,
+          });
+        }
+      }
+    }
     if (command.type === "thread.metadata.update" && command.limitRecovery != null) {
       const projection = yield* loadProjectionForCommand(
         command,
@@ -4782,7 +4807,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: now,
           };
         case "thread.unarchive":
-          return { ...thread, archivedAt: null, updatedAt: now };
+          return { ...thread, archivedAt: null, titleId: null, updatedAt: now };
         case "thread.settle": {
           const wasPinned = thread.pinnedAt != null;
           const alreadySettled =
@@ -4956,10 +4981,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return {
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title }),
-            // Archives hold no title ID, even when an ID write raced the archive.
-            ...(command.titleId === undefined
-              ? {}
-              : { titleId: thread.archivedAt === null ? command.titleId : null }),
+            ...(titleId === undefined ? {} : { titleId }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
@@ -16605,9 +16627,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   // dispatchWithReceiptEffect owns the dispatch span; this wrapper selects the thread locks.
   const dispatchWithReceipt = Effect.fnUntraced(function* (command: OrchestrationV2ServerCommand) {
+    const receipt = dispatchWithReceiptEffect(command);
     const dispatch = threadDispatch.withLock(
       commandThreadId(command),
-      dispatchWithReceiptEffect(command),
+      // Per-thread locks allow two different threads to dispatch concurrently.
+      command.type === "thread.metadata.update" && command.titleId != null
+        ? titleIdLock.withPermits(1)(receipt)
+        : receipt,
     );
     // A fork holds its source's lock, so a source deletion and its fork never interleave. A
     // parent's lock comes before its side chats' locks. A side chat fork from a side chat or a

@@ -80,6 +80,7 @@ describe("V2 preview upgrade", () => {
         [98, "ProjectRouterNotices"],
         [99, "ThreadFolders"],
         [100, "ThreadFolderRules"],
+        [101, "ThreadTitleIdIndex"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -203,6 +204,7 @@ describe("V2 preview upgrade", () => {
         [98, "ProjectRouterNotices"],
         [99, "ThreadFolders"],
         [100, "ThreadFolderRules"],
+        [101, "ThreadTitleIdIndex"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

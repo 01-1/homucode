@@ -22,30 +22,33 @@ function letters(index: number): string {
   return out;
 }
 
-function lowestFreeActive(initial: string, taken: ReadonlySet<string>): string {
+function lowestFreeActive(initial: string, taken: Pick<ReadonlySet<string>, "has">): string {
   if (!taken.has(initial)) return initial;
   for (let number = 1; ; number += 1) {
     if (!taken.has(`${initial}${number}`)) return `${initial}${number}`;
   }
 }
 
-function lowestFreeSettled(stem: string, taken: ReadonlySet<string>): string {
+function lowestFreeSettled(stem: string, taken: Pick<ReadonlySet<string>, "has">): string {
   for (let index = 0; ; index += 1) {
     if (!taken.has(`${stem}${letters(index)}`)) return `${stem}${letters(index)}`;
   }
 }
 
 /**
- * The ID a thread should have now. `taken` holds the IDs of the project's other threads.
- * Returns null when the title gives no initial (or is still the "New thread" placeholder).
+ * The ID a thread should have now. `taken` holds the IDs of the server's other threads.
+ * Automatic assignment leaves placeholder titles and titles without an initial ID-free.
  */
 export function reconcileThreadTitleId(input: {
   readonly current: string | null;
   readonly title: string;
   readonly settled: boolean;
-  readonly taken: ReadonlySet<string>;
+  readonly taken: Pick<ReadonlySet<string>, "has">;
+  readonly fallbackInitial?: string;
 }): string | null {
-  const initial = input.title.trim() === "New thread" ? undefined : threadTitleInitial(input.title);
+  const initial =
+    (input.title.trim() === "New thread" ? undefined : threadTitleInitial(input.title)) ??
+    input.fallbackInitial;
   if (initial === undefined) return null;
   const { current, settled, taken } = input;
   const rest =
