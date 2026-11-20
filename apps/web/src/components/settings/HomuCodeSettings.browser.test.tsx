@@ -38,8 +38,6 @@ it("keeps device preferences usable when the linked environment is unavailable",
   await router.load();
   // Exercise the real Settings route and scope boundary.
   await using _app = await render(<AppRoot router={router} />, { router: false });
-  await expect.element(page.getByText("This environment is no longer available.")).toBeVisible();
-
   const toggle = page.getByRole("switch", { name: "Format sent messages as Markdown" });
   expect(toggle.query()).not.toBeNull();
   await expect.element(toggle).toBeChecked();
@@ -50,7 +48,20 @@ it("keeps device preferences usable when the linked environment is unavailable",
   await expect.element(senderLabels).not.toBeChecked();
   await userEvent.click(senderLabels);
   await expect.element(senderLabels).toBeChecked();
+});
 
+it("explains an unavailable environment on the agent behavior page", async () => {
+  using _environment = installFakeEnvironment([]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: ["/settings/agent-behavior?machine=removed"] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, { router: false });
+  await expect.element(page.getByText("This environment is no longer available.")).toBeVisible();
   await expect
     .element(page.getByRole("switch", { name: "Show Building Homu settings" }))
     .not.toBeInTheDocument();
@@ -64,7 +75,7 @@ it("takes an offline MadoHomu settings search to the reconnect guidance", async 
   });
   const router = getRouter(
     createMemoryHistory({
-      initialEntries: ["/settings/homucode?machine=removed#madohomu-working-placement"],
+      initialEntries: ["/settings/madohomu?machine=removed#madohomu-working-placement"],
     }),
   );
   await router.load();

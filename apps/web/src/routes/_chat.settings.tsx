@@ -24,6 +24,7 @@ import {
 import {
   getBuildingT3SearchAvailability,
   getSettingsSearchTargetScope,
+  HOMUCODE_SETTINGS_PATHS,
   getThreadAutoSettlementSearchAvailability,
   isSettingsSearchScopeAvailable,
   movedSettingsPath,
@@ -107,7 +108,7 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
   if (
     SETTINGS_DEVICE_ONLY_PATHS.has(pathname) ||
     pathname === "/settings/projects" ||
-    pathname === "/settings/homucode"
+    HOMUCODE_SETTINGS_PATHS.has(pathname)
   ) {
     return children;
   }

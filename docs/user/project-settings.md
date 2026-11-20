@@ -50,7 +50,7 @@ and other phone-only settings ignore the filter.
 
 ## Settings sync
 
-Open **Settings → HomuCode → Settings sync** on each device you want to sync. Sync is off on
+Open **Settings → HomuCode → Interface → Settings sync** on each device you want to sync. Sync is off on
 new web, desktop, and mobile devices. It keeps supported client preferences, including themes,
 appearance, chat, and sidebar settings, in step through every connected server. Mobile syncs
 the preferences it shares with web and desktop.

@@ -91,17 +91,18 @@ describe("searchSettings", () => {
     });
   });
 
-  it("finds moved settings on the HomuCode page", () => {
-    for (const query of [
-      "HomuCode",
-      "Quick model",
-      "Device names",
-      "App scripts",
-      "Building Homu",
-      "Ask again after a restart",
-      "Update when agents are idle",
-    ]) {
-      expect(searchSettings(query)[0]?.to).toBe("/settings/homucode");
+  it("finds moved settings on the HomuCode pages", () => {
+    for (const [query, to] of [
+      ["HomuCode", "/settings/homucode"],
+      ["App scripts", "/settings/homucode"],
+      ["Quick model", "/settings/agent-behavior"],
+      ["Device names", "/settings/agent-behavior"],
+      ["Ask again after a restart", "/settings/agent-behavior"],
+      ["Update when agents are idle", "/settings/agent-behavior"],
+      ["Show Building Homu settings", "/settings/building-homu"],
+      ["Morning brief", "/settings/madohomu"],
+    ] as const) {
+      expect(searchSettings(query)[0]?.to, query).toBe(to);
     }
   });
 
@@ -188,7 +189,7 @@ describe("searchSettings", () => {
       });
       expect(searchSettings(title, available)[0]).toMatchObject({
         title,
-        to: "/settings/homucode",
+        to: "/settings/building-homu",
       });
     }
   });
@@ -234,7 +235,7 @@ describe("searchSettings", () => {
     });
     expect(searchSettings("stay signed in for 30 days", available)[0]).toMatchObject({
       id: "connect-device-long-sessions",
-      to: "/settings/homucode",
+      to: "/settings/agent-behavior",
     });
   });
 
@@ -321,7 +322,12 @@ describe("searchSettings", () => {
       const row = FEATURE_OFFER_SETTINGS[offer.id];
       expect(row).toBeDefined();
       expect(searchSettings(decodeMsg(offer.title))).toContainEqual(
-        expect.objectContaining({ id: row, to: "/settings/homucode" }),
+        expect.objectContaining({
+          id: row,
+          to: expect.stringMatching(
+            /^\/settings\/(homucode|madohomu|agent-behavior|building-homu)$/,
+          ),
+        }),
       );
     },
   );
@@ -495,10 +501,12 @@ describe("movedSettingsPath", () => {
     expect(movedSettingsPath("/settings/storage", "")).toBe("/settings/maintenance");
     expect(movedSettingsPath("/settings/integrations", "devices")).toBe("/settings/devices");
     expect(movedSettingsPath("/settings/beta", "")).toBe("/settings/labs");
-    expect(movedSettingsPath("/settings/building-t3", "")).toBe("/settings/homucode");
-    expect(movedSettingsPath("/settings/chat", "status-line")).toBe("/settings/homucode");
-    expect(movedSettingsPath("/settings/general", "madohomu-enabled")).toBe("/settings/homucode");
-    expect(movedSettingsPath("/settings/general", "madohomu")).toBe("/settings/homucode");
+    expect(movedSettingsPath("/settings/building-t3", "")).toBe("/settings/building-homu");
+    expect(movedSettingsPath("/settings/chat", "status-line")).toBe("/settings/agent-behavior");
+    expect(movedSettingsPath("/settings/general", "madohomu-enabled")).toBe("/settings/madohomu");
+    expect(movedSettingsPath("/settings/general", "madohomu")).toBe("/settings/madohomu");
+    expect(movedSettingsPath("/settings/homucode", "subagents")).toBe("/settings/agent-behavior");
+    expect(movedSettingsPath("/settings/homucode", "settings-sync")).toBeNull();
     expect(movedSettingsPath("/settings/threads", "thread-title-instructions")).toBeNull();
   });
 
