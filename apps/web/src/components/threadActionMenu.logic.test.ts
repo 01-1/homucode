@@ -108,6 +108,7 @@ describe("buildThreadActionMenuItems", () => {
         ? [
             "unpin",
             "unsettle",
+            "snooze",
             "unsnooze",
             "rename",
             "regenerate-title",
@@ -159,6 +160,15 @@ describe("buildThreadActionMenuItems", () => {
     const locked = ids(false, folderMenu).find((item) => item.id === "folder");
     expect(locked?.disabled).toBe(true);
     expect(locked?.children?.every((child) => child.disabled)).toBe(true);
+  });
+
+  it("offers snooze presets and custom time alongside Wake thread for a snoozed thread", () => {
+    const items = buildThreadActionMenuItems({ ...baseState, isSnoozed: true });
+    expect(items.find((item) => item.id === "snooze")).toMatchObject({
+      disabled: false,
+      children: [{ id: "snooze:custom" }, { id: "snooze:hour" }],
+    });
+    expect(items.find((item) => item.id === "unsnooze")?.disabled).not.toBe(true);
   });
 
   it("disables archive and turning into a project while the thread is running", () => {
