@@ -12728,5 +12728,12 @@
   "b7df38b7d8792d78": "Abrir guía",
   "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
   "fdbcf78e0275d350": "Vuelve a conectar {label} para cambiar su configuración.",
-  "1d91b130c2656404": "Comportamiento de los agentes"
+  "1d91b130c2656404": "Comportamiento de los agentes",
+  "22110503bfeb17af": "Detalles de la línea de estado",
+  "bb5251fd919e346b": "Todos los modelos",
+  "548123cb74c4abcf": "Límites de uso no disponibles",
+  "3adca48d927d36f5": "Mostrar todos los modelos en los detalles de la línea de estado",
+  "b2cc17d714a15e76": "Mostrar todos los modelos en los detalles de la línea de estado",
+  "5416694ec0dacb31": "Muestra los modelos y los límites de uso disponibles para el entorno de este hilo al pasar el puntero sobre la línea de estado o al enfocarla.",
+  "e9b5f7b109cc1ded": "Muestra los modelos y los límites de uso disponibles para el entorno de este hilo al pasar el puntero sobre la línea de estado o al enfocarla."
 }

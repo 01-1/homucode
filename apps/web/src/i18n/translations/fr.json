@@ -12732,5 +12732,12 @@
   "b7df38b7d8792d78": "Ouvrir le guide",
   "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue",
   "fdbcf78e0275d350": "Reconnectez {label} pour modifier ses paramètres.",
-  "1d91b130c2656404": "Comportement des agents"
+  "1d91b130c2656404": "Comportement des agents",
+  "22110503bfeb17af": "Détails de la barre d’état",
+  "bb5251fd919e346b": "Tous les modèles",
+  "548123cb74c4abcf": "Limites d’utilisation indisponibles",
+  "3adca48d927d36f5": "Afficher tous les modèles dans les détails de la barre d’état",
+  "b2cc17d714a15e76": "Afficher tous les modèles dans les détails de la barre d’état",
+  "5416694ec0dacb31": "Affiche les modèles et les limites d’utilisation signalées pour l’environnement de ce fil lorsque vous survolez la barre d’état ou lui donnez le focus.",
+  "e9b5f7b109cc1ded": "Affiche les modèles et les limites d’utilisation signalées pour l’environnement de ce fil lorsque vous survolez la barre d’état ou lui donnez le focus."
 }
