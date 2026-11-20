@@ -1,14 +1,35 @@
 #!/usr/bin/env bash
-# Runs on the boat box: builds and signs one HomuCode Android APK, or with MODE=ota publishes
-# the same commit's JS as an EAS update. Both share every step that feeds the native fingerprint.
-# Usage: box-build.sh COMMIT VARIANT APP_NAME [apk|ota]
+# Runs on the Boat box: prepares the source, builds a signed APK, or publishes from the prepared source.
+# Usage: box-build.sh COMMIT VARIANT APP_NAME [apk|ota|publish]
 set -euo pipefail
-build_root=/home/user/t3-preview
+build_root=$(cd "$(dirname "$0")" && pwd)
 revision=${1:?full commit required}; variant=${2:?variant required}; app_name=${3:?app name required}; mode=${4:-apk}
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
 export PATH="$build_root/node-v26.13.1-linux-x64/bin:$build_root/tools/bin:$PATH"
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME="$build_root/android-sdk" ANDROID_SDK_ROOT="$build_root/android-sdk"
 export CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_GIT_STATUS=1 EXPO_NO_TYPESCRIPT_SETUP=1 NODE_OPTIONS=--max-old-space-size=6144
+if [[ $mode == publish ]]; then
+  cd "$build_root/src/apps/mobile"
+  channel=$(python3 - "$build_root/artifacts/config.json" <<'PY'
+import json,sys
+updates = json.load(open(sys.argv[1])).get("updates", {})
+channel = updates.get("requestHeaders", {}).get("expo-channel-name")
+if not updates.get("enabled") or not channel:
+    sys.exit("Android OTA requires enabled updates and a configured channel.")
+print(channel)
+PY
+)
+  token=$(cat "$build_root/signing/expo-token")
+  if [[ -z $token ]]; then
+    echo "Expo token file is empty." >&2
+    exit 1
+  fi
+  EXPO_TOKEN=$token EAS_NO_VCS=1 EAS_PROJECT_ROOT=$PWD pnpm dlx eas-cli@27.10.0 update \
+    --platform android --channel "$channel" --message "$revision" --non-interactive --json \
+    > "$build_root/artifacts/update.json"
+  exit 0
+fi
+[[ $mode == apk || $mode == ota ]]
 mkdir -p "$build_root/src" "$build_root/artifacts"
 cd "$build_root/src"
 tar -xzf "$build_root/source-$revision.tar.gz"
@@ -25,17 +46,13 @@ assert n==3, n
 p.write_text(s)
 PY
 pnpm install --frozen-lockfile --filter=@t3tools/mobile...
+node "$build_root/link-widget-deps.cjs"
 cd apps/mobile
 # Fingerprint before prebuild and pin it: Gradle's own fingerprint also hashes the generated android/.
 runtime=$(pnpm exec expo-updates runtimeversion:resolve --platform android | tee "$build_root/artifacts/runtime-version.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["runtimeVersion"])')
 echo "T3CODE_MOBILE_RUNTIME_VERSION=$runtime" >> ../../.env
 pnpm exec expo config --type public --json > "$build_root/artifacts/config.json"
-if [[ $mode == ota ]]; then
-  EXPO_TOKEN=$(cat "$build_root/signing/expo-token") EAS_NO_VCS=1 EAS_PROJECT_ROOT=$PWD pnpm dlx eas-cli@27.10.0 update \
-    --platform android --channel "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["updates"]["requestHeaders"]["expo-channel-name"])' "$build_root/artifacts/config.json")" \
-    --message "$revision" --non-interactive --json > "$build_root/artifacts/update.json"
-  echo "PUBLISHED $revision $variant"; exit 0
-fi
+if [[ $mode == ota ]]; then exit 0; fi
 pnpm exec expo prebuild --clean --platform android --no-install
 python3 - "$(date -u +%y%m%d%H)" <<'PY'
 import pathlib,re,sys
@@ -53,10 +70,9 @@ apk="$build_root/artifacts/app.apk"
 "$tools/zipalign" -c -P 16 4 "$apk"
 "$tools/aapt2" dump badging "$apk" > "$apk.badging.txt"
 unzip -l "$apk" assets/index.android.bundle > /dev/null  # fails if the JS bundle is missing
-[[ $updates == 0 ]] || python3 - "$apk" "$runtime" <<'PY'  # the pinned runtime must be what the APK reports to the update server
-import sys, zipfile
-z = zipfile.ZipFile(sys.argv[1]); r = sys.argv[2]
-assert any(r.encode(e) in z.read(f) for f in ("AndroidManifest.xml", "resources.arsc") for e in ("utf-8", "utf-16-le")), "runtime not embedded"
-PY
+if [[ $updates == 1 ]]; then
+  python3 "$build_root/verify-apk-updates.py" "$tools/aapt2" "$apk" \
+    "$build_root/public.env" "$runtime"
+fi
 (cd "$build_root/artifacts" && sha256sum app.apk > app.apk.sha256)
 echo "BUILT $revision $variant"
