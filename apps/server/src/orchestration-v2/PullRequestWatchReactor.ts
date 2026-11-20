@@ -310,13 +310,13 @@ export const make = Effect.gen(function* () {
    * Each thread's merge and close commands, by item, with the pull requests each names. One counts
    * while it runs and, if it succeeded, until the read at its end is done.
    */
-  const agentEnds = new Map<ThreadId, Map<string, ReadonlySet<number | string> | "any">>();
+  const agentEnds = new Map<ThreadId, Map<string, ReturnType<typeof changeRequestsClosedBy>>>();
   // The agent needs no wake for a merge or close it made itself. Anything ending later, as a
   // `--auto` merge does, is news.
   const endedByAgent = (target: WatchTarget) => {
     const links = visibleThreadPullRequests(target.thread.pullRequests ?? []);
-    return [...(agentEnds.get(target.thread.id)?.values() ?? [])].some((named) => {
-      if (named === "any") return links.length === 1;
+    return [...(agentEnds.get(target.thread.id)?.values() ?? [])].some(({ named, implicit }) => {
+      if (implicit && links.length === 1) return true;
       return [...named].some((reference) => {
         if (typeof reference === "number") {
           return (

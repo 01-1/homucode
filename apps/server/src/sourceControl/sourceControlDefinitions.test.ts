@@ -76,11 +76,18 @@ it.each([
   ["sleep 30; cafe pr merge 26271", [26271]],
   ["az repos pr update --id 19 --status completed", [19]],
   ["az repos pr update --id=19 --status=abandoned", [19]],
-  ["gh pr merge --squash", "any"],
+  ["gh pr merge --squash", [], true],
+  ['gh pr merge 42 --body "Release with -R flag"', [42]],
   ["gh pr merge 19 -R different/repository", []],
-  ["gh stack merge", "any"],
-  ["gh pr merge 19 && gh pr merge --auto", "any"],
-] as const)("%s closes %j", (command, expected) => {
+  ["gh stack merge", [], true],
+  ["gh pr merge 19 && gh pr merge --auto", [19], true],
+  [
+    "gh pr close https://github.com/acme/web/pull/42 && gh pr merge --auto",
+    ["https://github.com/acme/web/pull/42"],
+    true,
+  ],
+] as const)("%s closes %j", (command, expected, implicit = false) => {
   const closed = changeRequestsClosedBy(command);
-  expect(closed === "any" ? closed : [...closed]).toEqual(expected);
+  expect([...closed.named]).toEqual(expected);
+  expect(closed.implicit).toBe(implicit);
 });

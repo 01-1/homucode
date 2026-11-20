@@ -32,35 +32,38 @@ const SHELL_WORD = /"((?:\\[\s\S]|[^"\\])*)"?|'([^']*)'?|((?:\\[\s\S]|[^\s"'\\])
 // A whole word that names one, so a number inside `--subject "Release 20"` does not.
 const NAMED_CHANGE_REQUEST = /^(?:--?[\w-]+=)?#?(\d+)$|^\S*\/(?:pulls?|merge_requests)\/(\d+)\/?$/u;
 
-/**
- * The change request numbers or URLs a merge or close command names, or "any" when one names none, as a
- * bare `gh pr merge` on the checked-out branch or `gh stack merge` does.
- */
-export function changeRequestsClosedBy(command: string): ReadonlySet<number | string> | "any" {
+/** The explicit and branch-based targets of merge or close commands in one shell invocation. */
+export function changeRequestsClosedBy(command: string): {
+  readonly named: ReadonlySet<number | string>;
+  readonly implicit: boolean;
+} {
   const named = new Set<number | string>();
+  let implicit = false;
   for (const { changeRequestCloseCommand: close } of sourceControlDefinitions.definitions) {
     if (close === undefined) continue;
     for (const match of command.matchAll(new RegExp(close.source, `${close.flags}g`))) {
-      // From the match's start, since Azure's match runs through `--id` to `--status`.
+      // Start at the match: Azure's pattern runs through --id to --status.
       const args = command.slice(match.index).split(/[;&|\n]/u, 1)[0] ?? "";
-      // Every host's merge and close takes one change request, so any later one is option text.
-      let target: string | undefined;
+      const words: string[] = [];
       for (const [, double, single, bare] of args.matchAll(SHELL_WORD)) {
-        // A comment ends the command.
         if (bare !== undefined && /^#(?!\d+$)/u.test(bare)) break;
-        const word = double ?? single ?? bare ?? "";
-        const [, number, url] = NAMED_CHANGE_REQUEST.exec(word) ?? [];
-        target = url === undefined ? number : word;
-        if (target !== undefined) break;
+        words.push(double ?? single ?? bare ?? "");
       }
-      if (
-        (target === undefined || /^\d+$/u.test(target)) &&
-        /(?:^|\s)(?:-R|--repo)(?:=|\s)/u.test(args)
-      )
-        continue;
-      if (target === undefined) return "any";
-      named.add(/^\d+$/u.test(target) ? Number(target) : target);
+      let target: number | string | undefined;
+      for (const word of words) {
+        const [, number, url] = NAMED_CHANGE_REQUEST.exec(word) ?? [];
+        if (number !== undefined || url !== undefined) {
+          target = number === undefined ? word : Number(number);
+          break;
+        }
+      }
+      const repositorySpecified = words.some((word) => /^(?:-R|--repo)(?:=|$)/u.test(word));
+      if (typeof target === "string" || (target !== undefined && !repositorySpecified)) {
+        named.add(target);
+      } else if (target === undefined && !repositorySpecified) {
+        implicit = true;
+      }
     }
   }
-  return named;
+  return { named, implicit };
 }
