@@ -29,7 +29,7 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly label: string;
 }> = [
   { id: HOMU_THEME.id, label: HOMU_THEME.label },
-  { id: DEFAULT_MOBILE_THEME_ID, label: "HomuCode" },
+  { id: DEFAULT_MOBILE_THEME_ID, label: "T3 Code" },
   { id: "material-you", label: "Material You" },
   ...BUILT_IN_THEMES.filter((theme) => theme !== HOMU_THEME).map((theme) => ({
     id: theme.id as MobileThemeId,
