@@ -263,6 +263,9 @@ export const layerExecutor: Layer.Layer<
                 providerSessionId: request.providerSessionId,
                 providerThreadId: request.providerThreadId,
                 providerTurnId: request.providerTurnId,
+                ...(request.sendSteerMessageId === undefined
+                  ? {}
+                  : { sendSteerMessageId: request.sendSteerMessageId }),
                 ...(request.subagent === undefined
                   ? {}
                   : {
@@ -285,7 +288,10 @@ export const layerExecutor: Layer.Layer<
                 // Settling here would end the run while the agent may still be running; the
                 // user decides with Force stop instead.
                 Effect.catchIf(
-                  (cause) => request.subagent === undefined && cause.unresponsive === true,
+                  (cause) =>
+                    request.subagent === undefined &&
+                    request.sendSteerMessageId === undefined &&
+                    cause.unresponsive === true,
                   () => Effect.succeed({ unresponsive: true, outcome: undefined } as const),
                 ),
                 Effect.catchIf(
@@ -306,7 +312,8 @@ export const layerExecutor: Layer.Layer<
                         providerThreadId: request.providerThreadId,
                         providerTurnId: request.providerTurnId,
                       })
-                    : request.subagent !== undefined && outcome === undefined
+                    : request.sendSteerMessageId !== undefined ||
+                        (request.subagent !== undefined && outcome === undefined)
                       ? Effect.void
                       : threads.dispatch({
                           type: "thread.background-work.settle",

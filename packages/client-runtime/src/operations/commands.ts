@@ -1196,6 +1196,17 @@ export const resumeThreadQueue = Effect.fn("EnvironmentCommands.resumeThreadQueu
   });
 });
 
+export const sendSteerNow = Effect.fn("EnvironmentCommands.sendSteerNow")(function* (
+  input: ThreadCommandInput & { readonly messageId: MessageId },
+) {
+  return yield* dispatch({
+    type: "steer.send-now",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    messageId: input.messageId,
+  });
+});
+
 export const promoteQueuedRun = Effect.fn("EnvironmentCommands.promoteQueuedRun")(function* (
   input: PromoteQueuedRunInput,
 ) {

@@ -3,6 +3,7 @@ import {
   isCompactionCommandMessage,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2ProviderCapabilities,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { copySorted } from "@t3tools/shared/Array";
 import { mFallback, msg } from "gt-i18n";
@@ -195,6 +196,21 @@ export function deriveThreadQueueWorkflowState(
           capabilities?.supportsSteeringByInterruptRestart === true)),
     promoteSkipsCompaction,
   };
+}
+
+export function canSendSteerNow(
+  projectedItem: OrchestrationV2ProjectedTurnItem | null | undefined,
+  threadId: ThreadId,
+): boolean {
+  const item = projectedItem?.item;
+  return (
+    projectedItem?.sourceThreadId === threadId &&
+    item?.type === "user_message" &&
+    item.status === "pending" &&
+    item.canSendNow === true &&
+    item.providerTurnId !== null &&
+    (item.inputIntent === "steer" || item.inputIntent === "promoted_queued_to_steer")
+  );
 }
 
 export function canForkProjectedAssistantItem(input: {

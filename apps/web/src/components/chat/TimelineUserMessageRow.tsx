@@ -12,12 +12,16 @@ import {
   type EnvironmentId,
   type MessageId,
   type ScheduledTaskId,
+  type ScopedThreadRef,
   type ServerProviderSkill,
   ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { threadEnvironment } from "../../state/threads";
+import { canSendSteerNow } from "@t3tools/client-runtime/state/thread-workflows";
 import { useQuietThreadShell } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
@@ -38,6 +42,7 @@ import {
 } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
 import {
+  ArrowUpIcon,
   CalendarClockIcon,
   ChevronDownIcon,
   DownloadIcon,
@@ -361,6 +366,9 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           </div>
         ) : null}
       </div>
+      {ctx.threadRef && canSendSteerNow(row.projectedItem, ctx.threadRef.threadId) ? (
+        <SendSteerNowButton threadRef={ctx.threadRef} messageId={row.message.id} />
+      ) : null}
       <UserMessageProjectedStatus row={row} />
       {expanded ? (
         <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
@@ -1141,6 +1149,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </div>
         ) : null}
       </div>
+      {ctx.threadRef && canSendSteerNow(row.projectedItem, ctx.threadRef.threadId) ? (
+        <SendSteerNowButton threadRef={ctx.threadRef} messageId={row.message.id} />
+      ) : null}
       <UserMessageProjectedStatus row={row} />
       {!folded || expanded ? (
         <div
@@ -1154,6 +1165,37 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SendSteerNowButton({
+  threadRef,
+  messageId,
+}: {
+  readonly threadRef: ScopedThreadRef;
+  readonly messageId: MessageId;
+}) {
+  const gt = useGT();
+  const send = useAtomCommand(threadEnvironment.sendSteerNow);
+  const [sending, setSending] = useState(false);
+  return (
+    <Button
+      size="xs"
+      variant="ghost-muted"
+      disabled={sending}
+      title={gt("Interrupt the current work to deliver this steer")}
+      onClick={async () => {
+        setSending(true);
+        await send({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId, messageId },
+        });
+        setSending(false);
+      }}
+    >
+      <ArrowUpIcon />
+      <T>Send now</T>
+    </Button>
   );
 }
 

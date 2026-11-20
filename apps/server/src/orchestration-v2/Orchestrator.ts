@@ -700,6 +700,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "prepared-run.retry":
     case "subagent.stop":
     case "run.interrupt":
+    case "steer.send-now":
     case "queued-message.promote-to-steer":
     case "queued-run.start":
     case "queue.resume":
@@ -12530,6 +12531,70 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     },
   );
 
+  const dispatchSendSteerNow = Effect.fn("Orchestrator.dispatchSendSteerNow")(function* (
+    command: Extract<OrchestrationV2Command, { readonly type: "steer.send-now" }>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+  ) {
+    const item = yield* projectionStore
+      .getTurnItem({
+        threadId: command.threadId,
+        itemId: idAllocator.derive.userTurnItem({ messageId: command.messageId }),
+      })
+      .pipe(mapDispatchError(command));
+    if (
+      item?.type !== "user_message" ||
+      item.status !== "pending" ||
+      item.canSendNow !== true ||
+      (item.inputIntent !== "steer" && item.inputIntent !== "promoted_queued_to_steer") ||
+      item.providerThreadId === null ||
+      item.providerTurnId === null ||
+      item.runId === null
+    ) {
+      return;
+    }
+    const projection = yield* loadProjectionForCommand(
+      command,
+      ["runs", "providerThreads", "providerTurns"],
+      {
+        runIds: [item.runId],
+        providerThreadIds: [item.providerThreadId],
+        providerTurnIds: [item.providerTurnId],
+      },
+    );
+    if (projection.thread.archivedAt !== null || projection.thread.deletedAt !== null) return;
+    const run = projection.runs.find((candidate) => candidate.id === item.runId);
+    const turn = projection.providerTurns.find((candidate) => candidate.id === item.providerTurnId);
+    const providerThread = projection.providerThreads.find(
+      (candidate) => candidate.id === turn?.providerThreadId,
+    );
+    if (
+      run?.status !== "running" ||
+      turn?.status !== "running" ||
+      turn.runAttemptId !== run.activeAttemptId ||
+      providerThread?.driver !== "claudeAgent" ||
+      providerThread.providerSessionId === null ||
+      (yield* stopReachedRun(command, command.threadId, run.id))
+    ) {
+      return;
+    }
+    const providerSessionId = providerThread.providerSessionId;
+    yield* Ref.update(effects, (existing) => [
+      ...existing,
+      {
+        id: `effect:${command.commandId}:provider-turn.interrupt:${turn.id}`,
+        commandId: command.commandId,
+        threadId: command.threadId,
+        request: {
+          type: "provider-turn.interrupt",
+          providerSessionId,
+          providerThreadId: providerThread.id,
+          providerTurnId: turn.id,
+          sendSteerMessageId: command.messageId,
+        },
+      } satisfies PendingOrchestrationEffectV2,
+    ]);
+  });
+
   const dispatchQueuedMessagePromoteToSteer = Effect.fn(
     "Orchestrator.dispatchQueuedMessagePromoteToSteer",
   )(function* (
@@ -16629,6 +16694,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.stop":
         cancelUnsettledEffects = yield* dispatchThreadStop(command, events, effects);
         break;
+      case "steer.send-now":
+        yield* dispatchSendSteerNow(command, effects);
+        break;
       case "queued-message.promote-to-steer":
         cancelUnsettledEffects = yield* dispatchQueuedMessagePromoteToSteer(
           command,
@@ -16921,6 +16989,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           command.type === "run.live-model-selection.record" ||
           command.type === "thread.stop" ||
           command.type === "subagent.stop" ||
+          command.type === "steer.send-now" ||
           command.type === "thread.project.move" ||
           // A replaced or cancelled title request completes as a no-op.
           command.type === "thread.title.regeneration.complete" ||
@@ -17271,6 +17340,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           : dispatch,
       );
     if (
+      command.type === "steer.send-now" ||
       command.type === "queued-message.promote-to-steer" ||
       command.type === "queue.resume" ||
       command.type === "queued-run.start" ||

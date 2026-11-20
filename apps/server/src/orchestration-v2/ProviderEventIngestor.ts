@@ -667,6 +667,7 @@ export const layer: Layer.Layer<
                   payload: {
                     ...item,
                     status: input.event.status,
+                    canSendNow: input.event.canSendNow,
                     completedAt: input.event.status === "pending" ? null : occurredAt,
                     updatedAt: occurredAt,
                   },

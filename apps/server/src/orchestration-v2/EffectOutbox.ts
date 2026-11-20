@@ -71,6 +71,7 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     providerThreadId: ProviderThreadId,
     providerTurnId: ProviderTurnId,
     subagent: Schema.optional(Schema.Struct({ id: NodeId, nativeTaskId: Schema.String })),
+    sendSteerMessageId: Schema.optional(MessageId),
   }),
   Schema.Struct({
     type: Schema.Literal("provider-turn.steer"),

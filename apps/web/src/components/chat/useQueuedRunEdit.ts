@@ -353,7 +353,7 @@ export function useQueuedRunEdit(input: {
     }));
   });
 
-  // The same move as the queued row's "Send now" while a turn runs.
+  // The same move as the queued row's "Steer now" while a turn runs.
   const steerSavedRun = async (edited: EditingQueuedRun) => {
     const projection = appAtomRegistry.get(
       environmentThreadDetails.quietThreadAtom({ environmentId, threadId: edited.threadId }),
