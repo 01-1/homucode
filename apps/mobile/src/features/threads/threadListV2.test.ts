@@ -25,6 +25,7 @@ import {
   RunId,
   RuntimeRequestId,
   ThreadId,
+  ThreadFolderId,
 } from "@t3tools/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -62,6 +63,79 @@ function makeThread(
 }
 
 const NOW = "2026-06-02T00:00:00.000Z";
+
+it("groups synced folders by environment and keeps their settled members accessible", () => {
+  const otherEnvironment = EnvironmentId.make("environment-2");
+  const filed = makeThread({ id: ThreadId.make("filed"), title: "Filed on PC" });
+  const unfiled = makeThread({ ...filed, environmentId: otherEnvironment });
+  const settled = makeThread({
+    id: ThreadId.make("settled"),
+    title: "Settled on PC",
+    settledAt: NOW,
+  });
+  const folder = {
+    id: ThreadFolderId.make("folder"),
+    environmentId,
+    name: "From PC",
+    icon: null,
+    threadIds: [filed.id, settled.id],
+    rule: null,
+    autoFile: false,
+    ruleSetAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  const input = {
+    threads: [filed, unfiled, settled],
+    folders: [folder],
+    environmentId: null,
+    searchQuery: "",
+    now: NOW,
+    settledShelfExpanded: false,
+    isListedSettled: () => false,
+  };
+  const layout = buildThreadListV2Items(input);
+  expect(
+    layout.folders.map(({ folder, items }) => [folder.name, items.map(({ thread }) => thread)]),
+  ).toEqual([["From PC", [filed, settled]]]);
+  expect(layout.items.map(({ thread }) => thread)).toEqual([unfiled]);
+  expect(layout.settledCount).toBe(0);
+  const rows = buildThreadListV2ListItems({ ...layout, pendingTasks: [] });
+  expect(rows.map((row) => (row.type === "v2-thread" ? row.item.thread : row.type))).toEqual([
+    "v2-folder",
+    filed,
+    settled,
+    unfiled,
+  ]);
+  expect(rows[2]).toMatchObject({ showTrailingDivider: false });
+
+  const collapsed = buildThreadListV2Items({
+    ...input,
+    collapsedFolderKeys: new Set([`${environmentId}:${folder.id}`]),
+  });
+  expect(collapsed.folders[0]?.items).toEqual([]);
+  expect(collapsed.folders[0]?.count).toBe(2);
+
+  const working = buildThreadListV2Items({
+    ...input,
+    workingShelfEnabled: true,
+    isWorking: () => true,
+  });
+  expect(working.workingCount).toBe(1);
+  const snoozed = buildThreadListV2Items({
+    ...input,
+    threads: [filed, unfiled].map((thread) => ({
+      ...thread,
+      snoozedAt: NOW,
+      snoozedUntil: "2099-06-02T00:00:00.000Z",
+    })),
+  });
+  expect(snoozed.snoozedCount).toBe(1);
+
+  const search = buildThreadListV2Items({ ...input, searchQuery: "Settled on PC" });
+  expect(search.folders).toEqual([]);
+  expect(search.items.map(({ thread }) => thread)).toEqual([settled]);
+});
 
 describe("resolveThreadListV2SnoozeMenuSelection", () => {
   it("recomputes the environment's presets instead of using old timestamps", () => {

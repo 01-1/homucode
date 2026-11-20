@@ -1,3 +1,4 @@
+import { scopedThreadFolderKey } from "@t3tools/client-runtime/state/thread-folders";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -84,6 +85,7 @@ import {
   resolveThreadListV2ProviderDrivers,
   resolveThreadListV2SwipeActions,
   layoutThreadListV2RowMenuActions,
+  type ThreadListV2FolderListItem,
   threadListV2RowAccessibilityLabel,
   type ThreadListV2Status,
 } from "./threadListV2";
@@ -298,6 +300,38 @@ const ThreadListV2SectionDivider = memo(function ThreadListV2SectionDivider(prop
 }) {
   return <ThreadListV2Section {...props} />;
 });
+
+export function ThreadListV2FolderHeader(props: {
+  readonly item: ThreadListV2FolderListItem;
+  readonly pane: "screen" | "sidebar";
+  readonly onToggle: (key: string) => void;
+}) {
+  const { folder, count, disabled, expanded } = props.item;
+  return (
+    <ThreadListV2Section
+      label={folder.name}
+      count={count}
+      pane={props.pane}
+      badge={
+        <SymbolView
+          name="folder"
+          size={13}
+          tintColorClassName={
+            props.pane === "sidebar" ? "accent-drawer-foreground-muted" : "accent-icon-muted"
+          }
+          type="monochrome"
+        />
+      }
+      disclosure={{
+        expanded,
+        disabled,
+        onToggle: () => props.onToggle(scopedThreadFolderKey(folder)),
+        accessibilityLabel: `${folder.name}, ${count} ${count === 1 ? "thread" : "threads"}`,
+        accessibilityHint: expanded ? "Collapses the folder." : "Expands the folder.",
+      }}
+    />
+  );
+}
 
 type ThreadListV2ShelfHeaderProps = {
   readonly count: number;
@@ -731,6 +765,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly leading?: ReactNode;
   /** Menu items a list adds; their ids start with `extra:` and go to `onExtraMenuAction`. */
   readonly extraMenuActions?: readonly MenuAction[];
+  readonly inFolder?: boolean;
   readonly onExtraMenuAction?: (thread: EnvironmentThreadShell, event: string) => void;
   /** Titles for T3's own pin items, for lists that have a pin of their own. */
   readonly pinMenuTitles?: { readonly pin: string; readonly unpin: string };
@@ -1626,11 +1661,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       </RowPressable>
     );
 
+  const folderIndent = props.inFolder ? 14 : 0;
+  const folderStyle = folderIndent > 0 ? { marginStart: folderIndent } : undefined;
   if (!canOperateThread)
-    return <View style={rowAppearance.swipeContainerStyle}>{rowContent(() => {})}</View>;
+    return (
+      <View style={[rowAppearance.swipeContainerStyle, folderStyle]}>{rowContent(() => {})}</View>
+    );
 
   return (
-    <View collapsable={false}>
+    <View collapsable={false} style={folderStyle}>
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
       )}
@@ -1642,7 +1681,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         containerStyle={rowAppearance.swipeContainerStyle}
         enableTrackpadSwipe
         fullSwipeAction="primary"
-        fullSwipeWidth={props.fullSwipeWidth ?? windowWidth - 32}
+        fullSwipeWidth={(props.fullSwipeWidth ?? windowWidth - 32) - folderIndent}
         listAnimatesLayout
         onDelete={handleDelete}
         onSwipeableClose={props.onSwipeableClose}

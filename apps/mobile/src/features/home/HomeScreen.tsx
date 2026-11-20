@@ -1,3 +1,4 @@
+import { useThreadFolderMenu, useThreadFolders } from "../../state/thread-folders";
 import { useContentTopInset } from "../../components/ui/useBarInset";
 import { usePaneRole } from "../../components/ui/Pane";
 import { ScreenContent } from "../../components/ui/ScreenContent";
@@ -72,6 +73,7 @@ import { threadListEnvironmentsAtom } from "../../state/presentation";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
+  ThreadListV2FolderHeader,
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
@@ -384,6 +386,8 @@ export function HomeScreen(props: HomeScreenProps) {
     setSettledVisibleCount((count) => count + THREAD_LIST_V2_SETTLED_PAGE_COUNT);
   const {
     loaded: shelfPreferencesLoaded,
+    collapsedFolderKeys,
+    toggleFolder,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
@@ -409,12 +413,16 @@ export function HomeScreen(props: HomeScreenProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder();
+  const folders = useThreadFolders();
+  const folderMenu = useThreadFolderMenu(folders);
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
+    folders,
+    collapsedFolderKeys,
     threads: props.threads,
     pendingTasks: props.pendingTasks,
     environmentId: props.selectedEnvironmentId,
@@ -459,6 +467,15 @@ export function HomeScreen(props: HomeScreenProps) {
   }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
 
   const renderV2Item = ({ item }: { readonly item: ThreadListV2ListItem }) => {
+    if (item.type === "v2-folder") {
+      return (
+        <ThreadListV2FolderHeader
+          item={item}
+          pane={sidebarSurface ? "sidebar" : "screen"}
+          onToggle={toggleFolder}
+        />
+      );
+    }
     if (item.type === "v2-pending") {
       const pendingScopeKey = scopedProjectKey(
         item.pendingTask.environmentId,
@@ -525,6 +542,7 @@ export function HomeScreen(props: HomeScreenProps) {
       );
     }
     const thread = item.item.thread;
+    const { filed, actions } = folderMenu.forThread(thread);
     return (
       <ThreadListV2Row
         pane={sidebarSurface ? "sidebar" : "screen"}
@@ -532,6 +550,9 @@ export function HomeScreen(props: HomeScreenProps) {
         fullSwipeWidth={fullSwipeWidth}
         onNewThreadOnBranch={props.onNewThreadOnBranch}
         thread={thread}
+        inFolder={item.folderKey !== undefined}
+        extraMenuActions={actions}
+        onExtraMenuAction={folderMenu.onAction}
         variant={item.item.variant}
         hasQueuedMessages={item.hasQueuedMessages}
         snoozed={item.item.snoozed}
@@ -575,9 +596,10 @@ export function HomeScreen(props: HomeScreenProps) {
         pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
         autoSettleOptOutSupported={autoSettleOptOutEnvironmentIds.has(thread.environmentId)}
         reorderSupported={
-          item.item.pinned
+          !filed &&
+          (item.item.pinned
             ? pinReorderEnvironmentIds.has(thread.environmentId)
-            : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
+            : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId))
         }
         canMoveUp={item.canMoveUp}
         canMoveDown={item.canMoveDown}
@@ -608,9 +630,11 @@ export function HomeScreen(props: HomeScreenProps) {
     selectedThreadKey,
     threadSearchMatchByKey,
     workingShelfEnabled,
+    folderMenu,
   };
 
   const hasAnyThreads =
+    threadListV2Layout.folders.length > 0 ||
     props.threads.some((thread) => thread.archivedAt === null) ||
     props.pendingTasks.length > 0 ||
     threadListV2Layout.settledCount > 0;

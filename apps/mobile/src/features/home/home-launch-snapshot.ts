@@ -14,6 +14,7 @@ const HOME_LOOK_PREFERENCES = [
   "projectGroupingMode",
   "workingShelfEnabled",
   "sidebarKeepWatchingPullRequests",
+  "collapsedThreadFolderKeys",
   "threadListSettledShelfExpanded",
   "threadListSnoozedShelfExpanded",
   "threadListWorkingShelfExpanded",

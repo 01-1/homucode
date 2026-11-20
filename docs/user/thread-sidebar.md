@@ -197,10 +197,12 @@ section is off. This choice follows [Settings sync](./project-settings.md#settin
 
 ## Thread folders
 
-Folders group threads from one environment on web and desktop. They show above **Pinned**
-and are shared by those clients. Mobile does not show thread folders.
+Folders group threads from one environment and sync between web, desktop, and mobile.
+On mobile, tap a folder above the thread list to open or collapse it. Long-press a thread
+and choose **Move to folder** to file it, create a new folder, or remove it from its folder.
+The phone remembers which folders you collapse and keeps settled folders above the list.
 
-To make a folder, right-click empty space in the sidebar and choose **New folder**, open a
+On web and desktop, right-click empty space in the sidebar and choose **New folder**, open a
 thread's menu and choose **Move to folder → New folder…**, or press `mod+g` on the open thread.
 To start one from several threads, select them and right-click → **New folder from selection**.
 Type the name right away, or double-click a folder later to rename it. Drag a thread onto a folder

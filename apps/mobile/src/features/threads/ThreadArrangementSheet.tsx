@@ -1,3 +1,4 @@
+import { layoutThreadFolders } from "@t3tools/client-runtime/state/thread-folders";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -16,7 +17,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { deriveThreadArrangementSizing } from "../../lib/layout";
-import { environmentServerConfigsAtom } from "../../state/server";
+import { environmentServerConfigsAtom, threadFoldersAtom } from "../../state/server";
 import { threadListEnvironmentsAtom } from "../../state/presentation";
 import { steadyNavigationThreadShellsAtom, steadyShellsHoldingAtom } from "../../state/threads";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
@@ -172,6 +173,7 @@ function ThreadArrangementSheet(props: { onClose: () => void }) {
   });
   const threads = useAtomValue(steadyNavigationThreadShellsAtom);
   const configs = useAtomValue(environmentServerConfigsAtom);
+  const folders = useAtomValue(threadFoldersAtom);
   const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
   const queuedThreadKeys = useAtomValue(queuedThreadKeysAtom);
   const pendingOrder = useAtomValue(pendingThreadOrderAtom);
@@ -191,8 +193,10 @@ function ThreadArrangementSheet(props: { onClose: () => void }) {
     visibleCount: settledVisibleCount,
   });
   const sections = useMemo(() => {
+    const unfiled =
+      folders.length > 0 ? layoutThreadFolders({ threads, folders }).unfiled : threads;
     const shared = {
-      threads,
+      threads: unfiled,
       now,
       queuedThreadKeys,
       pendingOrder,
@@ -202,7 +206,7 @@ function ThreadArrangementSheet(props: { onClose: () => void }) {
     const pinned = getThreadListV2OrderedSection({ ...shared, section: "pinned" });
     const active = getThreadListV2OrderedSection({ ...shared, section: "active" });
     const visible = new Set([...pinned, ...active].map(keyOf));
-    const parked = threads.filter(
+    const parked = unfiled.filter(
       (thread) => thread.archivedAt === null && !visible.has(keyOf(thread)),
     );
     return {
@@ -213,7 +217,7 @@ function ThreadArrangementSheet(props: { onClose: () => void }) {
       snoozed: parked.filter((thread) => effectiveSnoozed(thread, { now })),
       settled: sortSettledThreads(parked.filter((thread) => !effectiveSnoozed(thread, { now }))),
     };
-  }, [threads, configs, now, queuedThreadKeys, pendingOrder, workingShelfEnabled]);
+  }, [threads, folders, configs, now, queuedThreadKeys, pendingOrder, workingShelfEnabled]);
   const listedSettled = sections.settled.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettled);
   const visibleSettled = listedSettled.slice(0, settledVisibleCount);

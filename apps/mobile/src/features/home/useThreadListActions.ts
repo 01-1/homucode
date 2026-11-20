@@ -1,3 +1,4 @@
+import { findThreadFolder } from "@t3tools/client-runtime/state/thread-folders";
 import type { ThreadMoveDestination } from "../threads/threadOrder";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
@@ -14,7 +15,7 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 import { refreshArchivedThreadsForEnvironment } from "../archive/useArchivedThreadSnapshots";
 import { pinOrderKeyBetween } from "@t3tools/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { environmentServerConfigsAtom } from "../../state/server";
+import { environmentServerConfigsAtom, threadFoldersAtom } from "../../state/server";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { readEnvironmentScope } from "../../state/session";
 import { clearComposerDraft } from "../../state/use-composer-drafts";
@@ -626,6 +627,8 @@ export function useThreadListActions(): {
     );
     if (!current || current.archivedAt !== null) return false;
     thread = current;
+    const folders = appAtomRegistry.get(threadFoldersAtom);
+    if (findThreadFolder(folders, thread) !== null) return false;
     const section =
       typeof direction === "object" && direction.section !== undefined
         ? direction.section
@@ -653,6 +656,7 @@ export function useThreadListActions(): {
     }
     const ordered = getThreadListV2OrderedSection({
       threads: shells,
+      folders,
       section,
       now: new Date().toISOString(),
       queuedThreadKeys: appAtomRegistry.get(queuedThreadKeysAtom),
