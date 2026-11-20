@@ -1,6 +1,11 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import * as Cause from "effect/Cause";
 
-export function formatEnvironmentQueryError(cause: Cause.Cause<unknown>): string {
+export function formatEnvironmentQueryError(
+  cause: Cause.Cause<unknown>,
+  resolve: MFunctionType = mFallback,
+): string {
   const error = Cause.squash(cause);
   if (
     typeof error === "object" &&
@@ -11,5 +16,5 @@ export function formatEnvironmentQueryError(cause: Cause.Cause<unknown>): string
   ) {
     return error.message;
   }
-  return "The environment request failed.";
+  return resolve(msg("The environment request failed."));
 }

@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react-native";
 import type { ThreadId } from "@t3tools/contracts";
 import * as Haptics from "expo-haptics";
 import {
@@ -194,6 +195,7 @@ export function MadoHomuReorderList(props: {
   readonly onDrop: (threadId: ThreadId, sectionId: string, index: number) => boolean;
   readonly onStep: (threadId: ThreadId, direction: "up" | "down") => void;
 }) {
+  const gt = useGT();
   const { appearance } = useAppearancePreferences();
   const { fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -431,7 +433,9 @@ export function MadoHomuReorderList(props: {
                 </View>
               ) : item.type === "empty" ? (
                 <View className="flex-1 justify-center px-5">
-                  <Text className="text-sm text-foreground-muted">Drop a thread here.</Text>
+                  <Text className="text-sm text-foreground-muted">
+                    <T>Drop a thread here.</T>
+                  </Text>
                 </View>
               ) : (
                 <View
@@ -450,11 +454,11 @@ export function MadoHomuReorderList(props: {
                       collapsable={false}
                       accessible
                       accessibilityRole="adjustable"
-                      accessibilityLabel={`Reorder ${item.thread.title}`}
+                      accessibilityLabel={gt("Reorder {title}", { title: item.thread.title })}
                       accessibilityState={{ disabled: props.disabled }}
                       accessibilityActions={[
-                        ...(item.index > 0 ? [{ name: "decrement", label: "Move up" }] : []),
-                        ...(!item.last ? [{ name: "increment", label: "Move down" }] : []),
+                        ...(item.index > 0 ? [{ name: "decrement", label: gt("Move up") }] : []),
+                        ...(!item.last ? [{ name: "increment", label: gt("Move down") }] : []),
                       ]}
                       onAccessibilityAction={({ nativeEvent }) => {
                         if (props.disabled) return;

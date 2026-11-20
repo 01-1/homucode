@@ -1,3 +1,4 @@
+import { EnvironmentAuthInvalidError } from "@t3tools/contracts";
 import {
   RelayEnvironmentEndpointUnavailableError,
   type RelayProtectedError,
@@ -174,6 +175,19 @@ describe("presentConnectionDiagnosis", () => {
     expect(diagnosis?.headline).toBe("This device is not signed in to T3 Connect");
     expect(diagnosis?.hops.find((hop) => hop.result === "failed")?.hop).toBe("device");
     expect(diagnosis?.moreInfoUrl).toContain("sign-in-account-or-link-problems");
+  });
+
+  it("tells a host that refused this device's login to sign in again, not to start T3 Code", () => {
+    const failure = mapRemoteEnvironmentError(
+      new EnvironmentAuthInvalidError({
+        code: "auth_invalid",
+        reason: "invalid_credential",
+        traceId: "trace-1",
+      }),
+    );
+    const steps = diagnose(backoff(failure), "direct")?.steps.join(" ");
+    expect(steps).not.toContain("Make sure HomuCode is running");
+    expect(steps).toMatch(/pair|sign in/i);
   });
 
   it("does not report hops as working when the failure names none", () => {

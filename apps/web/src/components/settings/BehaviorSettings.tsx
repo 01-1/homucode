@@ -1,3 +1,4 @@
+import { useGT, T, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import {
@@ -20,7 +21,7 @@ import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { FEATURE_OFFER_SETTINGS, searchableSetting } from "./settingsSearch";
+import { FEATURE_OFFER_SETTINGS, useSearchableSetting } from "./settingsSearch";
 import { SettingsScopeNotice } from "./SettingsScopeNotice";
 import { Switch } from "../ui/switch";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -35,6 +36,7 @@ function WorkAssistancePicker({
   readonly value: ServerSettings["workAssistanceTarget"];
   readonly onChange: (value: ServerSettings["workAssistanceTarget"]) => void;
 }) {
+  const gt = useGT();
   const { environments: connected } = useEnvironments();
   const environments = connected.filter((entry) => entry.environmentId === environmentId);
   const projects = useProjects();
@@ -53,8 +55,8 @@ function WorkAssistancePicker({
           }
         }}
       >
-        <SelectTrigger aria-label="Work assistance environment">
-          <SelectValue placeholder="Choose an environment">
+        <SelectTrigger aria-label={gt("Work assistance environment")}>
+          <SelectValue placeholder={gt("Choose an environment")}>
             {environments.find((entry) => entry.environmentId === chosenEnvironment)?.label}
           </SelectValue>
         </SelectTrigger>
@@ -75,8 +77,8 @@ function WorkAssistancePicker({
           if (project) onChange({ environmentId: project.environmentId, projectId: project.id });
         }}
       >
-        <SelectTrigger aria-label="Work assistance project">
-          <SelectValue placeholder="Choose a project">
+        <SelectTrigger aria-label={gt("Work assistance project")}>
+          <SelectValue placeholder={gt("Choose a project")}>
             {
               projects.find(
                 (entry) =>
@@ -106,6 +108,7 @@ export function DeviceNamesSettings({
   readonly environmentId: EnvironmentId;
   readonly currentOnly?: boolean;
 }) {
+  const gt = useGT();
   const query = useEnvironmentQuery(serverEnvironment.messageDevices({ environmentId, input: {} }));
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
@@ -137,15 +140,15 @@ export function DeviceNamesSettings({
             <span>
               {[match.surface, match.os, match.deviceModel, match.browser]
                 .filter(Boolean)
-                .join(" · ") || `Device ${index + 1}`}
+                .join(" · ") || gt("Device {number}", { number: index + 1 })}
             </span>
             <Input
               key={current?.name ?? ""}
               disabled={!canWrite}
-              aria-label="Device name"
+              aria-label={gt("Device name")}
               maxLength={40}
               defaultValue={current?.name ?? _deviceName ?? _name ?? ""}
-              placeholder="Name this device"
+              placeholder={gt("Name this device")}
               onBlur={(event) => {
                 const name = event.target.value.trim();
                 const others = settings.deviceNames.filter((entry) => entry !== current);
@@ -162,14 +165,14 @@ export function DeviceNamesSettings({
       })}
       {query.error ? (
         <p className="text-muted-foreground">
-          {
-            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
-          }
+          {gt(
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update.",
+          )}
         </p>
       ) : null}
       {!devices.length ? (
         <p className="text-sm text-muted-foreground">
-          Devices appear after they connect to this server.
+          <T>Devices appear after they connect to this server.</T>
         </p>
       ) : null}
     </div>
@@ -177,6 +180,9 @@ export function DeviceNamesSettings({
 }
 
 export function BehaviorSettingsSection() {
+  const messages = useMessages();
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const { targets, scope, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const update = useUpdateScopedSettings();
@@ -186,7 +192,7 @@ export function BehaviorSettingsSection() {
       : undefined;
   return (
     <>
-      <SettingsSection title="Extra features">
+      <SettingsSection title={gt("Extra features")}>
         {FEATURE_OFFERS.map((offer) => {
           const id = FEATURE_OFFER_SETTINGS[offer.id];
           const key = offer.setting;
@@ -196,13 +202,13 @@ export function BehaviorSettingsSection() {
             <SettingsRow
               key={offer.id}
               {...searchableSetting(id)}
-              description={offer.description}
+              description={messages(offer.description)}
               serverScoped
               settingKeys={[key]}
               control={
                 <Checkbox
                   checked={settings[key] === (offer.enabledValue ?? true)}
-                  aria-label={offer.title}
+                  aria-label={messages(offer.title)}
                   onCheckedChange={(checked) =>
                     update({
                       [key]: checked ? (offer.enabledValue ?? true) : !(offer.enabledValue ?? true),
@@ -218,7 +224,7 @@ export function BehaviorSettingsSection() {
         <EnvironmentBehaviorSettings environmentId={environmentId} />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Select one environment to configure work assistance.
+          <T>Select one environment to configure work assistance.</T>
         </p>
       )}
       <SettingsSection
@@ -229,7 +235,7 @@ export function BehaviorSettingsSection() {
           <ConnectSessionSetting environmentId={environmentId} />
         ) : (
           <SettingsScopeNotice inline target="environment" targetId="connect-device-long-sessions">
-            Choose an environment to change its T3 Connect session length.
+            {gt("Choose an environment to change its T3 Connect session length.")}
           </SettingsScopeNotice>
         )}
       </SettingsSection>
@@ -245,7 +251,7 @@ export function BehaviorSettingsSection() {
               ? { eligibleEnvironmentIds: connectedEnvironments.map((env) => env.environmentId) }
               : {})}
           >
-            Choose an environment to edit device names.
+            {gt("Choose an environment to edit device names.")}
           </SettingsScopeNotice>
         )}
       </SettingsSection>
@@ -254,6 +260,8 @@ export function BehaviorSettingsSection() {
 }
 
 function ConnectSessionSetting({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const { connectDeviceLongSessions } = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(
@@ -266,11 +274,13 @@ function ConnectSessionSetting({ environmentId }: { readonly environmentId: Envi
     <SettingsRow
       {...searchableSetting("connect-device-long-sessions")}
       settingKeys={["connectDeviceLongSessions"]}
-      description="Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device in Sharing & access to end its access."
+      description={gt(
+        "Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device in Sharing & access to end its access.",
+      )}
       managed={connectDenial}
       control={
         <Switch
-          aria-label="Stay signed in for 30 days"
+          aria-label={gt("Stay signed in for 30 days")}
           checked={connectDeviceLongSessions}
           disabled={!canWrite}
           onCheckedChange={(enabled) =>
@@ -283,6 +293,8 @@ function ConnectSessionSetting({ environmentId }: { readonly environmentId: Envi
 }
 
 function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
@@ -292,23 +304,36 @@ function EnvironmentBehaviorSettings({ environmentId }: { readonly environmentId
     reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
   const [choosingWork, setChoosingWork] = useState(false);
+  const backgroundGitStatus = query.data
+    ? query.data.backgroundGitEnabled
+      ? gt("Background Git is currently on.")
+      : gt("Background Git is currently off.")
+    : null;
+  const backgroundGitDetail = query.data
+    ? query.data.backgroundGitOverridden
+      ? gt("T3CODE_BACKGROUND_GIT overrides the saved choice.")
+      : query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
+        ? gt("Restart to apply your saved choice.")
+        : gt("Restart to apply changes.")
+    : null;
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {query.data
-          ? `Background Git is currently ${query.data.backgroundGitEnabled ? "on" : "off"}. ${
-              query.data.backgroundGitOverridden
-                ? "T3CODE_BACKGROUND_GIT overrides the saved choice."
-                : query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
-                  ? "Restart to apply your saved choice."
-                  : "Restart to apply changes."
-            }`
-          : `Background Git status · ${reason ?? query.error ?? "Loading…"}`}
+        {backgroundGitStatus
+          ? gt("{status} {detail}", {
+              status: backgroundGitStatus,
+              detail: backgroundGitDetail ?? "",
+            })
+          : gt("Background Git status · {detail}", {
+              detail: reason ?? query.error ?? gt("Loading…"),
+            })}
       </p>
-      <SettingsSection id={searchableSetting("work-assistance").id} title="Work assistance">
+      <SettingsSection id={searchableSetting("work-assistance").id} title={gt("Work assistance")}>
         <SettingsRow
-          title="Enable work assistance (not recommended)"
-          description="Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself."
+          title={gt("Enable work assistance (not recommended)")}
+          description={gt(
+            "Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.",
+          )}
           control={
             <Checkbox
               disabled={!canWrite}

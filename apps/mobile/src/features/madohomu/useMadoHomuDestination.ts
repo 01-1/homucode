@@ -1,3 +1,5 @@
+import { m } from "../../i18n/messages";
+import { msg, useMessages } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import {
   madoHomuProjectSelectionIssue,
@@ -59,13 +61,18 @@ function settingsHost(
 }
 
 export function useMadoHomuProjectSelection() {
+  const resolve = useMessages();
   const { linked, destination } = useMadoHomuDestination();
   const writable = useEnvironmentsWithScope(linked, AuthSettingsWriteScope);
   const isSelecting = useAtomValue(selectionPendingAtom);
   const update = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   const selectionIssue = (id: EnvironmentId) =>
-    madoHomuProjectSelectionIssue(destination, id, (hostId) =>
-      settingsHost(linked, hostId, () => writable.has(hostId)),
+    madoHomuProjectSelectionIssue(
+      destination,
+      id,
+      (hostId) => settingsHost(linked, hostId, () => writable.has(hostId)),
+      false,
+      resolve,
     );
   const changeProject = async (project: ScopedProjectRef) => {
     if (appAtomRegistry.get(selectionPendingAtom)) return false;
@@ -89,7 +96,7 @@ export function useMadoHomuProjectSelection() {
         return true;
       } catch (error) {
         Dialog.alert(
-          "Could not change MadoHomu project",
+          m(msg("Could not change MadoHomu project")),
           error instanceof Error ? error.message : String(error),
         );
         return false;

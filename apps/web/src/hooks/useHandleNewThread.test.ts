@@ -29,6 +29,9 @@ const testState = vi.hoisted(() => {
     navigate: vi.fn(async (request: { readonly params: { readonly draftId: string } }) => {
       router.state.location.href = `/draft/${request.params.draftId}`;
     }),
+    buildLocation: (request: { readonly params: { readonly draftId: string } }) => ({
+      href: `/draft/${request.params.draftId}`,
+    }),
   };
   const draftStore = {
     getComposerDraft: vi.fn((draftId: string) => ({ draftId })),
@@ -78,6 +81,9 @@ const testState = vi.hoisted(() => {
     },
     get openDraftRoute() {
       return openDraftRoute;
+    },
+    registerDraft(draft: NonNullable<typeof storedDraft>) {
+      storedDraft = draft;
     },
     openEmptyDraft(draftId: string) {
       openDraftRoute = { kind: "draft", draftId };
@@ -285,7 +291,7 @@ describe.each([
 
   it("carries the retained checkout into a branch draft", async () => {
     testState.reset(draft);
-    const opened = await useNewThreadHandler()(
+    const pendingOpen = useNewThreadHandler()(
       { environmentId: "environment-ssh", projectId: "project-remote" } as never,
       {
         branch: "feature/source",
@@ -294,6 +300,8 @@ describe.each([
         envMode: "local",
       },
     );
+    testState.completeProjectFileRead(null);
+    const opened = await pendingOpen;
     const calls = [
       ...testState.draftStore.setLogicalProjectDraftThreadId.mock.calls,
       ...testState.draftStore.setDraftThreadContext.mock.calls,
@@ -310,6 +318,31 @@ describe.each([
         ),
       ),
     ).toBe(true);
+  });
+
+  it("resolves to the draft another opener showed for the same project meanwhile", async () => {
+    testState.reset(draft);
+    const pendingOpen = useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      { replace: true },
+    );
+
+    // The location moves before the route matches do.
+    testState.registerDraft({
+      draftId: "draft-home",
+      environmentId: "environment-ssh",
+      promotedTo: null,
+      threadId: "thread-home",
+    });
+    testState.router.state.location.href = "/draft/draft-home";
+    testState.completeProjectFileRead(null);
+
+    await expect(pendingOpen).resolves.toEqual({
+      draftId: "draft-home",
+      threadId: "thread-home",
+    });
+    expect(testState.router.navigate).not.toHaveBeenCalled();
+    expect(testState.draftStore.setLogicalProjectDraftThreadId).not.toHaveBeenCalled();
   });
 
   it("sets the prompt before the draft shows", async () => {

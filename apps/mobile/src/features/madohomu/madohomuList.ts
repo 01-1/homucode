@@ -25,6 +25,8 @@ import {
   type ThreadListV2ThreadListItem,
 } from "../threads/threadListV2";
 
+import type { MessageResolver } from "../../i18n/messages";
+
 type MadoHomuListSettings = Pick<
   ServerSettings,
   "madohomuThreads" | "madohomuSections" | "madohomuThreadOrder" | "madohomuWorkingPlacement"
@@ -100,6 +102,7 @@ export function buildMadoHomuListRows(input: {
   };
   /** Reorder mode: Pinned and custom sections stay open so every drop target shows. */
   readonly keepManualOpen?: boolean;
+  readonly resolve?: MessageResolver;
   readonly snoozeEnvironmentIds?: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys?: ReadonlySet<string>;
   readonly isWorking?: (thread: EnvironmentThreadShell) => boolean;
@@ -108,6 +111,7 @@ export function buildMadoHomuListRows(input: {
   const { isWorking } = input;
   const groups = groupMadoHomuThreads(input.threads, input.settings, {
     now: input.now,
+    ...(input.resolve ? { resolve: input.resolve } : {}),
     // A thread waiting on the user, a guest's request included, is never "working".
     ...(isWorking
       ? {

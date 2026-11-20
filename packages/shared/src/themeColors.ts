@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import { pipe } from "effect/Function";
 import type { EnvironmentTheme } from "@t3tools/contracts";
 import "culori/css";
@@ -201,13 +203,20 @@ function themeRgbToThemeColor(color: ThemeRgbColor): string {
   return formatOklchThemeColor(themeRgbToOklch(color));
 }
 
-export function decodeThemeColors(colors: ThemeColors): ThemeColors {
+export function decodeThemeColors(
+  colors: ThemeColors,
+  resolve: MFunctionType = mFallback,
+): ThemeColors {
   return Object.fromEntries(
     THEME_COLOR_ROLES.map((role) => {
       const color = toCanonicalThemeColor(colors[role]);
       if (!color) {
         throw new Error(
-          `The color for "${role}" must be a literal CSS color such as oklch(0.62 0.2 280).`,
+          resolve(
+            msg('The color for "{role}" must be a literal CSS color such as oklch(0.62 0.2 280).', {
+              role,
+            }),
+          ),
         );
       }
       return [role, color];

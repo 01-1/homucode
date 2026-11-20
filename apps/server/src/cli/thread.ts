@@ -729,6 +729,33 @@ const launchWorkspaceStrategy = (input: {
       }),
   });
 
+/**
+ * Options are model specific, so they need an explicit model. `true` and
+ * `false` become booleans because boolean options such as fastMode only match
+ * a boolean.
+ */
+export const launchModelSelection = Effect.fn("cli.thread.launchModelSelection")(function* (input: {
+  readonly provider: Option.Option<string>;
+  readonly model: Option.Option<string>;
+  readonly option: ReadonlyArray<string>;
+}) {
+  if (Option.isSome(input.provider) !== Option.isSome(input.model)) {
+    return yield* new ThreadUsageError({ detail: "--provider and --model go together." });
+  }
+  if (Option.isNone(input.provider) || Option.isNone(input.model)) {
+    if (input.option.length > 0) {
+      return yield* new ThreadUsageError({ detail: "--option needs --provider and --model." });
+    }
+    return undefined;
+  }
+  const options = yield* parseLaunchOptions(input.option);
+  return {
+    instanceId: input.provider.value,
+    model: input.model.value,
+    ...(options.length === 0 ? {} : { options }),
+  };
+});
+
 const jsonFlag = Flag.Boolean("json").pipe(
   Flag.withDescription("Print JSON instead of text."),
   Flag.withDefault(false),
@@ -818,9 +845,14 @@ export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(fun
     const at = option.indexOf("=");
     const id = option.slice(0, at).trim();
     const value = option.slice(at + 1).trim();
-    if (at <= 0 || !id || !value || options.some((existing) => existing.id === id)) {
+    if (at <= 0 || !id || !value) {
       return yield* new ThreadUsageError({
-        detail: "Each --option must be a unique ID=VALUE with a nonempty value.",
+        detail: "Each --option must be an ID=VALUE with a nonempty value.",
+      });
+    }
+    if (options.some((existing) => existing.id === id)) {
+      return yield* new ThreadUsageError({
+        detail: `--option ${id} is given more than once.`,
       });
     }
     options.push({ id, value: value === "true" ? true : value === "false" ? false : value });
@@ -911,6 +943,14 @@ const threadStartCommand = Command.make("start", {
           detail: "Model options require --provider and --model.",
         });
       }
+      const modelSelection =
+        Option.isSome(flags.provider) && Option.isSome(flags.model)
+          ? {
+              instanceId: flags.provider.value,
+              model: flags.model.value,
+              ...(options.length === 0 ? {} : { options }),
+            }
+          : undefined;
       const clientRequestId = Option.isNone(flags.clientRequestId)
         ? undefined
         : yield* decodeClientRequestId(flags.clientRequestId.value).pipe(
@@ -931,15 +971,7 @@ const threadStartCommand = Command.make("start", {
               message,
               ...(clientRequestId === undefined ? {} : { clientRequestId }),
               ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
-              ...(Option.isSome(flags.provider) && Option.isSome(flags.model)
-                ? {
-                    modelSelection: {
-                      instanceId: flags.provider.value,
-                      model: flags.model.value,
-                      ...(options.length === 0 ? {} : { options }),
-                    },
-                  }
-                : {}),
+              ...(modelSelection === undefined ? {} : { modelSelection }),
             },
             ThreadLaunchResult,
           );

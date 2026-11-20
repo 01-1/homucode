@@ -1,3 +1,4 @@
+import { T } from "gt-react";
 import { isMadoHomuThreadPinned, madohomuIconColor } from "@t3tools/client-runtime/madohomu";
 import { MADOHOMU_THREAD_PROMPT_MAX_LENGTH, type EnvironmentId } from "@t3tools/contracts";
 import type { SidebarThreadSummary } from "../../types";
@@ -67,12 +68,14 @@ export function MadoHomuThreadEditor({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Edit thread</DialogTitle>
+          <DialogTitle>
+            <T>Edit thread</T>
+          </DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <div className="grid gap-4">
             <label className="grid gap-1 text-sm">
-              Title
+              <T>Title</T>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={500} />
             </label>
             <MadoHomuIconPicker
@@ -82,9 +85,9 @@ export function MadoHomuThreadEditor({
               onColorChange={setColor}
             />
             <label className="grid gap-1 text-sm">
-              Thread prompt
+              <T>Thread prompt</T>
               <span className="text-xs text-muted-foreground">
-                Standing instructions for this thread. The agent sees them on every turn.
+                <T>Standing instructions for this thread. The agent sees them on every turn.</T>
               </span>
               <Textarea
                 value={prompt}
@@ -96,10 +99,10 @@ export function MadoHomuThreadEditor({
         </DialogPanel>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={onClose}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button disabled={busy || !title.trim()} onClick={() => void save()}>
-            Save
+            <T>Save</T>
           </Button>
         </DialogFooter>
       </DialogPopup>

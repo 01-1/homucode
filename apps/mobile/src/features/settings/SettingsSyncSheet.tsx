@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import type { ClientSettingsSyncChoice } from "@t3tools/client-runtime/state/client-settings-sync";
 import {
   formatSyncedSettingValue,
@@ -26,6 +27,7 @@ import {
 } from "./settingsSync";
 
 export function SettingsSyncSheet() {
+  const gt = useGT();
   const navigation = useNavigation();
   const prompt = useSettingsSyncPrompt();
   const answered = useRef(false);
@@ -46,7 +48,9 @@ export function SettingsSyncSheet() {
   };
 
   return (
-    <FitSheet header={<SheetHeader title="Settings sync" onClose={() => navigation.goBack()} />}>
+    <FitSheet
+      header={<SheetHeader title={gt("Settings sync")} onClose={() => navigation.goBack()} />}
+    >
       {prompt ? (
         <SettingsSyncChoices
           key={[prompt.environmentId, ...prompt.conflicts.map(({ key }) => key)].join()}
@@ -64,10 +68,11 @@ function SettingsSyncChoices(props: {
   readonly onApply: (choices: Readonly<Record<string, ClientSettingsSyncChoice>>) => void;
   readonly onDecideLater: () => void;
 }) {
+  const gt = useGT();
   const { prompt } = props;
   const server =
     useEnvironmentPresentation(prompt.environmentId).presentation?.entry.target.label ??
-    "your server";
+    gt("your server");
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
     Object.fromEntries(prompt.conflicts.map(({ key }) => [key, "remote" as const])),
@@ -85,17 +90,25 @@ function SettingsSyncChoices(props: {
   return (
     <>
       <SheetIntro
-        title={prompt.firstSetup ? "Set up settings sync" : "Settings changed in two places"}
+        title={
+          prompt.firstSetup ? gt("Set up settings sync") : gt("Settings changed in two places")
+        }
         description={
           prompt.firstSetup
-            ? `This phone's settings differ from the ones synced through ${server}. Choose which value to keep for each.`
-            : `These settings changed on this phone and through ${server} since they last synced. Choose which value to keep for each.`
+            ? gt(
+                "This phone's settings differ from the ones synced through {server}. Choose which value to keep for each.",
+                { server },
+              )
+            : gt(
+                "These settings changed on this phone and through {server} since they last synced. Choose which value to keep for each.",
+                { server },
+              )
         }
       />
       <View className="flex-row gap-2">
         <View className="flex-1">
           <Button
-            label="Use synced for all"
+            label={gt("Use synced for all")}
             tone="secondary"
             size="compact"
             fullWidth
@@ -104,7 +117,7 @@ function SettingsSyncChoices(props: {
         </View>
         <View className="flex-1">
           <Button
-            label="Keep this phone for all"
+            label={gt("Keep this phone for all")}
             tone="secondary"
             size="compact"
             fullWidth
@@ -122,13 +135,13 @@ function SettingsSyncChoices(props: {
         return (
           <SettingsSection key={conflict.key} title={syncedSettingLabel(conflict.key)}>
             <ListChoiceRow
-              label="This phone"
+              label={gt("This phone")}
               description={isExpanded ? local : (localPreview ?? local)}
               selected={choices[conflict.key] === "local"}
               onPress={() => setChoices((current) => ({ ...current, [conflict.key]: "local" }))}
             />
             <ListChoiceRow
-              label="Synced"
+              label={gt("Synced")}
               description={isExpanded ? remote : (remotePreview ?? remote)}
               selected={choices[conflict.key] !== "local"}
               separated
@@ -136,7 +149,7 @@ function SettingsSyncChoices(props: {
             />
             {isLong ? (
               <Button
-                label={isExpanded ? "Show less" : "Read more"}
+                label={isExpanded ? gt("Show less") : gt("Read more")}
                 tone="text"
                 size="compact"
                 fullWidth
@@ -147,10 +160,15 @@ function SettingsSyncChoices(props: {
         );
       })}
       <View className="gap-2">
-        <Button label="Apply" fullWidth onPress={() => props.onApply(choices)} />
-        <Button label="Decide later" tone="secondary" fullWidth onPress={props.onDecideLater} />
+        <Button label={gt("Apply")} fullWidth onPress={() => props.onApply(choices)} />
         <Button
-          label="Turn off sync on this phone"
+          label={gt("Decide later")}
+          tone="secondary"
+          fullWidth
+          onPress={props.onDecideLater}
+        />
+        <Button
+          label={gt("Turn off sync on this phone")}
           tone="text"
           fullWidth
           onPress={() => {

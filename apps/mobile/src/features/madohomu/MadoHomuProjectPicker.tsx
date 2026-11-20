@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { StackActions, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import {
   AuthOrchestrationOperateScope,
@@ -29,6 +30,7 @@ export function MadoHomuProjectPicker(props: {
   readonly canClear: boolean;
   readonly onChange: (project: ScopedProjectRef | null) => void;
 }) {
+  const gt = useGT();
   const navigation = useNavigation();
   const route = useRoute();
   const environmentById = new Map(
@@ -65,7 +67,7 @@ export function MadoHomuProjectPicker(props: {
             <ListActionRow
               key={environment.environmentId}
               icon="folder.badge.plus"
-              label="New project"
+              label={gt("New project")}
               description={issue ? `${environment.label} · ${issue}` : environment.label}
               disabled={props.disabled || issue !== null}
               onPress={() => newProject(environment.environmentId)}
@@ -86,7 +88,7 @@ export function MadoHomuProjectPicker(props: {
                 label={project.title}
                 description={[label, issue].filter(Boolean).join(" · ")}
                 icon={selected ? "checkmark" : undefined}
-                detail={selected ? "Selected" : undefined}
+                detail={selected ? gt("Selected") : undefined}
                 disabled={props.disabled || issue !== null}
                 onPress={() =>
                   props.onChange({ environmentId: project.environmentId, projectId: project.id })
@@ -98,7 +100,7 @@ export function MadoHomuProjectPicker(props: {
       ) : null}
       {props.canClear && props.projectId !== null ? (
         <ListActionRow
-          label="Clear project"
+          label={gt("Clear project")}
           disabled={props.disabled}
           onPress={() => props.onChange(null)}
         />

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
@@ -62,6 +63,7 @@ export function ThreadStatusBar(props: {
   readonly createdAt: string | null;
   readonly source: Omit<StatusLineInputSource, "nowMs">;
 }) {
+  const gt = useGT();
   const { environmentId, createdAt } = props;
   const { themeAppearance, themeVariables } = useAppearancePreferences();
   const enabled = useAtomValue(
@@ -116,7 +118,7 @@ export function ThreadStatusBar(props: {
     if (result.error === null) return null;
     return (
       <Text numberOfLines={1} className="pt-1.5 font-mono text-2xs text-foreground-muted">
-        Status line failed: {result.error}
+        {gt("Status line failed: {error}", { error: result.error })}
       </Text>
     );
   }

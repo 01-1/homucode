@@ -1,3 +1,4 @@
+import { useGT, useMessages } from "gt-react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AuthSettingsWriteScope, type ServerSettingsPatch } from "@t3tools/contracts";
 import { supportsSharedSettingsSync } from "@t3tools/client-runtime/state/shared-settings";
@@ -34,6 +35,7 @@ import {
 import { useSettingsWriter } from "./useSettingsWriter";
 
 export function SettingsHomuCodeRouteScreen() {
+  const gt = useGT();
   const menu = useSettingsEnvironmentMenu();
   const { selectedTargets, selectedProjectKey } = useSettingsEnvironmentFilter();
   const insets = useSafeAreaInsets();
@@ -51,11 +53,13 @@ export function SettingsHomuCodeRouteScreen() {
         contentContainerClassName="gap-5 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
-        <SettingsSection title="This phone">
+        <SettingsSection title={gt("This phone")}>
           <MobileThisDeviceName />
           <ListToggleRow
-            label="Faster phone launch"
-            description="Connect using the last signed-in account before sign-in loads. Applies next launch."
+            label={gt("Faster phone launch")}
+            description={gt(
+              "Connect using the last signed-in account before sign-in loads. Applies next launch.",
+            )}
             value={
               AsyncResult.isSuccess(preferencesResult) &&
               preferencesResult.value.fasterPhoneLaunch === true
@@ -64,10 +68,10 @@ export function SettingsHomuCodeRouteScreen() {
             onValueChange={(fasterPhoneLaunch) => savePreferences({ fasterPhoneLaunch })}
           />
         </SettingsSection>
-        <SettingsSection title="Sent messages">
+        <SettingsSection title={gt("Sent messages")}>
           <ListToggleRow
-            label="Show message sender labels"
-            description="Show who sent each message above its bubble in chat."
+            label={gt("Show message sender labels")}
+            description={gt("Show who sent each message above its bubble in chat.")}
             value={
               AsyncResult.isSuccess(preferencesResult) &&
               preferencesResult.value.showMessageSenderLabels === true
@@ -78,10 +82,12 @@ export function SettingsHomuCodeRouteScreen() {
             }
           />
         </SettingsSection>
-        <SettingsSection title="Settings sync">
+        <SettingsSection title={gt("Settings sync")}>
           <ListToggleRow
-            label="Sync settings"
-            description="Keep theme, chat and other settings the same as your other devices, through connected servers."
+            label={gt("Sync settings")}
+            description={gt(
+              "Keep theme, chat and other settings the same as your other devices, through connected servers.",
+            )}
             value={settingsSyncEnabled}
             disabled={!preferencesReady}
             onValueChange={(settingsSyncEnabled) => savePreferences({ settingsSyncEnabled })}
@@ -95,7 +101,7 @@ export function SettingsHomuCodeRouteScreen() {
             disabled={selectedTargets.length === 0}
           />
         </SettingsSection>
-        <SettingsSection title="Building Homu">
+        <SettingsSection title={gt("Building Homu")}>
           {selectedTargets.map((target) => (
             <MobileBuildVisibility
               key={target.environmentId}
@@ -105,7 +111,7 @@ export function SettingsHomuCodeRouteScreen() {
           {selectedTargets.some(
             (target) => target.serverConfig.settings.buildToolsSettingsVisible,
           ) ? (
-            <SettingsRow icon="hammer" label="Building Homu" target="SettingsBuildingT3" />
+            <SettingsRow icon="hammer" label={gt("Building Homu")} target="SettingsBuildingT3" />
           ) : null}
         </SettingsSection>
         <HomuCodeServerSettings />
@@ -135,6 +141,8 @@ export function SettingsHomuCodeRouteScreen() {
 }
 
 function HomuCodeServerSettings() {
+  const gt = useGT();
+  const resolve = useMessages();
   const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
   const selectedProject = projectGroups.find((group) => group.key === selectedProjectKey);
   const projectSelected = selectedProjectKey !== null;
@@ -178,45 +186,53 @@ function HomuCodeServerSettings() {
   if (targets.length === 0) return null;
   return (
     <>
-      <SettingsSection title="Status line">
+      <SettingsSection title={gt("Status line")}>
         <SettingsSwitchRow
           icon="terminal"
-          label="Status line"
-          subtitle="Show the model, context, and usage limits under the composer. Set its command on desktop or web."
+          label={gt("Status line")}
+          subtitle={gt(
+            "Show the model, context, and usage limits under the composer. Set its command on desktop or web.",
+          )}
           value={uniformMobileSetting(targets, "statusLineEnabled")}
           disabled={
-            !canWrite || pending || managedSettingReason(targets, "statusLineEnabled") !== undefined
+            !canWrite ||
+            pending ||
+            managedSettingReason(targets, ["statusLineEnabled"], resolve) !== undefined
           }
           onValueChange={(enabled) => write("statusLineEnabled", enabled)}
         />
       </SettingsSection>
       {!projectSelected ? (
-        <SettingsSection title="Subagents">
+        <SettingsSection title={gt("Subagents")}>
           <SettingsSwitchRow
             icon="pin"
-            label="Subagents inherit parent pin"
-            subtitle="Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server."
+            label={gt("Subagents inherit parent pin")}
+            subtitle={gt(
+              "Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server.",
+            )}
             value={uniformMobileSetting(targets, "subagentsInheritParentPin")}
             disabled={
               !canWrite ||
               pending ||
-              managedSettingReason(targets, "subagentsInheritParentPin") !== undefined
+              managedSettingReason(targets, ["subagentsInheritParentPin"], resolve) !== undefined
             }
             onValueChange={(enabled) => write("subagentsInheritParentPin", enabled)}
           />
         </SettingsSection>
       ) : null}
       {!projectSelected && autoreviewTargets.length > 0 ? (
-        <SettingsSection title="Autoreviewers">
+        <SettingsSection title={gt("Autoreviewers")}>
           <SettingsSwitchRow
             icon="checkmark.circle"
-            label="Autoreviewers (not recommended)"
-            subtitle="Lets agents attach reviewer subagents. Findings can lag behind the thread. Turning this off pauses attached reviewers."
+            label={gt("Autoreviewers (not recommended)")}
+            subtitle={gt(
+              "Lets agents attach reviewer subagents. Findings can lag behind the thread. Turning this off pauses attached reviewers.",
+            )}
             value={uniformMobileSetting(autoreviewTargets, "autoreviewEnabled")}
             disabled={
               !canWrite ||
               pending ||
-              managedSettingReason(targets, "autoreviewEnabled") !== undefined
+              managedSettingReason(targets, ["autoreviewEnabled"], resolve) !== undefined
             }
             onValueChange={(enabled) => write("autoreviewEnabled", enabled)}
           />

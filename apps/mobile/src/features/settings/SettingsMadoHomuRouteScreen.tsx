@@ -1,6 +1,6 @@
+import { T, msg, useGT, useMessages } from "gt-react-native";
 import { useRef, useState } from "react";
 import { TextInput, View } from "react-native";
-import { MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
 import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,13 +25,17 @@ const CODE_VISIBILITY_OPTIONS: ReadonlyArray<{
   readonly label: string;
   readonly description: string;
 }> = [
-  { value: "hidden", label: "None", description: "HomuCode lists none of them." },
+  { value: "hidden", label: msg("None"), description: msg("HomuCode lists none of them.") },
   {
     value: "scratch",
-    label: `${MADOHOMU_SCRATCH_LABEL} only`,
-    description: "HomuCode lists the threads not pinned in MadoHomu.",
+    label: msg("{scratch} only"),
+    description: msg("HomuCode lists the threads not pinned in MadoHomu."),
   },
-  { value: "all", label: "All", description: "HomuCode lists every thread of the project." },
+  {
+    value: "all",
+    label: msg("All"),
+    description: msg("HomuCode lists every thread of the project."),
+  },
 ];
 
 const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
@@ -41,15 +45,19 @@ const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
 }> = [
   {
     value: "section",
-    label: "Working section",
-    description: `Working ${MADOHOMU_SCRATCH_LABEL} threads move to their own section.`,
+    label: msg("Working section"),
+    description: msg("Working {scratch} threads move to their own section."),
   },
   {
     value: "top",
-    label: `Top of ${MADOHOMU_SCRATCH_LABEL}`,
-    description: `Working threads sort first in ${MADOHOMU_SCRATCH_LABEL}.`,
+    label: msg("Top of {scratch}"),
+    description: msg("Working threads sort first in {scratch}."),
   },
-  { value: "none", label: "Leave in place", description: "Working threads keep their place." },
+  {
+    value: "none",
+    label: msg("Leave in place"),
+    description: msg("Working threads keep their place."),
+  },
 ];
 
 export function SettingsMadoHomuRouteScreen() {
@@ -73,11 +81,11 @@ export function SettingsMadoHomuRouteScreen() {
       >
         {selectedProjectKey !== null ? (
           <Text className="text-base text-foreground-muted">
-            Choose an environment in the filter to configure MadoHomu.
+            <T>Choose an environment in the filter to configure MadoHomu.</T>
           </Text>
         ) : settingsTargets.length === 0 ? (
           <Text className="text-base text-foreground-muted">
-            Connect to an environment to configure MadoHomu.
+            <T>Connect to an environment to configure MadoHomu.</T>
           </Text>
         ) : (
           settingsTargets.map((target) => (
@@ -99,6 +107,9 @@ function EnvironmentMadoHomuSettings(props: {
   readonly label: string;
   readonly onSwitchEnvironment: () => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
+  const scratch = resolve(msg("Scratch", { $context: "MadoHomu thread section" }));
   const actions = useMadoHomuActions(props.environmentId);
   const projectSelection = useMadoHomuProjectSelection();
   const [time, setTime] = useState<string | null>(null);
@@ -130,13 +141,17 @@ function EnvironmentMadoHomuSettings(props: {
   return (
     <SettingsSection title={props.label}>
       <SettingsSwitchRow
-        label="Enable MadoHomu"
-        subtitle="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
+        label={gt("Enable MadoHomu")}
+        subtitle={gt(
+          "A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned.",
+        )}
         value={actions.settings.madohomuEnabled}
         disabled={busy || projectSelection.isSelecting || !actions.canWrite}
         onValueChange={(madohomuEnabled) => void run(() => actions.save({ madohomuEnabled }))}
       />
-      <Text className="px-4 pt-3 text-sm text-foreground-muted">MadoHomu project</Text>
+      <Text className="px-4 pt-3 text-sm text-foreground-muted">
+        <T>MadoHomu project</T>
+      </Text>
       <MadoHomuProjectPicker
         environmentId={props.environmentId}
         projectId={actions.settings.madohomuProjectId}
@@ -158,25 +173,27 @@ function EnvironmentMadoHomuSettings(props: {
       {actions.settings.madohomuEnabled ? (
         <>
           <Text className="px-4 pt-3 text-sm text-foreground-muted">
-            Show MadoHomu threads in HomuCode
+            <T>Show MadoHomu threads in HomuCode</T>
           </Text>
           {CODE_VISIBILITY_OPTIONS.map((option, index) => (
             <ListChoiceRow
               key={option.value}
-              label={option.label}
-              description={option.description}
+              label={resolve(option.label, { scratch })}
+              description={resolve(option.description, { scratch })}
               selected={actions.settings.madohomuCodeVisibility === option.value}
               separated={index > 0}
               disabled={busy || !actions.canWrite}
               onPress={() => void run(() => actions.save({ madohomuCodeVisibility: option.value }))}
             />
           ))}
-          <Text className="px-4 pt-3 text-sm text-foreground-muted">Working threads</Text>
+          <Text className="px-4 pt-3 text-sm text-foreground-muted">
+            <T>Working threads</T>
+          </Text>
           {WORKING_PLACEMENT_OPTIONS.map((option, index) => (
             <ListChoiceRow
               key={option.value}
-              label={option.label}
-              description={option.description}
+              label={resolve(option.label, { scratch })}
+              description={resolve(option.description, { scratch })}
               selected={actions.settings.madohomuWorkingPlacement === option.value}
               separated={index > 0}
               disabled={busy || !actions.canWrite}
@@ -186,8 +203,10 @@ function EnvironmentMadoHomuSettings(props: {
             />
           ))}
           <SettingsSwitchRow
-            label="Morning brief"
-            subtitle="A daily summary and proposed next steps. The agent plans and asks for approval before acting."
+            label={gt("Morning brief")}
+            subtitle={gt(
+              "A daily summary and proposed next steps. The agent plans and asks for approval before acting.",
+            )}
             value={briefEnabled}
             disabled={
               busy ||
@@ -201,9 +220,11 @@ function EnvironmentMadoHomuSettings(props: {
             }
           />
           <View className="gap-3 px-4 py-3">
-            <Text className="text-sm text-foreground-muted">Daily time (HH:MM)</Text>
+            <Text className="text-sm text-foreground-muted">
+              <T>Daily time (HH:MM)</T>
+            </Text>
             <TextInput
-              accessibilityLabel="Morning brief time"
+              accessibilityLabel={gt("Morning brief time")}
               value={time ?? savedTime}
               onChangeText={setTime}
               autoCapitalize="none"
@@ -213,14 +234,18 @@ function EnvironmentMadoHomuSettings(props: {
               className="min-h-12 rounded-xl bg-subtle p-3 text-base text-foreground"
             />
             {!validTime ? (
-              <Text className="text-sm text-danger-foreground">Enter a time such as 09:00.</Text>
+              <Text className="text-sm text-danger-foreground">
+                <T>Enter a time such as 09:00.</T>
+              </Text>
             ) : null}
             <Text className="text-sm text-foreground-muted">
-              Time zone: {actions.taskQuery.data?.timeZone ?? "Server time"}
+              {gt("Time zone: {timeZone}", {
+                timeZone: actions.taskQuery.data?.timeZone ?? gt("Server time"),
+              })}
             </Text>
             {briefEnabled && time !== null && time !== savedTime ? (
               <Button
-                label="Save time"
+                label={gt("Save time")}
                 disabled={busy || !canBrief || !validTime}
                 onPress={() => void run(() => actions.setMorningBrief(true, time))}
               />

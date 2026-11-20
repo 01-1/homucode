@@ -15,7 +15,12 @@ import {
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { findThemeFile, themeOnBase } from "@t3tools/shared/themeBase";
 import { themeCssLoadsRemoteFiles } from "@t3tools/shared/themeCss";
-import { BUILT_IN_THEME_IDS, UNPUBLISHABLE_THEME_IDS } from "@t3tools/shared/themePalettes";
+import {
+  BUILT_IN_THEME_IDS,
+  MOBILE_DEFAULT_THEME_ID,
+  MOBILE_THEME_IDS,
+  UNPUBLISHABLE_THEME_IDS,
+} from "@t3tools/shared/themePalettes";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -52,7 +57,8 @@ const MAX_THEME_FILES = 32;
  * JSON encoding, at up to 6 bytes per character for a `\uXXXX` escape, plus the colors.
  */
 export const MAX_THEME_FILE_BYTES = 6 * THEME_CSS_MAX_LENGTH + 16 * 1024;
-const MAX_THEME_TOTAL_BYTES = 6 * MAX_THEME_FILE_BYTES;
+// Clients cache every published theme in localStorage, which holds about 5 MB per origin.
+const MAX_THEME_TOTAL_BYTES = 2 * 1024 * 1024;
 
 /** A theme's background is `<id>.<extension>` beside `<id>.json`; earlier extensions win. */
 const THEME_BACKGROUND_EXTENSIONS = ["webp", "png", "jpg", "jpeg"] as const;
@@ -281,11 +287,15 @@ export const readPublishedThemes = Effect.fn(function* (themesDir: string) {
   return themes;
 });
 
-const unknownTheme = (themeId: string, themes: ReadonlyArray<EnvironmentTheme>) =>
+const unknownTheme = (
+  themeId: string,
+  themes: ReadonlyArray<EnvironmentTheme>,
+  builtInThemeIds: ReadonlyArray<string> = BUILT_IN_THEME_IDS,
+) =>
   new EnvironmentThemeRefusedError({
     themeId,
     problem: "is not a built-in or published theme.",
-    known: [...BUILT_IN_THEME_IDS, ...themes.map(({ id }) => id)],
+    known: [...builtInThemeIds, ...themes.map(({ id }) => id)],
   });
 
 /** What `EnvironmentThemeService.read` answers for this setting and these published themes. */
@@ -432,11 +442,13 @@ const make = Effect.gen(function* () {
     }
     // Timestamps make clients apply a set again when its value did not change. Theme and
     // appearance have one each, so setting one does not undo a later local choice of the other.
+    // The stock theme is an empty default with a set time, which clients adopt as stock.
+    const defaultTheme = themeId === MOBILE_DEFAULT_THEME_ID ? "" : themeId;
     const select = Effect.gen(function* () {
       const setAt = DateTime.formatIso(yield* DateTime.now);
       yield* settings
         .updateSettings({
-          ...(themeId === undefined ? {} : { defaultTheme: themeId, defaultThemeSetAt: setAt }),
+          ...(defaultTheme === undefined ? {} : { defaultTheme, defaultThemeSetAt: setAt }),
           ...(appearance === undefined
             ? {}
             : { defaultAppearance: appearance, defaultAppearanceSetAt: setAt }),
@@ -450,8 +462,8 @@ const make = Effect.gen(function* () {
         if (themeId === undefined) return yield* select;
         const { themes } = yield* refresh;
         if (theme === undefined) {
-          if (findThemeFile(themes, themeId) === undefined) {
-            return yield* unknownTheme(themeId, themes);
+          if (themeId !== MOBILE_DEFAULT_THEME_ID && findThemeFile(themes, themeId) === undefined) {
+            return yield* unknownTheme(themeId, themes, MOBILE_THEME_IDS);
           }
           return yield* select;
         }

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { Platform, View } from "react-native";
+import { useGT } from "gt-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Toast } from "../../components/ui/Toast";
+import { useAndroidFloatingTabs } from "../settings/appearance/AppearancePreferencesProvider";
 import {
   useDeviceType,
   useDuoBottomBarInset,
@@ -18,6 +20,8 @@ import {
 } from "./thread-undo-notice";
 
 export function ThreadUndoNotice(props: { readonly visible: boolean }) {
+  const gt = useGT();
+  const floatingTabsEnabled = useAndroidFloatingTabs();
   const notice = useThreadUndoNotice();
   const insets = useSafeAreaInsets();
   const columnMetrics = useNativeColumnLayoutMetrics();
@@ -68,8 +72,10 @@ export function ThreadUndoNotice(props: { readonly visible: boolean }) {
               columnMetrics?.safeArea.bottom ?? 0,
               (workspace?.bottomClearance ?? 0) - workspacePadding,
             ) + 8
-      : undefined;
-  // Android keeps New thread at the bottom, so the notice sits at the top instead of covering it.
+      : floatingTabsEnabled && keyboardHeight === 0
+        ? Math.max(insets.bottom + 12, workspace?.bottomClearance ?? 0)
+        : undefined;
+  // The docked Android layout keeps New thread at the bottom.
   const position = bottom === undefined ? { top: insets.top + 12 } : { bottom };
   return (
     <View
@@ -81,9 +87,15 @@ export function ThreadUndoNotice(props: { readonly visible: boolean }) {
     >
       <Toast
         placement={bottom === undefined ? "top" : "bottom"}
-        message={`${notice.action} thread`}
+        message={
+          notice.action === "Settled"
+            ? gt("Settled thread")
+            : notice.action === "Snoozed"
+              ? gt("Snoozed thread")
+              : gt("Unpinned thread")
+        }
         action={{
-          label: "Undo",
+          label: gt("Undo"),
           onPress: () => {
             void notice.undo();
           },

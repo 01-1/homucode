@@ -10,6 +10,12 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { migrationManifest, runMigrations } from "./Migrations.ts";
 
 import RepairStaleTitleRegeneration from "./Migrations/102_RepairStaleTitleRegeneration.ts";
+import IssueTrackerBindings from "./Migrations/103_IssueTrackerBindings.ts";
+import ActiveShellIndexIndexes from "./Migrations/104_ActiveShellIndexIndexes.ts";
+import BackgroundRecoveryIndexes from "./Migrations/105_BackgroundRecoveryIndexes.ts";
+import TurnStartReadIndexes from "./Migrations/106_TurnStartReadIndexes.ts";
+import DelegatedTaskReadIndexes from "./Migrations/107_DelegatedTaskReadIndexes.ts";
+import ThreadItemCounts from "./Migrations/108_ThreadItemCounts.ts";
 import HomuCompletion from "./Migrations/096_ThreadCompletionOutbox.ts";
 import HomuAssistance from "./Migrations/097_WorkAssistanceContinuity.ts";
 import HomuRouter from "./Migrations/098_ProjectRouterNotices.ts";
@@ -132,22 +138,43 @@ describe("runMigrations", () => {
       }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
-  it.effect.each(["upstream", "homu"] as const)(
+  it.effect.each(["upstream-title-repair", "upstream-v0.1.11", "homu"] as const)(
     "upgrades the shipped %s migration ledger into the combined history",
     (source) =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        yield* runMigrations({ toMigrationInclusive: source === "upstream" ? 95 : 101 });
-        if (source === "upstream") {
+        yield* runMigrations({ toMigrationInclusive: source === "homu" ? 102 : 95 });
+        const upstream = [
+          [96, "RepairStaleTitleRegeneration", RepairStaleTitleRegeneration],
+          [97, "IssueTrackerBindings", IssueTrackerBindings],
+          [98, "ActiveShellIndexIndexes", ActiveShellIndexIndexes],
+          [99, "BackgroundRecoveryIndexes", BackgroundRecoveryIndexes],
+          [100, "TurnStartReadIndexes", TurnStartReadIndexes],
+          [101, "DelegatedTaskReadIndexes", DelegatedTaskReadIndexes],
+          [102, "ThreadItemCounts", ThreadItemCounts],
+        ] as const;
+        const alreadyApplied =
+          source === "upstream-v0.1.11"
+            ? upstream
+            : source === "upstream-title-repair"
+              ? upstream.slice(0, 1)
+              : [];
+        for (const [id, name, migration] of alreadyApplied) {
           yield* sql.withTransaction(
-            RepairStaleTitleRegeneration.pipe(
+            migration.pipe(
               Effect.andThen(
-                sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (96, 'RepairStaleTitleRegeneration')`,
+                sql`INSERT INTO effect_sql_migrations(migration_id, name) VALUES (${id}, ${name})`,
               ),
             ),
           );
         }
-        yield* runMigrations();
+        const migrated = yield* runMigrations();
+        if (source === "homu") {
+          assert.deepStrictEqual(
+            migrated,
+            migrationManifest.filter(([id]) => id > 102),
+          );
+        }
         assert.deepStrictEqual(yield* history, migrationManifest);
         yield* sql`PRAGMA query_only = ON`;
         assert.deepStrictEqual(yield* runMigrations(), []);

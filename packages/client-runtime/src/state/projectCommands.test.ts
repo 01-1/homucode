@@ -145,7 +145,7 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* (
       permissions: [AuthFilesystemWriteScope],
     }),
   );
-  const openScratch = Effect.promise(() =>
+  const openScratch = Effect.exit(
     commands.openScratch.run(registry, { environmentId: ENVIRONMENT_ID, input: {} }),
   );
   return { registry, storedProject, openScratch, commands, metadataRequests, readResponse };
@@ -312,7 +312,7 @@ describe("writeFile metadata", () => {
         { suspendOnWaiting: true },
       ).pipe(Effect.forkChild);
       yield* Deferred.await(started);
-      const write = yield* Effect.promise(() =>
+      const write = yield* Effect.exit(
         h.commands.writeFile.run(h.registry, {
           environmentId: ENVIRONMENT_ID,
           input: { cwd: "/repo", relativePath: "foo", contents: "new" },
@@ -347,7 +347,7 @@ describe("writeFile metadata", () => {
         { kind: "file", byteLength: 5 },
         { kind: "file", byteLength: 5 },
       ]);
-      const result = yield* Effect.promise(() =>
+      const result = yield* Effect.exit(
         h.commands.writeFile.run(h.registry, {
           environmentId: ENVIRONMENT_ID,
           input: { cwd: "/repo", relativePath: "./foo", contents: "new" },
@@ -391,7 +391,7 @@ it.effect("updates a device-local project pin without dispatching a shared proje
     });
     const h = yield* makeHarness(pins);
     h.registry.set(h.storedProject, PROJECT);
-    const result = yield* Effect.promise(() =>
+    const result = yield* Effect.exit(
       h.commands.update.run(h.registry, {
         environmentId: ENVIRONMENT_ID,
         input: { projectId: PROJECT_ID, pinned: true },

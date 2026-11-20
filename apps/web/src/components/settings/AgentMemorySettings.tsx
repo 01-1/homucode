@@ -1,10 +1,11 @@
+import { useGT, T } from "gt-react";
 import { AgentMemorySettings as MemorySchema } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
 
 import { DraftInput } from "../ui/draft-input";
 import { Switch } from "../ui/switch";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
@@ -19,6 +20,8 @@ const LIMITS = [
 ] as const;
 
 export function AgentMemorySettings() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const { scope, connectedEnvironments } = useSettingsScope();
   const updateSettings = useUpdateScopedSettings();
   const environment = connectedEnvironments.length === 1 ? connectedEnvironments[0] : undefined;
@@ -26,20 +29,22 @@ export function AgentMemorySettings() {
   const memory = useScopedSettings((settings) => settings.agentMemory);
 
   return (
-    <SettingsSection id={searchableSetting("agent-memory").id} title="Agent memory controls">
+    <SettingsSection id={searchableSetting("agent-memory").id} title={gt("Agent memory controls")}>
       {(scope.kind === "all" || scope.kind === "environment") &&
       environment &&
       config?.environment.platform.os === "linux" ? (
         <>
           <SettingsRow
-            title="Enable memory controls"
-            description="Limit memory for new agents on Linux with systemd and cgroups v2. New agents wait when the group memory budget is full."
+            title={gt("Enable memory controls")}
+            description={gt(
+              "Limit memory for new agents on Linux with systemd and cgroups v2. New agents wait when the group memory budget is full.",
+            )}
             serverScoped
             managedPaths={["agentMemory.enabled"]}
             control={
               <Switch
                 checked={memory.enabled}
-                aria-label="Enable memory controls"
+                aria-label={gt("Enable memory controls")}
                 onCheckedChange={(enabled) => updateSettings({ agentMemory: { enabled } })}
               />
             }
@@ -57,7 +62,7 @@ export function AgentMemorySettings() {
                     key={environment.environmentId}
                     aria-label={label}
                     value={memory[key]?.toString() ?? ""}
-                    placeholder={isValid(null) ? "Automatic" : undefined}
+                    placeholder={isValid(null) ? gt("Automatic") : undefined}
                     inputMode="numeric"
                     onCommit={(draft) => {
                       const value = draft.trim() === "" ? null : Number(draft);
@@ -73,7 +78,7 @@ export function AgentMemorySettings() {
         </>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Select one Linux environment to configure memory controls.
+          <T>Select one Linux environment to configure memory controls.</T>
         </p>
       )}
     </SettingsSection>

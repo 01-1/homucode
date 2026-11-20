@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentThreadFolder } from "@t3tools/client-runtime/state/thread-folders";
@@ -90,6 +91,7 @@ function FolderRenameInput(props: {
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState(props.name);
   // Enter and Escape blur the input as it unmounts; that blur must not commit again.
   const settledRef = useRef(false);
@@ -112,7 +114,7 @@ function FolderRenameInput(props: {
       value={draft}
       dir="auto"
       maxLength={MAX_NAME_LENGTH}
-      aria-label="Folder name"
+      aria-label={gt("Folder name")}
       onChange={(event) => setDraft(event.target.value)}
       onFocus={(event) => event.currentTarget.select()}
       onKeyDown={handleKeyDown}
@@ -150,6 +152,9 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
   onRename: (folder: EnvironmentThreadFolder, name: string) => void;
   onContextMenu: (folder: EnvironmentThreadFolder, position: { x: number; y: number }) => void;
 }) {
+  const gt = useGT();
+  const settleLabel =
+    props.settleAction === "settle" ? gt("Settle folder") : gt("Un-settle folder");
   const { folder, folderKey, collapsed, threads, hiddenThreads, onToggle } = props;
   const canOperate = useEnvironmentScope(folder.environmentId, AuthOrchestrationOperateScope);
   const isRenaming = useThreadFolderRenameKey() === folderKey;
@@ -321,9 +326,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
               render={
                 <button
                   type="button"
-                  aria-label={
-                    props.settleAction === "settle" ? "Settle folder" : "Un-settle folder"
-                  }
+                  aria-label={settleLabel}
                   onClick={(event) => {
                     event.stopPropagation();
                     props.onSettle(folder, props.settleAction!);
@@ -340,9 +343,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
                 <Undo2Icon aria-hidden className="size-3.5" />
               )}
             </TooltipTrigger>
-            <TooltipPopup side="top">
-              {props.settleAction === "settle" ? "Settle folder" : "Un-settle folder"}
-            </TooltipPopup>
+            <TooltipPopup side="top">{settleLabel}</TooltipPopup>
           </Tooltip>
         )}
         {isRenaming ? null : (
@@ -364,6 +365,7 @@ export const SidebarThreadFolderEmptyRow = memo(function SidebarThreadFolderEmpt
   folderKey: string;
   style: SidebarThreadFolderStyle;
 }) {
+  const gt = useGT();
   return (
     <li
       aria-hidden
@@ -375,7 +377,7 @@ export const SidebarThreadFolderEmptyRow = memo(function SidebarThreadFolderEmpt
       )}
     >
       <span className="text-sidebar-muted-foreground">
-        {props.folder.threadIds.length > 0 ? "No active threads" : "No threads yet"}
+        {props.folder.threadIds.length > 0 ? gt("No active threads") : gt("No threads yet")}
       </span>
     </li>
   );

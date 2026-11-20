@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveMadoHomuSelection } from "@t3tools/client-runtime/madohomu";
@@ -92,7 +94,7 @@ export function useMadoHomuNewThread(environmentId: EnvironmentId, onOpen?: () =
     setCreating(true);
     return startMadoHomuThread(router)
       .then((started) => {
-        if (!started) toastManager.add({ type: "error", title: "Could not create thread" });
+        if (!started) toastManager.add({ type: "error", title: m(msg("Could not create thread")) });
       })
       .finally(() => {
         creatingRef.current = false;

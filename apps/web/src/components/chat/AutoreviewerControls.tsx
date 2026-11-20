@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   CommandId,
@@ -23,6 +24,7 @@ function ReviewerControl({
   threadRef: ScopedThreadRef;
   reviewer: OrchestrationV2Autoreviewer;
 }) {
+  const gt = useGT();
   const child = useQuietThreadShell({
     environmentId: threadRef.environmentId,
     threadId: reviewer.threadId,
@@ -43,8 +45,10 @@ function ReviewerControl({
         size="compact"
         variant="ghost-destructive"
         disabled={!allowed || stopping}
-        aria-label={`Stop autoreviewer ${title}`}
-        title="Stop this reviewer and its delegated work, and remove its attachment. History is kept."
+        aria-label={gt("Stop autoreviewer {title}", { title })}
+        title={gt(
+          "Stop this reviewer and its delegated work, and remove its attachment. History is kept.",
+        )}
         onClick={async () => {
           if (!allowed || stopping) return;
           setStopping(true);
@@ -61,16 +65,18 @@ function ReviewerControl({
             if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
               const failure = squashAtomCommandFailure(result);
               setError(
-                failure instanceof Error ? failure.message : "Could not stop the autoreviewer.",
+                failure instanceof Error ? failure.message : gt("Could not stop the autoreviewer."),
               );
             }
           } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "Could not stop the autoreviewer.");
+            setError(
+              cause instanceof Error ? cause.message : gt("Could not stop the autoreviewer."),
+            );
           }
           setStopping(false);
         }}
       >
-        {stopping ? "Stopping…" : "Stop autoreviewer"}
+        {stopping ? gt("Stopping…") : gt("Stop autoreviewer")}
       </Button>
       {error !== null ? (
         <p role="alert" className="w-full text-destructive">
@@ -88,9 +94,10 @@ export function AutoreviewerControls({
   threadRef: ScopedThreadRef | null;
   reviewers: ReadonlyArray<OrchestrationV2Autoreviewer>;
 }) {
+  const gt = useGT();
   if (threadRef === null || reviewers.length === 0) return null;
   return (
-    <section aria-label="Attached autoreviewers" className="mb-2 flex flex-col gap-1">
+    <section aria-label={gt("Attached autoreviewers")} className="mb-2 flex flex-col gap-1">
       {reviewers.map((reviewer) => (
         <ReviewerControl
           key={JSON.stringify([threadRef.environmentId, threadRef.threadId, reviewer.threadId])}

@@ -73,6 +73,7 @@ class TextKey extends Data.Class<{
   cwd: string | undefined;
   skills: NonNullable<OrchestrationV2SearchThreadInput["skills"]>;
   userTextFormat: NonNullable<OrchestrationV2SearchThreadInput["userTextFormat"]>;
+  theme: OrchestrationV2SearchThreadInput["theme"];
 }> {}
 
 function textKey(
@@ -80,6 +81,7 @@ function textKey(
   cwd: string | undefined,
   skills: TextKey["skills"],
   userTextFormat: TextKey["userTextFormat"],
+  theme: TextKey["theme"],
 ) {
   return new TextKey({
     text:
@@ -95,12 +97,13 @@ function textKey(
     cwd,
     skills,
     userTextFormat: item.type === "user_message" ? userTextFormat : "markdown",
+    theme,
   });
 }
 
 function parseText(key: TextKey): readonly string[] {
   return key.role === "plan"
-    ? searchablePlanSegments(key.text, key.cwd)
+    ? searchablePlanSegments(key.text, key.cwd, key.theme)
     : (searchableMessageSegments(
         {
           role: key.role,
@@ -110,6 +113,7 @@ function parseText(key: TextKey): readonly string[] {
         },
         key.cwd,
         key.skills,
+        key.theme,
         key.userTextFormat,
       ) ?? []);
 }
@@ -212,6 +216,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         query: Schema.optional(Schema.String),
         skills: OrchestrationV2SearchThreadInput.fields.skills,
         userTextFormat: Schema.String,
+        theme: OrchestrationV2SearchThreadInput.fields.theme,
       }),
     ),
   );
@@ -314,7 +319,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
       scans: CompletedScans,
       renderedSnapshot: RenderedSnapshot,
     ) {
-      const { threadId } = input;
+      const { threadId, theme } = input;
       const active = yield* sql<{ cwd: string | null }>`
       SELECT COALESCE(json_extract(t.payload_json, '$.worktreePath'), p.workspace_root) AS cwd
       FROM orchestration_v2_projection_threads t JOIN projection_projects p ON p.project_id = t.project_id
@@ -328,6 +333,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         query: input.query,
         skills: input.skills ?? [],
         userTextFormat: input.userTextFormat ?? "markdown",
+        ...(theme === undefined ? {} : { theme }),
       });
       const cached = scans.get(cacheKey);
       if (cached && cached.sequence === (yield* readRevision(cached.sourceThreadIds))) {
@@ -341,6 +347,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
         cwd,
         skills: input.skills ?? [],
         userTextFormat: input.userTextFormat ?? "markdown",
+        ...(theme === undefined ? {} : { theme }),
       });
       const rendered = renderedSnapshot.current;
       if (
@@ -461,6 +468,7 @@ export const makeThreadFind = Effect.fn("makeThreadFind")(function* (
               cwd,
               input.skills ?? [],
               input.userTextFormat ?? "markdown",
+              input.theme,
             );
             const segments =
               decoded.item.type === "assistant_message" &&

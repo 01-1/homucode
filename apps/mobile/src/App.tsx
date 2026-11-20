@@ -4,6 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
+import { useLocale, useGT } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Platform, StatusBar, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -40,6 +41,7 @@ import {
 } from "./features/agent-awareness/notificationNavigation";
 import {
   installAppShortcuts,
+  republishAppShortcuts,
   recordAppShortcutNavigationState,
 } from "./features/shortcuts/appShortcutsRuntime";
 import {
@@ -48,6 +50,8 @@ import {
   useAppearancePreferences,
 } from "./features/settings/appearance/AppearancePreferencesProvider";
 import { RootStack, rootPathnameFromState, workspaceLocationFromState } from "./Stack";
+import { I18nProvider } from "./i18n/I18nProvider";
+import { DEFAULT_LOCALE } from "./i18n/locales";
 import { appAtomRegistry } from "./state/atom-registry";
 import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-drafts";
 import { environmentThreadShells, threadEnvironment } from "./state/threads";
@@ -301,6 +305,19 @@ function SplashScreenCoordinator() {
   return null;
 }
 
+function QuickActionsLanguage() {
+  const locale = useLocale();
+  // Shortcuts published before the catalog loaded are English.
+  const publishedLocale = useRef(DEFAULT_LOCALE);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the launcher keeps quick action titles from the last publish, so a language switch republishes them
+  useEffect(() => {
+    if (Platform.OS !== "android" || publishedLocale.current === locale) return;
+    publishedLocale.current = locale;
+    republishAppShortcuts();
+  }, [locale]);
+  return null;
+}
+
 interface AppProps {
   readonly launchSurface?: string;
 }
@@ -311,11 +328,13 @@ export default function App({ launchSurface }: AppProps) {
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AndroidTaskSurfaceContext.Provider
-            value={hasAndroidTaskRouting ? (madohomu ? "madohomu" : "main") : null}
-          >
-            <AppContent madohomu={madohomu} />
-          </AndroidTaskSurfaceContext.Provider>
+          <I18nProvider>
+            <AndroidTaskSurfaceContext.Provider
+              value={hasAndroidTaskRouting ? (madohomu ? "madohomu" : "main") : null}
+            >
+              <AppContent madohomu={madohomu} />
+            </AndroidTaskSurfaceContext.Provider>
+          </I18nProvider>
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>
@@ -324,6 +343,7 @@ export default function App({ launchSurface }: AppProps) {
 
 // Android's MadoHomu task keeps its own stack when the main task navigates.
 function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
+  const gt = useGT();
   const { environments, isReady } = useMadoHomuEnvironmentStates();
   const wanted = madohomuLauncherWanted(environments, isReady);
   const destination = useMadoHomuEnvironments()[0]?.environmentId;
@@ -341,8 +361,8 @@ function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavig
         <Text className="text-lg font-semibold text-foreground">MadoHomu</Text>
         <Text className="text-center text-base text-foreground-muted">
           {wanted === false
-            ? "Enable MadoHomu in HomuCode Settings to use it."
-            : "Waiting for a connection to your MadoHomu environment."}
+            ? gt("Enable MadoHomu in HomuCode Settings to use it.")
+            : gt("Waiting for a connection to your MadoHomu environment.")}
         </Text>
       </View>
     );
@@ -386,6 +406,7 @@ function AppContent({ madohomu }: { readonly madohomu: boolean }) {
       <MadoHomuLauncherSync />
       {madohomu ? null : (
         <>
+          <QuickActionsLanguage />
           <SubscriptionUsageCoordinator />
           <ConnectDeviceApprovalCoordinator />
         </>

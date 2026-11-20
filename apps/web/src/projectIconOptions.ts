@@ -4,16 +4,19 @@ import {
   type ProjectIconColor,
   type ProjectIconOverride,
 } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { lucideIconNames } from "./lib/lucideIconByName";
 import { deriveProjectIdentity } from "./projectIdentity";
 export { PROJECT_ICON_COLORS, projectIconColorClassName } from "./projectIconColors";
+
+const isProjectMonogramText = Schema.is(ProjectMonogramText);
 
 export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
   readonly label: string;
   readonly icons: ReadonlyArray<string>;
 }> = [
   {
-    label: "Work",
+    label: msg("Work"),
     icons: [
       "briefcase",
       "kanban",
@@ -35,7 +38,7 @@ export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    label: "Code",
+    label: msg("Code"),
     icons: [
       "folder-code",
       "code-2",
@@ -58,7 +61,7 @@ export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    label: "Files",
+    label: msg("Files"),
     icons: [
       "folder",
       "folder-open",
@@ -77,7 +80,7 @@ export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    label: "Status",
+    label: msg("Status"),
     icons: [
       "circle-check",
       "circle-alert",
@@ -97,7 +100,7 @@ export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    label: "Objects",
+    label: msg("Objects"),
     icons: [
       "rocket",
       "wrench",
@@ -117,7 +120,7 @@ export const PROJECT_ICON_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    label: "Places",
+    label: msg("Places"),
     icons: [
       "globe-2",
       "cloud",
@@ -188,86 +191,93 @@ export const PROJECT_EMOJI_CATEGORIES: ReadonlyArray<{
   readonly emojis: ReadonlyArray<{ readonly emoji: string; readonly label: string }>;
 }> = [
   {
-    label: "Work and tech",
+    label: msg("Work and tech"),
     emojis: [
-      { emoji: "💻", label: "Computer" },
-      { emoji: "🖥️", label: "Desktop" },
-      { emoji: "⌨️", label: "Keyboard" },
-      { emoji: "📱", label: "Mobile" },
-      { emoji: "🤖", label: "Robot" },
-      { emoji: "🧠", label: "Brain" },
-      { emoji: "⚙️", label: "Gear" },
-      { emoji: "🛠️", label: "Tools" },
-      { emoji: "🔧", label: "Wrench" },
-      { emoji: "🧪", label: "Test tube" },
-      { emoji: "🗄️", label: "Database" },
-      { emoji: "☁️", label: "Cloud" },
-      { emoji: "📦", label: "Package" },
-      { emoji: "🔒", label: "Lock" },
-      { emoji: "🔑", label: "Key" },
-      { emoji: "🐛", label: "Bug" },
+      { emoji: "💻", label: msg("Computer") },
+      { emoji: "🖥️", label: msg("Desktop") },
+      { emoji: "⌨️", label: msg("Keyboard") },
+      { emoji: "📱", label: msg("Mobile") },
+      { emoji: "🤖", label: msg("Robot") },
+      { emoji: "🧠", label: msg("Brain") },
+      { emoji: "⚙️", label: msg("Gear") },
+      { emoji: "🛠️", label: msg("Tools") },
+      { emoji: "🔧", label: msg("Wrench") },
+      { emoji: "🧪", label: msg("Test tube") },
+      { emoji: "🗄️", label: msg("Database") },
+      { emoji: "☁️", label: msg("Cloud") },
+      { emoji: "📦", label: msg("Package") },
+      { emoji: "🔒", label: msg("Lock") },
+      { emoji: "🔑", label: msg("Key") },
+      { emoji: "🐛", label: msg("Bug") },
     ],
   },
   {
-    label: "Status",
+    label: msg("Status"),
     emojis: [
-      { emoji: "🚀", label: "Rocket" },
-      { emoji: "✨", label: "Sparkles" },
-      { emoji: "⚡", label: "Lightning" },
-      { emoji: "🔥", label: "Fire" },
-      { emoji: "💡", label: "Idea" },
-      { emoji: "🎯", label: "Target" },
-      { emoji: "✅", label: "Check" },
-      { emoji: "⏳", label: "Hourglass" },
-      { emoji: "📌", label: "Pin" },
-      { emoji: "🚧", label: "Construction" },
-      { emoji: "⭐", label: "Star" },
-      { emoji: "🏁", label: "Finish flag" },
-      { emoji: "📣", label: "Megaphone" },
-      { emoji: "💬", label: "Speech bubble" },
-      { emoji: "👀", label: "Eyes" },
-      { emoji: "❤️", label: "Heart" },
+      { emoji: "🚀", label: msg("Rocket") },
+      { emoji: "✨", label: msg("Sparkles") },
+      { emoji: "⚡", label: msg("Lightning") },
+      { emoji: "🔥", label: msg("Fire") },
+      { emoji: "💡", label: msg("Idea") },
+      { emoji: "🎯", label: msg("Target") },
+      { emoji: "✅", label: msg("Check") },
+      { emoji: "⏳", label: msg("Hourglass") },
+      { emoji: "📌", label: msg("Pin") },
+      { emoji: "🚧", label: msg("Construction") },
+      { emoji: "⭐", label: msg("Star") },
+      { emoji: "🏁", label: msg("Finish flag") },
+      { emoji: "📣", label: msg("Megaphone") },
+      { emoji: "💬", label: msg("Speech bubble") },
+      { emoji: "👀", label: msg("Eyes") },
+      { emoji: "❤️", label: msg("Heart") },
     ],
   },
   {
-    label: "Docs and data",
+    label: msg("Docs and data"),
     emojis: [
-      { emoji: "📚", label: "Books" },
-      { emoji: "📝", label: "Memo" },
-      { emoji: "📄", label: "Page" },
-      { emoji: "📁", label: "Folder" },
-      { emoji: "🗂️", label: "Dividers" },
-      { emoji: "📊", label: "Bar chart" },
-      { emoji: "📈", label: "Chart" },
-      { emoji: "🗓️", label: "Calendar" },
-      { emoji: "📎", label: "Paperclip" },
-      { emoji: "🔖", label: "Bookmark" },
+      { emoji: "📚", label: msg("Books") },
+      { emoji: "📝", label: msg("Memo") },
+      { emoji: "📄", label: msg("Page") },
+      { emoji: "📁", label: msg("Folder") },
+      { emoji: "🗂️", label: msg("Dividers") },
+      { emoji: "📊", label: msg("Bar chart") },
+      { emoji: "📈", label: msg("Chart") },
+      { emoji: "🗓️", label: msg("Calendar") },
+      { emoji: "📎", label: msg("Paperclip") },
+      { emoji: "🔖", label: msg("Bookmark") },
     ],
   },
   {
-    label: "Fun and life",
+    label: msg("Fun and life"),
     emojis: [
-      { emoji: "🎮", label: "Game" },
-      { emoji: "🎵", label: "Music" },
-      { emoji: "🎬", label: "Movie" },
-      { emoji: "🎨", label: "Palette" },
-      { emoji: "📷", label: "Camera" },
-      { emoji: "🛍️", label: "Shopping" },
-      { emoji: "☕", label: "Coffee" },
-      { emoji: "🍕", label: "Pizza" },
-      { emoji: "🏠", label: "Home" },
-      { emoji: "✈️", label: "Plane" },
-      { emoji: "🌱", label: "Seedling" },
-      { emoji: "🌍", label: "Globe" },
-      { emoji: "🦄", label: "Unicorn" },
-      { emoji: "🐙", label: "Octopus" },
-      { emoji: "🐳", label: "Whale" },
-      { emoji: "🦊", label: "Fox" },
+      { emoji: "🎮", label: msg("Game") },
+      { emoji: "🎵", label: msg("Music") },
+      { emoji: "🎬", label: msg("Movie") },
+      { emoji: "🎨", label: msg("Palette") },
+      { emoji: "📷", label: msg("Camera") },
+      { emoji: "🛍️", label: msg("Shopping") },
+      { emoji: "☕", label: msg("Coffee") },
+      { emoji: "🍕", label: msg("Pizza") },
+      { emoji: "🏠", label: msg("Home") },
+      { emoji: "✈️", label: msg("Plane") },
+      { emoji: "🌱", label: msg("Seedling") },
+      { emoji: "🌍", label: msg("Globe") },
+      { emoji: "🦄", label: msg("Unicorn") },
+      { emoji: "🐙", label: msg("Octopus") },
+      { emoji: "🐳", label: msg("Whale") },
+      { emoji: "🦊", label: msg("Fox") },
     ],
   },
 ];
 
 const MAX_EMOJI_LENGTH = 32;
+
+// The server also rejects monograms longer than two graphemes (ProjectCommands.ts).
+export function isValidProjectMonogram(text: string): boolean {
+  if (!isProjectMonogramText(text)) return false;
+  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
+  return Array.from(segments).length <= 2;
+}
 
 export function firstEmoji(value: string): string | null {
   const trimmed = value.trim();
@@ -287,7 +297,6 @@ export function firstEmoji(value: string): string | null {
 }
 
 const DEFAULT_ICON = "folder-code";
-const isMonogramText = Schema.is(ProjectMonogramText);
 
 export interface ProjectIconDraft {
   readonly mode: ProjectIconOverride["kind"];
@@ -320,5 +329,5 @@ export function projectIconFromDraft(draft: ProjectIconDraft): ProjectIconOverri
   if (draft.mode === "lucide") return { kind: "lucide", name: draft.iconName, color: draft.color };
   if (draft.mode === "emoji") return { kind: "emoji", emoji: draft.emoji };
   const text = normalizeMonogram(draft.letters);
-  return isMonogramText(text) ? { kind: "monogram", text, color: draft.color } : null;
+  return isValidProjectMonogram(text) ? { kind: "monogram", text, color: draft.color } : null;
 }

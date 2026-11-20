@@ -1,5 +1,6 @@
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceColumns";
 import Constants from "expo-constants";
+import { useGT } from "gt-react-native";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 
@@ -15,6 +16,8 @@ export function brandTitleOffset(): number {
   return Platform.isPad && !NATIVE_WORKSPACE_COLUMNS_SUPPORTED ? IPAD_HOME_TITLE_OFFSET : 0;
 }
 
+const HOMUCODE_WORDMARK = { prefix: "Homu", suffix: "Code" };
+
 export function CompactBrandTitle(
   props: {
     readonly allowFontScaling?: boolean;
@@ -23,6 +26,7 @@ export function CompactBrandTitle(
     readonly fit?: boolean;
   } = {},
 ) {
+  const gt = useGT();
   const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();
@@ -38,7 +42,7 @@ export function CompactBrandTitle(
         props.fit && showStage ? (event) => setFullWidth(event.nativeEvent.layout.width) : undefined
       }
       aria-level={1}
-      accessibilityLabel={props.accessibilityLabel ?? "HomuCode, Threads"}
+      accessibilityLabel={props.accessibilityLabel ?? gt("HomuCode, Threads")}
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -54,8 +58,8 @@ export function CompactBrandTitle(
         className="font-t3-medium text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
       >
-        <Text className="font-t3-medium text-foreground">Homu</Text>
-        {"Code"}
+        <Text className="font-t3-medium text-foreground">{HOMUCODE_WORDMARK.prefix}</Text>
+        {HOMUCODE_WORDMARK.suffix}
       </Text>
       {showStage ? (
         <View

@@ -1,3 +1,4 @@
+import { T, useGT, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useLocation } from "@tanstack/react-router";
 import {
@@ -47,6 +48,8 @@ export function FeatureOfferChoices({
   onChange: (selected: ReadonlySet<string>) => void;
   disabled?: boolean;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   return (
     <div className="grid gap-4">
       {offers.map((offer, index) => {
@@ -58,26 +61,28 @@ export function FeatureOfferChoices({
         };
         const options =
           offer.id === "subagents"
-            ? ["Homu delegation (delegate_task)", "Provider native subagents"]
+            ? [gt("Homu delegation (delegate_task)"), gt("Provider native subagents")]
             : offer.id === "thread-only-stop"
-              ? ["Only the current thread", "Current thread and its subagents"]
+              ? [gt("Only the current thread"), gt("Current thread and its subagents")]
               : null;
         return (
           <div key={offer.id}>
             {offer.page === 2 && index > 0 && offers[index - 1]?.page === 1 ? (
               <div className="mb-4 border-t pt-4">
-                <h3 className="font-medium">Extra features</h3>
+                <h3 className="font-medium">
+                  <T>Extra features</T>
+                </h3>
               </div>
             ) : null}
             {options ? (
               <div className="grid gap-2 text-sm">
-                <span className="font-medium">{offer.title}</span>
+                <span className="font-medium">{messages(offer.title)}</span>
                 <Select
                   value={selected.has(offer.id) ? "default" : "alternative"}
                   disabled={disabled}
                   onValueChange={(value) => select(value === "default")}
                 >
-                  <SelectTrigger aria-label={offer.title}>
+                  <SelectTrigger aria-label={messages(offer.title)}>
                     <SelectValue>{selected.has(offer.id) ? options[0] : options[1]}</SelectValue>
                   </SelectTrigger>
                   <SelectPopup>
@@ -85,7 +90,7 @@ export function FeatureOfferChoices({
                     <SelectItem value="alternative">{options[1]}</SelectItem>
                   </SelectPopup>
                 </Select>
-                <span className="text-muted-foreground">{offer.description}</span>
+                <span className="text-muted-foreground">{messages(offer.description)}</span>
               </div>
             ) : (
               <label className="flex cursor-pointer items-start gap-3 text-sm">
@@ -95,8 +100,8 @@ export function FeatureOfferChoices({
                   onCheckedChange={(checked) => select(Boolean(checked))}
                 />
                 <span>
-                  <span className="block font-medium">{offer.title}</span>
-                  <span className="text-muted-foreground">{offer.description}</span>
+                  <span className="block font-medium">{messages(offer.title)}</span>
+                  <span className="text-muted-foreground">{messages(offer.description)}</span>
                 </span>
               </label>
             )}
@@ -119,6 +124,7 @@ export function FeatureOffersDialog() {
 }
 
 function EnvironmentFeatureOffers({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
   const available = useAtomValue(serverEnvironment.settingsValueAtom(environmentId)) !== null;
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
@@ -166,19 +172,19 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       if (saved._tag === "Success" && apply && offers.some((offer) => offer.id === "settings-sync"))
         await updateClientSettings({ settingsSyncEnabled: selected.has("settings-sync") });
     } catch {
-      toastManager.add({ type: "error", title: "Could not save HomuCode features" });
+      toastManager.add({ type: "error", title: gt("Could not save HomuCode features") });
     }
     setBusy(false);
   };
   if (!available || !canWrite || offers.length === 0) return null;
   const title =
     followup === "building-t3"
-      ? "Building Homu"
+      ? gt("Building Homu")
       : followup === "device-name"
-        ? "Name this device"
+        ? gt("Name this device")
         : pages[step]?.[0]?.page === 2
-          ? "Extra features"
-          : "HomuCode features";
+          ? gt("Extra features")
+          : gt("HomuCode features");
   return (
     <Dialog
       open
@@ -190,10 +196,12 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            You can change these choices in Settings.
             {prefilled.sourceLabel
-              ? ` Filled in from your choices on ${prefilled.sourceLabel}.`
-              : null}
+              ? gt(
+                  "You can change these choices in Settings. Filled in from your choices on {source}.",
+                  { source: prefilled.sourceLabel },
+                )
+              : gt("You can change these choices in Settings.")}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
@@ -212,11 +220,11 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
         </DialogPanel>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => void save(false)}>
-            Not now
+            <T>Not now</T>
           </Button>
           {step > 0 ? (
             <Button variant="outline" disabled={busy} onClick={() => setStep(step - 1)}>
-              Back
+              <T context="button, previous step">Back</T>
             </Button>
           ) : null}
           <Button
@@ -226,7 +234,7 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
               else setStep(step + 1);
             }}
           >
-            {last ? "Save" : "Next"}
+            {last ? gt("Save") : gt("Next", { $context: "button, next step" })}
           </Button>
         </DialogFooter>
       </DialogPopup>

@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import {
@@ -8,7 +9,7 @@ import {
 import type { EnvironmentPresentation } from "~/state/environments";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 const AUTOMATIC = "automatic";
 
@@ -17,13 +18,15 @@ export function ScratchEnvironmentSettings({
 }: {
   readonly environments: ReadonlyArray<EnvironmentPresentation>;
 }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const scratchEnvironmentId = useClientSettings((settings) => settings.scratchEnvironmentId);
   const settingsHydrated = useClientSettingsHydrated();
 
   if (environments.length < 2) return null;
 
   const items = [
-    { value: AUTOMATIC, label: "Automatic" },
+    { value: AUTOMATIC, label: gt("Automatic") },
     ...environments.map((environment) => ({
       value: environment.environmentId as string,
       label: environment.label,
@@ -56,7 +59,7 @@ export function ScratchEnvironmentSettings({
           <SelectTrigger
             size="xs"
             className="w-40"
-            aria-label="Machine for threads without a project"
+            aria-label={gt("Machine for threads without a project")}
           >
             <SelectValue />
           </SelectTrigger>
@@ -71,9 +74,11 @@ export function ScratchEnvironmentSettings({
       }
     >
       <p className="px-3 py-2.5 text-xs text-muted-foreground sm:px-4">
-        Choose the machine that runs threads started without a project. Automatic uses this device's
-        own machine when it has one, otherwise the machine you are working on. If the chosen machine
-        is unavailable, Automatic applies. This applies only to this device.
+        <T>
+          Choose the machine that runs threads started without a project. Automatic uses this
+          device's own machine when it has one, otherwise the machine you are working on. If the
+          chosen machine is unavailable, Automatic applies. This applies only to this device.
+        </T>
       </p>
     </FoldedSettingsSection>
   );

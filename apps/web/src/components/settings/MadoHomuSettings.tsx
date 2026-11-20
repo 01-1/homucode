@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
@@ -21,7 +22,7 @@ import {
   SettingsSection,
   useSettingsSearchTargetId,
 } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -40,6 +41,7 @@ const WORKING_PLACEMENT_LABELS = {
 } as const satisfies Record<ServerSettings["madohomuWorkingPlacement"], string>;
 
 export function MadoHomuSettings() {
+  const gt = useGT();
   const { target, scope, search, selectScope } = useSettingsScope();
   const { environments } = useEnvironments();
   const destination = useAtomValue(madohomuDestinationEnvironmentIdAtom);
@@ -59,10 +61,10 @@ export function MadoHomuSettings() {
   const environmentPicker =
     environments.length > 1 || (machineId && !selected && environments.length > 0) ? (
       <SettingsRow
-        title="Environment"
+        title={gt("Environment")}
         control={
           <Select value={machineId ?? null} onValueChange={selectMachine}>
-            <SelectTrigger aria-label="MadoHomu environment" size="sm">
+            <SelectTrigger aria-label={gt("MadoHomu environment")} size="sm">
               <SelectValue>{label}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
@@ -85,8 +87,8 @@ export function MadoHomuSettings() {
         >
           <p className="p-4 text-sm text-muted-foreground">
             {label
-              ? `Reconnect ${label} to configure MadoHomu.`
-              : "Connect an environment to configure MadoHomu."}
+              ? gt("Reconnect {label} to configure MadoHomu.", { label })
+              : gt("Connect an environment to configure MadoHomu.")}
           </p>
         </SettingsSearchTarget>
       </SettingsSection>
@@ -111,6 +113,8 @@ function EnvironmentMadoHomuSettings({
   environmentPicker: ReactNode;
   onProjectChosen: (environmentId: EnvironmentId) => void;
 }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const actions = useMadoHomuActions(environmentId);
   const [time, setTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -135,10 +139,12 @@ function EnvironmentMadoHomuSettings({
       {environmentPicker}
       <SettingsRow
         {...searchableSetting("madohomu-enabled")}
-        description="A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned."
+        description={gt(
+          "A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned.",
+        )}
         control={
           <Switch
-            aria-label="Enable MadoHomu"
+            aria-label={gt("Enable MadoHomu")}
             checked={actions.settings.madohomuEnabled}
             disabled={!actions.canWrite || busy}
             onCheckedChange={(enabled) =>
@@ -157,13 +163,16 @@ function EnvironmentMadoHomuSettings({
                 search={{ environmentId }}
                 className="underline underline-offset-2"
               >
-                Open MadoHomu
+                <T>Open MadoHomu</T>
               </Link>
             </div>
           </SettingsRow>
           <SettingsRow
             {...searchableSetting("madohomu-code-visibility")}
-            description={`Which threads of the MadoHomu project HomuCode's thread list shows. ${MADOHOMU_SCRATCH_LABEL} threads are the ones not pinned in MadoHomu.`}
+            description={gt(
+              "Which threads of the MadoHomu project HomuCode's thread list shows. {scratch} threads are the ones not pinned in MadoHomu.",
+              { scratch: MADOHOMU_SCRATCH_LABEL },
+            )}
             control={
               <Select
                 value={actions.settings.madohomuCodeVisibility}
@@ -174,7 +183,7 @@ function EnvironmentMadoHomuSettings({
                 }}
               >
                 <SelectTrigger
-                  aria-label="Show MadoHomu threads in HomuCode"
+                  aria-label={gt("Show MadoHomu threads in HomuCode")}
                   className="w-36"
                   size="sm"
                 >
@@ -198,7 +207,10 @@ function EnvironmentMadoHomuSettings({
           />
           <SettingsRow
             {...searchableSetting("madohomu-working-placement")}
-            description={`Where a ${MADOHOMU_SCRATCH_LABEL} thread shows in MadoHomu while it is working. Pinned threads keep their place.`}
+            description={gt(
+              "Where a {scratch} thread shows in MadoHomu while it is working. Pinned threads keep their place.",
+              { scratch: MADOHOMU_SCRATCH_LABEL },
+            )}
             control={
               <Select
                 value={actions.settings.madohomuWorkingPlacement}
@@ -208,7 +220,7 @@ function EnvironmentMadoHomuSettings({
                   void run(() => actions.save({ madohomuWorkingPlacement: value }));
                 }}
               >
-                <SelectTrigger aria-label="Working threads" className="w-36" size="sm">
+                <SelectTrigger aria-label={gt("Working threads")} className="w-36" size="sm">
                   <SelectValue>
                     {WORKING_PLACEMENT_LABELS[actions.settings.madohomuWorkingPlacement]}
                   </SelectValue>
@@ -229,10 +241,12 @@ function EnvironmentMadoHomuSettings({
           />
           <SettingsRow
             {...searchableSetting("madohomu-morning-brief")}
-            description="A daily summary of work in progress, decisions waiting on you, and proposed next steps. The agent plans and asks for approval before acting."
+            description={gt(
+              "A daily summary of work in progress, decisions waiting on you, and proposed next steps. The agent plans and asks for approval before acting.",
+            )}
             control={
               <Switch
-                aria-label="Morning brief"
+                aria-label={gt("Morning brief")}
                 checked={briefEnabled}
                 disabled={
                   busy ||
@@ -250,7 +264,7 @@ function EnvironmentMadoHomuSettings({
           >
             <div className="flex items-center gap-3 py-2">
               <label className="text-sm" htmlFor="madohomu-brief-time">
-                Daily time
+                <T>Daily time</T>
               </label>
               <Input
                 id="madohomu-brief-time"
@@ -264,7 +278,7 @@ function EnvironmentMadoHomuSettings({
                 }}
               />
               <span className="text-xs text-muted-foreground">
-                {actions.taskQuery.data?.timeZone ?? "Server time"}
+                {actions.taskQuery.data?.timeZone ?? gt("Server time")}
               </span>
             </div>
             {actions.taskQuery.error ? (
@@ -285,15 +299,17 @@ function MadoHomuDesktopLauncherSetting({
   busy: boolean;
   run: (action: () => Promise<boolean>) => Promise<void>;
 }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const launcherEnabled = useAtomValue(madohomuDesktopLauncherEnabledAtom);
   const canWrite = useAtomValue(canUpdateMadoHomuDesktopLauncherAtom);
   return (
     <SettingsRow
       {...searchableSetting("madohomu-desktop-app")}
-      description="Add MadoHomu to this desktop's app launcher. Opens a separate window."
+      description={gt("Add MadoHomu to this desktop's app launcher. Opens a separate window.")}
       control={
         <Switch
-          aria-label="MadoHomu desktop app"
+          aria-label={gt("MadoHomu desktop app")}
           checked={launcherEnabled === true}
           disabled={busy || !canWrite}
           onCheckedChange={(enabled) =>
@@ -301,7 +317,7 @@ function MadoHomuDesktopLauncherSetting({
               saveMadoHomuDesktopLauncherEnabled(enabled).catch(() => {
                 toastManager.add({
                   type: "error",
-                  title: "Could not save the MadoHomu desktop preference",
+                  title: gt("Could not save the MadoHomu desktop preference"),
                 });
                 return false;
               }),

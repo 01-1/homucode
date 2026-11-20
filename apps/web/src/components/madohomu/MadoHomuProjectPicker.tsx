@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg, useGT, T } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { madoHomuProjectSelectionIssue } from "@t3tools/client-runtime/madohomu";
 import { projectKey } from "@t3tools/client-runtime/state/entities";
@@ -88,9 +90,9 @@ function useProjectPicker(environmentId: EnvironmentId | null, onChosen?: OnProj
         type: "error",
         title:
           projectId === null
-            ? "Could not clear MadoHomu’s project"
-            : "Could not select MadoHomu’s project",
-        description: error instanceof Error ? error.message : "Try again.",
+            ? m(msg("Could not clear MadoHomu’s project"))
+            : m(msg("Could not select MadoHomu’s project")),
+        description: error instanceof Error ? error.message : m(msg("Try again.")),
       });
     }
   };
@@ -147,6 +149,7 @@ function ProjectPicker({
   showNew: boolean;
   showClear?: boolean;
 }) {
+  const gt = useGT();
   if (!showNew && picker.projects.length === 0 && (!showClear || picker.currentId === null))
     return null;
   return (
@@ -157,14 +160,14 @@ function ProjectPicker({
             variant="outline"
             className="w-full min-w-48 justify-between"
             disabled={picker.pending}
-            aria-label="MadoHomu project"
+            aria-label={gt("MadoHomu project")}
           />
         }
       >
         <span className="min-w-0 truncate">
           {picker.current
             ? `${picker.current.title} · ${picker.current.machine.label}`
-            : "Choose a project"}
+            : gt("Choose a project")}
         </span>
         <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
       </MenuTrigger>
@@ -213,7 +216,7 @@ function ProjectMenuItems({
         <>
           <MenuItem disabled={addTargets.length === 0} onClick={newProject}>
             <FolderPlusIcon />
-            New project…
+            <T>New project…</T>
           </MenuItem>
           {projects.length > 0 && <MenuSeparator />}
         </>
@@ -248,7 +251,7 @@ function ProjectMenuItems({
         <>
           <MenuSeparator />
           <MenuItem disabled={clear === null} onClick={clear ?? undefined}>
-            Clear project
+            <T>Clear project</T>
           </MenuItem>
         </>
       )}
@@ -258,11 +261,12 @@ function ProjectMenuItems({
 
 export function MadoHomuNoProject({
   environmentId,
-  message = "Make a new project for MadoHomu to focus on, or choose one you already have.",
+  message,
 }: {
   environmentId: EnvironmentId | null;
   message?: string;
 }) {
+  const gt = useGT();
   const navigate = useNavigate();
   const picker = useProjectPicker(
     environmentId,
@@ -271,14 +275,17 @@ export function MadoHomuNoProject({
   return (
     <div className="mx-auto w-full max-w-md space-y-4 p-6">
       <h1 className="text-xl font-semibold">MadoHomu</h1>
-      <p>{message}</p>
+      <p>
+        {message ??
+          gt("Make a new project for MadoHomu to focus on, or choose one you already have.")}
+      </p>
       <Button
         className="w-full"
         disabled={picker.addTargets.length === 0}
         onClick={picker.newProject}
       >
         <FolderPlusIcon />
-        New project…
+        <T>New project…</T>
       </Button>
       <ProjectPicker picker={picker} showNew={false} />
     </div>

@@ -477,11 +477,7 @@ export const layer: Layer.Layer<
           switch (input.event.type) {
             case "app_thread.created": {
               const offered = input.event.appThread;
-              const existing = yield* projections.getThread(offered.id).pipe(
-                Effect.catchTags({
-                  ProjectionStoreThreadNotFoundError: () => Effect.succeed(null),
-                }),
-              );
+              const existing = yield* projections.findThread(offered.id);
               if (
                 existing !== null &&
                 (input.event.createOnly === true ||
@@ -492,11 +488,7 @@ export const layer: Layer.Layer<
               const parentId = offered.lineage.parentThreadId;
               const parent =
                 existing === null && parentId !== null
-                  ? yield* projections.getThread(parentId).pipe(
-                      Effect.catchTags({
-                        ProjectionStoreThreadNotFoundError: () => Effect.succeed(null),
-                      }),
-                    )
+                  ? yield* projections.findThread(parentId)
                   : null;
               const inheritPin =
                 parent !== null &&

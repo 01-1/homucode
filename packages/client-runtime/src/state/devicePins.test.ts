@@ -51,7 +51,7 @@ describe("device pins", () => {
           environmentId: EnvironmentId,
           pinned: boolean,
         ) =>
-          Effect.promise(() =>
+          Effect.exit(
             target.pins.setProject.run(registry, {
               environmentId,
               projectId: v2Project.id,

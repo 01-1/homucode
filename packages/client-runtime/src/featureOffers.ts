@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import {
   isManagedSettingPath,
   managedCapabilityDenial,
@@ -38,145 +40,159 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
     id: "madohomu",
     page: 1,
     title: "MadoHomu",
-    description:
+    description: msg(
       "A focused view for one project with your threads in sections, its own desktop app and an optional morning brief.",
+    ),
   },
   {
     id: "quick-model",
     page: 1,
-    title: "Quick model",
-    description: "Pick the model a /q message runs one quick turn on.",
+    title: msg("Quick model"),
+    description: msg("Pick the model a /q message runs one quick turn on."),
   },
   {
     id: "settings-sync",
     page: 1,
-    title: "Settings sync",
-    description: "Keep this device's theme, chat and other settings in sync through your server.",
+    title: msg("Settings sync"),
+    description: msg(
+      "Keep this device's theme, chat and other settings in sync through your server.",
+    ),
   },
   {
     id: "status-line",
     page: 1,
-    title: "Status line",
-    description: "Show a line with model, context and usage information.",
+    title: msg("Status line"),
+    description: msg("Show a line with model, context and usage information."),
     setting: "statusLineEnabled",
   },
   {
     id: "subagents",
     page: 2,
-    title: "Subagents",
-    description: "Choose how agents delegate work.",
+    title: msg("Subagents"),
+    description: msg("Choose how agents delegate work."),
     setting: "preferNativeSubagents",
     enabledValue: false,
   },
   {
     id: "bare-stop-wait",
     page: 2,
-    title: "Stop or wait jumps the queue",
-    description:
+    title: msg("Stop or wait jumps the queue"),
+    description: msg(
       "A message containing only stop or wait stops the running turn and goes first in the queue.",
+    ),
     setting: "bareStopWaitEnabled",
   },
   {
     id: "claude-steer-recovery",
     page: 2,
-    title: "Resend unread steers after Stop",
-    description:
+    title: msg("Resend unread steers after Stop"),
+    description: msg(
       "When you steer Claude while it's running a tool, Claude reads your message only after the tool finishes. If you press Stop first, the message is normally lost. With this on, Homu sends it again for you.",
+    ),
     setting: "claudeSteersSurviveStop",
   },
   {
     id: "reask-after-restart",
     page: 2,
-    title: "Ask again after a restart",
-    description:
+    title: msg("Ask again after a restart"),
+    description: msg(
       "When HomuCode restarts while a thread waits on an approval, question or secret, the thread resumes and asks again instead of staying stopped.",
+    ),
     setting: "reaskPendingRequestsAfterRestart",
   },
   {
     id: "apply-model-change-now",
     page: 2,
-    title: "Apply model and effort changes now",
-    description:
+    title: msg("Apply model and effort changes now"),
+    description: msg(
       "Changing a working thread's model or effort restarts its turn on the new setting, and it carries on without a new message. Codex loses most of its prompt cache when effort changes.",
+    ),
     setting: "applyModelChangeNow",
   },
   {
     id: "faster-phone-launch",
     page: 2,
     platform: "mobile",
-    title: "Faster phone launch",
-    description:
+    title: msg("Faster phone launch"),
+    description: msg(
       "Connect to T3 Connect machines using the last signed-in account before sign-in loads.",
+    ),
   },
   {
     id: "sent-from",
     page: 2,
-    title: "Tell agents who sent each message",
-    description:
+    title: msg("Tell agents who sent each message"),
+    description: msg(
       "End every message an agent receives with a [T3] line: a human and their device, or what sent an automatic message.",
+    ),
     setting: "messageSentFromEnabled",
   },
   {
     id: "project-in-title",
     page: 2,
-    title: "Project name in thread titles",
-    description: "Include the project name when generating thread titles.",
+    title: msg("Project name in thread titles"),
+    description: msg("Include the project name when generating thread titles."),
     setting: "threadTitleIncludeProjectName",
   },
   {
     id: "title-id-prefix",
     page: 2,
-    title: "Thread title ID prefix",
-    description: "Include a short thread ID in generated titles.",
+    title: msg("Thread title ID prefix"),
+    description: msg("Include a short thread ID in generated titles."),
     setting: "threadTitleIdPrefix",
   },
   {
     id: "thread-only-stop",
     page: 2,
-    title: "Stop behavior",
-    description: "Shift-click, background Stop and /stopall also stop subagents.",
+    title: msg("Stop behavior"),
+    description: msg("Shift-click, background Stop and /stopall also stop subagents."),
     setting: "stopThreadSubagents",
     enabledValue: false,
   },
   {
     id: "background-git",
     page: 2,
-    title: "Background Git",
-    description:
+    title: msg("Background Git"),
+    description: msg(
       "Refresh Git status and fetch in the background. Restart to apply; T3CODE_BACKGROUND_GIT overrides this choice.",
+    ),
     setting: "backgroundGitEnabled",
   },
   {
     id: "auto-update-when-idle",
     page: 2,
-    title: "Update when agents are idle",
-    description:
+    title: msg("Update when agents are idle"),
+    description: msg(
       "Install app updates once this machine's agents and keyboard and mouse have been idle for five minutes, and each provider's updates once its own agents have.",
+    ),
     setting: "autoUpdateWhenIdle",
   },
   {
     id: "building-t3",
     page: 2,
-    title: "Set up building HomuCode",
-    description:
+    title: msg("Set up building HomuCode"),
+    description: msg(
       "Configure cloud builds, Android APK builds and loading AppImages on the next page.",
+    ),
     setting: "buildToolsSettingsVisible",
   },
   {
     id: "connect-long-sessions",
     page: 2,
     setting: "connectDeviceLongSessions",
-    title: "Stay signed in for 30 days",
-    description:
+    title: msg("Stay signed in for 30 days"),
+    description: msg(
       "T3 Connect devices reconnect without a cloud round trip. Revoke a device in Settings → Sharing & access to cut it off.",
+    ),
   },
   {
     id: "claude-hold-background-commands",
     page: 2,
     setting: "claudeHoldBackgroundCommands",
-    title: "Keep Claude threads working during background commands",
-    description:
+    title: msg("Keep Claude threads working during background commands"),
+    description: msg(
       "A Claude thread stays Working while a command it started in the background is still running, unless the agent releases it. A dev server left running keeps the thread Waiting until it ends.",
+    ),
   },
 ];
 
@@ -190,23 +206,33 @@ const LEGACY_SETUP_INTRODUCED: Partial<Record<keyof ServerSettings, number>> = {
 
 type HomuSetupEnvironment = Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "capabilities">;
 
-function homuUnavailableReason(environment: HomuSetupEnvironment | null | undefined): string {
-  if (!environment) return "Waiting for server information.";
+function homuUnavailableReason(
+  environment: HomuSetupEnvironment | null | undefined,
+  resolve: MFunctionType,
+): string {
+  if (!environment) return resolve(msg("Waiting for server information."));
   if (/-homu\./.test(environment.serverVersion)) {
-    return `HomuCode ${environment.serverVersion} lacks support for this feature. Update the server to use it.`;
+    return resolve(
+      msg("HomuCode {version} lacks support for this feature. Update the server to use it.", {
+        version: environment.serverVersion,
+      }),
+    );
   }
-  return "This server does not support this HomuCode feature.";
+  return resolve(msg("This server does not support this HomuCode feature."));
 }
 
 export function getBuildToolsUnavailableReason(
   environment: HomuSetupEnvironment | null | undefined,
   canWrite?: boolean,
+  resolve: MFunctionType = mFallback,
 ): string | null {
   const legacyRelease = legacyHomuRelease(environment?.serverVersion);
   if (!(environment?.capabilities.buildTools ?? legacyRelease >= 32)) {
-    return homuUnavailableReason(environment);
+    return homuUnavailableReason(environment, resolve);
   }
-  return canWrite === false ? "This connection is read-only for build settings." : null;
+  return canWrite === false
+    ? resolve(msg("This connection is read-only for build settings."))
+    : null;
 }
 
 function legacyHomuRelease(version: string | undefined): number {
@@ -224,9 +250,10 @@ interface HomuSetupPermissions {
 function managedHomuSettingReason(
   policy: ManagedPolicySummary | undefined,
   setting: keyof ServerSettings,
+  resolve: MFunctionType,
 ): string | null {
   return policy && isManagedSettingPath(policy, setting)
-    ? `${policy.organization} manages this setting.`
+    ? resolve(msg("{organization} manages this setting.", { organization: policy.organization }))
     : null;
 }
 
@@ -234,25 +261,27 @@ export function getHomuSettingUnavailableReason(
   environment: HomuSetupEnvironment | null | undefined,
   setting: keyof ServerSettings,
   permissions: HomuSetupPermissions = {},
+  resolve: MFunctionType = mFallback,
 ): string | null {
   const supported =
     environment?.capabilities.homuSetup ??
     legacyHomuRelease(environment?.serverVersion) >= (LEGACY_SETUP_INTRODUCED[setting] ?? 32);
   if (!supported || (setting === "statusLineEnabled" && !environment?.capabilities.statusLine)) {
-    return homuUnavailableReason(environment);
+    return homuUnavailableReason(environment, resolve);
   }
   if (setting === "buildToolsSettingsVisible") {
-    const reason = getBuildToolsUnavailableReason(environment, permissions.canWrite);
+    const reason = getBuildToolsUnavailableReason(environment, permissions.canWrite, resolve);
     if (reason) return reason;
   }
-  if (permissions.canWrite === false) return "This connection is read-only for server settings.";
-  const managed = managedHomuSettingReason(permissions.managedPolicy, setting);
+  if (permissions.canWrite === false)
+    return resolve(msg("This connection is read-only for server settings."));
+  const managed = managedHomuSettingReason(permissions.managedPolicy, setting, resolve);
   if (managed) return managed;
   if (setting === "connectDeviceLongSessions") {
     return (
       managedCapabilityDenial(permissions.managedPolicy, "connect") ??
       (permissions.canWriteAccess === false
-        ? "This connection cannot change access settings."
+        ? resolve(msg("This connection cannot change access settings."))
         : null)
     );
   }
@@ -267,13 +296,18 @@ export function supportsHomuSettingsSync(environment: HomuSetupEnvironment): boo
 export function getHomuSetupSupport(
   environment: HomuSetupEnvironment | null | undefined,
   permissions: HomuSetupPermissions = {},
+  resolve: MFunctionType = mFallback,
 ): {
   readonly supportedFeatureIds: ReadonlySet<string>;
   readonly unavailableFeatureReasons: ReadonlyMap<string, string>;
   readonly buildToolsUnavailableReason: string | null;
   readonly featureOffersSeenUnavailableReason: string | null;
 } {
-  const buildStatusReason = getBuildToolsUnavailableReason(environment, permissions.canWrite);
+  const buildStatusReason = getBuildToolsUnavailableReason(
+    environment,
+    permissions.canWrite,
+    resolve,
+  );
   const supportedFeatureIds = new Set<string>();
   const unavailableFeatureReasons = new Map<string, string>();
   for (const offer of FEATURE_OFFERS) {
@@ -283,7 +317,7 @@ export function getHomuSetupSupport(
     }
     const setting =
       offer.setting ?? (offer.id === "madohomu" ? "madohomuEnabled" : "quickModelSelection");
-    const reason = getHomuSettingUnavailableReason(environment, setting, permissions);
+    const reason = getHomuSettingUnavailableReason(environment, setting, permissions, resolve);
     if (reason) unavailableFeatureReasons.set(offer.id, reason);
     else supportedFeatureIds.add(offer.id);
   }
@@ -293,10 +327,13 @@ export function getHomuSetupSupport(
     featureOffersSeenUnavailableReason: managedHomuSettingReason(
       permissions.managedPolicy,
       "featureOffersSeen",
+      resolve,
     ),
     buildToolsUnavailableReason:
       buildStatusReason ??
-      (permissions.canRunBuildTools === false ? "This connection cannot run build tools." : null),
+      (permissions.canRunBuildTools === false
+        ? resolve(msg("This connection cannot run build tools."))
+        : null),
   };
 }
 

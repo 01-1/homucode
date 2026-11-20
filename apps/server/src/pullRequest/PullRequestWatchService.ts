@@ -3,6 +3,7 @@ import {
   ThreadId,
   type OrchestrationV2ThreadShell,
   type PullRequestUnavailableError,
+  type PullRequestWatchUntil,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -15,6 +16,7 @@ import * as Schema from "effect/Schema";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as PullRequestService from "./PullRequestService.ts";
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   resolveTarget,
   type PullRequestTarget,
@@ -53,6 +55,15 @@ export class PullRequestWatchFromSubagentError extends Schema.TaggedError<PullRe
   }
 }
 
+export class PullRequestWatchBackgroundGitDisabledError extends Schema.TaggedError<PullRequestWatchBackgroundGitDisabledError>()(
+  "PullRequestWatchBackgroundGitDisabledError",
+  {},
+) {
+  override get message(): string {
+    return "Pull request watches require Background Git. Turn it on and restart HomuCode to start a watch.";
+  }
+}
+
 export class PullRequestWatchThreadNotFoundError extends Schema.TaggedError<PullRequestWatchThreadNotFoundError>()(
   "PullRequestWatchThreadNotFoundError",
   { threadId: ThreadId },
@@ -69,11 +80,13 @@ export class PullRequestWatchService extends Context.Service<
       readonly threadId: ThreadId;
       readonly target: PullRequestTarget;
       readonly watching: boolean;
+      readonly until?: PullRequestWatchUntil | undefined;
     }) => Effect.Effect<
       ResolvedTarget & { readonly watching: boolean; readonly wasWatching: boolean },
       | PullRequestWatchFailedError
       | PullRequestNotOpenError
       | PullRequestWatchFromSubagentError
+      | PullRequestWatchBackgroundGitDisabledError
       | PullRequestWatchThreadNotFoundError
       | PullRequestTargetError
       | PullRequestUnavailableError
@@ -104,8 +117,12 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly target: PullRequestTarget;
     readonly watching: boolean;
+    readonly until?: PullRequestWatchUntil | undefined;
   }) {
     const { watching } = input;
+    if (watching && !(yield* BackgroundGitEnabled)) {
+      return yield* new PullRequestWatchBackgroundGitDisabledError();
+    }
     const thread = yield* requireThread(input.threadId);
     const project = yield* projects.getShell(thread.projectId).pipe(
       Effect.map(Option.getOrUndefined),
@@ -123,8 +140,10 @@ const make = Effect.gen(function* () {
     if (watching && before?.snapshot?.state === "merged") {
       return yield* new PullRequestNotOpenError({ state: "merged" });
     }
+    // A pending rollup has no failure yet, so any failure the first read finds is news.
+    let checksPendingAtStart: boolean | undefined;
     if (watching && before?.watch === undefined) {
-      yield* pullRequests
+      checksPendingAtStart = yield* pullRequests
         .summary(
           {
             projectId: thread.projectId,
@@ -139,11 +158,12 @@ const make = Effect.gen(function* () {
           Effect.flatMap((summary) =>
             summary.state === "merged"
               ? Effect.fail(new PullRequestNotOpenError({ state: "merged" }))
-              : Effect.void,
+              : Effect.succeed(summary.checksState === "pending"),
           ),
           Effect.catchTags({
             // Host and transport errors can recover while the watch is active.
-            PullRequestOperationError: () => Effect.void,
+            // A failed read leaves the seed to the link's last sync.
+            PullRequestOperationError: () => Effect.undefined,
           }),
         );
     }
@@ -158,6 +178,10 @@ const make = Effect.gen(function* () {
         number: target.number,
         watching,
         ...(watching ? { link: { url: target.url, source: "agent" as const } } : {}),
+        ...(watching && input.until !== undefined && { until: input.until }),
+        ...(watching && checksPendingAtStart !== undefined
+          ? { checksPending: checksPendingAtStart }
+          : {}),
       })
       .pipe(
         Effect.catchCause((cause) =>

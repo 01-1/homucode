@@ -1,3 +1,4 @@
+import { msg, useGT, useMessages, T } from "gt-react";
 import {
   AlarmClockIcon,
   ArrowDownUpIcon,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { type ElementType, useState } from "react";
 
+import type { MessageResolver } from "../../i18n/messages";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 
@@ -58,30 +60,38 @@ interface FilterOption<Value extends string> {
 }
 
 const STATUS_OPTIONS: ReadonlyArray<FilterOption<SidebarSearchStatus>> = [
-  { value: "working", label: "Working", Icon: LoaderCircleIcon },
-  { value: "needs-you", label: "Needs you", Icon: CircleAlertIcon },
-  { value: "failed", label: "Failed", Icon: CircleXIcon },
-  { value: "unread", label: "Unread", Icon: CircleDotIcon },
+  {
+    value: "working",
+    label: msg("Working", { $context: "thread status" }),
+    Icon: LoaderCircleIcon,
+  },
+  { value: "needs-you", label: msg("Needs you"), Icon: CircleAlertIcon },
+  { value: "failed", label: msg("Failed"), Icon: CircleXIcon },
+  { value: "unread", label: msg("Unread"), Icon: CircleDotIcon },
 ];
 
 const SHELF_OPTIONS: ReadonlyArray<FilterOption<SidebarSearchShelf>> = [
-  { value: "pinned", label: "Pinned", Icon: PinIcon },
-  { value: "active", label: "Active", Icon: InboxIcon },
-  { value: "snoozed", label: "Snoozed", Icon: AlarmClockIcon },
-  { value: "settled", label: "Settled", Icon: CheckCheckIcon },
+  { value: "pinned", label: msg("Pinned", { $context: "thread shelf or section" }), Icon: PinIcon },
+  { value: "active", label: msg("Active", { $context: "thread shelf" }), Icon: InboxIcon },
+  { value: "snoozed", label: msg("Snoozed", { $context: "thread shelf" }), Icon: AlarmClockIcon },
+  { value: "settled", label: msg("Settled", { $context: "thread shelf" }), Icon: CheckCheckIcon },
 ];
 
 const UPDATED_OPTIONS: ReadonlyArray<FilterOption<SidebarSearchUpdated>> = [
-  { value: "any", label: "Any time", Icon: LayersIcon },
-  { value: "day", label: "Past day", Icon: ClockIcon },
-  { value: "week", label: "Past week", Icon: ClockIcon },
-  { value: "month", label: "Past month", Icon: ClockIcon },
-  { value: "older", label: "Older than a month", Icon: ClockIcon },
+  {
+    value: "any",
+    label: msg("Any time", { $context: "thread filter date range" }),
+    Icon: LayersIcon,
+  },
+  { value: "day", label: msg("Past day"), Icon: ClockIcon },
+  { value: "week", label: msg("Past week"), Icon: ClockIcon },
+  { value: "month", label: msg("Past month"), Icon: ClockIcon },
+  { value: "older", label: msg("Older than a month"), Icon: ClockIcon },
 ];
 
 const FEATURE_OPTIONS: ReadonlyArray<FilterOption<SidebarSearchFeature>> = [
-  { value: "pull-request", label: "Has a pull request", Icon: PullRequestGlyph.pullRequest },
-  { value: "worktree", label: "In a worktree", Icon: FolderGitIcon },
+  { value: "pull-request", label: msg("Has a pull request"), Icon: PullRequestGlyph.pullRequest },
+  { value: "worktree", label: msg("In a worktree"), Icon: FolderGitIcon },
 ];
 
 export interface SidebarSearchChoice {
@@ -97,10 +107,10 @@ function toggled<Value>(values: ReadonlyArray<Value>, value: Value, on: boolean)
   return on ? [...values, value] : values.filter((candidate) => candidate !== value);
 }
 
-function selectionSummary(selected: ReadonlyArray<string>, labels: ReadonlyArray<string>) {
-  if (selected.length === 0) return "Any";
-  if (selected.length === 1) return labels[0] ?? "1 selected";
-  return `${selected.length} selected`;
+function selectionSummary(count: number, firstLabel: string | undefined, resolve: MessageResolver) {
+  if (count === 0) return resolve(msg("Any", { $context: "no filters selected" }));
+  if (count === 1 && firstLabel !== undefined) return firstLabel;
+  return resolve(msg("{count} selected", { count }));
 }
 
 function FilterSubTrigger({
@@ -134,14 +144,16 @@ function CheckboxFilterSubmenu<Value extends string>({
   selected: ReadonlyArray<Value>;
   onChange: (selected: Value[]) => void;
 }) {
+  const resolve = useMessages();
   return (
     <MenuSub>
       <FilterSubTrigger
         Icon={Icon}
         label={label}
         summary={selectionSummary(
-          selected,
-          options.filter((option) => selected.includes(option.value)).map((option) => option.label),
+          selected.length,
+          options.find((option) => option.value === selected[0])?.label,
+          resolve,
         )}
       />
       <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
@@ -173,6 +185,7 @@ function ProjectFilterChoices({
   onToggle: (key: string) => void;
   onClear: () => void;
 }) {
+  const gt = useGT();
   const [query, setQuery] = useState("");
   const needle = query.trim().toLocaleLowerCase();
   const visible =
@@ -185,18 +198,24 @@ function ProjectFilterChoices({
         autoFocus
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
-        placeholder="Search projects"
-        aria-label="Search projects"
+        placeholder={gt("Search projects")}
+        aria-label={gt("Search projects")}
       />
       {needle.length === 0 ? (
         <MenuCheckboxItem checked={selectedKeys.length === 0} onCheckedChange={() => onClear()}>
           <span className="flex min-w-0 items-center gap-2">
             <FolderIcon aria-hidden className="size-3.5" />
-            <span className="min-w-0 flex-1 truncate">All projects</span>
+            <span className="min-w-0 flex-1 truncate">
+              <T>All projects</T>
+            </span>
           </span>
         </MenuCheckboxItem>
       ) : null}
-      {visible.length === 0 ? <MenuItem disabled>No matching projects</MenuItem> : null}
+      {visible.length === 0 ? (
+        <MenuItem disabled>
+          <T>No matching projects</T>
+        </MenuItem>
+      ) : null}
       {visible.map((project) => (
         <MenuCheckboxItem
           key={project.value}
@@ -246,6 +265,8 @@ function FilterMenuContent({
   onClearProjects,
   threadChoices,
 }: SidebarSearchFilterMenuProps) {
+  const gt = useGT();
+  const resolve = useMessages();
   const update = (next: Partial<SidebarSearchFilters>) => onFiltersChange({ ...filters, ...next });
   const selectedProjectLabels = projects
     .filter((project) => selectedProjectKeys.includes(project.value))
@@ -258,11 +279,11 @@ function FilterMenuContent({
       <MenuSub>
         <FilterSubTrigger
           Icon={FolderIcon}
-          label="Project"
+          label={gt("Project")}
           summary={
             selectedProjectKeys.length === 0
-              ? "All"
-              : selectionSummary(selectedProjectKeys, selectedProjectLabels)
+              ? gt("All")
+              : selectionSummary(selectedProjectKeys.length, selectedProjectLabels[0], resolve)
           }
         />
         <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
@@ -275,24 +296,24 @@ function FilterMenuContent({
         </MenuSubPopup>
       </MenuSub>
       <CheckboxFilterSubmenu
-        label="Status"
+        label={gt("Status")}
         Icon={CircleDotIcon}
-        options={STATUS_OPTIONS}
+        options={STATUS_OPTIONS.map((option) => ({ ...option, label: resolve(option.label) }))}
         selected={filters.statuses}
         onChange={(statuses) => update({ statuses })}
       />
       <CheckboxFilterSubmenu
-        label="Shelf"
+        label={gt("Shelf")}
         Icon={InboxIcon}
-        options={SHELF_OPTIONS}
+        options={SHELF_OPTIONS.map((option) => ({ ...option, label: resolve(option.label) }))}
         selected={filters.shelves}
         onChange={(shelves) => update({ shelves })}
       />
       <MenuSub>
         <FilterSubTrigger
           Icon={ClockIcon}
-          label="Last activity"
-          summary={updated?.label ?? "Any time"}
+          label={gt("Last activity")}
+          summary={resolve((updated ?? UPDATED_OPTIONS[0]!).label)}
         />
         <MenuSubPopup {...SIDEBAR_SEARCH_PROPS}>
           <MenuRadioGroup
@@ -303,7 +324,7 @@ function FilterMenuContent({
               <MenuRadioItem key={option.value} value={option.value}>
                 <span className="flex min-w-0 items-center gap-2">
                   <option.Icon aria-hidden className="size-3.5" />
-                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  <span className="min-w-0 flex-1 truncate">{resolve(option.label)}</span>
                   <MenuRadioItemIndicator />
                 </span>
               </MenuRadioItem>
@@ -313,7 +334,7 @@ function FilterMenuContent({
       </MenuSub>
       {providers.length > 1 || filters.providers.length > 0 ? (
         <ChoiceFilterSubmenu
-          label="Provider"
+          label={gt("Provider")}
           Icon={BotIcon}
           choices={providers}
           selected={filters.providers}
@@ -322,7 +343,7 @@ function FilterMenuContent({
       ) : null}
       {environments.length > 1 || filters.environments.length > 0 ? (
         <ChoiceFilterSubmenu
-          label="Server"
+          label={gt("Server")}
           Icon={ServerIcon}
           choices={environments}
           selected={filters.environments}
@@ -340,7 +361,7 @@ function FilterMenuContent({
         >
           <span className="flex min-w-0 items-center gap-2">
             <option.Icon aria-hidden className="size-3.5" />
-            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            <span className="min-w-0 flex-1 truncate">{resolve(option.label)}</span>
           </span>
         </MenuCheckboxItem>
       ))}
@@ -350,7 +371,9 @@ function FilterMenuContent({
       >
         <span className="flex min-w-0 items-center gap-2">
           <TextIcon aria-hidden className="size-3.5" />
-          <span className="min-w-0 flex-1 truncate">Don't search messages</span>
+          <span className="min-w-0 flex-1 truncate">
+            <T>Don't search messages</T>
+          </span>
         </span>
       </MenuCheckboxItem>
       <MenuSeparator />
@@ -361,7 +384,7 @@ function FilterMenuContent({
           if (selectedProjectKeys.length > 0) onClearProjects();
         }}
       >
-        Clear filters
+        <T>Clear filters</T>
       </MenuItem>
     </>
   );
@@ -394,13 +417,16 @@ function ActiveCount({ count }: { count: number }) {
 }
 
 export function SidebarSearchFilterMenu(props: SidebarSearchFilterMenuProps) {
+  const gt = useGT();
   const count = countSidebarSearchFilters(props.filters) + props.selectedProjectKeys.length;
   return (
     <Menu>
       <MenuTrigger
         render={
           <SidebarHeaderIconButton
-            label={count > 0 ? `Filter threads (${count} active)` : "Filter threads"}
+            label={
+              count > 0 ? gt("Filter threads ({count} active)", { count }) : gt("Filter threads")
+            }
           />
         }
       >
@@ -421,12 +447,20 @@ export function SidebarSearchSortMenu({
   sort: SidebarSearchSort;
   onSortChange: (sort: SidebarSearchSort) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const current =
     SIDEBAR_SEARCH_SORT_OPTIONS.find((option) => option.value === sort) ??
     SIDEBAR_SEARCH_SORT_OPTIONS[0]!;
   return (
     <Menu>
-      <MenuTrigger render={<SidebarHeaderIconButton label={`Sort threads: ${current.label}`} />}>
+      <MenuTrigger
+        render={
+          <SidebarHeaderIconButton
+            label={gt("Sort threads: {sort}", { sort: resolve(current.label) })}
+          />
+        }
+      >
         <ArrowDownUpIcon className="size-4" />
       </MenuTrigger>
       <MenuPopup {...SIDEBAR_SEARCH_PROPS} align="end">
@@ -434,11 +468,13 @@ export function SidebarSearchSortMenu({
           value={sort}
           onValueChange={(next) => onSortChange(next as SidebarSearchSort)}
         >
-          <MenuGroupLabel>Sort results by</MenuGroupLabel>
+          <MenuGroupLabel>
+            <T>Sort results by</T>
+          </MenuGroupLabel>
           {SIDEBAR_SEARCH_SORT_OPTIONS.map((option) => (
             <MenuRadioItem key={option.value} value={option.value} closeOnClick>
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                <span className="min-w-0 flex-1 truncate">{resolve(option.label)}</span>
                 <MenuRadioItemIndicator />
               </span>
             </MenuRadioItem>

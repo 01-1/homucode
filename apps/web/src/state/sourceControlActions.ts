@@ -1,3 +1,4 @@
+import { msg, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   AtomCommandFailure,
@@ -24,6 +25,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { m } from "../i18n/messages";
 import { gitEnvironment } from "./git";
 import { useEnvironmentQuery } from "./query";
 import { readEnvironmentScope, useEnvironmentScope } from "./session";
@@ -99,7 +101,7 @@ function useAction<
         Cause.fail(
           new EnvironmentAuthorizationError({
             requiredScope: AuthSourceControlWriteScope,
-            message: "This connection cannot change source control.",
+            message: m(msg("This connection cannot change source control.")),
           }),
         ),
       );
@@ -120,7 +122,7 @@ function useAction<
           input.scope,
           {
             operation,
-            label: input.label,
+            label: m(input.label),
           },
           execute,
         );
@@ -190,7 +192,7 @@ export function useVcsInitAction(scope: SourceControlActionScope) {
   };
   return useAction({
     kind: "init",
-    label: "Initializing repository",
+    label: msg("Initializing repository"),
     scope,
     action,
     onSuccess: refreshStatus,
@@ -220,7 +222,7 @@ export function useVcsPullAction(scope: SourceControlActionScope) {
   };
   return useAction({
     kind: "pull",
-    label: "Pulling latest changes...",
+    label: msg("Pulling latest changes..."),
     scope,
     action,
     onSuccess: refreshStatus,
@@ -250,7 +252,7 @@ export function useGitStackedAction(scope: SourceControlActionScope) {
 
   return useAction({
     kind: "runStackedAction",
-    label: "Running source control action",
+    label: msg("Running source control action"),
     scope,
     action,
     onSuccess: refreshStatus,
@@ -296,7 +298,7 @@ export function useSourceControlPublishRepositoryAction(scope: SourceControlActi
   };
   return useAction({
     kind: "publishRepository",
-    label: "Publishing repository",
+    label: msg("Publishing repository"),
     scope,
     action,
     onSuccess: refreshStatus,
@@ -333,7 +335,7 @@ export function usePreparePullRequestThreadAction(scope: SourceControlActionScop
         Cause.fail(
           new EnvironmentAuthorizationError({
             requiredScope: AuthOrchestrationOperateScope,
-            message: "This connection cannot change threads.",
+            message: m(msg("This connection cannot change threads.")),
           }),
         ),
       );
@@ -350,7 +352,7 @@ export function usePreparePullRequestThreadAction(scope: SourceControlActionScop
   };
   return useAction({
     kind: "preparePullRequestThread",
-    label: "Preparing pull request thread",
+    label: msg("Preparing pull request thread"),
     scope,
     action,
   });
@@ -380,6 +382,7 @@ export function readCachedPullRequestResolution(
 }
 
 export function usePullRequestResolutionState(target: PullRequestResolutionTarget) {
+  const resolve = useMessages();
   const query = useEnvironmentQuery(
     target.environmentId !== null && target.cwd !== null && target.reference !== null
       ? gitEnvironment.pullRequestResolution({
@@ -390,6 +393,7 @@ export function usePullRequestResolutionState(target: PullRequestResolutionTarge
           },
         })
       : null,
+    resolve,
   );
   const cached = readCachedPullRequestResolution(target);
 

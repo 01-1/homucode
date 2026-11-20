@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import {
   type ClientSettingsSyncChoice,
   formatSyncedSettingValue,
@@ -38,6 +39,7 @@ export function SettingsSyncDialogHost() {
 }
 
 function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
+  const gt = useGT();
   const descriptionId = useId();
   const server = useEnvironment(prompt.environmentId)?.label ?? "your server";
   const [choices, setChoices] = useState<Record<string, ClientSettingsSyncChoice>>(() =>
@@ -63,22 +65,28 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
       <DialogPopup data-unprompted className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {prompt.firstSetup ? "Set up settings sync" : "Settings changed in two places"}
+            {prompt.firstSetup ? gt("Set up settings sync") : gt("Settings changed in two places")}
           </DialogTitle>
           <DialogDescription>
             {prompt.firstSetup
-              ? `This device's settings differ from the ones synced through ${server}. Choose which value to keep for each.`
-              : `These settings changed on this device and through ${server} since they last synced. Choose which value to keep for each.`}
+              ? gt(
+                  "This device's settings differ from the ones synced through {server}. Choose which value to keep for each.",
+                  { server },
+                )
+              : gt(
+                  "These settings changed on this device and through {server} since they last synced. Choose which value to keep for each.",
+                  { server },
+                )}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => chooseAll("remote")}>
-                Use synced for all
+                <T>Use synced for all</T>
               </Button>
               <Button size="sm" variant="outline" onClick={() => chooseAll("local")}>
-                Keep this device for all
+                <T>Keep this device for all</T>
               </Button>
             </div>
             <ul className="flex flex-col divide-y divide-border">
@@ -106,10 +114,10 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
                       }}
                     >
                       <Toggle value="local" aria-describedby={localId}>
-                        This device
+                        <T>This device</T>
                       </Toggle>
                       <Toggle value="remote" aria-describedby={remoteId}>
-                        Synced
+                        <T>Synced</T>
                       </Toggle>
                     </ToggleGroup>
                     <div className="grid grid-cols-2 gap-2 text-muted-foreground text-xs">
@@ -128,7 +136,7 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
                         aria-expanded={isExpanded}
                         onClick={() => toggleExpanded(conflict.key)}
                       >
-                        {isExpanded ? "Show less" : "Read more"}
+                        {isExpanded ? gt("Show less") : gt("Read more")}
                       </Button>
                     ) : null}
                   </li>
@@ -145,12 +153,14 @@ function SettingsSyncDialog({ prompt }: { prompt: SettingsSyncPrompt }) {
               deferSettingsSyncPrompt();
             }}
           >
-            Turn off sync on this device
+            <T>Turn off sync on this device</T>
           </Button>
           <Button variant="outline" onClick={deferSettingsSyncPrompt}>
-            Decide later
+            <T>Decide later</T>
           </Button>
-          <Button onClick={() => resolveSettingsSyncPrompt(choices)}>Apply</Button>
+          <Button onClick={() => resolveSettingsSyncPrompt(choices)}>
+            <T context="apply settings">Apply</T>
+          </Button>
         </DialogFooter>
       </DialogPopup>
     </Dialog>
