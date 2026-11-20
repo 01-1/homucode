@@ -5384,15 +5384,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
         case "thread.pull-request-watch.checks-reopen": {
           const linked = threadPullRequestsOf(thread);
-          if (!linked.some((link) => link.watch?.checksPending !== undefined)) return thread;
-          return {
-            ...thread,
-            pullRequests: linked.map((link) =>
-              link.watch?.checksPending === undefined
-                ? link
-                : { ...link, watch: withoutChecksAnswer(link.watch) },
-            ),
-          };
+          const pullRequests = linked.map((link) =>
+            link.watch?.checksPending === undefined ||
+            (command.pullRequest !== undefined &&
+              !threadPullRequestKeysEqual(link, command.pullRequest))
+              ? link
+              : { ...link, watch: withoutChecksAnswer(link.watch) },
+          );
+          return pullRequests.some((link, index) => link !== linked[index])
+            ? { ...thread, pullRequests }
+            : thread;
         }
         case "thread.pull-request.watch":
         case "thread.pull-request-watch.sync": {

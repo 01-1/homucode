@@ -16,6 +16,7 @@ import * as Schema from "effect/Schema";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as PullRequestService from "./PullRequestService.ts";
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import {
   resolveTarget,
   type PullRequestTarget,
@@ -54,6 +55,15 @@ export class PullRequestWatchFromSubagentError extends Schema.TaggedError<PullRe
   }
 }
 
+export class PullRequestWatchBackgroundGitDisabledError extends Schema.TaggedError<PullRequestWatchBackgroundGitDisabledError>()(
+  "PullRequestWatchBackgroundGitDisabledError",
+  {},
+) {
+  override get message(): string {
+    return "Pull request watches require Background Git. Turn it on and restart HomuCode to start a watch.";
+  }
+}
+
 export class PullRequestWatchThreadNotFoundError extends Schema.TaggedError<PullRequestWatchThreadNotFoundError>()(
   "PullRequestWatchThreadNotFoundError",
   { threadId: ThreadId },
@@ -76,6 +86,7 @@ export class PullRequestWatchService extends Context.Service<
       | PullRequestWatchFailedError
       | PullRequestNotOpenError
       | PullRequestWatchFromSubagentError
+      | PullRequestWatchBackgroundGitDisabledError
       | PullRequestWatchThreadNotFoundError
       | PullRequestTargetError
       | PullRequestUnavailableError
@@ -109,6 +120,9 @@ const make = Effect.gen(function* () {
     readonly until?: PullRequestWatchUntil | undefined;
   }) {
     const { watching } = input;
+    if (watching && !(yield* BackgroundGitEnabled)) {
+      return yield* new PullRequestWatchBackgroundGitDisabledError();
+    }
     const thread = yield* requireThread(input.threadId);
     const project = yield* projects.getShell(thread.projectId).pipe(
       Effect.map(Option.getOrUndefined),

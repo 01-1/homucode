@@ -33,11 +33,11 @@ const SHELL_WORD = /"((?:\\[\s\S]|[^"\\])*)"?|'([^']*)'?|((?:\\[\s\S]|[^\s"'\\])
 const NAMED_CHANGE_REQUEST = /^(?:--?[\w-]+=)?#?(\d+)$|^\S*\/(?:pulls?|merge_requests)\/(\d+)\/?$/u;
 
 /**
- * The change request numbers a merge or close command names, or "any" when one names none, as a
+ * The change request numbers or URLs a merge or close command names, or "any" when one names none, as a
  * bare `gh pr merge` on the checked-out branch or `gh stack merge` does.
  */
-export function changeRequestsClosedBy(command: string): ReadonlySet<number> | "any" {
-  const named = new Set<number>();
+export function changeRequestsClosedBy(command: string): ReadonlySet<number | string> | "any" {
+  const named = new Set<number | string>();
   for (const { changeRequestCloseCommand: close } of sourceControlDefinitions.definitions) {
     if (close === undefined) continue;
     for (const match of command.matchAll(new RegExp(close.source, `${close.flags}g`))) {
@@ -48,13 +48,19 @@ export function changeRequestsClosedBy(command: string): ReadonlySet<number> | "
       for (const [, double, single, bare] of args.matchAll(SHELL_WORD)) {
         // A comment ends the command.
         if (bare !== undefined && /^#(?!\d+$)/u.test(bare)) break;
-        const [, number, url] = NAMED_CHANGE_REQUEST.exec(double ?? single ?? bare ?? "") ?? [];
-        target = number ?? url;
+        const word = double ?? single ?? bare ?? "";
+        const [, number, url] = NAMED_CHANGE_REQUEST.exec(word) ?? [];
+        target = url === undefined ? number : word;
         if (target !== undefined) break;
       }
+      if (
+        (target === undefined || /^\d+$/u.test(target)) &&
+        /(?:^|\s)(?:-R|--repo)(?:=|\s)/u.test(args)
+      )
+        continue;
       if (target === undefined) return "any";
-      named.add(Number(target));
+      named.add(/^\d+$/u.test(target) ? Number(target) : target);
     }
   }
-  return named.size === 0 ? "any" : named;
+  return named;
 }

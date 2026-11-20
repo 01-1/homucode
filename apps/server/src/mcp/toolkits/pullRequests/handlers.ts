@@ -1198,13 +1198,21 @@ const make = Effect.gen(function* () {
         // until a read sees them run. The rerun already happened, so a failed reopen only logs.
         if (
           checks.some((check) => check.rerun) &&
-          threadPullRequestsOf(thread).some((link) => link.watch?.checksPending !== undefined)
+          threadPullRequestsOf(thread).some(
+            (link) =>
+              link.watch?.checksPending !== undefined && threadPullRequestKeysEqual(link, target),
+          )
         ) {
           yield* engine
             .dispatch({
               type: "thread.pull-request-watch.checks-reopen",
               commandId: yield* commandId("mcp-ci-rerun-checks", thread.id),
               threadId: thread.id,
+              pullRequest: {
+                host: target.host,
+                repository: target.repository,
+                number: target.number,
+              },
             })
             .pipe(
               Effect.catchCause((cause) =>

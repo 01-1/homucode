@@ -115,6 +115,7 @@ export function brokenRuntimeError(input: {
   readonly version: string;
   readonly advisory: ServerProviderCompatibilityAdvisory | undefined;
   readonly action?: string;
+  readonly productName?: string;
 }): ProviderSetupError | undefined {
   const detail = brokenVersionDetail(input);
   return detail === undefined

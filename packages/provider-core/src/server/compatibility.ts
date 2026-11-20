@@ -12,6 +12,7 @@ export const noCompatibilityPolicy: ProviderCompatibilityLookup = () => Effect.u
 /** The one message for a version the policy rates `broken`; `action` names how it is updated. */
 export function brokenVersionDetail(input: {
   readonly name: string;
+  readonly productName?: string;
   readonly version: string;
   readonly advisory: ServerProviderCompatibilityAdvisory | undefined;
   readonly action?: string;
@@ -19,5 +20,5 @@ export function brokenVersionDetail(input: {
   if (input.advisory?.status !== "broken") return undefined;
   const target =
     input.advisory.recommendedVersion ?? input.advisory.recommendedRange ?? "a newer version";
-  return `${input.name} ${input.version} does not work with this T3 Code release. ${input.action ?? `Update ${input.name}`} to ${target}, then retry.`;
+  return `${input.name} ${input.version} does not work with this ${input.productName ?? "T3 Code"} release. ${input.action ?? `Update ${input.name}`} to ${target}, then retry.`;
 }

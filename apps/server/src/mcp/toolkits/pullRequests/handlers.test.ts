@@ -1105,7 +1105,11 @@ describe("source control tools", () => {
           return yield* Ref.get(harness.commands);
         });
       expect(yield* rerun(false, true)).toMatchObject([
-        { type: "thread.pull-request-watch.checks-reopen", threadId: THREAD_ID },
+        {
+          type: "thread.pull-request-watch.checks-reopen",
+          threadId: THREAD_ID,
+          pullRequest: { host: "github.com", repository: "t3tools/t3code", number: 42 },
+        },
       ]);
       // Nothing re-ran, or the watch has no answer to clear.
       expect(yield* rerun(false, false)).toEqual([]);

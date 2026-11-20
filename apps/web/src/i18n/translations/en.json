@@ -3267,10 +3267,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "on the computer that opened this page"
-      ]
+      "c": [" ", "on the computer that opened this page"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3282,10 +3279,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· whoever runs it gets this access"
-      ]
+      "c": [" ", "· whoever runs it gets this access"]
     }
   ],
   "c54cc9c75db9dc58": "Only approve a sign-in you just started.",
@@ -7895,6 +7889,8 @@
   "2e39f5294e5b43cd": "Device {number}",
   "e4b228abbc8849ee": "Device name",
   "407b287108d9c86a": "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update.",
+  "5ad3264bcba861f9": "Choose an environment to change its T3 Connect session length.",
+  "338d2d0caaf1aa4b": "Choose an environment to edit device names.",
   "d8131e1ccddad16d": "Let T3 Connect devices reconnect for 30 days without a cloud round trip. Revoke a device in Sharing & access to end its access.",
   "3200eea6f5408f23": "Background Git is currently on.",
   "b10340ada326415b": "Background Git is currently off.",
@@ -7908,8 +7904,6 @@
   "39820cc9b6160a4e": "Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.",
   "4814ae29e4bfa636": "Devices appear after they connect to this server.",
   "2f8405b090722eed": "Select one environment to configure work assistance.",
-  "72c62e242a8584e8": "Choose an environment to change its T3 Connect session length.",
-  "82f11d4be5d39edc": "Choose an environment to edit device names.",
   "e116ed85458b6613": "Static prefix",
   "575ae567e3b6ca3d": "Semantic prefix",
   "6675de66f9b3f71d": "Custom instructions",

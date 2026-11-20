@@ -17,10 +17,12 @@ import { commandIndicatesFailure } from "@t3tools/shared/toolOutput";
 import {
   changeRequestsClosedBy,
   isChangeRequestCloseCommand,
+  sourceControlDefinitions,
 } from "../sourceControl/sourceControlDefinitions.ts";
 import {
   normalizeThreadPullRequestKey,
   threadPullRequestKeyOf,
+  threadPullRequestKeysEqual,
   visibleThreadPullRequests,
 } from "../sourceControl/threadPullRequests.ts";
 import * as Cause from "effect/Cause";
@@ -308,13 +310,25 @@ export const make = Effect.gen(function* () {
    * Each thread's merge and close commands, by item, with the pull requests each names. One counts
    * while it runs and, if it succeeded, until the read at its end is done.
    */
-  const agentEnds = new Map<ThreadId, Map<string, ReadonlySet<number> | "any">>();
+  const agentEnds = new Map<ThreadId, Map<string, ReadonlySet<number | string> | "any">>();
   // The agent needs no wake for a merge or close it made itself. Anything ending later, as a
   // `--auto` merge does, is news.
-  const endedByAgent = (target: WatchTarget) =>
-    [...(agentEnds.get(target.thread.id)?.values() ?? [])].some(
-      (named) => named === "any" || named.has(target.link.number),
-    );
+  const endedByAgent = (target: WatchTarget) => {
+    const links = visibleThreadPullRequests(target.thread.pullRequests ?? []);
+    return [...(agentEnds.get(target.thread.id)?.values() ?? [])].some((named) => {
+      if (named === "any") return links.length === 1;
+      return [...named].some((reference) => {
+        if (typeof reference === "number") {
+          return (
+            reference === target.link.number &&
+            links.filter((link) => link.number === reference).length === 1
+          );
+        }
+        const parsed = sourceControlDefinitions.parseChangeRequestUrl(reference)?.link;
+        return parsed !== undefined && threadPullRequestKeysEqual(parsed, target.link);
+      });
+    });
+  };
   const threadTails = new Map<
     string,
     {

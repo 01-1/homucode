@@ -30,14 +30,12 @@ export function DesktopMadoHomuCoordinator() {
       launcherEnabled === undefined
     )
       return;
-    void bridge
-      .configureMadoHomu({ enabled, launcherEnabled, environmentId })
-      .catch(() =>
-        toastManager.add({
-          type: "error",
-          title: m(msg("Could not update the MadoHomu desktop app")),
-        }),
-      );
+    void bridge.configureMadoHomu({ enabled, launcherEnabled, environmentId }).catch(() =>
+      toastManager.add({
+        type: "error",
+        title: m(msg("Could not update the MadoHomu desktop app")),
+      }),
+    );
   }, [bridge, enabled, launcherEnabled, environmentId]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- receives navigation requested by the native merge and split window actions
   useEffect(

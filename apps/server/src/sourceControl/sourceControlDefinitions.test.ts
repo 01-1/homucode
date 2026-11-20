@@ -65,12 +65,19 @@ it.each([
   ["gh pr merge 19 --body https://github.com/o/r/pull/20", [19]],
   ["gh pr merge 19 # then 20", [19]],
   ["gh pr merge --squash --match-head-commit 3b2f958 #19", [19]],
-  ["gh pr close https://github.com/o/r/pull/19 && gh pr merge 20", [19, 20]],
-  ["glab mr merge https://gitlab.com/o/r/-/merge_requests/7", [7]],
+  [
+    "gh pr close https://github.com/o/r/pull/19 && gh pr merge 20",
+    ["https://github.com/o/r/pull/19", 20],
+  ],
+  [
+    "glab mr merge https://gitlab.com/o/r/-/merge_requests/7",
+    ["https://gitlab.com/o/r/-/merge_requests/7"],
+  ],
   ["sleep 30; cafe pr merge 26271", [26271]],
   ["az repos pr update --id 19 --status completed", [19]],
   ["az repos pr update --id=19 --status=abandoned", [19]],
   ["gh pr merge --squash", "any"],
+  ["gh pr merge 19 -R different/repository", []],
   ["gh stack merge", "any"],
   ["gh pr merge 19 && gh pr merge --auto", "any"],
 ] as const)("%s closes %j", (command, expected) => {

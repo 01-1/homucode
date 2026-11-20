@@ -10,7 +10,7 @@ import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
+import { type Atom, AtomRegistry } from "effect/reactivity";
 import { expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import { environmentCatalog } from "./connection/catalog";
@@ -143,14 +143,12 @@ it.each([primary, remote, null])(
     using update = vi
       .spyOn(serverEnvironment.updateSettings, "run")
       .mockImplementation((_registry, { input: { patch } }) =>
-        Effect.succeed(
-          AsyncResult.success({
-            ...DEFAULT_SERVER_SETTINGS,
-            madohomuEnabled: patch.madohomuEnabled ?? false,
-            madohomuProjectId: patch.madohomuProjectId ?? null,
-            madohomuDestinationEnvironmentId: patch.madohomuDestinationEnvironmentId ?? null,
-          }),
-        ),
+        Effect.succeed({
+          ...DEFAULT_SERVER_SETTINGS,
+          madohomuEnabled: patch.madohomuEnabled ?? false,
+          madohomuProjectId: patch.madohomuProjectId ?? null,
+          madohomuDestinationEnvironmentId: patch.madohomuDestinationEnvironmentId ?? null,
+        }),
       );
 
     await expect(saveMadoHomuProject(remote, sharedProjectId)).resolves.toBe(true);

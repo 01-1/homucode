@@ -24,6 +24,7 @@ import {
 } from "../orchestration-v2/testkit/pullRequestFixtures.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as PullRequestService from "./PullRequestService.ts";
+import { BackgroundGitEnabled } from "../vcs/BackgroundGit.ts";
 import * as PullRequestWatchService from "./PullRequestWatchService.ts";
 import type { PullRequestTarget } from "./pullRequestTarget.ts";
 
@@ -166,6 +167,20 @@ const makeHarness = Effect.fn("makePullRequestWatchHarness")(function* (
 });
 
 describe("PullRequestWatchService", () => {
+  it.effect("refuses new watches with Background Git off and lets an existing watch stop", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const target = { url: "https://github.com/t3tools/t3code/pull/9" };
+      const refused = yield* harness.setWatching(true, target).pipe(Effect.flip);
+      expect(refused._tag).toBe("PullRequestWatchBackgroundGitDisabledError");
+      expect(yield* Ref.get(harness.commands)).toEqual([]);
+      yield* harness.setWatching(false, target);
+      expect(yield* Ref.get(harness.commands)).toMatchObject([
+        { type: "thread.pull-request.watch", watching: false, number: 9 },
+      ]);
+    }).pipe(Effect.provideService(BackgroundGitEnabled, false)),
+  );
+
   it.effect("links an unlinked watch even while the host has a transient read failure", () =>
     Effect.gen(function* () {
       const cases: ReadonlyArray<readonly [HarnessOptions, boolean | undefined]> = [

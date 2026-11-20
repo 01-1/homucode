@@ -3818,6 +3818,7 @@ const OrchestrationV2InternalCommand = Schema.Union([
     type: Schema.Literal("thread.pull-request-watch.checks-reopen"),
     commandId: CommandId,
     threadId: ThreadId,
+    pullRequest: Schema.optionalKey(ThreadPullRequestKey),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pull-request-watch.sync"),

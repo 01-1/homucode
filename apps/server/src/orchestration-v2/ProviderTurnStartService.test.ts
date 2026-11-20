@@ -2690,7 +2690,12 @@ effectIt.effect.each([
 
       yield* harness.start;
 
-      expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe("Start over");
+      expect(
+        harness.startTurn.mock.calls[0]?.[0].message.text.replace(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}: /,
+          "",
+        ),
+      ).toBe(sentByUnknownHuman("Start over"));
       expect(
         harness.projection().contextHandoffs.map((handoff) => [handoff.status, handoff.delivery]),
       ).toEqual([

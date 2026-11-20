@@ -2167,6 +2167,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 name: "Codex",
                 version,
                 advisory,
+                productName: "HomuCode",
               });
             if (refused) return yield* refused;
             yield* client.notify("initialized", undefined);

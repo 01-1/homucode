@@ -235,7 +235,7 @@ export function BehaviorSettingsSection() {
           <ConnectSessionSetting environmentId={environmentId} />
         ) : (
           <SettingsScopeNotice inline target="environment" targetId="connect-device-long-sessions">
-            <T>Choose an environment to change its T3 Connect session length.</T>
+            {gt("Choose an environment to change its T3 Connect session length.")}
           </SettingsScopeNotice>
         )}
       </SettingsSection>
@@ -251,7 +251,7 @@ export function BehaviorSettingsSection() {
               ? { eligibleEnvironmentIds: connectedEnvironments.map((env) => env.environmentId) }
               : {})}
           >
-            <T>Choose an environment to edit device names.</T>
+            {gt("Choose an environment to edit device names.")}
           </SettingsScopeNotice>
         )}
       </SettingsSection>
