@@ -112,7 +112,13 @@ const FeatureOffersDraft = Schema.Struct({
   offered: Schema.optionalKey(Schema.Array(Schema.String)),
   savedServerOffers: Schema.optionalKey(Schema.Array(Schema.String)),
   pendingServerOffers: Schema.optionalKey(Schema.Array(Schema.String)),
+  environmentIds: Schema.optionalKey(Schema.Array(Schema.String)),
 });
+const PendingFeatureOfferSave = Schema.Struct({
+  selected: Schema.Array(Schema.String),
+  offered: Schema.Array(Schema.String),
+});
+const isPendingFeatureOfferSaves = Schema.is(Schema.Record(Schema.String, PendingFeatureOfferSave));
 export type FeatureOffersDraft = typeof FeatureOffersDraft.Type;
 const isFeatureOffersDraft = Schema.is(FeatureOffersDraft);
 const isFeatureOffersDrafts = Schema.is(Schema.Record(Schema.String, FeatureOffersDraft));
@@ -186,6 +192,10 @@ export interface Preferences {
   readonly featureOffersDraft?: FeatureOffersDraft | null;
   readonly featureOffersDrafts?: Readonly<Record<string, FeatureOffersDraft>>;
   readonly featureOffersSnoozedUntil?: string | null;
+  /** Per offline server, the HomuCode features choices to send once it connects. */
+  readonly featureOffersPendingSaves?: Readonly<
+    Record<string, typeof PendingFeatureOfferSave.Type>
+  >;
   /** This phone's name, sent to every server it connects to. */
   readonly deviceName?: string;
   /** Per server, the synced copy this phone last agreed with. */
@@ -288,6 +298,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     featureOffersDraft?: FeatureOffersDraft;
     featureOffersDrafts?: Readonly<Record<string, FeatureOffersDraft>>;
     featureOffersSnoozedUntil?: string;
+    featureOffersPendingSaves?: Preferences["featureOffersPendingSaves"];
     deviceName?: string;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
@@ -458,6 +469,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.featureOffersDraft = parsed.featureOffersDraft;
   if (isFeatureOffersDrafts(parsed.featureOffersDrafts))
     preferences.featureOffersDrafts = parsed.featureOffersDrafts;
+  if (isPendingFeatureOfferSaves(parsed.featureOffersPendingSaves))
+    preferences.featureOffersPendingSaves = parsed.featureOffersPendingSaves;
   if (
     typeof parsed.featureOffersSnoozedUntil === "string" &&
     Number.isFinite(Date.parse(parsed.featureOffersSnoozedUntil))

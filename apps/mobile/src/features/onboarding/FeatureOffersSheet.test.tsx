@@ -179,26 +179,51 @@ vi.mock("../../components/ui/ListChoiceRow", () => ({
     </div>
   ),
 }));
+vi.mock("../../components/ui/SelectionRow", () => ({
+  SelectionRow: ({
+    title,
+    subtitle,
+    selected,
+    onPress,
+  }: {
+    title: string;
+    subtitle?: string;
+    selected: boolean;
+    onPress: () => void;
+  }) => (
+    <div>
+      <button aria-pressed={selected} onClick={onPress}>
+        {title}
+      </button>
+      {subtitle}
+    </div>
+  ),
+}));
 vi.mock("../settings/components/SettingsSwitchRow", () => ({
   SettingsSwitchRow: ({
     label,
+    subtitle,
     value,
     onValueChange,
     disabled,
   }: {
     label: string;
+    subtitle?: string;
     value: boolean;
     onValueChange: (value: boolean) => void;
     disabled?: boolean;
   }) => (
-    <button
-      role="switch"
-      aria-checked={value}
-      disabled={disabled}
-      onClick={() => onValueChange(!value)}
-    >
-      {label}
-    </button>
+    <div>
+      <button
+        role="switch"
+        aria-checked={value}
+        disabled={disabled}
+        onClick={() => onValueChange(!value)}
+      >
+        {label}
+      </button>
+      <span>{subtitle}</span>
+    </div>
   ),
 }));
 
@@ -377,8 +402,20 @@ it.each(["upstream", "read-only"])(
   },
 );
 
-it("chooses a compatible server before upstream and keeps drafts separate when switching servers", async () => {
+it("saves one set of choices to several servers, sending an offline server's when it reconnects", async () => {
   using screen = setup();
+  const offline = {
+    environmentId: "o",
+    label: "o",
+    connection: { phase: "disconnected" },
+    serverConfig: {
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        featureOffersSeen: mocks.settings.featureOffersSeen.filter((id) => id !== "status-line"),
+      },
+      environment: mocks.descriptor,
+    },
+  };
   mocks.otherEnvironments = [
     {
       environmentId: "main",
@@ -392,23 +429,75 @@ it("chooses a compatible server before upstream and keeps drafts separate when s
         },
       },
     },
+    offline,
   ];
   act(() => screen.root.render(<FeatureOffersSheet active />));
-  expect(screen.container.querySelector('[aria-pressed="true"]')?.textContent).toBe("pbox");
+  const pressed = () =>
+    [...screen.container.querySelectorAll('[aria-pressed="true"]')].map(
+      (button) => button.textContent,
+    );
+  expect(pressed()).toEqual(["pbox"]);
   await screen.click("Set up building HomuCode");
-  await screen.click("Next");
   await screen.click("main");
-  await screen.click("Settings sync");
-  await screen.click("pbox");
+  await screen.click("o");
+  expect(pressed()).toEqual(["main", "o", "pbox"]);
+  expect(screen.container.textContent).toContain("Status line");
+  expect(screen.container.textContent).toContain("o (when online)");
+  await screen.click("Next");
   expect(screen.container.textContent).toContain("Build controls");
-  expect(mocks.preferences.featureOffersDrafts?.main?.selected).toContain("settings-sync");
   await screen.click("Save");
+  expect(mocks.update).toHaveBeenCalledOnce();
   expect(mocks.update).toHaveBeenLastCalledWith({
     environmentId: "server",
     input: { patch: expect.objectContaining({ buildToolsSettingsVisible: true }) },
   });
-  expect(mocks.preferences.featureOffersDrafts?.main).toBeDefined();
-  expect(mocks.preferences.featureOffersDrafts?.server).toBeUndefined();
+  expect(mocks.preferences.featureOffersPendingSaves?.o?.selected).toContain("building-t3");
+  expect(mocks.preferences.featureOffersPendingSaves?.main).toBeUndefined();
+
+  offline.connection = { phase: "connected" };
+  await act(async () => screen.root.render(<FeatureOffersSheet active />));
+  expect(mocks.update).toHaveBeenLastCalledWith({
+    environmentId: "o",
+    input: {
+      patch: expect.objectContaining({
+        buildToolsSettingsVisible: true,
+        featureOffersSeen: expect.arrayContaining(["building-t3"]),
+      }),
+    },
+  });
+  expect(mocks.preferences.featureOffersPendingSaves?.o).toBeUndefined();
+});
+
+it("fills in choices another server already saved and lets enabled features be turned off", async () => {
+  using screen = setup();
+  act(() => screen.root.render(null));
+  mocks.settings = { ...mocks.settings, featureOffersSeen: [] };
+  mocks.otherEnvironments = [
+    {
+      environmentId: "msi",
+      label: "msi",
+      connection: { phase: "connected" },
+      serverConfig: {
+        settings: {
+          ...DEFAULT_SERVER_SETTINGS,
+          featureOffersSeen: FEATURE_OFFERS.map((offer) => offer.id),
+          statusLineEnabled: false,
+          madohomuEnabled: true,
+        },
+        environment: mocks.descriptor,
+      },
+    },
+  ];
+  act(() => screen.root.render(<FeatureOffersSheet active />));
+  expect(screen.container.textContent).toContain("Filled in from your choices on msi.");
+  const value = (label: string) =>
+    [...screen.container.querySelectorAll('[role="switch"]')]
+      .find((button) => button.textContent === label)
+      ?.getAttribute("aria-checked");
+  expect(value("Status line")).toBe("false");
+  expect(value("MadoHomu")).toBe("true");
+  await screen.click("MadoHomu");
+  expect(value("MadoHomu")).toBe("false");
 });
 
 it.each(["Save", "Dismiss sheet", "In 1 hour"])(

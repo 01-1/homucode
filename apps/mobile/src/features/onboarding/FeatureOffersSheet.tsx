@@ -8,12 +8,13 @@ import {
 } from "../../state/preferences";
 import { MobileBuildTools, MobileThisDeviceName } from "../settings/SetupBehaviorSettings";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
+import { SelectionRow } from "../../components/ui/SelectionRow";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
-  enabledFeatureOffers,
   FEATURE_OFFERS,
   getHomuSetupSupport,
-  selectedFeatureOffers,
+  pendingFeatureOfferPatch,
+  prefilledFeatureOffers,
   featureOfferPages,
   featureOfferSettingsPatch,
   unseenFeatureOffers,
@@ -37,7 +38,7 @@ import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScroll
 import { Sheet } from "../../components/ui/Sheet";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { useEnvironments, type EnvironmentPresentation } from "../../state/environments";
-import type { FeatureOffersDraft } from "../../persistence/mobile-preferences";
+import type { FeatureOffersDraft, Preferences } from "../../persistence/mobile-preferences";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentsWithScope } from "../../state/session";
@@ -50,7 +51,8 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : null;
   const persisted = useAtomValue(persistedMobilePreferencesAtom);
   const [dismissedUntil, setDismissedUntil] = useState(0);
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<EnvironmentId | null>(null);
+  const [chosenEnvironmentIds, setChosenEnvironmentIds] =
+    useState<ReadonlyArray<EnvironmentId> | null>(null);
   const [now, setNow] = useState(Date.now);
   const snoozedUntil = Math.max(
     dismissedUntil,
@@ -95,6 +97,11 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
     return {
       environment,
       support,
+      offlineSupport: connected
+        ? support
+        : getHomuSetupSupport(environment.serverConfig?.environment, {
+            managedPolicy: environment.serverConfig?.managedPolicy,
+          }),
       pending: pending.length > 0,
       remotePending: pending.some(
         (offer) => offer.platform !== "mobile" && offer.id !== "settings-sync",
@@ -102,8 +109,7 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
     };
   });
   const draft = preferences?.featureOffersDraft;
-  const target =
-    targets.find((target) => target.environment.environmentId === selectedEnvironmentId) ??
+  const fallback =
     targets.find(
       (target) =>
         target.environment.environmentId === draft?.environmentId &&
@@ -111,29 +117,94 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
     ) ??
     targets.find((target) => target.remotePending) ??
     targets.find((target) => target.pending);
-  return active && preferences !== null && snoozedUntil <= now && target ? (
+  const fallbackId = fallback?.environment.environmentId;
+  const fallbackDraft = fallbackId
+    ? (preferences?.featureOffersDrafts?.[fallbackId] ??
+      (draft?.environmentId === fallbackId ? draft : undefined))
+    : undefined;
+  // In the order chosen; the first stays primary while others connect or drop.
+  const environmentIds = (
+    chosenEnvironmentIds ??
+    fallbackDraft?.environmentIds ??
+    (fallbackId ? [fallbackId] : [])
+  ).flatMap((id) => {
+    const match = targets.find((target) => target.environment.environmentId === id);
+    return match ? [match.environment.environmentId] : [];
+  });
+  const target =
+    targets.find((target) => target.environment.environmentId === environmentIds[0]) ?? fallback;
+  usePendingFeatureOfferSaves(targets, writable, preferences?.featureOffersPendingSaves);
+  return active &&
+    preferences !== null &&
+    snoozedUntil <= now &&
+    target &&
+    (fallback || chosenEnvironmentIds) ? (
     <EnvironmentFeatureOffers
       key={target.environment.environmentId}
       environmentId={target.environment.environmentId}
       support={target.support}
       targets={targets}
-      onEnvironmentChange={setSelectedEnvironmentId}
+      environmentIds={
+        environmentIds.length > 0 ? environmentIds : [target.environment.environmentId]
+      }
+      onEnvironmentsChange={setChosenEnvironmentIds}
       onDismiss={(until) => setDismissedUntil(until ? Date.parse(until) : Infinity)}
     />
   ) : null;
+}
+
+/** Sends choices saved for an offline server once it connects, then forgets them. */
+function usePendingFeatureOfferSaves(
+  targets: ReadonlyArray<FeatureOffersTarget>,
+  writable: ReadonlySet<EnvironmentId>,
+  pendingSaves: Preferences["featureOffersPendingSaves"],
+) {
+  const update = useAtomCommand(serverEnvironment.updateSettings);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom, { mode: "promiseExit" });
+  // The save last tried per server; a failed one waits for a reconnect or a new save.
+  const attempted = useRef(new Map<string, string>());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes saved choices to a server when its connection comes up
+  useEffect(() => {
+    for (const { environment, support } of targets) {
+      const environmentId = environment.environmentId;
+      const save = pendingSaves?.[environmentId];
+      if (environment.connection.phase !== "connected") {
+        attempted.current.delete(environmentId);
+        continue;
+      }
+      if (!save || !environment.serverConfig || !writable.has(environmentId)) continue;
+      const key = JSON.stringify(save);
+      if (attempted.current.get(environmentId) === key) continue;
+      attempted.current.set(environmentId, key);
+      const patch = pendingFeatureOfferPatch(environment.serverConfig.settings, support, save);
+      void settlePromise(async () => {
+        const result = patch ? await update({ environmentId, input: { patch } }) : null;
+        if (result?._tag === "Failure") return;
+        await savePreferences({
+          transform: (current) => {
+            const rest = { ...current.featureOffersPendingSaves };
+            if (JSON.stringify(rest[environmentId]) === key) delete rest[environmentId];
+            return { featureOffersPendingSaves: rest };
+          },
+        });
+      });
+    }
+  }, [targets, writable, pendingSaves, update, savePreferences]);
 }
 
 function EnvironmentFeatureOffers({
   environmentId,
   support,
   targets,
-  onEnvironmentChange,
+  environmentIds,
+  onEnvironmentsChange,
   onDismiss,
 }: {
   readonly environmentId: EnvironmentId;
   readonly support: ReturnType<typeof getHomuSetupSupport>;
   readonly targets: ReadonlyArray<FeatureOffersTarget>;
-  readonly onEnvironmentChange: (environmentId: EnvironmentId) => void;
+  readonly environmentIds: ReadonlyArray<EnvironmentId>;
+  readonly onEnvironmentsChange: (environmentIds: ReadonlyArray<EnvironmentId>) => void;
   readonly onDismiss: (until?: string) => void;
 }) {
   const config = useEnvironmentServerConfig(environmentId);
@@ -148,10 +219,44 @@ function EnvironmentFeatureOffers({
       ? preferences.featureOffersDraft
       : undefined);
   const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
-  const unseen = unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
-    (offer) => !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
+  const selectedTargets = targets.filter((target) =>
+    environmentIds.includes(target.environment.environmentId),
   );
-  const defaults = selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled });
+  const unseenIds = new Set(
+    [
+      settings,
+      ...selectedTargets.flatMap(({ environment }) =>
+        environment.serverConfig ? [environment.serverConfig.settings] : [],
+      ),
+    ].flatMap((entry) =>
+      unseenFeatureOffers(entry, "mobile", preferences.featureOffersSeen).map((offer) => offer.id),
+    ),
+  );
+  const unseen = FEATURE_OFFERS.filter(
+    (offer) =>
+      unseenIds.has(offer.id) &&
+      !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
+  );
+  const primaryConnected = selectedTargets.some(
+    (target) =>
+      target.environment.environmentId === environmentId &&
+      target.environment.connection.phase === "connected",
+  );
+  const queuedTargets = selectedTargets.filter(
+    (target) => target.environment.environmentId !== environmentId || !primaryConnected,
+  );
+  const prefilled = prefilledFeatureOffers(
+    settings,
+    { ...preferences, settingsSyncEnabled },
+    targets.flatMap(({ environment }) =>
+      environment.environmentId !== environmentId &&
+      environment.connection.phase === "connected" &&
+      environment.serverConfig
+        ? [{ label: environment.label, settings: environment.serverConfig.settings }]
+        : [],
+    ),
+  );
+  const defaults = prefilled.selected;
   const savedOfferIds = draft?.offered;
   const newOffers =
     savedOfferIds && !savedOfferIds.some((id) => support.supportedFeatureIds.has(id))
@@ -192,9 +297,10 @@ function EnvironmentFeatureOffers({
   }, []);
   const selected = chosen ?? defaults;
   const offers = attemptOffers ?? (unseen.length > 0 ? unseen : FEATURE_OFFERS);
-  const available = offers.filter((offer) => support.supportedFeatureIds.has(offer.id));
+  const available = offers.filter((offer) =>
+    selectedTargets.some((target) => offerSupport(target, offer.id) !== "no"),
+  );
   const pages = featureOfferPages(offers);
-  const enabled = enabledFeatureOffers(settings);
   const includes = (id: string) => available.some((offer) => offer.id === id) && selected.has(id);
   const followups = [
     ...(includes("sent-from") ? ["device-name"] : []),
@@ -209,11 +315,12 @@ function EnvironmentFeatureOffers({
   const last = step === pages.length + followups.length - 1;
   const save = async () => {
     if (pending.current) return;
-    onEnvironmentChange(environmentId);
+    onEnvironmentsChange(environmentIds);
     pending.current = true;
     setBusy(true);
     setError(null);
     setAttemptOffers(offers);
+    setSelected(selected);
     if (
       !support.featureOffersSeenUnavailableReason &&
       pendingServerOffers.current.length > 0 &&
@@ -226,6 +333,7 @@ function EnvironmentFeatureOffers({
     }
     const serverOffers = available.filter(
       (offer) =>
+        support.supportedFeatureIds.has(offer.id) &&
         offer.platform !== "mobile" &&
         offer.id !== "settings-sync" &&
         !savedServerOffers.current.includes(offer.id),
@@ -248,6 +356,12 @@ function EnvironmentFeatureOffers({
       serverOffers.length > 0 ||
       (!support.featureOffersSeenUnavailableReason &&
         acknowledged.some((id) => !settings.featureOffersSeen.includes(id)));
+    const queued = {
+      selected: [...selected],
+      offered: available
+        .filter((offer) => offer.platform !== "mobile" && offer.id !== "settings-sync")
+        .map((offer) => offer.id),
+    };
     const preferencesPatch = {
       featureOffersSeen: [
         ...new Set([
@@ -270,9 +384,15 @@ function EnvironmentFeatureOffers({
       ({
         transform: (current) => {
           const drafts = { ...current.featureOffersDrafts };
+          const pendingSaves = { ...current.featureOffersPendingSaves };
+          for (const { environment } of queuedTargets) {
+            pendingSaves[environment.environmentId] = queued;
+            if (environment.environmentId !== environmentId)
+              delete drafts[environment.environmentId];
+          }
           const remainingOffers = offers.filter(
             (offer) =>
-              !support.supportedFeatureIds.has(offer.id) ||
+              (primaryConnected && !support.supportedFeatureIds.has(offer.id)) ||
               (support.featureOffersSeenUnavailableReason &&
                 savedServerOffers.current.includes(offer.id)),
           );
@@ -286,12 +406,14 @@ function EnvironmentFeatureOffers({
                   offered: remainingOffers.map((offer) => offer.id),
                   savedServerOffers: savedServerOffers.current,
                   pendingServerOffers: pendingServerOffers.current,
+                  environmentIds,
                 }
               : null;
           if (remaining) drafts[environmentId] = remaining;
           else delete drafts[environmentId];
           return {
             ...preferencesPatch,
+            featureOffersPendingSaves: pendingSaves,
             featureOffersDrafts: drafts,
             featureOffersDraft:
               current.featureOffersDraft?.environmentId === environmentId
@@ -348,6 +470,7 @@ function EnvironmentFeatureOffers({
       offered: offers.map((offer) => offer.id),
       savedServerOffers: savedServerOffers.current,
       pendingServerOffers: pendingServerOffers.current,
+      environmentIds,
     };
     return savePreferences({
       transform: (current) => ({
@@ -378,9 +501,31 @@ function EnvironmentFeatureOffers({
     setPage(pageIds[next] ?? 0);
     void keep({ environmentId, selected: [...selected], step: next, page: pageIds[next] });
   };
+  const toggleEnvironment = (id: EnvironmentId) => {
+    const next = environmentIds.includes(id)
+      ? environmentIds.filter((entry) => entry !== id)
+      : [...environmentIds, id];
+    if (next.length === 0) return;
+    const primary = next[0];
+    if (primary && primary !== environmentId) {
+      const carried = {
+        environmentId: primary,
+        selected: [...selected],
+        step: 0,
+        environmentIds: next,
+      };
+      void savePreferences({
+        transform: (current) => ({
+          featureOffersDraft: carried,
+          featureOffersDrafts: { ...current.featureOffersDrafts, [primary]: carried },
+        }),
+      });
+    } else void keep({ environmentId, selected: [...selected], step, page: pageIds[step] });
+    onEnvironmentsChange(next);
+  };
   const dismiss = async (until?: string, native = false) => {
     if (pending.current) return;
-    onEnvironmentChange(environmentId);
+    onEnvironmentsChange(environmentIds);
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -420,11 +565,16 @@ function EnvironmentFeatureOffers({
             <Text className="text-base text-foreground-muted">
               You can change these choices in Settings.
             </Text>
+            {prefilled.sourceLabel ? (
+              <Text className="text-sm text-foreground-muted">
+                Filled in from your choices on {prefilled.sourceLabel}.
+              </Text>
+            ) : null}
             <FeatureOffersEnvironmentPicker
               targets={targets}
-              selected={environmentId}
+              selected={environmentIds}
               disabled={busy}
-              onSelect={onEnvironmentChange}
+              onToggle={toggleEnvironment}
             />
             {step < pages.length ? (
               pages[step]?.map((offer, index, pageOffers) => {
@@ -434,7 +584,13 @@ function EnvironmentFeatureOffers({
                     : offer.id === "thread-only-stop"
                       ? ["Only the current thread", "Current thread and its subagents"]
                       : null;
-                const unavailable = support.unavailableFeatureReasons.get(offer.id);
+                const unavailable = available.includes(offer)
+                  ? undefined
+                  : (support.unavailableFeatureReasons.get(offer.id) ??
+                    "No selected environment supports this feature.");
+                const supportChips = (
+                  <FeatureSupportChips offer={offer} targets={targets} selected={selectedTargets} />
+                );
                 return (
                   <View key={offer.id} className="gap-2">
                     {offer.page === 2 && index > 0 && pageOffers[index - 1]?.page === 1 ? (
@@ -458,15 +614,19 @@ function EnvironmentFeatureOffers({
                           disabled={busy || Boolean(unavailable)}
                           onPress={() => select(offer.id, false)}
                         />
+                        {supportChips}
                       </>
                     ) : (
-                      <SettingsSwitchRow
-                        label={offer.title}
-                        subtitle={unavailable ?? offer.description}
-                        value={selected.has(offer.id) || enabled.has(offer.id)}
-                        disabled={busy || Boolean(unavailable) || enabled.has(offer.id)}
-                        onValueChange={(value) => select(offer.id, value)}
-                      />
+                      <>
+                        <SettingsSwitchRow
+                          label={offer.title}
+                          subtitle={unavailable ?? offer.description}
+                          value={selected.has(offer.id)}
+                          disabled={busy || Boolean(unavailable)}
+                          onValueChange={(value) => select(offer.id, value)}
+                        />
+                        {supportChips}
+                      </>
                     )}
                   </View>
                 );
@@ -508,56 +668,137 @@ function EnvironmentFeatureOffers({
 interface FeatureOffersTarget {
   readonly environment: EnvironmentPresentation;
   readonly support: ReturnType<typeof getHomuSetupSupport>;
+  readonly offlineSupport: ReturnType<typeof getHomuSetupSupport>;
+}
+
+// Readable on both the light and dark sheet backgrounds.
+const ENVIRONMENT_COLORS = ["#3b82f6", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444"];
+
+function environmentColor(
+  targets: ReadonlyArray<FeatureOffersTarget>,
+  environmentId: EnvironmentId,
+): string {
+  const index = targets.findIndex((target) => target.environment.environmentId === environmentId);
+  return ENVIRONMENT_COLORS[Math.max(0, index) % ENVIRONMENT_COLORS.length]!;
+}
+
+/** "later": the server is offline and its choices are sent when it reconnects. */
+function offerSupport(target: FeatureOffersTarget, offerId: string): "yes" | "no" | "later" {
+  const { environment } = target;
+  if (environment.connection.phase === "connected")
+    return target.support.supportedFeatureIds.has(offerId) ? "yes" : "no";
+  if (!environment.serverConfig) return "later";
+  return target.offlineSupport.supportedFeatureIds.has(offerId) ? "later" : "no";
+}
+
+function FeatureSupportChips({
+  offer,
+  targets,
+  selected,
+}: {
+  readonly offer: FeatureOffer;
+  readonly targets: ReadonlyArray<FeatureOffersTarget>;
+  readonly selected: ReadonlyArray<FeatureOffersTarget>;
+}) {
+  if (offer.platform === "mobile" || offer.id === "settings-sync") {
+    return (
+      <View className="flex-row flex-wrap gap-2 px-4">
+        <Text className="text-xs text-foreground-muted">This phone</Text>
+      </View>
+    );
+  }
+  return (
+    <View className="flex-row flex-wrap gap-2 px-4">
+      {selected.map((target) => {
+        const { environmentId, label } = target.environment;
+        const state = offerSupport(target, offer.id);
+        const color = environmentColor(targets, environmentId);
+        return (
+          <View
+            key={environmentId}
+            accessible
+            accessibilityLabel={
+              state === "yes"
+                ? `${label} supports this`
+                : state === "later"
+                  ? `${label} gets this when it reconnects`
+                  : `${label} does not support this`
+            }
+            className="flex-row items-center gap-1.5 rounded-full border px-2 py-0.5"
+            style={{
+              borderColor: state === "no" ? "transparent" : color,
+              opacity: state === "no" ? 0.5 : 1,
+            }}
+          >
+            <View
+              className="size-2 rounded-full border"
+              style={{
+                borderColor: color,
+                backgroundColor: state === "yes" ? color : "transparent",
+              }}
+            />
+            <Text
+              className="text-xs text-foreground"
+              style={state === "no" ? { textDecorationLine: "line-through" } : undefined}
+            >
+              {state === "later" ? `${label} (when online)` : label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 function FeatureOffersEnvironmentPicker({
   targets,
   selected,
   disabled,
-  onSelect,
+  onToggle,
 }: {
   readonly targets: ReadonlyArray<FeatureOffersTarget>;
-  readonly selected: EnvironmentId;
+  readonly selected: ReadonlyArray<EnvironmentId>;
   readonly disabled: boolean;
-  readonly onSelect: (environmentId: EnvironmentId) => void;
+  readonly onToggle: (environmentId: EnvironmentId) => void;
 }) {
   return (
     <View className="gap-3">
       <Text className="text-sm text-foreground-muted">
-        Server choices apply to the selected environment. Phone choices apply to this phone.
+        Server choices apply to every selected environment. Phone choices apply to this phone.
       </Text>
-      {targets.map(({ environment, support }) => {
-        const reasons = new Map<string, string[]>();
-        for (const offer of FEATURE_OFFERS) {
-          const reason = support.unavailableFeatureReasons.get(offer.id);
-          if (reason) reasons.set(reason, [...(reasons.get(reason) ?? []), offer.title]);
-        }
-        return (
+      <View>
+        {targets.map(({ environment, support }, index) => (
           <View key={environment.environmentId}>
-            <ListChoiceRow
-              label={environment.label}
-              description={
+            <SelectionRow
+              role="checkbox"
+              title={environment.label}
+              leading={
+                <View
+                  className="size-3 rounded-full"
+                  style={{
+                    backgroundColor: environmentColor(targets, environment.environmentId),
+                  }}
+                />
+              }
+              subtitle={
                 environment.connection.phase !== "connected"
-                  ? "Disconnected. Server choices stay on this phone until it reconnects."
+                  ? "Offline. Choices are sent when it reconnects."
                   : `${support.supportedFeatureIds.size} features available`
               }
-              selected={environment.environmentId === selected}
+              selected={selected.includes(environment.environmentId)}
               disabled={disabled}
-              onPress={() => onSelect(environment.environmentId)}
+              isFirst={index === 0}
+              isLast={index === targets.length - 1}
+              onPress={() => onToggle(environment.environmentId)}
             />
-            {[...reasons].map(([reason, titles]) => (
-              <Text key={reason} className="text-sm text-foreground-muted">
-                {reason} {titles.join(", ")}.
-              </Text>
-            ))}
             {support.featureOffersSeenUnavailableReason ? (
               <Text className="text-sm text-foreground-muted">
                 {support.featureOffersSeenUnavailableReason}
               </Text>
             ) : null}
           </View>
-        );
-      })}
+        ))}
+      </View>
     </View>
   );
 }

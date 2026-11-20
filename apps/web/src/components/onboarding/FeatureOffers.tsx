@@ -2,8 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useLocation } from "@tanstack/react-router";
 import {
   FEATURE_OFFERS,
-  enabledFeatureOffers,
-  selectedFeatureOffers,
+  prefilledFeatureOffers,
   featureOfferPages,
   featureOfferSettingsPatch,
   unseenFeatureOffers,
@@ -40,13 +39,11 @@ const OPTIONAL_FEATURE_OFFERS = FEATURE_OFFERS.filter((offer) => offer.page === 
 export function FeatureOfferChoices({
   offers = OPTIONAL_FEATURE_OFFERS,
   selected,
-  enabled,
   onChange,
   disabled = false,
 }: {
   offers?: ReadonlyArray<FeatureOffer>;
   selected: ReadonlySet<string>;
-  enabled?: ReadonlySet<string>;
   onChange: (selected: ReadonlySet<string>) => void;
   disabled?: boolean;
 }) {
@@ -93,8 +90,8 @@ export function FeatureOfferChoices({
             ) : (
               <label className="flex cursor-pointer items-start gap-3 text-sm">
                 <Checkbox
-                  disabled={disabled || enabled?.has(offer.id)}
-                  checked={selected.has(offer.id) || enabled?.has(offer.id) === true}
+                  disabled={disabled}
+                  checked={selected.has(offer.id)}
                   onCheckedChange={(checked) => select(Boolean(checked))}
                 />
                 <span>
@@ -132,8 +129,16 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
   );
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const localSettings = useClientSettings();
+  const configs = useAtomValue(environmentServerConfigsAtom);
+  const prefilled = prefilledFeatureOffers(
+    settings,
+    localSettings,
+    [...configs].flatMap(([id, config]) =>
+      id === environmentId ? [] : [{ label: config.environment.label, settings: config.settings }],
+    ),
+  );
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null);
-  const selected = chosen ?? selectedFeatureOffers(settings, localSettings);
+  const selected = chosen ?? prefilled.selected;
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const offers = unseenFeatureOffers(settings).filter(
@@ -184,14 +189,18 @@ function EnvironmentFeatureOffers({ environmentId }: { environmentId: Environmen
       <DialogPopup data-unprompted>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>You can change these choices in Settings.</DialogDescription>
+          <DialogDescription>
+            You can change these choices in Settings.
+            {prefilled.sourceLabel
+              ? ` Filled in from your choices on ${prefilled.sourceLabel}.`
+              : null}
+          </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           {step < pages.length ? (
             <FeatureOfferChoices
               offers={pages[step] ?? []}
               selected={selected}
-              enabled={enabledFeatureOffers(settings)}
               onChange={setChosen}
               disabled={busy}
             />

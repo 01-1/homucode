@@ -327,7 +327,7 @@ export function featureOfferPages(
     : [first, extra];
 }
 
-export function enabledFeatureOffers(
+function enabledFeatureOffers(
   settings: Pick<ServerSettings, "madohomuEnabled" | "quickModelSelection">,
 ): ReadonlySet<string> {
   return new Set([
@@ -351,7 +351,10 @@ export function selectedFeatureOffers(
 }
 
 export function featureOfferSettingsPatch(
-  settings: Pick<ServerSettings, "featureOffersSeen" | "defaultModelSelection">,
+  settings: Pick<
+    ServerSettings,
+    "featureOffersSeen" | "defaultModelSelection" | "madohomuEnabled" | "quickModelSelection"
+  >,
   offered: ReadonlyArray<FeatureOffer>,
   selected: ReadonlySet<string>,
 ) {
@@ -362,6 +365,9 @@ export function featureOfferSettingsPatch(
         ? (offer.enabledValue ?? true)
         : !(offer.enabledValue ?? true);
   }
+  const offers = (id: string) => offered.some((offer) => offer.id === id);
+  const madohomu = offers("madohomu") ? selected.has("madohomu") : settings.madohomuEnabled;
+  const quick = offers("quick-model") ? selected.has("quick-model") : null;
   return {
     ...booleanPatch,
     featureOffersSeen: [
@@ -370,13 +376,81 @@ export function featureOfferSettingsPatch(
         ...offered.filter((offer) => !offer.platform).map((offer) => offer.id),
       ]),
     ],
-    ...(offered.some((offer) => offer.id === "madohomu") && selected.has("madohomu")
-      ? { madohomuEnabled: true }
-      : {}),
-    ...(offered.some((offer) => offer.id === "quick-model") &&
-    selected.has("quick-model") &&
-    settings.defaultModelSelection
+    ...(madohomu !== settings.madohomuEnabled ? { madohomuEnabled: madohomu } : {}),
+    ...(quick === true && !settings.quickModelSelection && settings.defaultModelSelection
       ? { quickModelSelection: settings.defaultModelSelection }
       : {}),
+    ...(quick === false && settings.quickModelSelection ? { quickModelSelection: null } : {}),
   };
+}
+
+/** A server whose setup already ran, to start another server's choices from. */
+export interface FeatureOfferSource {
+  readonly label: string;
+  readonly settings: ServerSettings;
+}
+
+/**
+ * Choices to start from: a server's own answers for offers it has seen, then answers another
+ * server already gave, then defaults. `sourceLabel` names that other server when it filled any.
+ */
+export function prefilledFeatureOffers(
+  settings: ServerSettings,
+  local: { readonly settingsSyncEnabled?: boolean; readonly fasterPhoneLaunch?: boolean },
+  sources: ReadonlyArray<FeatureOfferSource>,
+): { readonly selected: ReadonlySet<string>; readonly sourceLabel: string | null } {
+  const own = selectedFeatureOffers(settings, local);
+  const seen = new Set(settings.featureOffersSeen);
+  const source = sources
+    .filter((candidate) => candidate.settings.featureOffersSeen.some((id) => !seen.has(id)))
+    .reduce<FeatureOfferSource | undefined>(
+      (best, candidate) =>
+        best &&
+        best.settings.featureOffersSeen.length >= candidate.settings.featureOffersSeen.length
+          ? best
+          : candidate,
+      undefined,
+    );
+  if (!source) return { selected: own, sourceLabel: null };
+  const theirs = selectedFeatureOffers(source.settings, local);
+  const sourceSeen = new Set(source.settings.featureOffersSeen);
+  const selected = new Set<string>();
+  let copied = false;
+  for (const offer of FEATURE_OFFERS) {
+    const fromSource =
+      !offer.platform &&
+      offer.id !== "settings-sync" &&
+      !seen.has(offer.id) &&
+      sourceSeen.has(offer.id);
+    copied ||= fromSource;
+    if ((fromSource ? theirs : own).has(offer.id)) selected.add(offer.id);
+  }
+  return { selected, sourceLabel: copied ? source.label : null };
+}
+
+/** Choices saved on a device for a server that was offline, sent once it connects. */
+export interface PendingFeatureOfferSave {
+  readonly selected: ReadonlyArray<string>;
+  readonly offered: ReadonlyArray<string>;
+}
+
+export function pendingFeatureOfferPatch(
+  settings: ServerSettings,
+  support: ReturnType<typeof getHomuSetupSupport>,
+  save: PendingFeatureOfferSave,
+) {
+  const offers = FEATURE_OFFERS.filter(
+    (offer) =>
+      save.offered.includes(offer.id) &&
+      support.supportedFeatureIds.has(offer.id) &&
+      !offer.platform &&
+      offer.id !== "settings-sync",
+  );
+  if (offers.length === 0) return null;
+  const { featureOffersSeen, ...patch } = featureOfferSettingsPatch(
+    settings,
+    offers,
+    new Set(save.selected),
+  );
+  return support.featureOffersSeenUnavailableReason ? patch : { ...patch, featureOffersSeen };
 }
