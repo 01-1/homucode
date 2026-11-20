@@ -452,14 +452,23 @@ it.each([false, true])(
       featureOffersSeen: ["settings-sync", "faster-phone-launch"],
     };
     mocks.savedPreferences = mocks.preferences;
+    const seenBeforeSave = mocks.settings.featureOffersSeen.filter((id) => id !== "subagents");
     const other = {
       environmentId: "omen",
       label: "omen",
       connection: { phase: "connected" },
-      serverConfig: { settings: { ...mocks.settings }, environment: mocks.descriptor },
+      serverConfig: {
+        settings: {
+          ...mocks.settings,
+          featureOffersSeen: seenBeforeSave,
+          preferNativeSubagents: true,
+        },
+        environment: mocks.descriptor,
+      },
     };
     mocks.otherEnvironments = [other];
     act(() => screen.root.render(<FeatureOffersSheet active />));
+    await screen.click("Homu delegation (delegate_task)");
     const gate = Promise.withResolvers<{ _tag: "Failure" }>();
     mocks.preferenceGate = gate.promise;
     mocks.gateFinalWrite = true;
@@ -485,12 +494,15 @@ it.each([false, true])(
     ).toEqual(["Set up building HomuCode"]);
     mocks.preferenceGate = null;
     if (relaunch) {
+      await screen.click("Homu delegation (delegate_task)");
       await screen.click("Not now");
       await screen.click("On next launch");
-      expect(mocks.preferences.featureOffersDraft?.savedServerOffers).toContain("building-t3");
+      expect(mocks.preferences.featureOffersDraft?.savedServerOffers).toEqual(
+        expect.arrayContaining(["building-t3", "subagents"]),
+      );
       other.serverConfig.settings = {
         ...other.serverConfig.settings,
-        featureOffersSeen: mocks.settings.featureOffersSeen,
+        featureOffersSeen: seenBeforeSave,
       };
       act(() => screen.root.render(null));
       act(() => screen.root.render(<FeatureOffersSheet active />));
@@ -498,7 +510,7 @@ it.each([false, true])(
     await screen.click("Save");
     if (relaunch) {
       expect(mocks.update.mock.calls[1]?.[0].input.patch).toEqual({
-        featureOffersSeen: expect.arrayContaining(["building-t3"]),
+        featureOffersSeen: expect.arrayContaining(["building-t3", "subagents"]),
       });
     } else {
       expect(mocks.update).toHaveBeenCalledOnce();
