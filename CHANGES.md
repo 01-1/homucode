@@ -19,6 +19,8 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Threads and subagents
 
+- **Claude context after Resume.** Stopping a resumed Claude turn before it answers preserves the conversation for the next turn.
+
 - **Full access command approvals.** Codex and Claude threads, including delegated threads, no longer pause for native tool approvals in Full access. If a provider still requires confirmation for a command, HomuCode refuses it automatically and gives the agent the reason.
 
 - **Subagents and moves.** Pinned subagents get their own row in the sidebar's pinned group, naming their parent. New subagents start unpinned by default. Turn on **Settings → HomuCode → Subagents → Subagents inherit parent pin** to pin new subagents on the same server wherever their parent is pinned. Threads can be moved under another thread or to the root (`thread.move`, the `t3_thread_organize` tool, and the thread menus), with guards so no pending result or wait is lost.

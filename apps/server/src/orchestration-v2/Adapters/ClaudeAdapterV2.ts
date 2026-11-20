@@ -1499,12 +1499,6 @@ export const layerQueryRunner: Layer.Layer<
             ...(resumeSessionAt === undefined ? {} : { resumeSessionAt }),
             env: {
               ...(sdkOptions.env ?? hostEnvironment),
-              ...(input.resume
-                ? {
-                    CLAUDE_CODE_RESUME_INTERRUPTED_TURN: "1",
-                    CLAUDE_CODE_RESUME_REASON: "user_resume",
-                  }
-                : {}),
               [PortScanner.AGENT_THREAD_ENV]: input.threadId,
             },
           };
@@ -13179,12 +13173,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               promptUuid === null
                 ? null
                 : turnInput.resume
-                  ? {
-                      type: "user" as const,
-                      message: { role: "user" as const, content: [] },
-                      parent_tool_use_id: null,
+                  ? // Claude does not save an empty resume prompt. A second Stop can then orphan the transcript.
+                    makeClaudeUserMessage({
+                      text: "Continue where you left off.",
                       uuid: promptUuid,
-                    }
+                    })
                   : yield* makeClaudeUserMessageWithAttachments({
                       text: promptText,
                       // Mentions in inline handoff history are history, not this turn's skill.
