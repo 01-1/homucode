@@ -1,3 +1,4 @@
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import {
   ClientSettingsSchema,
   type ClientSettingsPatch,
@@ -25,6 +26,9 @@ import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 import * as Equal from "effect/Equal";
 import * as Cause from "effect/Cause";
 import { Atom } from "effect/reactivity";
+import { msg } from "gt-react";
+
+import { m } from "../../i18n/messages";
 
 import type { ResolvedSettingsScope } from "./settingsScope";
 
@@ -205,18 +209,18 @@ export function scopedSettingsAreMixed(
 
 /** The global "Compact idle threads" choices: "Before the cache expires" with and without falling back to "When you return". */
 export const IDLE_COMPACTION_CHOICES = [
-  { value: "onReturn", label: "When you return", patch: { idleCompaction: "onReturn" } },
+  { value: "onReturn", label: msg("When you return"), patch: { idleCompaction: "onReturn" } },
   {
     value: "beforeCacheExpires",
-    label: "Before cache expires, or on return (beta)",
+    label: msg("Before cache expires, or on return (beta)"),
     patch: { idleCompaction: "beforeCacheExpires", idleCompactionFallback: true },
   },
   {
     value: "beforeCacheExpiresOnly",
-    label: "Only before cache expires (beta)",
+    label: msg("Only before cache expires (beta)"),
     patch: { idleCompaction: "beforeCacheExpires", idleCompactionFallback: false },
   },
-  { value: "off", label: "Never", patch: { idleCompaction: "off" } },
+  { value: "off", label: msg("Never"), patch: { idleCompaction: "off" } },
 ] as const satisfies readonly { value: string; label: string; patch: ServerSettingsPatch }[];
 
 export function idleCompactionChoice(
@@ -429,10 +433,16 @@ export function planScopedSettingsPatch(
       : scope.kind === "unavailable"
         ? scope.message
         : unscopableKeys.length > 0
-          ? "This setting is environment-wide and cannot be overridden by a project."
+          ? m(msg("This setting is environment-wide and cannot be overridden by a project."))
           : isProjectScope
-            ? "Connect the selected checkouts, or update their environments, to save a project override."
-            : `Connect ${scope.kind === "environment" ? scope.label : "an environment"} to save this setting.`;
+            ? m(
+                msg(
+                  "Connect the selected checkouts, or update their environments, to save a project override.",
+                ),
+              )
+            : scope.kind === "environment"
+              ? m(msg("Connect {environment} to save this setting.", { environment: scope.label }))
+              : m(msg("Connect an environment to save this setting."));
   return { clientPatch, hasClientWrite, serverWrites, unavailableReason };
 }
 
@@ -454,7 +464,11 @@ export function planScopedSettingsClear(
     unavailableReason:
       serverWrites.length > 0
         ? null
-        : "Connect the selected checkouts, or update their environments, to reset this override.",
+        : m(
+            msg(
+              "Connect the selected checkouts, or update their environments, to reset this override.",
+            ),
+          ),
   };
 }
 
@@ -510,7 +524,7 @@ export function planProjectOverridesClear(
     hasClientWrite: false,
     serverWrites,
     unavailableReason:
-      serverWrites.length > 0 ? null : "Connect the environments to reset these overrides.",
+      serverWrites.length > 0 ? null : m(msg("Connect the environments to reset these overrides.")),
   };
 }
 
@@ -688,7 +702,7 @@ async function persistScopedSettingsPlan(
       return [
         {
           ...environment,
-          message: "This environment does not support this setting. Update HomuCode on it.",
+          message: m(msg("This environment does not support this setting. Update HomuCode on it.")),
         },
       ];
     }
@@ -703,8 +717,8 @@ async function persistScopedSettingsPlan(
         ...environment,
         message:
           error instanceof Error
-            ? error.message
-            : "The save failed. Try reconnecting and saving again.",
+            ? (errorDisplayMessage(error, m) ?? error.message)
+            : m(msg("The save failed. Try reconnecting and saving again.")),
       },
     ];
   });

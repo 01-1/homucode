@@ -8,7 +8,7 @@ import {
   type AndroidNavigationStyle,
 } from "../../../lib/androidNavigationStyle";
 
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Atom, AsyncResult } from "effect/reactivity";
 
 import { ScopedTheme, ScopedVariables, Uniwind } from "uniwind";
@@ -19,7 +19,8 @@ import {
   type ResolvedAppearance,
 } from "../../../lib/appearancePreferences";
 import { appAtomRegistry } from "../../../state/atom-registry";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../../state/preferences";
+import { useAtomCommand } from "../../../state/use-atom-command";
 import { mobilePublishedThemesAtom, mobileThemeSourceAtom } from "../../../state/themes";
 import type { Preferences } from "../../../persistence/mobile-preferences";
 import {
@@ -201,7 +202,7 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   const themeSource = useAtomValue(mobileThemeSourceAtom);
   const publishedThemes = useAtomValue(mobilePublishedThemesAtom);
   const themeSourceLabel = themeSource?.label ?? null;
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   const systemColorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const storedPreferences = AsyncResult.isSuccess(preferencesResult)
     ? preferencesResult.value
@@ -269,11 +270,13 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   ]);
 
   const updatePreferences = (patch: Partial<Preferences>) => {
-    startTransition(() => savePreferences(patch));
+    startTransition(() => {
+      void savePreferences(patch);
+    });
   };
 
   const updateThemePreferences = (patch: Partial<Preferences>) => {
-    savePreferences(patch);
+    void savePreferences(patch);
   };
 
   // A theme picked here replaces a synced one the phone could not show.

@@ -191,6 +191,11 @@ export const make = Effect.gen(function* () {
       });
       // VMs and containers can resize RAM live, so each launch re-checks the total
       // the limits came from. A failed update is retried by the next launch.
+      // An unreadable meminfo keeps the throttle, as before swap was checked.
+      const readHasSwap = fileSystem.readFileString("/proc/meminfo").pipe(
+        Effect.map((text) => /^SwapTotal:\s*0 kB$/m.exec(text) === null),
+        Effect.orElseSucceed(() => true),
+      );
       let appliedTotal: number | undefined;
       let appliedKey: string | undefined;
       const memoryLimitsLock = yield* Semaphore.make(1);
@@ -199,7 +204,8 @@ export const make = Effect.gen(function* () {
           const total = NodeOS.totalmem();
           const settings = yield* memory.settings;
           const limits = agentMemoryLimits(settings, total);
-          const high = settings.enabled ? String(limits.groupHigh) : "infinity";
+          const high =
+            settings.enabled && (yield* readHasSwap) ? String(limits.groupHigh) : "infinity";
           const max = settings.enabled ? String(limits.groupMax) : "infinity";
           const key = `${total}:${high}:${max}`;
           if (key === appliedKey) return;

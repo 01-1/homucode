@@ -26,7 +26,7 @@ const SECTIONS = [
     title: "Server settings",
     rows: [
       { id: "SettingsProviderAccounts", label: "Provider accounts" },
-      { id: "SettingsEnvironmentSourceControl", label: "Source control" },
+      { id: "SettingsEnvironmentSourceControl", label: "Source control & issues" },
     ],
   },
 ];
@@ -55,10 +55,10 @@ describe("filterSettingsSections", () => {
     { query: "building homu", expected: [["Interface", ["HomuCode"]]] },
     { query: "morning brief", expected: [["Interface", ["HomuCode"]]] },
     { query: "microphone", expected: [["Interface", ["Voice"]]] },
-    { query: "agent credits", expected: [["Server settings", ["Source control"]]] },
+    { query: "agent credits", expected: [["Server settings", ["Source control & issues"]]] },
     {
       query: "server settings",
-      expected: [["Server settings", ["Provider accounts", "Source control"]]],
+      expected: [["Server settings", ["Provider accounts", "Source control & issues"]]],
     },
     {
       query: "accounts",

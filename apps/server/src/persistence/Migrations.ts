@@ -110,6 +110,12 @@ import HomuMigration99 from "./Migrations/099_ThreadFolders.ts";
 import HomuMigration100 from "./Migrations/100_ThreadFolderRules.ts";
 import HomuMigration101 from "./Migrations/101_ThreadTitleIdIndex.ts";
 import RepairStaleTitleRegeneration from "./Migrations/102_RepairStaleTitleRegeneration.ts";
+import Migration0103 from "./Migrations/103_IssueTrackerBindings.ts";
+import Migration0104 from "./Migrations/104_ActiveShellIndexIndexes.ts";
+import Migration0105 from "./Migrations/105_BackgroundRecoveryIndexes.ts";
+import Migration0106 from "./Migrations/106_TurnStartReadIndexes.ts";
+import Migration0107 from "./Migrations/107_DelegatedTaskReadIndexes.ts";
+import Migration0108 from "./Migrations/108_ThreadItemCounts.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -215,6 +221,12 @@ const migrationEntries = [
   [100, "ThreadFolderRules", HomuMigration100],
   [101, "ThreadTitleIdIndex", HomuMigration101],
   [102, "RepairStaleTitleRegeneration", RepairStaleTitleRegeneration],
+  [103, "IssueTrackerBindings", Migration0103],
+  [104, "ActiveShellIndexIndexes", Migration0104],
+  [105, "BackgroundRecoveryIndexes", Migration0105],
+  [106, "TurnStartReadIndexes", Migration0106],
+  [107, "DelegatedTaskReadIndexes", Migration0107],
+  [108, "ThreadItemCounts", Migration0108],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -300,17 +312,34 @@ const LEGACY_HOMU_MIGRATIONS = new Map<number, string>([
   [86, "ThreadFolderRules"],
 ]);
 
+const UPSTREAM_V0111_TAIL = [
+  "RepairStaleTitleRegeneration",
+  "IssueTrackerBindings",
+  "ActiveShellIndexIndexes",
+  "BackgroundRecoveryIndexes",
+  "TurnStartReadIndexes",
+  "DelegatedTaskReadIndexes",
+  "ThreadItemCounts",
+] as const;
+
 // Older Homu builds recorded their own migrations at 82-86; drop those rows so they rerun as 96-100.
 export function reconciledHomuMigrationHistory(
   recorded: ReadonlyArray<{ readonly id: number; readonly name: string }>,
 ) {
-  const upstreamRepair = recorded.find(
+  const upstreamRepair = recorded.some(
     ({ id, name }) => id === 96 && name === "RepairStaleTitleRegeneration",
   );
-  if (upstreamRepair !== undefined) {
-    const upstream = recorded.filter((row) => row !== upstreamRepair);
-    if (upstream.every(({ id }) => id <= 95) && skippedV2Migrations(upstream).length === 0)
-      return upstream;
+  if (upstreamRepair) {
+    const common = recorded.filter(({ id }) => id <= 95);
+    const tail = recorded.filter(({ id }) => id > 95).toSorted((a, b) => a.id - b.id);
+    // The shared history and contiguous upstream tail must match before replaying the moved entries.
+    if (
+      common.some(({ id }) => id === 95) &&
+      skippedV2Migrations(common).length === 0 &&
+      tail.every(({ id, name }, index) => id === 96 + index && name === UPSTREAM_V0111_TAIL[index])
+    ) {
+      return common;
+    }
     return recorded;
   }
   const kept = recorded.filter(({ id, name }) => LEGACY_HOMU_MIGRATIONS.get(id) !== name);

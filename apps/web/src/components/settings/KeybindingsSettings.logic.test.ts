@@ -1,3 +1,4 @@
+import { decodeMsg } from "gt-react";
 import { assert, describe, expect, it } from "vite-plus/test";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import {
@@ -84,7 +85,7 @@ describe("KeybindingsSettings.logic", () => {
     const rows = buildKeybindingRows(bindings);
     const custom = rows.find((row) => row.command === "bash:npm run build.prod");
     expect(custom).toMatchObject({ source: "Custom", defaultKey: null });
-    expect(groupKeybindingRows(rows).map((group) => group.title)).toEqual([
+    expect(groupKeybindingRows(rows).map((group) => decodeMsg(group.title))).toEqual([
       "Project scripts",
       "Custom scripts",
     ]);
@@ -295,6 +296,12 @@ describe("KeybindingsSettings.logic", () => {
     ] satisfies ResolvedKeybindingsConfig);
 
     expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
+    const disabledRows = buildKeybindingRows([
+      rows[0]!.binding,
+      { ...rows[1]!.binding, whenAst: { type: "identifier", name: "false" } },
+    ]);
+    expect(disabledRows.map((row) => row.conflicts)).toEqual([[], []]);
+
     expect(
       keybindingConflictLabels(rows, {
         rowId: rows[0]?.id ?? "",

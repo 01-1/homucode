@@ -1,15 +1,21 @@
 import Constants from "expo-constants";
+import { msg, T, useMessages } from "gt-react-native";
 import { View } from "react-native";
 
 import { AppText as Text } from "./ui/AppText";
 
 const appVariant = Constants.expoConfig?.extra?.appVariant;
 const DEFAULT_STAGE_LABEL =
-  appVariant === "development" ? "Dev" : appVariant === "preview" ? "Preview" : "Beta";
+  appVariant === "development"
+    ? msg("Dev", { $context: "app release stage badge" })
+    : appVariant === "preview"
+      ? msg("Preview", { $context: "app release stage badge" })
+      : msg("Beta", { $context: "app release stage badge" });
 
 export function BrandMark(props: { readonly compact?: boolean; readonly stageLabel?: string }) {
+  const m = useMessages();
   const compact = props.compact ?? false;
-  const stageLabel = props.stageLabel ?? DEFAULT_STAGE_LABEL;
+  const stageLabel = props.stageLabel ?? m(DEFAULT_STAGE_LABEL);
 
   return (
     <View className="gap-1">
@@ -26,7 +32,7 @@ export function BrandMark(props: { readonly compact?: boolean; readonly stageLab
       </View>
       {!compact ? (
         <Text className="text-xs font-medium text-foreground-muted">
-          Mobile control surface for your live coding environments
+          <T>Mobile control surface for your live coding environments</T>
         </Text>
       ) : null}
     </View>

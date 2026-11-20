@@ -1,6 +1,8 @@
 import { uuidv4 } from "../../lib/uuid";
 import * as Dialog from "../../components/ui/Dialog";
 import { useNavigation } from "@react-navigation/native";
+import { vcsActionLabelText } from "@t3tools/client-runtime/state/vcs";
+import { useGT, useMessages } from "gt-react-native";
 import { AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 import { AuthFilesystemReadScope, AuthSourceControlWriteScope } from "@t3tools/contracts";
@@ -22,6 +24,8 @@ export function DraftThreadHeader(props: {
   /** A MadoHomu draft, which never names its project. */
   readonly madohomu: boolean;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const navigation = useNavigation();
   const environmentId = props.thread.environmentId;
   const canReadFiles = useEnvironmentScope(environmentId, AuthFilesystemReadScope);
@@ -44,11 +48,11 @@ export function DraftThreadHeader(props: {
     });
   };
   const requiresThread = () =>
-    Dialog.alert("Available after the first message", "This action needs a saved thread.");
+    Dialog.alert(gt("Available after the first message"), gt("This action needs a saved thread."));
   return (
     <ThreadHeader
       draft
-      title="New thread"
+      title={gt("New thread")}
       subtitle=""
       hasThreadCwd={props.cwd !== null}
       inspectorMode={null}
@@ -59,7 +63,7 @@ export function DraftThreadHeader(props: {
         hasThread: false,
         currentBranch: props.thread.branch,
         gitStatus: status.data,
-        gitOperationLabel: progress.currentLabel,
+        gitOperationLabel: vcsActionLabelText(progress, messages),
         canOpenTerminal: false,
         canOperateTerminal: false,
         canOpenFiles: canReadFiles && props.cwd !== null,
@@ -76,7 +80,7 @@ export function DraftThreadHeader(props: {
           if (!canWriteGit || !props.cwd) return;
           const result = await pull({ environmentId, input: { cwd: props.cwd } });
           if (AsyncResult.isFailure(result))
-            Dialog.alert("Could not pull", String(Cause.squash(result.cause)));
+            Dialog.alert(gt("Could not pull"), String(Cause.squash(result.cause)));
         },
         onRunAction: async (input) => {
           if (!canWriteGit || !props.cwd) return null;
@@ -86,7 +90,7 @@ export function DraftThreadHeader(props: {
             actionId: uuidv4(),
           });
           if (AsyncResult.isFailure(result)) {
-            Dialog.alert("Git action failed", String(Cause.squash(result.cause)));
+            Dialog.alert(gt("Git action failed"), String(Cause.squash(result.cause)));
             return null;
           }
           return result.value;
