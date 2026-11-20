@@ -185,6 +185,8 @@ const make = Effect.gen(function* () {
         ? yield* runProcess("bash", [path.join(repo, "scripts/homu-android/build.sh"), sha], repo, {
             ...process.env,
             T3_BUILD_BOAT_CLI: boat,
+            MODE: "apk",
+            PUBLISH_OTA: "0",
             VARIANT: "development",
             APP_NAME: "HomuCode",
             OUT: path.join(home, "app/mobile"),

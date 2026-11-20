@@ -1,0 +1,23 @@
+# HomuCode Android development
+
+## UI verification on Boat
+
+Use a Boat emulator for Android UI verification. Run the app against an isolated backend and drive it through the T3 Device panel. Launch the exact build and exercise the changed flow before reporting in-app verification. Agents may add and remove a temporary Boat Device source through the Browser panel without asking again. The [Test T3 Mobile skill](../../.agents/skills/test-t3-mobile/SKILL.md) covers the device tools, pairing, and teardown.
+
+1. Look for a Boat source in the Device panel. If it is missing, use `boat list --all` to look for an existing emulator sandbox. If you need a new one, use a dedicated sandbox with a bounded lifetime and verify that its SSH user can access `/dev/kvm`.
+2. On the Boat host, install Node 22.12 or newer, Java 17, and FFmpeg with libx264. Install the Android command-line tools under `~/Android/Sdk/cmdline-tools/latest`, accept the SDK licenses, and use `sdkmanager` to install `platform-tools`, `emulator`, and `system-images;android-36;google_apis;x86_64`. For foldable testing, run `avdmanager create avd --name homucode_fold --package 'system-images;android-36;google_apis;x86_64' --device pixel_9_pro_fold`.
+3. Confirm `boat ssh <sandbox-id>` works. On pbox, configure an SSH alias using the sandbox's current endpoint, the Boat SSH identity, and the pinned sandbox host key from the Boat CLI. Add the alias as a [machine over SSH](../user/devices.md#ssh-device-hosts) in Settings → Devices and test the connection.
+4. Run `device_list` in the test thread and use `device_open` on the Boat host and AVD it returns. Let T3 boot the device. If the Boat emulator remains unavailable, report what failed and stop verification.
+5. If the isolated backend runs on pbox, forward its loopback port with `ssh -NT -o ExitOnForwardFailure=yes -R <remote-port>:127.0.0.1:<server-port> <boat-alias>`. Pair the emulator to `http://10.0.2.2:<remote-port>`. If the installed server lacks an API the app needs, run the checkout’s server with the repo’s Node version and `node apps/server/src/bin.ts serve --base-dir <isolated-dir> --host 127.0.0.1 --port <server-port>`.
+6. Use the AgentDevice command returned by `device_open` for app interaction. After testing, close the device session, remove the temporary Device source and SSH alias, and stop the test backend, forward, and disposable sandbox you started.
+
+`vp run mobile:install android` routes Android cache misses to Boat on pbox. For a signed release APK with bundled JavaScript, use the release procedure below and install the APK on the selected Boat device. Use Add Environment with the forwarded address and a fresh one-time code from the isolated backend when testing a release APK.
+
+## Releasing Android updates
+
+- Use `scripts/homu-android/ota.sh [REF]` for a JavaScript release on the current native runtime. It publishes from Boat to the fork's EAS project and records the update group, channel configuration, and runtime under `~/hold/homu-android/<sha>-development-ota/run.*/`. The default ref is `origin/main`.
+- For a new runtime or an install with Expo Updates disabled, run `scripts/homu-android/build.sh [REF]` from pbox. It signs a release APK on Boat for arm64-v8a and x86_64, verifies it, and copies it to `~/app/mobile/HomuCode-development-<sha>.apk`. The signed release also publishes its matching OTA. The in-app Build Android APK action produces a test APK and leaves the release channel alone. Build logs and release metadata are under `~/hold/homu-android/<sha>-development/run.*/`.
+- Before delivery, verify that Expo Updates is enabled in the built APK, the project and channel are the fork's, and the published runtime matches the APK. An installed APK only receives updates for its native runtime. Use the signed APK to move it to a new runtime.
+- Keep the default `VARIANT=development` (package `com.t3tools.t3code.dev`): T3's Clerk instance allows that package's sign-in callback, so Connect sign-in works. `APP_NAME` (default `HomuCode`) is the launcher name.
+- It signs with the `t3-preview` key in `~/credentials/android-signing/`. Keep that key, or installed builds stop updating in place. The version code is the build's UTC date and hour, so each build installs over the last.
+- To put it on Homura's phone, serve it on the LAN from pbox: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <pbox wlo1 IPv4> --directory ~/hold/lan-apk`. Give her `http://<ip>:8767/<apk>`. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule in the copied part.

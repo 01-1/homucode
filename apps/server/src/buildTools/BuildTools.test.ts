@@ -58,7 +58,7 @@ print('fixture cloud build completed')
   );
   yield* fs.writeFileString(
     path.join(repo, "scripts/homu-android/build.sh"),
-    '#!/bin/bash\nset -eu\nmkdir -p "$OUT"\nprintf fixture > "$OUT/HomuCode-development-${1:0:10}.apk"\necho fixture Android completed\n',
+    '#!/bin/bash\nset -eu\n[[ $MODE == apk && $PUBLISH_OTA == 0 ]]\nmkdir -p "$OUT"\nprintf fixture > "$OUT/HomuCode-development-${1:0:10}.apk"\necho fixture Android completed\n',
   );
   yield* fs.writeFileString(
     path.join(repo, "addons/load-build/t3-load-build"),

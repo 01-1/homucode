@@ -30,6 +30,7 @@
         "fixtures/*/*.js",
         "knip-schemas.ts",
         "install-madohomu.mjs",
+        "homu-android/link-widget-deps.cjs",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",
         "mobile-native-client.ts",

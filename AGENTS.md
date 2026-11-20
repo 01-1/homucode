@@ -6,6 +6,8 @@ What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summar
 
 ## Task-specific instructions
 
+- Run Android in-app verification on a Boat emulator through the T3 Device panel. Launch the app and exercise the changed flow before reporting it verified. See [Android development](docs/operations/android-development.md).
+- Publish HomuCode Android updates over the air from Boat using the fork's EAS project. For a new native runtime, build a signed OTA-enabled APK with the existing release key and verify its channel and runtime. See [Android development](docs/operations/android-development.md#releasing-android-updates).
 - For product spelling, text wordmarks, and compact icons, read [HomuCode brand design](docs/internals/brand-design.md).
 
 ## What T3 Code is
@@ -103,12 +105,8 @@ The most common defect in this repo is a change that works on the path you teste
 
 ## Android builds
 
-- The fork's GitHub mobile workflows skip themselves outside `pingdotgg/t3code`. Build the Android app on boat.dev instead, from pbox: `scripts/homu-android/build.sh [REF]` (default `origin/main`). It archives the commit, builds and signs a release APK (arm64-v8a and x86_64, JS bundled, no Metro) on a fresh xlarge box, checks the checksum, copies it to `~/app/mobile/HomuCode-development-<sha>.apk`, and deletes the box. It takes about 20 minutes. Logs are in `~/hold/homu-android/<sha>-<variant>/`.
-- `scripts/homu-android/ota.sh [REF]` publishes REF's JavaScript as an over-the-air update instead, in a few minutes, to the `homucode` channel of the configured EAS project, using the Expo robot token in `~/credentials/expo/token`. Installed APKs download it on launch and apply it the next time they go to the background. Only APKs with the same native fingerprint take it, so a change to native code (a native module, an Expo SDK bump, permissions, `app.config.ts`) still needs `build.sh`; both print the runtime version they built for. Logs are in `~/hold/homu-android/<sha>-development-ota/`.
 - For refs with EAS update support, set `T3CODE_EAS_PROJECT_ID` and `T3CODE_EAS_OWNER` as unquoted values in `${XDG_CONFIG_HOME:-$HOME/.config}/homucode/android.env`, or point `HOMUCODE_ANDROID_ENV` to that file. Use the same project as your installed APKs so they keep receiving updates.
-- Keep the default `VARIANT=development` (package `com.t3tools.t3code.dev`): T3's Clerk instance allows that package's sign-in callback, so Connect sign-in works. `APP_NAME` (default `HomuCode`) is the launcher name.
-- It signs with the `t3-preview` key in `~/credentials/android-signing/`. Keep that key, or installed builds stop updating in place. The version code is the build's UTC date and hour, so each build installs over the last.
-- To put it on Homura's phone, serve it on the LAN from pbox: `mkdir -p ~/hold/lan-apk && ln -f ~/app/mobile/<apk> ~/hold/lan-apk/` and then `systemd-run --user --unit=lan-apk --collect python3 -m http.server 8767 --bind <pbox wlo1 IPv4> --directory ~/hold/lan-apk`. Give her `http://<ip>:8767/<apk>`. Ports above 1024 are already open in the firewall. Stop it with `systemctl --user stop lan-apk`. This is a requested exception to the no-detach rule above.
+- Follow [Android development](docs/operations/android-development.md) for Boat verification, signed APKs, and OTA releases.
 
 ## Test data
 
@@ -162,7 +160,6 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
   ```
 
 - User-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers.
-- For Android verification, agents may provision a temporary Boat emulator and use the Browser panel to add and remove its Device source in Settings without asking again.
 
 - Real agent turns cost money. To watch a turn stream through the pipeline and UI, use the free `Replay (dev)` provider that `vp run dev` registers; [test-t3-app](.agents/skills/test-t3-app/SKILL.md) shows how to start one. Use a real provider only when the change depends on that provider's behavior, and then pick its cheapest model, such as Haiku for Claude or Luna for Codex.
 
