@@ -329,7 +329,12 @@ export function buildThreadActionMenuItems(
                 icon: "clock",
                 disabled: !state.canSnoozeNow,
                 children: [
-                  { id: "snooze:custom" as const, label: "Custom…" },
+                  {
+                    id: "snooze:custom" as const,
+                    label: resolve(
+                      msg("Custom…", { $context: "opens the custom snooze time dialog" }),
+                    ),
+                  },
                   ...state.snoozePresets.map((preset, index) => ({
                     id: `snooze:${preset.id}` as const,
                     label: preset.label,
@@ -389,7 +394,7 @@ export function buildThreadActionMenuItems(
       ? [
           {
             id: "move-to-project" as const,
-            label: "Move to project",
+            label: resolve(msg("Move to project")),
             icon: "folder" as const,
             children: [
               ...state.moveProjectOptions.map((project) => ({
@@ -399,12 +404,12 @@ export function buildThreadActionMenuItems(
               })),
               {
                 id: "move-to-new-project" as const,
-                label: "New project…",
+                label: resolve(msg("New project…")),
                 disabled: state.projectDirectoryChangeBlocked ?? state.isRunning,
               },
               ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
                 id: `move-to-environment:${environment.environmentId}` as const,
-                label: `On ${environment.label}`,
+                label: resolve(msg("On {environment}", { environment: environment.label })),
                 separatorBefore: index === 0,
                 // The source is archived after the copy, and archive rejects a running thread.
                 disabled: state.isRunning,
@@ -421,7 +426,7 @@ export function buildThreadActionMenuItems(
       ? [
           {
             id: "copy-to-project" as const,
-            label: "Copy to project",
+            label: resolve(msg("Copy to project")),
             icon: "copy" as const,
             children: [
               ...copyOptions.projects.map((project) => ({
@@ -430,7 +435,7 @@ export function buildThreadActionMenuItems(
               })),
               ...(state.moveEnvironmentOptions ?? []).map((environment, index) => ({
                 id: `copy-to-environment:${environment.environmentId}` as const,
-                label: `On ${environment.label}`,
+                label: resolve(msg("On {environment}", { environment: environment.label })),
                 separatorBefore: index === 0 && copyOptions.projects.length > 0,
                 children: environment.projects.map((project) => ({
                   id: environmentProjectMenuId("copy", environment.environmentId, project.id),
@@ -442,16 +447,16 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     ...(state.hasRunningSubagents === true
-      ? [{ id: "stop-with-subagents" as const, label: "Stop with subagents" }]
+      ? [{ id: "stop-with-subagents" as const, label: resolve(msg("Stop with subagents")) }]
       : []),
     ...(state.move?.canMoveToRoot === true
-      ? [{ id: "move-to-root" as const, label: "Move to root" }]
+      ? [{ id: "move-to-root" as const, label: resolve(msg("Move to root")) }]
       : []),
     ...(state.move != null && state.move.candidates.length > 0
       ? [
           {
             id: "move-under" as const,
-            label: "Move under",
+            label: resolve(msg("Move under")),
             icon: "folder-tree",
             children: state.move.candidates.map((candidate) => ({
               id: `move-under:${candidate.threadId}` as const,
@@ -590,7 +595,9 @@ export function buildMoveEnvironmentOptions<E extends string>(input: {
   return [...byEnvironment]
     .map(([environmentId, projects]) => ({
       environmentId,
-      label: input.environmentLabel(environmentId) ?? "Remote",
+      label:
+        input.environmentLabel(environmentId) ??
+        m(msg("Remote", { $context: "remote environment" })),
       projects,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));

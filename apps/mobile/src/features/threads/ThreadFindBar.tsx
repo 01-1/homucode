@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import type { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { Platform, type TextInputInstance, View } from "react-native";
@@ -19,6 +20,7 @@ export function ThreadFindBar(props: {
   readonly threadKey: string;
   readonly top: number;
 }) {
+  const gt = useGT();
   const inputRef = useRef<TextInputInstance>(null);
   const [query, setQuery] = useState("");
   // null opens at the newest match once the count is known.
@@ -87,9 +89,9 @@ export function ThreadFindBar(props: {
     >
       <SearchField
         inputRef={inputRef}
-        accessibilityLabel="Find in thread"
-        clearAccessibilityLabel="Clear find"
-        placeholder="Find in thread"
+        accessibilityLabel={gt("Find in thread")}
+        clearAccessibilityLabel={gt("Clear find")}
+        placeholder={gt("Find in thread")}
         value={query}
         onChangeText={changeQuery}
       />
@@ -102,18 +104,18 @@ export function ThreadFindBar(props: {
         </Text>
       ) : null}
       <IconButton
-        accessibilityLabel="Previous match"
+        accessibilityLabel={gt("Previous match")}
         icon="chevron.up"
         disabled={total === 0 || searching}
         onPress={() => step(-1)}
       />
       <IconButton
-        accessibilityLabel="Next match"
+        accessibilityLabel={gt("Next match")}
         icon="chevron.down"
         disabled={total === 0 || searching}
         onPress={() => step(1)}
       />
-      <IconButton accessibilityLabel="Close find" icon="xmark" onPress={closeThreadFind} />
+      <IconButton accessibilityLabel={gt("Close find")} icon="xmark" onPress={closeThreadFind} />
     </View>
   );
 }

@@ -347,7 +347,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "quick-model",
-    title: "Quick model",
+    title: msg("Quick model", { $context: "model used for one turn" }),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["quick fast model /q one question cheap"],
@@ -488,42 +488,42 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "madohomu-enabled",
-    title: "Enable MadoHomu",
+    title: msg("Enable MadoHomu"),
     to: "/settings/homucode",
     searchTerms: ["focused chat tasks opt in"],
     environmentOnly: true,
   },
   {
     id: "madohomu-project",
-    title: "MadoHomu project",
+    title: msg("MadoHomu project"),
     to: "/settings/homucode",
     searchTerms: ["project picker"],
     environmentOnly: true,
   },
   {
     id: "madohomu-code-visibility",
-    title: "Show MadoHomu threads in HomuCode",
+    title: msg("Show MadoHomu threads in HomuCode"),
     to: "/settings/homucode",
     searchTerms: ["MadoHomu hide threads sidebar scratch pinned visibility"],
     environmentOnly: true,
   },
   {
     id: "madohomu-working-placement",
-    title: "Working threads",
+    title: msg("Working threads"),
     to: "/settings/homucode",
     searchTerms: ["MadoHomu working running section top scratch"],
     environmentOnly: true,
   },
   {
     id: "madohomu-morning-brief",
-    title: "Morning brief",
+    title: msg("Morning brief"),
     to: "/settings/homucode",
     searchTerms: ["MadoHomu daily time approval schedule"],
     environmentOnly: true,
   },
   {
     id: "madohomu-desktop-app",
-    title: "MadoHomu desktop app",
+    title: msg("MadoHomu desktop app"),
     to: "/settings/homucode",
     searchTerms: ["MadoHomu launcher separate window"],
     environmentOnly: true,
@@ -563,7 +563,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "autoreviewers",
-    title: "Autoreviewers (not recommended)",
+    title: msg("Autoreviewers (not recommended)"),
     to: "/settings/homucode",
     searchTerms: ["autoreview reviewer subagent code review watch thread findings lgtm"],
   },
@@ -575,13 +575,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "watched-pull-requests-in-working",
-    title: "Keep watched pull requests in Working",
+    title: msg("Keep watched pull requests in Working"),
     to: "/settings/general",
     searchTerms: ["pr watch monitor checks inbox sidebar working section"],
   },
   {
     id: "thread-folder-style",
-    title: "Folder style",
+    title: msg("Folder style"),
     to: "/settings/homucode",
     searchTerms: ["thread folders cards tabs tab groups helium color line sidebar look"],
   },
@@ -669,20 +669,20 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "app-scripts",
-    title: "App scripts",
+    title: msg("App scripts"),
     to: "/settings/homucode",
     searchTerms: ["typescript user scripts automation macro keybinding run code window api"],
   },
   {
     id: "app-scripts-terminal",
-    title: "Run app scripts from the terminal",
+    title: msg("Run app scripts from the terminal"),
     to: "/settings/homucode",
     desktopOnly: true,
     searchTerms: ["t3 app run cli terminal command script automation"],
   },
   {
     id: "app-scripts-agents",
-    title: "Let agents run app scripts",
+    title: msg("Let agents run app scripts"),
     to: "/settings/homucode",
     desktopOnly: true,
     searchTerms: ["agent shell t3 app run allow scripts security"],
@@ -907,14 +907,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "status-line",
-    title: "Status line",
+    title: msg("Status line"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["statusline claude code footer context usage limits model effort"],
   },
   {
     id: "status-line-command",
-    title: "Status line command",
+    title: msg("Status line command"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["statusline script shell jq bash claude code"],
@@ -927,19 +927,19 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "show-message-sender-labels",
-    title: "Show message sender labels",
+    title: msg("Show message sender labels"),
     to: "/settings/homucode",
     searchTerms: ["hide sender line human automatic sent from device message chat"],
   },
   {
     id: "user-message-markdown",
-    title: "Format sent messages as Markdown",
+    title: msg("Format sent messages as Markdown"),
     to: "/settings/homucode",
     searchTerms: ["user message markdown plain text raw formatting render bullet list prompt"],
   },
   {
     id: "user-message-plus-bullets",
-    title: "Lines starting with + become bullets",
+    title: msg("Lines starting with + become bullets"),
     to: "/settings/homucode",
     searchTerms: ["plus + bullet list item sent message markdown literal"],
   },
@@ -951,21 +951,21 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "claude-hold-background-commands",
-    title: "Keep Claude threads working while background commands run",
+    title: msg("Keep Claude threads working while background commands run"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["claude background bash commands working waiting hold tasks"],
   },
   {
     id: "subagents-inherit-parent-pin",
-    title: "Subagents inherit parent pin",
+    title: msg("Subagents inherit parent pin"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["pin pinned child threads delegation sidebar automatically"],
   },
   {
     id: "prefer-native-subagents",
-    title: "Prefer native subagents",
+    title: msg("Prefer native subagents"),
     to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["agent orchestration delegate_task native Agent spawn_agent same provider"],
@@ -1030,7 +1030,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "local-default-branch",
-    title: "Start on default branch",
+    title: msg("Start on default branch"),
     to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["new local threads checkout switch main default branch project folder"],
@@ -1070,7 +1070,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "show-building-t3",
-    title: "Show Building Homu settings",
+    title: msg("Show Building Homu settings"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1078,7 +1078,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "agent-memory",
-    title: "Agent memory controls",
+    title: msg("Agent memory controls"),
     to: "/settings/homucode",
     scope: "environment",
     environmentOnly: true,
@@ -1086,7 +1086,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "work-assistance",
-    title: "Work assistance",
+    title: msg("Work assistance"),
     to: "/settings/homucode",
     scope: "environment",
     environmentOnly: true,
@@ -1094,7 +1094,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "device-names",
-    title: "Device names",
+    title: msg("Device names"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1102,7 +1102,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "bare-stop-wait",
-    title: "Stop or wait jumps the queue",
+    title: msg("Stop or wait jumps the queue"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1110,7 +1110,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "claude-steer-recovery",
-    title: "Resend unread steers after Stop",
+    title: msg("Resend unread steers after Stop"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1118,7 +1118,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "reask-after-restart",
-    title: "Ask again after a restart",
+    title: msg("Ask again after a restart"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1126,7 +1126,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "auto-update-when-idle",
-    title: "Update when agents are idle",
+    title: msg("Update when agents are idle"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1134,7 +1134,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "apply-model-change-now",
-    title: "Apply model and effort changes now",
+    title: msg("Apply model and effort changes now"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1142,7 +1142,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "sent-from",
-    title: "Tell agents who sent each message",
+    title: msg("Tell agents who sent each message"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1150,7 +1150,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "thread-only-stop",
-    title: "Stop behavior",
+    title: msg("Stop behavior"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1158,7 +1158,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "background-git",
-    title: "Background Git",
+    title: msg("Background Git"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     environmentOnly: true,
@@ -1166,7 +1166,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "settings-sync",
-    title: "Settings sync",
+    title: msg("Settings sync"),
     to: "/settings/homucode",
     searchTerms: ["sync devices synced conflict merge share preferences"],
   },
@@ -1205,14 +1205,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "thread-title-project-name",
-    title: "Project name in title prompt",
+    title: msg("Project name in title prompt"),
     to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["generated thread titles project name context titler"],
   },
   {
     id: "thread-title-id-prefix",
-    title: "Thread title IDs",
+    title: msg("Thread title IDs"),
     to: "/settings/homucode",
     scope: "project-defaults",
     searchTerms: ["generated thread titles id prefix initials short code collision counter"],
@@ -1239,7 +1239,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "staged-build",
-    title: "Staged build",
+    title: msg("Staged build"),
     to: "/settings/homucode",
     searchTerms: ["appimage rollback undo revert previous build launcher next start"],
     desktopOnly: true,
@@ -1668,7 +1668,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "connect-device-long-sessions",
-    title: "Stay signed in for 30 days",
+    title: msg("Stay signed in for 30 days"),
     to: "/settings/homucode",
     scope: "environment-defaults",
     searchTerms: ["t3 connect devices sessions pass token expiry reconnect cloud round trip"],
@@ -1749,7 +1749,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "scratch-environment",
-    title: "Threads without a project",
+    title: msg("Threads without a project"),
     to: "/settings/homucode",
     searchTerms: ["no project scratch default machine environment device start new thread"],
   },
@@ -2047,6 +2047,7 @@ export function searchSettings(
   return settingsForThisPlatform(items)
     .flatMap((item, index) => {
       const title = normalizeSearchText(decodeMsg(item.title));
+      const featureOfferTitle = FEATURE_OFFER_TITLES.get(item.id);
       const fields = [
         title,
         normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
@@ -2054,7 +2055,12 @@ export function searchSettings(
         normalizeSearchText(translate(item.title)),
         normalizeSearchText(translate(SETTINGS_SECTION_LABELS[item.to])),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
-        normalizeSearchText(FEATURE_OFFER_TITLES.get(item.id) ?? ""),
+        ...(featureOfferTitle
+          ? [
+              normalizeSearchText(decodeMsg(featureOfferTitle)),
+              normalizeSearchText(translate(featureOfferTitle)),
+            ]
+          : []),
         ...(item.searchTerms ?? []).map((term) => normalizeSearchText(translate(term))),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];

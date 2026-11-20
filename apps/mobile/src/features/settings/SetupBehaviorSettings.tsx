@@ -1,3 +1,4 @@
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
@@ -64,45 +65,64 @@ function MobileWorkAssistancePicker({
             }
           />
         ))}
-      {projects.length === 0 ? <Text>Connect an environment and add a project first.</Text> : null}
+      {projects.length === 0 ? (
+        <Text>
+          <T>Connect an environment and add a project first.</T>
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 /** Saved on the phone and sent to every server, so naming needs no server support. */
 export function MobileThisDeviceName() {
+  const gt = useGT();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   if (!AsyncResult.isSuccess(preferencesResult)) return null;
   const name = preferencesResult.value.deviceName ?? "";
   return (
     <View className="gap-1">
-      <Text>Phone name</Text>
+      <Text>
+        <T>Phone name</T>
+      </Text>
       <TextInput
-        accessibilityLabel="Phone name"
+        accessibilityLabel={gt("Phone name")}
         defaultValue={name}
-        placeholder="Name this device"
+        placeholder={gt("Name this device")}
         maxLength={40}
         className="rounded-lg border border-border p-3 text-foreground"
         onChangeText={(text) => savePreferences({ deviceName: text.trim() })}
       />
       <Text className="text-foreground-muted">
-        Agents on every server see this name, unless a server names this device itself.
+        <T>Agents on every server see this name, unless a server names this device itself.</T>
       </Text>
     </View>
   );
 }
 
 export function MobileDeviceNames({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const config = useEnvironmentServerConfig(environmentId);
   const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const unsupported = getHomuSettingUnavailableReason(config?.environment, "deviceNames");
-  const reason = getHomuSettingUnavailableReason(config?.environment, "deviceNames", {
-    canWrite,
-    managedPolicy: config?.managedPolicy,
-  });
+  const unsupported = getHomuSettingUnavailableReason(
+    config?.environment,
+    "deviceNames",
+    {},
+    resolve,
+  );
+  const reason = getHomuSettingUnavailableReason(
+    config?.environment,
+    "deviceNames",
+    {
+      canWrite,
+      managedPolicy: config?.managedPolicy,
+    },
+    resolve,
+  );
   const query = useEnvironmentQuery(
     unsupported ? null : serverEnvironment.messageDevices({ environmentId, input: {} }),
   );
@@ -137,11 +157,11 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
                 .join(" · ")}
             </Text>
             <TextInput
-              accessibilityLabel="Device name"
+              accessibilityLabel={gt("Device name")}
               editable={!reason}
               key={rule?.name ?? ""}
               defaultValue={rule?.name ?? _name ?? _ruleName ?? ""}
-              placeholder="Name this device"
+              placeholder={gt("Name this device")}
               maxLength={40}
               className="rounded-lg border border-border p-3 text-foreground"
               onEndEditing={(event) => {
@@ -161,9 +181,9 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
       })}
       {query.error ? (
         <Text className="text-foreground-muted">
-          {
-            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update."
-          }
+          {gt(
+            "Couldn't load devices from this server. If it runs an older HomuCode, restart it to update.",
+          )}
         </Text>
       ) : null}
     </View>
@@ -175,18 +195,26 @@ export function MobileBuildVisibility({
 }: {
   readonly environmentId: EnvironmentId;
 }) {
+  const gt = useGT();
   const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const reason = getHomuSettingUnavailableReason(config?.environment, "buildToolsSettingsVisible", {
-    canWrite,
-    managedPolicy: config?.managedPolicy,
-  });
+  const resolve = useMessages();
+  const reason = getHomuSettingUnavailableReason(
+    config?.environment,
+    "buildToolsSettingsVisible",
+    {
+      canWrite,
+      managedPolicy: config?.managedPolicy,
+    },
+    resolve,
+  );
   return (
     <SettingsSwitchRow
-      label="Show Building Homu settings"
+      label={gt("Show Building Homu settings")}
       subtitle={
-        reason ?? "Configure cloud builds, APK builds and loading AppImages on this environment."
+        reason ??
+        gt("Configure cloud builds, APK builds and loading AppImages on this environment.")
       }
       disabled={reason !== null}
       value={config?.settings.buildToolsSettingsVisible ?? false}
@@ -207,6 +235,7 @@ function MobileQuickModelSetting({
   readonly reason: string | null;
   readonly onChange: (selection: ModelSelection | null) => void;
 }) {
+  const gt = useGT();
   const disabled = reason !== null;
   const [open, setOpen] = useState(false);
   const selection = config.settings.quickModelSelection;
@@ -225,17 +254,17 @@ function MobileQuickModelSetting({
   return (
     <>
       <ListActionRow
-        label="Quick model"
-        description={reason ?? "Choose the model used by /q on web and desktop."}
-        detail={selected?.label ?? selection?.model ?? "Off"}
+        label={gt("Quick model")}
+        description={reason ?? gt("Choose the model used by /q on web and desktop.")}
+        detail={selected?.label ?? selection?.model ?? gt("Off")}
         disabled={disabled}
         onPress={() => setOpen(true)}
       />
       {open ? (
-        <Sheet title="Quick model" onClose={() => setOpen(false)}>
+        <Sheet title={gt("Quick model")} onClose={() => setOpen(false)}>
           <ScreenScrollView>
             <ListChoiceRow
-              label="Off"
+              label={gt("Off")}
               selected={selection === null}
               disabled={disabled}
               onPress={() => choose(null)}
@@ -251,7 +280,11 @@ function MobileQuickModelSetting({
                 onPress={() => choose(model.selection)}
               />
             ))}
-            {models.length === 0 ? <Text>No models are available on this environment.</Text> : null}
+            {models.length === 0 ? (
+              <Text>
+                <T>No models are available on this environment.</T>
+              </Text>
+            ) : null}
           </ScreenScrollView>
         </Sheet>
       ) : null}
@@ -266,10 +299,12 @@ export function MobileExtraSettings({
   readonly environmentId: EnvironmentId;
   readonly label: string;
 }) {
+  const gt = useGT();
   const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const buildStatusReason = getBuildToolsUnavailableReason(config?.environment, canWrite);
+  const resolve = useMessages();
+  const buildStatusReason = getBuildToolsUnavailableReason(config?.environment, canWrite, resolve);
   const query = useEnvironmentQuery(
     buildStatusReason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
@@ -285,14 +320,19 @@ export function MobileExtraSettings({
     canWriteAccess: canSetLongSessions,
     managedPolicy: config.managedPolicy,
   };
-  const { unavailableFeatureReasons } = getHomuSetupSupport(config.environment, permissions);
+  const { unavailableFeatureReasons } = getHomuSetupSupport(
+    config.environment,
+    permissions,
+    resolve,
+  );
   const workAssistanceReason = getHomuSettingUnavailableReason(
     config.environment,
     "workAssistanceTarget",
     permissions,
+    resolve,
   );
   return (
-    <SettingsSection title={`Extra features · ${label}`}>
+    <SettingsSection title={gt("Extra features · {label}", { label })}>
       <MobileQuickModelSetting
         config={config}
         reason={unavailableFeatureReasons.get("quick-model") ?? null}
@@ -311,16 +351,18 @@ export function MobileExtraSettings({
             key={offer.id}
             label={
               offer.id === "subagents"
-                ? "Use Homu delegation (delegate_task)"
+                ? gt("Use Homu delegation (delegate_task)")
                 : offer.id === "thread-only-stop"
-                  ? "Stop stops only this thread"
-                  : offer.title
+                  ? gt("Stop stops only this thread")
+                  : resolve(offer.title)
             }
             subtitle={
               reason ??
               (key === "claudeHoldBackgroundCommands"
-                ? "Keep Claude threads working until background commands finish or the agent releases them."
-                : offer.description)
+                ? gt(
+                    "Keep Claude threads working until background commands finish or the agent releases them.",
+                  )
+                : resolve(offer.description))
             }
             value={settings[key] === (offer.enabledValue ?? true)}
             disabled={reason !== undefined}
@@ -340,19 +382,28 @@ export function MobileExtraSettings({
       })}
       <Text>
         {query.data
-          ? `Background Git is currently ${query.data.backgroundGitEnabled ? "on" : "off"}. ${
-              query.data.backgroundGitOverridden
-                ? "T3CODE_BACKGROUND_GIT overrides the saved choice."
+          ? gt("{status} {detail}", {
+              status: query.data.backgroundGitEnabled
+                ? gt("Background Git is currently on.")
+                : gt("Background Git is currently off."),
+              detail: query.data.backgroundGitOverridden
+                ? gt("T3CODE_BACKGROUND_GIT overrides the saved choice.")
                 : query.data.backgroundGitEnabled !== settings.backgroundGitEnabled
-                  ? "Restart to apply your saved choice."
-                  : "Restart to apply changes."
-            }`
-          : `Background Git status · ${buildStatusReason ?? query.error ?? "Loading…"}`}
+                  ? gt("Restart to apply your saved choice.")
+                  : gt("Restart to apply changes."),
+            })
+          : gt("Background Git status · {status}", {
+              status: buildStatusReason ?? query.error ?? gt("Loading…"),
+            })}
       </Text>
-      <Text>Work assistance (not recommended)</Text>
+      <Text>
+        <T>Work assistance (not recommended)</T>
+      </Text>
       <Text className="text-foreground-muted">
-        Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
-        that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
+        <T>
+          Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
+          that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
+        </T>
       </Text>
       {workAssistanceReason ? (
         <Text className="text-foreground-muted">{workAssistanceReason}</Text>
@@ -366,7 +417,7 @@ export function MobileExtraSettings({
             }
           />
           <Button
-            label="Turn off work assistance"
+            label={gt("Turn off work assistance")}
             disabled={!settings.workAssistanceTarget}
             onPress={() =>
               void update({ environmentId, input: { patch: { workAssistanceTarget: null } } })
@@ -374,16 +425,19 @@ export function MobileExtraSettings({
           />
         </>
       )}
-      <Text>Device names</Text>
+      <Text>
+        <T>Device names</T>
+      </Text>
       <MobileDeviceNames environmentId={environmentId} />
     </SettingsSection>
   );
 }
 
 export function SettingsBuildingT3RouteScreen() {
+  const gt = useGT();
   const { selectedTargets } = useSettingsEnvironmentFilter();
   return (
-    <SettingsScreen title="Building Homu">
+    <SettingsScreen title={gt("Building Homu")}>
       <ScreenScrollView contentContainerClassName="gap-6 p-5">
         {selectedTargets
           .filter((target) => target.serverConfig?.settings.buildToolsSettingsVisible)
@@ -397,14 +451,18 @@ export function SettingsBuildingT3RouteScreen() {
   );
 }
 
+const SHA256_LABEL = "SHA-256";
+
 export function MobileBuildTools({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
   const config = useEnvironmentServerConfig(environmentId);
   const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
+  const resolve = useMessages();
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const canRun = useAtomValue(serverEnvironment.buildToolsRun.permissionAtom(environmentId));
-  const reason = getBuildToolsUnavailableReason(config?.environment, canWrite);
+  const reason = getBuildToolsUnavailableReason(config?.environment, canWrite, resolve);
   const query = useEnvironmentQuery(
     reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
@@ -433,22 +491,26 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
   if (!settings) return null;
   return (
     <View className="gap-4">
-      {!canRun ? <Text>This connection cannot run build tools.</Text> : null}
+      {!canRun ? (
+        <Text>
+          <T>This connection cannot run build tools.</T>
+        </Text>
+      ) : null}
       {(
         [
-          ["buildRepoPath", "HomuCode checkout"],
-          ["buildBoatCliPath", "Boat CLI"],
-          ["buildMachineType", "Cloud machine type"],
-          ["buildOutputFolder", "Build output folder"],
-          ["buildAppImageFolder", "AppImage build folder"],
+          ["buildRepoPath", msg("HomuCode checkout")],
+          ["buildBoatCliPath", msg("Boat CLI")],
+          ["buildMachineType", msg("Cloud machine type")],
+          ["buildOutputFolder", msg("Build output folder")],
+          ["buildAppImageFolder", msg("AppImage build folder")],
         ] as const
       ).map(([key, label]) => (
         <View key={key}>
-          <Text>{label}</Text>
+          <Text>{resolve(label)}</Text>
           <TextInput
             key={settings[key]}
             defaultValue={settings[key]}
-            accessibilityLabel={label}
+            accessibilityLabel={resolve(label)}
             editable={canWrite && !busy}
             className="rounded-lg border border-border p-3 text-foreground"
             onEndEditing={(event) =>
@@ -458,35 +520,40 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
         </View>
       ))}
       <Text>
-        Build folder: {query.data?.buildFolder}. The loader starts the newest AppImage here.
+        {gt("Build folder: {folder}. The loader starts the newest AppImage here.", {
+          folder: query.data?.buildFolder ?? "",
+        })}
       </Text>
       <Text>
         {query.data?.stagedBuilds
-          ? `Running ${query.data.stagedBuilds.running}; next ${query.data.stagedBuilds.next ?? "none"}`
-          : "Staged builds are not available on this installation."}
+          ? gt("Running {running}; next {next}", {
+              running: query.data.stagedBuilds.running,
+              next: query.data.stagedBuilds.next ?? gt("none"),
+            })
+          : gt("Staged builds are not available on this installation.")}
       </Text>
       <Button
-        label="Undo a staged build"
+        label={gt("Undo a staged build")}
         disabled={actionsDisabled || !query.data?.stagedBuilds?.previous}
         onPress={() => action("undo")}
       />
       {query.data?.undoneAs ? (
         <Button
-          label="Redo staged build"
+          label={gt("Redo staged build")}
           disabled={actionsDisabled}
           onPress={() => action("redo")}
         />
       ) : null}
       {(
         [
-          ["cloudBuildEnabled", "Enable cloud builds"],
-          ["androidBuildEnabled", "Enable Android APK builds"],
-          ["loadBuildEnabled", "Enable loading AppImages"],
+          ["cloudBuildEnabled", msg("Enable cloud builds")],
+          ["androidBuildEnabled", msg("Enable Android APK builds")],
+          ["loadBuildEnabled", msg("Enable loading AppImages")],
         ] as const
       ).map(([key, label]) => (
         <SettingsSwitchRow
           key={key}
-          label={label}
+          label={resolve(label)}
           value={settings[key]}
           disabled={
             !canWrite || busy || (key === "loadBuildEnabled" && !query.data?.appImageAvailable)
@@ -496,38 +563,43 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
           }
         />
       ))}
-      <Text>Install boat and run boat login on the server before building.</Text>
+      <Text>
+        {gt("Install {cli} and run {command} on the server before building.", {
+          cli: "boat",
+          command: "boat login",
+        })}
+      </Text>
       <TextInput
-        accessibilityLabel="Build revision"
+        accessibilityLabel={gt("Build revision")}
         value={ref}
         onChangeText={setRef}
         className="rounded-lg border border-border p-3 text-foreground"
       />
       <TextInput
-        accessibilityLabel="Focused test file"
+        accessibilityLabel={gt("Focused test file")}
         value={testFile}
         onChangeText={setTestFile}
-        placeholder="Focused test file"
+        placeholder={gt("Focused test file")}
         className="rounded-lg border border-border p-3 text-foreground"
       />
       <Button
-        label="Build AppImage"
+        label={gt("Build AppImage")}
         disabled={actionsDisabled || busy || !settings.cloudBuildEnabled}
         onPress={() => setConfirm("cloud-build")}
       />
       <Button
-        label="Run focused tests"
+        label={gt("Run focused tests")}
         disabled={actionsDisabled || busy || !settings.cloudBuildEnabled || !testFile.trim()}
         onPress={() => setConfirm("cloud-test")}
       />
       <Button
-        label="Build Android APK"
+        label={gt("Build Android APK")}
         disabled={actionsDisabled || busy || !settings.androidBuildEnabled}
         onPress={() => setConfirm("android")}
       />
       <SettingsSwitchRow
-        label="Serve APKs on LAN"
-        subtitle="Serve ~/app/mobile on port 8767 until switched off or the server stops."
+        label={gt("Serve APKs on LAN")}
+        subtitle={gt("Serve ~/app/mobile on port 8767 until switched off or the server stops.")}
         value={Boolean(query.data?.lanUrl)}
         disabled={actionsDisabled || (!settings.androidBuildEnabled && !query.data?.lanUrl)}
         onValueChange={(value) => action(value ? "serve" : "stop-serving")}
@@ -535,25 +607,26 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
       {query.data?.lanUrl ? (
         <Text selectable>
           {query.data.lanUrl}
-          {query.data.artifactPath?.split("/").at(-1) ?? "<APK filename>"}
+          {query.data.artifactPath?.split("/").at(-1) ??
+            gt("<{filename}>", { filename: gt("APK filename") })}
         </Text>
       ) : null}
       <TextInput
-        accessibilityLabel="Staged AppImage"
+        accessibilityLabel={gt("Staged AppImage")}
         value={stagedFile}
         onChangeText={setStagedFile}
-        placeholder="Staged AppImage path"
+        placeholder={gt("Staged AppImage path")}
         className="rounded-lg border border-border p-3 text-foreground"
       />
       <TextInput
-        accessibilityLabel="SHA-256"
+        accessibilityLabel={SHA256_LABEL}
         value={sha256}
         onChangeText={setSha256}
-        placeholder="SHA-256"
+        placeholder={SHA256_LABEL}
         className="rounded-lg border border-border p-3 text-foreground"
       />
       <Button
-        label="Load staged build"
+        label={gt("Load staged build")}
         disabled={
           actionsDisabled ||
           busy ||
@@ -568,21 +641,21 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
         <View className="gap-2">
           <Text>
             {confirm === "load"
-              ? "This restarts Homu, with automatic rollback if it fails to return."
-              : "This starts a cloud machine on your boat.dev account."}
+              ? gt("This restarts Homu, with automatic rollback if it fails to return.")
+              : gt("This starts a cloud machine on your boat.dev account.")}
           </Text>
           <Button
-            label="Confirm"
+            label={gt("Confirm")}
             disabled={actionsDisabled}
             onPress={() => {
               action(confirm);
               setConfirm(null);
             }}
           />
-          <Button label="Cancel" tone="text" onPress={() => setConfirm(null)} />
+          <Button label={gt("Cancel")} tone="text" onPress={() => setConfirm(null)} />
         </View>
       ) : null}
-      <Text selectable>{query.error ?? query.data?.message ?? "Loading status…"}</Text>
+      <Text selectable>{query.error ?? query.data?.message ?? gt("Loading status…")}</Text>
       {query.data?.artifactPath ? <Text selectable>{query.data.artifactPath}</Text> : null}
       {query.data?.output ? <Text selectable>{query.data.output}</Text> : null}
     </View>

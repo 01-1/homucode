@@ -1,3 +1,4 @@
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { AsyncResult } from "effect/reactivity";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -47,6 +48,7 @@ import { coverHomeForLaunchSnapshot } from "../home/home-launch-snapshot";
 import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 
 export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
+  const resolve = useMessages();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : null;
   const persisted = useAtomValue(persistedMobilePreferencesAtom);
@@ -79,12 +81,16 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
   const buildWritable = useEnvironmentsWithScope(environments, AuthEnvironmentMaintainScope);
   const targets = environments.map((environment) => {
     const connected = environment.connection.phase === "connected";
-    const support = getHomuSetupSupport(environment.serverConfig?.environment, {
-      canWrite: connected && writable.has(environment.environmentId),
-      canWriteAccess: connected && accessWritable.has(environment.environmentId),
-      canRunBuildTools: connected && buildWritable.has(environment.environmentId),
-      managedPolicy: environment.serverConfig?.managedPolicy,
-    });
+    const support = getHomuSetupSupport(
+      environment.serverConfig?.environment,
+      {
+        canWrite: connected && writable.has(environment.environmentId),
+        canWriteAccess: connected && accessWritable.has(environment.environmentId),
+        canRunBuildTools: connected && buildWritable.has(environment.environmentId),
+        managedPolicy: environment.serverConfig?.managedPolicy,
+      },
+      resolve,
+    );
     const pending = unseenFeatureOffers(
       environment.serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
       "mobile",
@@ -99,9 +105,13 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
       support,
       offlineSupport: connected
         ? support
-        : getHomuSetupSupport(environment.serverConfig?.environment, {
-            managedPolicy: environment.serverConfig?.managedPolicy,
-          }),
+        : getHomuSetupSupport(
+            environment.serverConfig?.environment,
+            {
+              managedPolicy: environment.serverConfig?.managedPolicy,
+            },
+            resolve,
+          ),
       pending: pending.length > 0,
       remotePending: pending.some(
         (offer) => offer.platform !== "mobile" && offer.id !== "settings-sync",
@@ -207,6 +217,8 @@ function EnvironmentFeatureOffers({
   readonly onEnvironmentsChange: (environmentIds: ReadonlyArray<EnvironmentId>) => void;
   readonly onDismiss: (until?: string) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
@@ -431,9 +443,9 @@ function EnvironmentFeatureOffers({
           step,
           page: pageIds[step],
         });
-        if (kept._tag === "Failure") return "Could not save choices on this phone. Try again.";
+        if (kept._tag === "Failure") return msg("Could not save choices on this phone. Try again.");
         const result = needsServerWrite ? await update({ environmentId, input: { patch } }) : null;
-        if (result?._tag === "Failure") return "Could not save HomuCode features. Try again.";
+        if (result?._tag === "Failure") return msg("Could not save HomuCode features. Try again.");
         savedServerOffers.current = [
           ...new Set([...savedServerOffers.current, ...pendingServerOffers.current]),
         ];
@@ -441,14 +453,16 @@ function EnvironmentFeatureOffers({
         pendingPhoneSave.current = phonePatch;
       }
       const saved = await savePreferences(phonePatch);
-      return saved._tag === "Success" ? null : "Could not save choices on this phone. Try again.";
+      return saved._tag === "Success"
+        ? null
+        : msg("Could not save choices on this phone. Try again.");
     });
     if (attempt._tag === "Success") {
       if (attempt.value === null) {
         pendingPhoneSave.current = null;
         onDismiss();
       } else setError(attempt.value);
-    } else setError("Could not save HomuCode features. Try again.");
+    } else setError(msg("Could not save HomuCode features. Try again."));
     pending.current = false;
     setBusy(false);
   };
@@ -457,12 +471,12 @@ function EnvironmentFeatureOffers({
   useEffect(() => (offered ? coverHomeForLaunchSnapshot() : undefined), [offered]);
   const title =
     followup === "building-t3"
-      ? "Building Homu"
+      ? gt("Building Homu")
       : followup === "device-name"
-        ? "Name this device"
+        ? gt("Name this device")
         : pages[step]?.[0]?.page === 2
-          ? "Extra features"
-          : "HomuCode features";
+          ? gt("Extra features")
+          : gt("HomuCode features");
   // Saved on the phone: a dropped connection closes this sheet, and reopening it restores them.
   const keep = (next: FeatureOffersDraft, until?: string | null) => {
     const nextDraft = {
@@ -535,7 +549,7 @@ function EnvironmentFeatureOffers({
     const saved = result._tag === "Success" && result.value._tag === "Success";
     if (saved) onDismiss(until);
     else {
-      setError("Could not save choices on this phone. Try again.");
+      setError(msg("Could not save choices on this phone. Try again."));
       if (native) setSheetGeneration((generation) => generation + 1);
     }
     pending.current = false;
@@ -544,7 +558,7 @@ function EnvironmentFeatureOffers({
   return (
     <Sheet
       key={sheetGeneration}
-      title={snoozing ? "Snooze HomuCode features" : title}
+      title={snoozing ? gt("Snooze HomuCode features") : title}
       onClose={() => void dismiss(undefined, true)}
       dismissDisabled={busy || !settled}
     >
@@ -553,7 +567,7 @@ function EnvironmentFeatureOffers({
         contentInsetAdjustmentBehavior="automatic"
         contentContainerClassName="gap-4 p-5 pb-12"
       >
-        {error ? <Text>{error}</Text> : null}
+        {error ? <Text>{resolve(error)}</Text> : null}
         {snoozing ? (
           <FeatureOffersSnooze
             disabled={busy}
@@ -563,11 +577,11 @@ function EnvironmentFeatureOffers({
         ) : (
           <>
             <Text className="text-base text-foreground-muted">
-              You can change these choices in Settings.
+              <T>You can change these choices in Settings.</T>
             </Text>
             {prefilled.sourceLabel ? (
               <Text className="text-sm text-foreground-muted">
-                Filled in from your choices on {prefilled.sourceLabel}.
+                {gt("Filled in from your choices on {source}.", { source: prefilled.sourceLabel })}
               </Text>
             ) : null}
             <FeatureOffersEnvironmentPicker
@@ -580,14 +594,14 @@ function EnvironmentFeatureOffers({
               pages[step]?.map((offer, index, pageOffers) => {
                 const options =
                   offer.id === "subagents"
-                    ? ["Homu delegation (delegate_task)", "Provider native subagents"]
+                    ? [gt("Homu delegation (delegate_task)"), gt("Provider native subagents")]
                     : offer.id === "thread-only-stop"
-                      ? ["Only the current thread", "Current thread and its subagents"]
+                      ? [gt("Only the current thread"), gt("Current thread and its subagents")]
                       : null;
                 const unavailable = available.includes(offer)
                   ? undefined
                   : (support.unavailableFeatureReasons.get(offer.id) ??
-                    "No selected environment supports this feature.");
+                    gt("No selected environment supports this feature."));
                 const supportChips = (
                   <FeatureSupportChips offer={offer} targets={targets} selected={selectedTargets} />
                 );
@@ -595,15 +609,17 @@ function EnvironmentFeatureOffers({
                   <View key={offer.id} className="gap-2">
                     {offer.page === 2 && index > 0 && pageOffers[index - 1]?.page === 1 ? (
                       <View className="border-t border-border pt-4">
-                        <Text className="text-lg">Extra features</Text>
+                        <Text className="text-lg">
+                          <T>Extra features</T>
+                        </Text>
                       </View>
                     ) : null}
                     {options ? (
                       <>
-                        <Text>{offer.title}</Text>
+                        <Text>{resolve(offer.title)}</Text>
                         <ListChoiceRow
                           label={options[0]!}
-                          description={unavailable ?? offer.description}
+                          description={unavailable ?? resolve(offer.description)}
                           selected={selected.has(offer.id)}
                           disabled={busy || Boolean(unavailable)}
                           onPress={() => select(offer.id, true)}
@@ -619,8 +635,8 @@ function EnvironmentFeatureOffers({
                     ) : (
                       <>
                         <SettingsSwitchRow
-                          label={offer.title}
-                          subtitle={unavailable ?? offer.description}
+                          label={resolve(offer.title)}
+                          subtitle={unavailable ?? resolve(offer.description)}
                           value={selected.has(offer.id)}
                           disabled={busy || Boolean(unavailable)}
                           onValueChange={(value) => select(offer.id, value)}
@@ -638,7 +654,7 @@ function EnvironmentFeatureOffers({
             )}
             <View className="gap-2">
               <Button
-                label={last ? "Save" : "Next"}
+                label={last ? gt("Save") : gt("Next")}
                 tone="primary"
                 fullWidth
                 loading={busy}
@@ -648,10 +664,15 @@ function EnvironmentFeatureOffers({
                 }}
               />
               {step > 0 ? (
-                <Button label="Back" fullWidth disabled={busy} onPress={() => goTo(step - 1)} />
+                <Button
+                  label={gt("Back")}
+                  fullWidth
+                  disabled={busy}
+                  onPress={() => goTo(step - 1)}
+                />
               ) : null}
               <Button
-                label="Not now"
+                label={gt("Not now")}
                 tone="text"
                 fullWidth
                 disabled={busy}
@@ -700,10 +721,13 @@ function FeatureSupportChips({
   readonly targets: ReadonlyArray<FeatureOffersTarget>;
   readonly selected: ReadonlyArray<FeatureOffersTarget>;
 }) {
+  const gt = useGT();
   if (offer.platform === "mobile" || offer.id === "settings-sync") {
     return (
       <View className="flex-row flex-wrap gap-2 px-4">
-        <Text className="text-xs text-foreground-muted">This phone</Text>
+        <Text className="text-xs text-foreground-muted">
+          <T>This phone</T>
+        </Text>
       </View>
     );
   }
@@ -719,10 +743,10 @@ function FeatureSupportChips({
             accessible
             accessibilityLabel={
               state === "yes"
-                ? `${label} supports this`
+                ? gt("{label} supports this", { label })
                 : state === "later"
-                  ? `${label} gets this when it reconnects`
-                  : `${label} does not support this`
+                  ? gt("{label} gets this when it reconnects", { label })
+                  : gt("{label} does not support this", { label })
             }
             className="flex-row items-center gap-1.5 rounded-full border px-2 py-0.5"
             style={{
@@ -741,7 +765,7 @@ function FeatureSupportChips({
               className="text-xs text-foreground"
               style={state === "no" ? { textDecorationLine: "line-through" } : undefined}
             >
-              {state === "later" ? `${label} (when online)` : label}
+              {state === "later" ? gt("{label} (when online)", { label }) : label}
             </Text>
           </View>
         );
@@ -761,10 +785,13 @@ function FeatureOffersEnvironmentPicker({
   readonly disabled: boolean;
   readonly onToggle: (environmentId: EnvironmentId) => void;
 }) {
+  const gt = useGT();
   return (
     <View className="gap-3">
       <Text className="text-sm text-foreground-muted">
-        Server choices apply to every selected environment. Phone choices apply to this phone.
+        <T>
+          Server choices apply to every selected environment. Phone choices apply to this phone.
+        </T>
       </Text>
       <View>
         {targets.map(({ environment, support }, index) => (
@@ -782,8 +809,8 @@ function FeatureOffersEnvironmentPicker({
               }
               subtitle={
                 environment.connection.phase !== "connected"
-                  ? "Offline. Choices are sent when it reconnects."
-                  : `${support.supportedFeatureIds.size} features available`
+                  ? gt("Offline. Choices are sent when it reconnects.")
+                  : gt("{count} features available", { count: support.supportedFeatureIds.size })
               }
               selected={selected.includes(environment.environmentId)}
               disabled={disabled}
@@ -812,23 +839,25 @@ function FeatureOffersSnooze({
   readonly onBack: () => void;
   readonly disabled: boolean;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const [amount, setAmount] = useState("");
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [error, setError] = useState<string | null>(null);
   const snooze = (amount: string, unit: "minutes" | "hours" | "days") => {
     const until = resolveCustomSnooze({ mode: "duration", amount, unit }, new Date());
     if (until) onSnooze(until);
-    else setError("Enter a positive duration.");
+    else setError(msg("Enter a positive duration."));
   };
   return (
     <View className="gap-4">
-      <Button label="On next launch" disabled={disabled} onPress={() => onSnooze()} />
-      <Button label="In 1 hour" disabled={disabled} onPress={() => snooze("1", "hours")} />
-      <Button label="In 1 day" disabled={disabled} onPress={() => snooze("1", "days")} />
-      <Button label="In 1 week" disabled={disabled} onPress={() => snooze("7", "days")} />
+      <Button label={gt("On next launch")} disabled={disabled} onPress={() => onSnooze()} />
+      <Button label={gt("In 1 hour")} disabled={disabled} onPress={() => snooze("1", "hours")} />
+      <Button label={gt("In 1 day")} disabled={disabled} onPress={() => snooze("1", "days")} />
+      <Button label={gt("In 1 week")} disabled={disabled} onPress={() => snooze("7", "days")} />
       <TextInput
-        accessibilityLabel="Custom snooze duration"
-        placeholder="Custom duration"
+        accessibilityLabel={gt("Custom snooze duration")}
+        placeholder={gt("Custom duration")}
         keyboardType="decimal-pad"
         value={amount}
         editable={!disabled}
@@ -838,16 +867,16 @@ function FeatureOffersSnooze({
       <SegmentedControl
         variant="card"
         options={[
-          { value: "minutes", label: "Minutes" },
-          { value: "hours", label: "Hours" },
-          { value: "days", label: "Days" },
+          { value: "minutes", label: gt("Minutes") },
+          { value: "hours", label: gt("Hours") },
+          { value: "days", label: gt("Days") },
         ]}
         selected={unit}
         onSelect={setUnit}
       />
-      {error ? <Text>{error}</Text> : null}
-      <Button label="Snooze" disabled={disabled} onPress={() => snooze(amount, unit)} />
-      <Button label="Back" disabled={disabled} tone="text" onPress={onBack} />
+      {error ? <Text>{resolve(error)}</Text> : null}
+      <Button label={gt("Snooze")} disabled={disabled} onPress={() => snooze(amount, unit)} />
+      <Button label={gt("Back")} disabled={disabled} tone="text" onPress={onBack} />
     </View>
   );
 }

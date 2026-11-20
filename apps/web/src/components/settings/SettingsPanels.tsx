@@ -1013,11 +1013,13 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...setting("watched-pull-requests-in-working")}
-          description="Keep threads watching a pull request in Working after its checks finish."
+          description={gt(
+            "Keep threads watching a pull request in Working after its checks finish.",
+          )}
           resetAction={
             settings.sidebarKeepWatchingPullRequests ? (
               <SettingResetButton
-                label="keep watched pull requests in Working"
+                ariaLabel={gt("Reset keep watched pull requests in Working to default")}
                 onClick={() => updateSettings({ sidebarKeepWatchingPullRequests: false })}
               />
             ) : null
@@ -1029,7 +1031,7 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarKeepWatchingPullRequests: Boolean(checked) })
               }
               disabled={!settings.sidebarWorkingShelfEnabled || settings.boringSidebarEnabled}
-              aria-label="Keep watched pull requests in Working"
+              aria-label={gt("Keep watched pull requests in Working")}
             />
           }
         />

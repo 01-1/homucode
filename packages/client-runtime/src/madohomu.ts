@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import type {
   MadoHomuThreadSettings,
   EnvironmentId,
@@ -63,22 +65,27 @@ export function groupMadoHomuThreads<
 >(
   threads: ReadonlyArray<T>,
   settings: MadoHomuGroupSettings,
-  options: { readonly now: string; readonly isWorking?: (thread: T) => boolean },
+  options: {
+    readonly now: string;
+    readonly isWorking?: (thread: T) => boolean;
+    readonly resolve?: MFunctionType;
+  },
 ): MadoHomuGroup<T>[] {
   const working = (thread: T) =>
     settings.madohomuWorkingPlacement !== "none" && options.isWorking?.(thread) === true;
+  const resolve = options.resolve ?? mFallback;
   const groups: MadoHomuGroup<T>[] = [
-    { kind: "pinned", id: "pinned", title: "Pinned", threads: [] },
+    { kind: "pinned", id: "pinned", title: resolve(msg("Pinned")), threads: [] },
     ...settings.madohomuSections.map((section) => ({
       kind: "custom" as const,
       id: section.id,
       title: section.name,
       threads: [] as T[],
     })),
-    { kind: "working", id: "working", title: "Working", threads: [] },
-    { kind: "scratch", id: "scratch", title: MADOHOMU_SCRATCH_LABEL, threads: [] },
-    { kind: "snoozed", id: "snoozed", title: "Snoozed", threads: [] },
-    { kind: "settled", id: "settled", title: "Settled", threads: [] },
+    { kind: "working", id: "working", title: resolve(msg("Working")), threads: [] },
+    { kind: "scratch", id: "scratch", title: resolve(msg("Scratch")), threads: [] },
+    { kind: "snoozed", id: "snoozed", title: resolve(msg("Snoozed")), threads: [] },
+    { kind: "settled", id: "settled", title: resolve(msg("Settled")), threads: [] },
   ];
   const byId = new Map(groups.map((group) => [group.id, group]));
   const group = (id: string) => byId.get(id)!;
@@ -276,14 +283,14 @@ export function pageMadoHomuRows<T>(
  * What an empty Pinned section says. `canDrag` is false where rows only drag in a reorder mode,
  * so the text never promises a gesture that does nothing.
  */
-export function madohomuEmptyPinnedText(input: {
-  readonly hasThreads: boolean;
-  readonly canDrag: boolean;
-}): string {
-  if (!input.hasThreads) return "No threads yet. Choose New thread to start one.";
+export function madohomuEmptyPinnedText(
+  input: { readonly hasThreads: boolean; readonly canDrag: boolean },
+  resolve: MFunctionType = mFallback,
+): string {
+  if (!input.hasThreads) return resolve(msg("No threads yet. Choose New thread to start one."));
   return input.canDrag
-    ? "Nothing pinned. Drag a thread here, or use Move to in its menu."
-    : "Nothing pinned. Use Move to in a thread's menu.";
+    ? resolve(msg("Nothing pinned. Drag a thread here, or use Move to in its menu."))
+    : resolve(msg("Nothing pinned. Use Move to in a thread's menu."));
 }
 
 export const MADOHOMU_ICON_COLORS = [
@@ -334,9 +341,11 @@ export function findMadoHomuMorningBriefThread<
   );
   return (
     available.find((thread) => thread.id === taskThreadId) ??
-    available.find((thread) => thread.title === "Morning brief")
+    available.find((thread) => thread.title === MORNING_BRIEF_TITLE)
   );
 }
+
+const MORNING_BRIEF_TITLE = "Morning brief";
 
 export function madohomuMorningBriefInput(input: {
   readonly id: ScheduledTaskId;
@@ -349,7 +358,7 @@ export function madohomuMorningBriefInput(input: {
 }): ScheduledTaskUpsertInput {
   return {
     id: input.id,
-    title: "Morning brief",
+    title: MORNING_BRIEF_TITLE,
     prompt: MORNING_BRIEF_PROMPT,
     enabled: true,
     schedule: { type: "fixed_time", timeOfDay: input.timeOfDay },
@@ -418,14 +427,36 @@ export function madoHomuProjectSelectionIssue(
   environmentId: EnvironmentId,
   readHost: ReadMadoHomuSettingsHost,
   clear = false,
+  resolve: MFunctionType = mFallback,
 ): string | null {
   const issue = (id: EnvironmentId, isAnchor: boolean) => {
     const host = readHost(id);
     const label = host?.label ?? id;
-    const purpose = isAnchor ? " to save the launch destination" : " to change the project";
-    if (!host?.connected) return `Connect to ${label}${purpose}.`;
-    if (!host.settingsLoaded) return `Wait for settings from ${label} to load${purpose}.`;
-    if (!host.canWrite) return `Settings write access on ${label} is required${purpose}.`;
+    if (!host?.connected) {
+      return isAnchor
+        ? resolve(msg("Connect to {label} to save the launch destination.", { label }))
+        : resolve(msg("Connect to {label} to change the project.", { label }));
+    }
+    if (!host.settingsLoaded) {
+      return isAnchor
+        ? resolve(
+            msg("Wait for settings from {label} to load to save the launch destination.", {
+              label,
+            }),
+          )
+        : resolve(msg("Wait for settings from {label} to load to change the project.", { label }));
+    }
+    if (!host.canWrite) {
+      return isAnchor
+        ? resolve(
+            msg("Settings write access on {label} is required to save the launch destination.", {
+              label,
+            }),
+          )
+        : resolve(
+            msg("Settings write access on {label} is required to change the project.", { label }),
+          );
+    }
     return null;
   };
   const anchor = clear ? null : madoHomuProjectAnchor(destination, environmentId);

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import {
   isMadoHomuThreadPinned,
   MADOHOMU_SCRATCH_LABEL,
@@ -50,6 +51,7 @@ export const useMadoHomuRenamingSection = create<{
  * rows and the open thread's title bar both use it, so the two menus match.
  */
 export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
+  const gt = useGT();
   const actions = useMadoHomuActions(environmentId);
   const { settings } = actions;
   const { threads, groups } = useMadoHomuThreads(environmentId);
@@ -88,23 +90,34 @@ export function useMadoHomuThreadMenu(environmentId: EnvironmentId) {
       : undefined;
     const moveTo: ContextMenuItem = {
       id: MENU_MOVE,
-      label: "Move to",
+      label: gt("Move to"),
       icon: "folder",
       disabled: !canEdit,
       children: [
-        { id: MENU_SECTION_PREFIX, label: "Pinned", checked: section === null },
+        {
+          id: MENU_SECTION_PREFIX,
+          label: gt("Pinned", { $context: "thread shelf or section" }),
+          checked: section === null,
+        },
         ...settings.madohomuSections.map((s) => ({
           id: `${MENU_SECTION_PREFIX}${s.id}`,
           label: s.name,
           checked: section === s.id,
         })),
         { id: MENU_SCRATCH, label: MADOHOMU_SCRATCH_LABEL, checked: !pinned },
-        { id: MENU_NEW_SECTION, label: "New section…", separatorBefore: true },
+        { id: MENU_NEW_SECTION, label: gt("New section…"), separatorBefore: true },
       ],
     };
     return {
       items: [moveTo],
-      afterRename: [{ id: MENU_EDIT, label: "Edit…", icon: "pencil", disabled: !canEdit }],
+      afterRename: [
+        {
+          id: MENU_EDIT,
+          label: gt("Edit…", { $context: "verb, edit a thread" }),
+          icon: "pencil",
+          disabled: !canEdit,
+        },
+      ],
       labels: MADOHOMU_THREAD_MENU_LABELS,
       onSelect: (id) => {
         if (id === MENU_EDIT) setEditing(threadId);

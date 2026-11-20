@@ -1,3 +1,4 @@
+import { T, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import {
@@ -28,6 +29,8 @@ export function MadoHomuThreadEditor(props: {
   readonly thread: MadoHomuEditableThread;
   readonly onClose: () => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const actions = useMadoHomuActions(props.environmentId);
   const entry = actions.settings.madohomuThreads[props.thread.id];
   const [title, setTitle] = useState(props.thread.title);
@@ -70,7 +73,7 @@ export function MadoHomuThreadEditor(props: {
     });
   };
   return (
-    <Sheet title="Edit MadoHomu thread" onClose={props.onClose} dismissDisabled={busy}>
+    <Sheet title={gt("Edit MadoHomu thread")} onClose={props.onClose} dismissDisabled={busy}>
       <ScrollView
         nestedScrollEnabled
         contentInsetAdjustmentBehavior="automatic"
@@ -78,9 +81,11 @@ export function MadoHomuThreadEditor(props: {
         contentContainerClassName="gap-4 p-5 pb-12"
       >
         <View className="gap-2">
-          <Text className="text-sm text-foreground-muted">Title</Text>
+          <Text className="text-sm text-foreground-muted">
+            <T>Title</T>
+          </Text>
           <TextInput
-            accessibilityLabel="Thread title"
+            accessibilityLabel={gt("Thread title")}
             value={title}
             onChangeText={setTitle}
             maxLength={500}
@@ -88,13 +93,15 @@ export function MadoHomuThreadEditor(props: {
             className="min-h-12 rounded-xl bg-grouped-card p-3 text-base text-foreground"
           />
         </View>
-        <Text className="text-sm text-foreground-muted">Icon</Text>
+        <Text className="text-sm text-foreground-muted">
+          <T>Icon</T>
+        </Text>
         <View className="flex-row flex-wrap gap-2">
           {MADOHOMU_ICONS.map((choice) => (
             <Pressable
               key={choice.id}
               accessibilityRole="button"
-              accessibilityLabel={choice.label}
+              accessibilityLabel={resolve(choice.label)}
               accessibilityState={{ selected: (icon || DEFAULT_MADOHOMU_ICON) === choice.id }}
               disabled={busy}
               onPress={() => setIcon(choice.id)}
@@ -112,9 +119,11 @@ export function MadoHomuThreadEditor(props: {
           ))}
         </View>
         <View className="gap-2">
-          <Text className="text-sm text-foreground-muted">Custom emoji</Text>
+          <Text className="text-sm text-foreground-muted">
+            <T>Custom emoji</T>
+          </Text>
           <TextInput
-            accessibilityLabel="Custom emoji"
+            accessibilityLabel={gt("Custom emoji")}
             value={icon.startsWith("lucide:") ? "" : icon}
             onChangeText={setIcon}
             maxLength={16}
@@ -127,7 +136,7 @@ export function MadoHomuThreadEditor(props: {
             <Pressable
               key={swatch}
               accessibilityRole="button"
-              accessibilityLabel={`Icon color ${swatch}`}
+              accessibilityLabel={gt("Icon color {swatch}", { swatch })}
               accessibilityState={{ selected: color.toLowerCase() === swatch }}
               disabled={busy}
               onPress={() => setColor(swatch)}
@@ -141,9 +150,11 @@ export function MadoHomuThreadEditor(props: {
           ))}
         </View>
         <View className="gap-2">
-          <Text className="text-sm text-foreground-muted">Icon color (hex)</Text>
+          <Text className="text-sm text-foreground-muted">
+            <T>Icon color (hex)</T>
+          </Text>
           <TextInput
-            accessibilityLabel="Icon color (hex)"
+            accessibilityLabel={gt("Icon color (hex)")}
             value={color}
             onChangeText={setColor}
             maxLength={7}
@@ -153,13 +164,17 @@ export function MadoHomuThreadEditor(props: {
             className="min-h-12 rounded-xl bg-grouped-card p-3 text-base text-foreground"
           />
           {!validColor ? (
-            <Text className="text-sm text-danger-foreground">Enter a color such as #3b82f6.</Text>
+            <Text className="text-sm text-danger-foreground">
+              <T>Enter a color such as #3b82f6.</T>
+            </Text>
           ) : null}
         </View>
         <View className="gap-2">
-          <Text className="text-sm text-foreground-muted">Thread prompt</Text>
+          <Text className="text-sm text-foreground-muted">
+            <T>Thread prompt</T>
+          </Text>
           <TextInput
-            accessibilityLabel="Thread prompt"
+            accessibilityLabel={gt("Thread prompt")}
             value={prompt}
             onChangeText={setPrompt}
             multiline
@@ -168,18 +183,24 @@ export function MadoHomuThreadEditor(props: {
             className="min-h-24 rounded-xl bg-grouped-card p-3 text-base text-foreground"
           />
           <Text className="text-sm text-foreground-muted">
-            Included privately with the title on every turn.
+            <T>Included privately with the title on every turn.</T>
           </Text>
         </View>
         <Button
-          label="Save"
+          label={gt("Save")}
           tone="primary"
           fullWidth
           loading={busy}
           disabled={!validColor || !title.trim() || !actions.canWrite}
           onPress={() => void save()}
         />
-        <Button label="Cancel" tone="text" fullWidth disabled={busy} onPress={props.onClose} />
+        <Button
+          label={gt("Cancel")}
+          tone="text"
+          fullWidth
+          disabled={busy}
+          onPress={props.onClose}
+        />
       </ScrollView>
     </Sheet>
   );

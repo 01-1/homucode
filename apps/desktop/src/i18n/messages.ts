@@ -42,7 +42,8 @@ export function m(message: string, variables: Readonly<Record<string, string>> =
       ? undefined
       : activeCatalog[hashMessage(source, { ...options, $format: "ICU" })];
   // Untranslated text is English, so it takes English plural rules.
-  const brand = (text: string) => text.replaceAll("T3 Code", "HomuCode").replaceAll("T3 home", "Homu home");
+  const brand = (text: string) =>
+    text.replaceAll("T3 Code", "HomuCode").replaceAll("T3 home", "Homu home");
   return target === undefined
     ? gtFallback(brand(source), { ...options, $locale: DEFAULT_LOCALE })
     : gtFallback(brand(target), { ...options, $locale: activeLocale, $_fallback: brand(source) });

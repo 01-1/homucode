@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { OrchestrationV2UserInputQuestion } from "@t3tools/contracts";
 import { getQuestionAnswerSelection } from "@t3tools/client-runtime/work-log/user-input";
 import { CheckIcon } from "lucide-react";
@@ -11,6 +12,7 @@ export function QuestionOptionsHistory({
   readonly question: OrchestrationV2UserInputQuestion;
   readonly answer?: unknown;
 }) {
+  const gt = useGT();
   const { selectedLabels, customText } = getQuestionAnswerSelection(question, answer);
   return (
     <div className="space-y-1">
@@ -25,7 +27,7 @@ export function QuestionOptionsHistory({
               <li key={option.value ?? option.label} className="flex items-start gap-2">
                 <span className="flex h-5 w-3 shrink-0 items-center justify-center">
                   {selected ? (
-                    <CheckIcon aria-label="Chosen" className="size-3 text-foreground" />
+                    <CheckIcon aria-label={gt("Chosen")} className="size-3 text-foreground" />
                   ) : (
                     <span aria-hidden className="size-1 rounded-full bg-icon-muted" />
                   )}

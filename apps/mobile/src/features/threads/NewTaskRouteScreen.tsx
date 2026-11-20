@@ -289,7 +289,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       return;
     }
     if (retargeted === "locked") {
-      Dialog.alert("MadoHomu draft kept", "This draft belongs to its original MadoHomu project.");
+      Dialog.alert(
+        gt("MadoHomu draft kept"),
+        gt("This draft belongs to its original MadoHomu project."),
+      );
       return;
     }
     const draftId = retargeted ? routeDraftId : undefined;

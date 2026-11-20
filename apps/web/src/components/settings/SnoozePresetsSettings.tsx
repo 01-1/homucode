@@ -497,6 +497,7 @@ function AmountField(props: {
   label: string;
   onChange: (value: number) => void;
 }) {
+  const gt = useGT();
   // Typing stays local until the field commits (blur, Enter, or a step), so half-typed
   // values never reach the server.
   const [draft, setDraft] = useState<number | null>(props.value);
@@ -525,7 +526,7 @@ function AmountField(props: {
       }}
     >
       <NumberFieldGroup>
-        <NumberFieldDecrement aria-label="Decrease" />
+        <NumberFieldDecrement aria-label={gt("Decrease")} />
         <NumberFieldInput
           aria-label={props.label}
           // Base UI commits on blur but not on Enter; refocus so keyboard users stay put.
@@ -536,7 +537,7 @@ function AmountField(props: {
             input.focus();
           }}
         />
-        <NumberFieldIncrement aria-label="Increase" />
+        <NumberFieldIncrement aria-label={gt("Increase")} />
       </NumberFieldGroup>
     </NumberField>
   );

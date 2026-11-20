@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { DEFAULT_UNIFIED_SETTINGS, SidebarThreadFolderStyle } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
 import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
@@ -21,7 +22,7 @@ import {
   SettingsSection,
   SettingResetButton,
 } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import {
   useScopedSettings,
   useScopedSettingsMixed,
@@ -57,6 +58,8 @@ export function HomuCodeSettingsPanel() {
 }
 
 function HomuCodeDeviceSettings() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useClientSettings();
   const { environments } = useEnvironments();
   const scratchEnvironments = environments.filter(
@@ -65,43 +68,45 @@ function HomuCodeDeviceSettings() {
 
   return (
     <>
-      <SettingsSection title="Settings sync">
+      <SettingsSection title={gt("Settings sync")}>
         <SettingsRow
           {...searchableSetting("settings-sync")}
-          description="Keep this device's settings the same as your other devices', through connected servers. When a setting changed in two places, or on first setup, you choose which value to keep."
+          description={gt(
+            "Keep this device's settings the same as your other devices', through connected servers. When a setting changed in two places, or on first setup, you choose which value to keep.",
+          )}
           control={
             <Switch
               checked={settings.settingsSyncEnabled}
               onCheckedChange={(checked) =>
                 void updateClientSettings({ settingsSyncEnabled: Boolean(checked) })
               }
-              aria-label="Settings sync"
+              aria-label={gt("Settings sync")}
             />
           }
         />
       </SettingsSection>
-      <SettingsSection title="Sent messages">
+      <SettingsSection title={gt("Sent messages")}>
         <SettingsRow
           {...searchableSetting("show-message-sender-labels")}
-          description="Show who sent each message above its bubble in chat."
+          description={gt("Show who sent each message above its bubble in chat.")}
           control={
             <Switch
               checked={settings.showMessageSenderLabels}
               onCheckedChange={(showMessageSenderLabels) =>
                 void updateClientSettings({ showMessageSenderLabels })
               }
-              aria-label="Show message sender labels"
+              aria-label={gt("Show message sender labels")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("user-message-markdown")}
-          description="Off shows your sent messages as the plain text you typed."
+          description={gt("Off shows your sent messages as the plain text you typed.")}
           resetAction={
             settings.userMessageMarkdownEnabled !==
             DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled ? (
               <SettingResetButton
-                label="sent message formatting"
+                ariaLabel={gt("Reset sent message formatting to default")}
                 onClick={() =>
                   void updateClientSettings({
                     userMessageMarkdownEnabled: DEFAULT_UNIFIED_SETTINGS.userMessageMarkdownEnabled,
@@ -116,17 +121,19 @@ function HomuCodeDeviceSettings() {
               onCheckedChange={(checked) =>
                 void updateClientSettings({ userMessageMarkdownEnabled: Boolean(checked) })
               }
-              aria-label="Format sent messages as Markdown"
+              aria-label={gt("Format sent messages as Markdown")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("user-message-plus-bullets")}
-          description="Off keeps a + at the start of a line in your sent messages as you typed it."
+          description={gt(
+            "Off keeps a + at the start of a line in your sent messages as you typed it.",
+          )}
           resetAction={
             settings.userMessagePlusBullets !== DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets ? (
               <SettingResetButton
-                label="+ bullets"
+                ariaLabel={gt("Reset + bullets to default")}
                 onClick={() =>
                   void updateClientSettings({
                     userMessagePlusBullets: DEFAULT_UNIFIED_SETTINGS.userMessagePlusBullets,
@@ -142,20 +149,22 @@ function HomuCodeDeviceSettings() {
               onCheckedChange={(checked) =>
                 void updateClientSettings({ userMessagePlusBullets: Boolean(checked) })
               }
-              aria-label="Lines starting with + become bullets"
+              aria-label={gt("Lines starting with + become bullets")}
             />
           }
         />
       </SettingsSection>
-      <SettingsSection title="Sidebar">
+      <SettingsSection title={gt("Sidebar")}>
         <SettingsRow
           {...searchableSetting("thread-folder-style")}
-          description="Cards tint each folder. Tab groups color the folder name and draw a line beside its threads."
+          description={gt(
+            "Cards tint each folder. Tab groups color the folder name and draw a line beside its threads.",
+          )}
           resetAction={
             settings.sidebarThreadFolderStyle !==
             DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle ? (
               <SettingResetButton
-                label="folder style"
+                ariaLabel={gt("Reset folder style to default")}
                 onClick={() =>
                   void updateClientSettings({
                     sidebarThreadFolderStyle: DEFAULT_UNIFIED_SETTINGS.sidebarThreadFolderStyle,
@@ -173,7 +182,7 @@ function HomuCodeDeviceSettings() {
                 }
               }}
             >
-              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Folder style">
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label={gt("Folder style")}>
                 <SelectValue>
                   {SIDEBAR_THREAD_FOLDER_STYLE_LABELS[settings.sidebarThreadFolderStyle]}
                 </SelectValue>
@@ -196,6 +205,8 @@ function HomuCodeDeviceSettings() {
 }
 
 function HomuCodeEnvironmentSettings() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const mixedStatusLineCommand = useScopedSettingsMixed(["statusLineCommand"]);
@@ -220,12 +231,14 @@ function HomuCodeEnvironmentSettings() {
   return (
     <>
       <BehaviorSettingsSection />
-      <SettingsSection id="subagents" title="Subagents">
+      <SettingsSection id="subagents" title={gt("Subagents")}>
         <SettingsRow
           serverScoped
           {...searchableSetting("prefer-native-subagents")}
           settingKeys={["preferNativeSubagents"]}
-          description="Use provider-native subagents for same-provider work. Off routes every subagent through HomuCode. Applies next turn; providers that load instructions at startup need a thread restart."
+          description={gt(
+            "Use provider-native subagents for same-provider work. Off routes every subagent through HomuCode. Applies next turn; providers that load instructions at startup need a thread restart.",
+          )}
           control={
             <ScopedSwitch
               settingKeys={["preferNativeSubagents"]}
@@ -233,7 +246,7 @@ function HomuCodeEnvironmentSettings() {
               onCheckedChange={(checked) =>
                 updateSettings({ preferNativeSubagents: Boolean(checked) })
               }
-              aria-label="Prefer native subagents"
+              aria-label={gt("Prefer native subagents")}
             />
           }
         />
@@ -241,7 +254,9 @@ function HomuCodeEnvironmentSettings() {
           serverScoped
           {...searchableSetting("subagents-inherit-parent-pin")}
           settingKeys={["subagentsInheritParentPin"]}
-          description="Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server."
+          description={gt(
+            "Pin new subagents on the devices where their parent is pinned. Applies to subagents on the same server.",
+          )}
           control={
             <ScopedSwitch
               settingKeys={["subagentsInheritParentPin"]}
@@ -249,17 +264,19 @@ function HomuCodeEnvironmentSettings() {
               onCheckedChange={(checked) =>
                 updateSettings({ subagentsInheritParentPin: Boolean(checked) })
               }
-              aria-label="Subagents inherit parent pin"
+              aria-label={gt("Subagents inherit parent pin")}
             />
           }
         />
       </SettingsSection>
-      <SettingsSection id="claude-background-commands" title="Claude background commands">
+      <SettingsSection id="claude-background-commands" title={gt("Claude background commands")}>
         <SettingsRow
           serverScoped
           {...searchableSetting("claude-hold-background-commands")}
           settingKeys={["claudeHoldBackgroundCommands"]}
-          description="Keep Claude threads in Working until new background commands finish or the agent releases them. Applies without restarting. Claude monitors always keep threads working."
+          description={gt(
+            "Keep Claude threads in Working until new background commands finish or the agent releases them. Applies without restarting. Claude monitors always keep threads working.",
+          )}
           control={
             <ScopedSwitch
               settingKeys={["claudeHoldBackgroundCommands"]}
@@ -267,51 +284,55 @@ function HomuCodeEnvironmentSettings() {
               onCheckedChange={(checked) =>
                 updateSettings({ claudeHoldBackgroundCommands: Boolean(checked) })
               }
-              aria-label="Keep Claude threads working while background commands run"
+              aria-label={gt("Keep Claude threads working while background commands run")}
             />
           }
         />
       </SettingsSection>
 
-      <SettingsSection id="autoreview" title="Autoreviewers">
+      <SettingsSection id="autoreview" title={gt("Autoreviewers")}>
         <SettingsRow
           serverScoped
           {...searchableSetting("autoreviewers")}
-          description="Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers."
+          description={gt(
+            "Not recommended: reviewers lag behind the thread, so findings are often stale. Lets agents attach reviewer subagents to a thread. Turning this off pauses attached reviewers.",
+          )}
           settingKeys={["autoreviewEnabled"]}
           control={
             <ScopedSwitch
               settingKeys={["autoreviewEnabled"]}
               checked={settings.autoreviewEnabled}
               onCheckedChange={(checked) => updateSettings({ autoreviewEnabled: Boolean(checked) })}
-              aria-label="Autoreviewers (not recommended)"
+              aria-label={gt("Autoreviewers (not recommended)")}
             />
           }
         />
       </SettingsSection>
 
-      <SettingsSection title="New threads">
+      <SettingsSection title={gt("New threads")}>
         <QuickModelRow />
         <LocalThreadsUseDefaultBranchRow />
       </SettingsSection>
-      <SettingsSection title="Thread titles">
+      <SettingsSection title={gt("Thread titles")}>
         <SettingsRow
           serverScoped
           settingKeys={["threadTitleIncludeProjectName"]}
           mixed={mixedProjectName}
           {...searchableSetting("thread-title-project-name")}
-          description="Show the titler the project name, so titles can leave out what it already says."
+          description={gt(
+            "Show the titler the project name, so titles can leave out what it already says.",
+          )}
           resetAction={
             mixedProjectName || !settings.threadTitleIncludeProjectName ? (
               <SettingResetButton
-                label="project name for titles"
+                ariaLabel={gt("Reset project name for titles to default")}
                 onClick={() => updateSettings({ threadTitleIncludeProjectName: true })}
               />
             ) : null
           }
           control={
             <Switch
-              aria-label="Show the project name to the titler"
+              aria-label={gt("Show the project name to the titler")}
               mixed={mixedProjectName}
               checked={mixedProjectName ? false : settings.threadTitleIncludeProjectName}
               onCheckedChange={(enabled) =>
@@ -325,18 +346,20 @@ function HomuCodeEnvironmentSettings() {
           settingKeys={["threadTitleIdPrefix"]}
           mixed={mixedIdPrefix}
           {...searchableSetting("thread-title-id-prefix")}
-          description="Show a short ID before each generated title: its first letter, plus a number when another active thread has it (F, F1, F2). Settled threads add a letter (F1a)."
+          description={gt(
+            "Show a short ID before each generated title: its first letter, plus a number when another active thread has it (F, F1, F2). Settled threads add a letter (F1a).",
+          )}
           resetAction={
             mixedIdPrefix || settings.threadTitleIdPrefix ? (
               <SettingResetButton
-                label="title IDs"
+                ariaLabel={gt("Reset title IDs to default")}
                 onClick={() => updateSettings({ threadTitleIdPrefix: false })}
               />
             ) : null
           }
           control={
             <Switch
-              aria-label="Prefix thread titles with an ID"
+              aria-label={gt("Prefix thread titles with an ID")}
               mixed={mixedIdPrefix}
               checked={mixedIdPrefix ? false : settings.threadTitleIdPrefix}
               onCheckedChange={(enabled) => updateSettings({ threadTitleIdPrefix: enabled })}
@@ -344,16 +367,16 @@ function HomuCodeEnvironmentSettings() {
           }
         />
       </SettingsSection>
-      <SettingsSection title="Status line">
+      <SettingsSection title={gt("Status line")}>
         <SettingsRow
           serverScoped
           settingKeys={["statusLineEnabled"]}
           {...searchableSetting("status-line")}
-          description="Show the model, context, and usage limits in the top bar."
+          description={gt("Show the model, context, and usage limits in the top bar.")}
           resetAction={
             settings.statusLineEnabled !== DEFAULT_UNIFIED_SETTINGS.statusLineEnabled ? (
               <SettingResetButton
-                label="status line"
+                ariaLabel={gt("Reset status line to default")}
                 onClick={() =>
                   updateSettings({ statusLineEnabled: DEFAULT_UNIFIED_SETTINGS.statusLineEnabled })
                 }
@@ -365,7 +388,7 @@ function HomuCodeEnvironmentSettings() {
               settingKeys={["statusLineEnabled"]}
               checked={settings.statusLineEnabled}
               onCheckedChange={(checked) => updateSettings({ statusLineEnabled: Boolean(checked) })}
-              aria-label="Show the status line"
+              aria-label={gt("Show the status line")}
             />
           }
         />
@@ -373,11 +396,13 @@ function HomuCodeEnvironmentSettings() {
           serverScoped
           settingKeys={["statusLineCommand"]}
           {...searchableSetting("status-line-command")}
-          description="A command that reads Claude Code's status line JSON on stdin and prints a line of text, shown in place of the dials. Leave empty for the built-in status line."
+          description={gt(
+            "A command that reads Claude Code's status line JSON on stdin and prints a line of text, shown in place of the dials. Leave empty for the built-in status line.",
+          )}
           resetAction={
             settings.statusLineCommand !== DEFAULT_UNIFIED_SETTINGS.statusLineCommand ? (
               <SettingResetButton
-                label="status line command"
+                ariaLabel={gt("Reset status line command to default")}
                 onClick={() =>
                   updateSettings({ statusLineCommand: DEFAULT_UNIFIED_SETTINGS.statusLineCommand })
                 }
@@ -390,24 +415,24 @@ function HomuCodeEnvironmentSettings() {
               className="w-full sm:w-72"
               value={mixedStatusLineCommand ? "" : settings.statusLineCommand}
               onCommit={(next) => updateSettings({ statusLineCommand: next.trim() })}
-              placeholder={mixedStatusLineCommand ? "Mixed" : "Built-in"}
+              placeholder={mixedStatusLineCommand ? gt("Mixed") : gt("Built-in")}
               spellCheck={false}
-              aria-label="Status line command"
+              aria-label={gt("Status line command")}
             />
           }
         />
       </SettingsSection>
       <AgentMemorySettings />
-      <SettingsSection id="building-t3" title="Building Homu">
+      <SettingsSection id="building-t3" title={gt("Building Homu")}>
         <SettingsRow
           {...searchableSetting("show-building-t3")}
-          description="Configure cloud builds, Android APK builds, and loading AppImages."
+          description={gt("Configure cloud builds, Android APK builds, and loading AppImages.")}
           serverScoped
           settingKeys={["buildToolsSettingsVisible"]}
           control={
             <Switch
               checked={settings.buildToolsSettingsVisible}
-              aria-label="Show Building Homu settings"
+              aria-label={gt("Show Building Homu settings")}
               onCheckedChange={(value) =>
                 updateSettings({ buildToolsSettingsVisible: Boolean(value) })
               }
@@ -430,7 +455,7 @@ function HomuCodeEnvironmentSettings() {
           (environment) => environment.serverConfig?.settings.buildToolsSettingsVisible,
         ) ? (
         <p className="text-sm text-muted-foreground">
-          Select one environment to configure Building Homu.
+          <T>Select one environment to configure Building Homu.</T>
         </p>
       ) : null}
     </>

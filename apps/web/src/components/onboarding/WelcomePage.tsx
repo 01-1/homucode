@@ -260,10 +260,10 @@ export function WelcomePage({
         if (selectedOffers.has("quick-model") && !offerSettings.defaultModelSelection) {
           toastManager.add({
             type: "info",
-            title: "Choose your quick model",
+            title: gt("Choose your quick model"),
             description: (
               <Link to="/settings/threads" hash="quick-model">
-                Open Quick model settings
+                <T>Open Quick model settings</T>
               </Link>
             ),
             timeout: 0,
@@ -374,7 +374,7 @@ export function WelcomePage({
                     projectImport={projectImport}
                     isImporting={isImporting}
                   />
-                  <WelcomeSection title="HomuCode features">
+                  <WelcomeSection title={gt("HomuCode features")}>
                     <FeatureOfferChoices
                       selected={selectedOffers}
                       onChange={setSelectedOffers}
@@ -382,7 +382,9 @@ export function WelcomePage({
                     />
                     {localSettings.onboardingCompletedAt === null ? (
                       <div className="mt-5 grid gap-2 text-sm">
-                        <span>Theme</span>
+                        <span>
+                          <T>Theme</T>
+                        </span>
                         <Select
                           value={theme}
                           onValueChange={(value) => {
@@ -390,7 +392,7 @@ export function WelcomePage({
                             if (selected) setTheme(selected.id);
                           }}
                         >
-                          <SelectTrigger aria-label="Setup theme">
+                          <SelectTrigger aria-label={gt("Setup theme")}>
                             <SelectValue>
                               {BUILT_IN_THEMES.find((entry) => entry.id === theme)?.label}
                             </SelectValue>
@@ -412,10 +414,10 @@ export function WelcomePage({
                 <WelcomeSection
                   title={
                     offerStep === 1
-                      ? "Extra features"
+                      ? gt("Extra features")
                       : followup === "device-name"
-                        ? "Name this device"
-                        : "Building Homu"
+                        ? gt("Name this device")
+                        : gt("Building Homu")
                   }
                 >
                   {offerStep === 1 ? (
@@ -440,7 +442,7 @@ export function WelcomePage({
                   disabled={isImporting}
                   onClick={() => setOfferStep(offerStep - 1)}
                 >
-                  Back
+                  <T context="button, previous step">Back</T>
                 </Button>
               ) : agentReady ? (
                 <span />

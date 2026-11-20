@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { useEffect } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { arrayElementsEqual } from "@t3tools/client-runtime/state/entities";
@@ -120,14 +122,14 @@ const NEW_THREAD_FOLDER_NAME = "New folder";
 export async function mutateThreadFolders(
   environmentId: EnvironmentId,
   mutation: ThreadFolderMutation,
-  failureTitle = "Could not update folder",
+  failureTitle = m(msg("Could not update folder")),
 ): Promise<ThreadFolderMutationResult | null> {
   if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) {
     toastManager.add(
       stackedThreadToast({
         type: "error",
         title: failureTitle,
-        description: "This connection cannot change folders.",
+        description: m(msg("This connection cannot change folders.")),
       }),
     );
     return null;

@@ -1770,7 +1770,7 @@ function OpenCommandPaletteDialog(props: {
     actionItems.push({
       kind: "action",
       value: "action:madohomu",
-      title: "Open MadoHomu",
+      title: gt("Open MadoHomu"),
       searchTerms: ["madohomu", "chat"],
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
@@ -2016,8 +2016,8 @@ function OpenCommandPaletteDialog(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Cannot select a MadoHomu project on this machine",
-          description: "Choose a folder on a machine where you can change MadoHomu settings.",
+          title: gt("Cannot select a MadoHomu project on this machine"),
+          description: gt("Choose a folder on a machine where you can change MadoHomu settings."),
         }),
       );
       return;

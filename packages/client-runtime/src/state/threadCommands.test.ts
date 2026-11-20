@@ -495,10 +495,15 @@ describe("remote thread lifecycle commands", () => {
             },
           ],
         });
-        const result = h.commands.settle.run(h.registry, {
-          environmentId: ENVIRONMENT_ID,
-          input: { threadId: THREAD_ID },
-        });
+        const result = yield* Effect.forkChild(
+          Effect.exit(
+            h.commands.settle.run(h.registry, {
+              environmentId: ENVIRONMENT_ID,
+              input: { threadId: THREAD_ID },
+            }),
+          ),
+          { startImmediately: true },
+        );
         const request = yield* Queue.take(h.requests);
         expect(h.registry.get(h.visibleAtom)?.threads[0]).toMatchObject({
           status,
@@ -506,7 +511,7 @@ describe("remote thread lifecycle commands", () => {
           pendingRuntimeRequest: USER_INPUT,
         });
         yield* Deferred.succeed(request.reply, { sequence: 2 });
-        expect((yield* Effect.promise(() => result))._tag).toBe("Success");
+        expect((yield* Fiber.join(result))._tag).toBe("Success");
         expect(h.registry.get(h.visibleAtom)?.threads[0]?.pendingRuntimeRequest).toEqual(
           USER_INPUT,
         );
@@ -805,14 +810,19 @@ it.effect.each(["pin", "unpin", "reorderPin", "reorderActive"] as const)(
   (action) =>
     Effect.gen(function* () {
       const h = yield* makeHarness({ deviceId: "phone" });
-      const result = h.commands[action].run(h.registry, {
-        environmentId: ENVIRONMENT_ID,
-        input: { threadId: THREAD_ID, orderKey: "b" },
-      });
+      const result = yield* Effect.forkChild(
+        Effect.exit(
+          h.commands[action].run(h.registry, {
+            environmentId: ENVIRONMENT_ID,
+            input: { threadId: THREAD_ID, orderKey: "b" },
+          }),
+        ),
+        { startImmediately: true },
+      );
       const request = yield* Queue.take(h.requests);
       expect(request.command).toMatchObject({ deviceId: "phone", threadId: THREAD_ID });
       yield* Deferred.fail(request.reply, new Error("Rejected"));
-      expect((yield* Effect.promise(() => result))._tag).toBe("Failure");
+      expect((yield* Fiber.join(result))._tag).toBe("Failure");
       expect(h.registry.get(h.visibleAtom)?.threads[0]?.pinnedAt).toBeNull();
       expect(h.registry.get(h.snapshotAtom(ENVIRONMENT_ID))).toBe(SNAPSHOT);
     }),

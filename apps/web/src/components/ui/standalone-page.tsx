@@ -1,3 +1,4 @@
+import { HOMUCODE_WORDMARK_PREFIX, HOMUCODE_WORDMARK_SUFFIX } from "~/branding";
 import type { ReactNode } from "react";
 
 export function StandalonePage({ children }: { readonly children: ReactNode }) {
@@ -22,8 +23,8 @@ export function StandalonePageHeader({
     <>
       <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
         <span className="text-lg font-medium tracking-tight whitespace-nowrap">
-          <span className="text-foreground">Homu</span>
-          {"Code"}
+          <span className="text-foreground">{HOMUCODE_WORDMARK_PREFIX}</span>
+          {HOMUCODE_WORDMARK_SUFFIX}
         </span>
         {context ? <span className="text-sm">{context}</span> : null}
       </div>

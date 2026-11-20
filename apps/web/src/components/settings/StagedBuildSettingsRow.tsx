@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg, T, useGT } from "gt-react";
 import { getBuildToolsUnavailableReason } from "@t3tools/client-runtime/feature-offers";
 import { useEnvironment } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
@@ -13,7 +15,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 const stagedBuilds = () =>
   typeof window === "undefined" ? undefined : window.desktopBridge?.stagedBuilds;
@@ -35,7 +37,7 @@ const failureToast = (title: string, error: unknown) =>
     stackedThreadToast({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : "Something went wrong.",
+      description: error instanceof Error ? error.message : m(msg("Something went wrong.")),
     }),
   );
 
@@ -43,6 +45,8 @@ const failureToast = (title: string, error: unknown) =>
 export function StagedBuildSettingsRow({
   environmentId,
 }: { readonly environmentId?: EnvironmentId } = {}) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const bridge = stagedBuilds();
   const query = useEnvironmentQuery(bridge ? stagedBuildsStateAtom : null);
   const environment = useEnvironment(environmentId ?? null);
@@ -74,7 +78,7 @@ export function StagedBuildSettingsRow({
   if (!state)
     return environmentId ? (
       <p className="text-sm text-muted-foreground">
-        Staged builds are not available on this installation.
+        <T>Staged builds are not available on this installation.</T>
       </p>
     ) : null;
 
@@ -86,7 +90,7 @@ export function StagedBuildSettingsRow({
     void bridge!
       .redo(undoneAs)
       .then(refresh)
-      .catch((error: unknown) => failureToast("Could not redo the staged build", error));
+      .catch((error: unknown) => failureToast(m(msg("Could not redo the staged build")), error));
   };
 
   const undo = () => {
@@ -104,28 +108,39 @@ export function StagedBuildSettingsRow({
         toastManager.add(
           stackedThreadToast({
             type: "success",
-            title: "Undid the staged build",
-            description: `The next start loads ${after.next}.`,
-            actionProps: { children: "Redo", onClick: () => redo(undoneAs) },
+            title: gt("Undid the staged build"),
+            description: gt("The next start loads {build}.", { build: after.next }),
+            actionProps: {
+              children: gt("Redo", { $context: "verb, reapply a staged build" }),
+              onClick: () => redo(undoneAs),
+            },
           }),
         );
       })
-      .catch((error: unknown) => failureToast("Could not undo the staged build", error))
+      .catch((error: unknown) => failureToast(m(msg("Could not undo the staged build")), error))
       .finally(() => setPending(false));
   };
 
   const loads =
     state.next === state.running
-      ? `The next start loads this running build, ${state.next}.`
-      : `The next start loads ${state.next}.`;
+      ? gt("The next start loads this running build, {build}.", { build: state.next })
+      : gt("The next start loads {build}.", { build: state.next });
 
   return (
     <SettingsRow
       {...searchableSetting("staged-build")}
       description={
         state.previous
-          ? `Running ${state.running}. ${loads} Undo goes back to ${state.previous}.`
-          : `Running ${state.running}. ${loads} No earlier build in ${state.folder}.`
+          ? gt("Running {running}. {loads} Undo goes back to {previous}.", {
+              running: state.running,
+              loads,
+              previous: state.previous,
+            })
+          : gt("Running {running}. {loads} No earlier build in {folder}.", {
+              running: state.running,
+              loads,
+              folder: state.folder,
+            })
       }
       control={
         <Button
@@ -138,7 +153,7 @@ export function StagedBuildSettingsRow({
           }
           onClick={undo}
         >
-          Undo
+          <T context="verb, undo a staged build">Undo</T>
         </Button>
       }
     />

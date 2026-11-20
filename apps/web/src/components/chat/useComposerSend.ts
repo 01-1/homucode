@@ -986,7 +986,7 @@ export function useComposerSend(input: ComposerSendInput) {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not change folder",
+            title: m(msg("Could not change folder")),
             description: error instanceof Error ? error.message : String(error),
           }),
         );
@@ -995,8 +995,8 @@ export function useComposerSend(input: ComposerSendInput) {
         if (shell === null || !threadCanChangeProjectDirectory(shell)) {
           reportCdFailure(
             shell === null
-              ? "This thread is unavailable."
-              : "The thread still has work in progress. Finish or stop it first.",
+              ? m(msg("This thread is unavailable."))
+              : m(msg("The thread still has work in progress. Finish or stop it first.")),
           );
           return;
         }

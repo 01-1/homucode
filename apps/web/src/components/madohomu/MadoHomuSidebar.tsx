@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg, useGT, T } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   DndContext,
@@ -163,7 +165,7 @@ function failureToast(title: string, result: AtomCommandResult<unknown, unknown>
     stackedThreadToast({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : "An error occurred.",
+      description: error instanceof Error ? error.message : m(msg("An error occurred.")),
     }),
   );
 }
@@ -176,6 +178,7 @@ export function MadoHomuSidebar() {
 }
 
 function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const actions = useMadoHomuActions(environmentId);
   const { threads, groups, now, settings, project } = useMadoHomuThreads(environmentId);
   const selectedId = useMadoHomuSelectedThreadId(environmentId);
@@ -396,7 +399,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     setRenaming(null);
     const trimmed = title.trim();
     if (trimmed.length === 0) {
-      toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+      toastManager.add({ type: "warning", title: gt("Thread title cannot be empty") });
       return;
     }
     if (trimmed === original) return;
@@ -465,7 +468,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       item.id === "folder"
         ? { ...item, label: MADOHOMU_THREAD_MENU_LABELS.folder }
         : item.id === "folder:new-from-selection"
-          ? { ...item, label: `New HomuCode folder from selection (${count})` }
+          ? { ...item, label: gt("New HomuCode folder from selection ({count})", { count }) }
           : item,
     );
     const clicked = await settlePromise(() =>
@@ -482,16 +485,19 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             : []),
           {
             id: "settle",
-            label: `Settle (${count})`,
+            label: gt("Settle ({count})", { count }),
             disabled: !configLoaded || settling.length === 0,
           },
           ...(canSnoozeAll
             ? [
                 {
                   id: "snooze",
-                  label: `Snooze (${count})`,
+                  label: gt("Snooze ({count})", { count }),
                   children: [
-                    { id: "snooze:custom", label: "Custom…" },
+                    {
+                      id: "snooze:custom",
+                      label: gt("Custom…", { $context: "opens the custom snooze time dialog" }),
+                    },
                     ...presets.map((preset, index) => ({
                       id: `snooze:${preset.id}`,
                       label: preset.label,
@@ -504,11 +510,15 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             : []),
           {
             id: "move",
-            label: "Move to",
+            label: gt("Move to"),
             icon: "folder" as const,
             disabled: !canEdit,
             children: [
-              { id: "move:", label: "Pinned", checked: sharedPlace === null },
+              {
+                id: "move:",
+                label: gt("Pinned", { $context: "thread shelf or section" }),
+                checked: sharedPlace === null,
+              },
               ...settings.madohomuSections.map((s) => ({
                 id: `move:${s.id}`,
                 label: s.name,
@@ -520,13 +530,18 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 checked: sharedPlace === "scratch",
                 disabled: pinned.length === 0,
               },
-              { id: "move-new-section", label: "New section…", separatorBefore: true },
+              { id: "move-new-section", label: gt("New section…"), separatorBefore: true },
             ],
           },
           ...(titleItem ? [titleItem] : []),
           ...folderItems,
-          { id: "mark-unread", label: `Mark unread (${count})` },
-          { id: "delete", label: `Delete (${count})`, destructive: true, separatorBefore: true },
+          { id: "mark-unread", label: gt("Mark unread ({count})", { count }) },
+          {
+            id: "delete",
+            label: gt("Delete ({count})", { count }),
+            destructive: true,
+            separatorBefore: true,
+          },
         ],
         position,
       ),
@@ -581,7 +596,10 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       if (confirmThreadDelete) {
         const confirmed = await settlePromise(() =>
           api.dialogs.confirm(
-            `Delete ${count} thread${count === 1 ? "" : "s"}?\nThis permanently clears their conversation history.`,
+            gt(
+              "{count, plural, =1 {Delete {count} thread?} other {Delete {count} threads?}}\nThis permanently clears their conversation history.",
+              { count },
+            ),
             { variant: "destructive" },
           ),
         );
@@ -623,14 +641,14 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             ...extras.items,
             {
               id: MENU_UP,
-              label: "Move up",
+              label: gt("Move up"),
               icon: "arrow-up",
               separatorBefore: true,
               disabled: !canEdit || index <= 0,
             },
             {
               id: MENU_DOWN,
-              label: "Move down",
+              label: gt("Move down"),
               icon: "arrow-down",
               disabled: !canEdit || index >= group.threads.length - 1,
             },
@@ -751,17 +769,17 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
     const clicked = await settlePromise(() =>
       api.contextMenu.show(
         [
-          { id: "rename", label: "Rename section", icon: "pencil", disabled: !canEdit },
-          { id: "up", label: "Move up", icon: "arrow-up", disabled: !canEdit || index <= 0 },
+          { id: "rename", label: gt("Rename section"), icon: "pencil", disabled: !canEdit },
+          { id: "up", label: gt("Move up"), icon: "arrow-up", disabled: !canEdit || index <= 0 },
           {
             id: "down",
-            label: "Move down",
+            label: gt("Move down"),
             icon: "arrow-down",
             disabled: !canEdit || index >= settings.madohomuSections.length - 1,
           },
           {
             id: "delete",
-            label: "Delete section",
+            label: gt("Delete section"),
             icon: "trash",
             destructive: true,
             separatorBefore: true,
@@ -777,9 +795,12 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       moveSection(section.id, clicked.value === "up" ? -1 : 1);
     else if (clicked.value === "delete") {
       const confirmed = await settlePromise(() =>
-        api.dialogs.confirm(`Delete section "${section.name}"? Its threads move back to Pinned.`, {
-          variant: "destructive",
-        }),
+        api.dialogs.confirm(
+          gt('Delete section "{name}"? Its threads move back to Pinned.', { name: section.name }),
+          {
+            variant: "destructive",
+          },
+        ),
       );
       if (confirmed._tag === "Success" && confirmed.value) void deleteSection(section.id);
     }
@@ -935,7 +956,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               className={QUIET_BUTTON_CLASS}
               onClick={() => setScratchCount((n) => n + MADOHOMU_SCRATCH_PAGE)}
             >
-              Show more ({moreScratch})
+              {gt("Show more ({count})", { count: moreScratch })}
             </button>
           </li>
         ) : null}
@@ -960,18 +981,25 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
             >
               <ChevronDownIcon aria-hidden className="size-3.5" />
               {loadingSettled
-                ? "Loading"
+                ? gt("Loading")
                 : failedSettled
-                  ? "Could not load older threads. Retry"
+                  ? gt("Could not load older threads. Retry")
                   : unknownSettledMatches
-                    ? "Show more"
-                    : `Show ${Math.min(historyUnavailable ? listedSettledThreads.length - shown.length : moreSettled, SETTLED_TAIL_PAGE_COUNT)} more`}
+                    ? gt("Show more", { $context: "reveal more threads" })
+                    : gt("Show {count} more", {
+                        count: Math.min(
+                          historyUnavailable
+                            ? listedSettledThreads.length - shown.length
+                            : moreSettled,
+                          SETTLED_TAIL_PAGE_COUNT,
+                        ),
+                      })}
             </button>
           </li>
         ) : null}
         {group.kind === "settled" && isExpanded(group) && historyUnavailable ? (
           <li className="list-none px-2 text-xs text-muted-foreground">
-            Reconnect to load older threads.
+            <T>Reconnect to load older threads.</T>
           </li>
         ) : null}
       </SectionBlock>
@@ -1002,7 +1030,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               render={
                 <button
                   type="button"
-                  aria-label="MadoHomu menu"
+                  aria-label={gt("MadoHomu menu")}
                   className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 />
               }
@@ -1015,7 +1043,9 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
               finalFocus={() => useMadoHomuRenamingSection.getState().draft === null}
             >
               <MenuSub>
-                <MenuSubTrigger>Change project…</MenuSubTrigger>
+                <MenuSubTrigger>
+                  <T>Change project…</T>
+                </MenuSubTrigger>
                 <MenuSubPopup>
                   <MadoHomuProjectMenuItems
                     environmentId={environmentId}
@@ -1027,7 +1057,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 </MenuSubPopup>
               </MenuSub>
               <MenuItem disabled={!enabled || !project || !canEdit} onClick={addSection}>
-                New section…
+                <T>New section…</T>
               </MenuItem>
               <MenuItem
                 onClick={() => {
@@ -1039,7 +1069,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                   });
                 }}
               >
-                MadoHomu settings
+                <T>MadoHomu settings</T>
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -1056,18 +1086,20 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                 onClick={() => void newThread.createThread()}
               >
                 <SquarePenIcon aria-hidden className="size-4" />
-                New thread
+                <T>New thread</T>
               </Button>
             </div>
           ) : null
         }
       >
         {!enabled ? null : !project ? (
-          <p className="p-3 text-xs text-muted-foreground">Choose a project to see its threads.</p>
+          <p className="p-3 text-xs text-muted-foreground">
+            <T>Choose a project to see its threads.</T>
+          </p>
         ) : (
           <nav
             ref={listRef}
-            aria-label="MadoHomu threads"
+            aria-label={gt("MadoHomu threads")}
             className={cn(
               "flex flex-col gap-3 px-2 pb-2",
               sweep !== null && "**:pointer-events-none",
@@ -1075,7 +1107,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
           >
             {!actions.modelSelection ? (
               <p className="px-1 text-xs text-muted-foreground">
-                Set up an agent in Settings to create threads.
+                <T>Set up an agent in Settings to create threads.</T>
               </p>
             ) : null}
             <DndContext
@@ -1115,7 +1147,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
                     heading(
                       group,
                       canEdit ? (
-                        <HeadingButton label="Add section" onClick={addSection}>
+                        <HeadingButton label={gt("Add section")} onClick={addSection}>
                           <PlusIcon aria-hidden className="size-3.5" />
                         </HeadingButton>
                       ) : null,
@@ -1187,7 +1219,7 @@ function MadoHomuThreadList({ environmentId }: { environmentId: EnvironmentId })
       <SidebarFooter>
         <Link to="/" className={cn(QUIET_BUTTON_CLASS, "text-sm")}>
           <AppWindowIcon aria-hidden className="size-4" />
-          Open HomuCode
+          <T>Open HomuCode</T>
         </Link>
       </SidebarFooter>
       {threadMenu.editor}
@@ -1250,6 +1282,7 @@ function SectionHeading({
   onContextMenu?: (event: MouseEvent) => void;
   autoFocus?: boolean;
 }) {
+  const gt = useGT();
   return (
     <div className="group/section flex items-center gap-1" onContextMenu={onContextMenu}>
       <button
@@ -1272,7 +1305,7 @@ function SectionHeading({
             render={
               <button
                 type="button"
-                aria-label={`${attention} need you. Expand ${title}`}
+                aria-label={gt("{attention} need you. Expand {title}", { attention, title })}
                 className="inline-flex items-center gap-0.5 rounded-full bg-warning/25 px-1.5 text-xs font-medium text-warning-foreground tabular-nums outline-none hover:bg-warning/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={onToggle}
               />
@@ -1281,7 +1314,7 @@ function SectionHeading({
             <ShieldQuestionIcon aria-hidden className="size-3 shrink-0" />
             {attention}
           </TooltipTrigger>
-          <TooltipPopup side="top">{attention} need you</TooltipPopup>
+          <TooltipPopup side="top">{gt("{attention} need you", { attention })}</TooltipPopup>
         </Tooltip>
       ) : null}
       {actions}
@@ -1372,6 +1405,7 @@ function CustomSectionHeader({
   onCancelRename: () => void;
   onMenu: (position: { x: number; y: number }) => void;
 }) {
+  const gt = useGT();
   const settledRef = useRef(false);
   // Enter and Escape remove the focused input; focus its heading instead of letting the
   // workspace hand focus back to the open thread's row, which would open that row's tooltip.
@@ -1394,8 +1428,8 @@ function CustomSectionHeader({
         id={`madohomu-section-${section.id}`}
         autoFocus
         defaultValue={section.name}
-        placeholder="New section"
-        aria-label="Section name"
+        placeholder={gt("New section")}
+        aria-label={gt("Section name")}
         maxLength={MADOHOMU_SECTION_NAME_MAX_LENGTH}
         onFocus={(event) => {
           settledRef.current = false;
@@ -1428,7 +1462,7 @@ function CustomSectionHeader({
       actions={
         canEdit ? (
           <HeadingButton
-            label={`Section actions for ${section.name}`}
+            label={gt("Section actions for {name}", { name: section.name })}
             onClick={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               onMenu({ x: rect.left, y: rect.bottom + 4 });

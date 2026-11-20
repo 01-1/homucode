@@ -798,7 +798,8 @@ export const make = Effect.gen(function* () {
       let now = yield* Clock.currentTimeMillis;
       // Past expiry the server has closed a T3 Connect socket. A direct socket stays open for
       // its session's whole renewal window, so it keeps retrying until a blocked credential.
-      while (direct !== undefined || now < expiresAtEpochMs) {
+      while (true) {
+        if (direct === undefined && now >= expiresAtEpochMs) return;
         // getDpopToken reuses a cached token until it is within the skew of expiry.
         // The floor spaces out retries and keeps a wall-clock jump from spinning.
         const floor = now < expiresAtEpochMs ? 5_000 : DPOP_ACCESS_TOKEN_REFRESH_SKEW_MS;

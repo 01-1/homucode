@@ -1160,11 +1160,11 @@ export function useThreadActions() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not move to a new project",
+            title: m(msg("Could not move to a new project")),
             description:
               thread === null
-                ? "This thread is unavailable."
-                : "The thread still has work in progress. Finish or stop it first.",
+                ? m(msg("This thread is unavailable."))
+                : m(msg("The thread still has work in progress. Finish or stop it first.")),
           }),
         );
         return;
@@ -1184,7 +1184,7 @@ export function useThreadActions() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not move to a new project",
+            title: m(msg("Could not move to a new project")),
             description: String(squashAtomCommandFailure(result)),
           }),
         );

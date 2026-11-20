@@ -65,7 +65,9 @@ export function UsageProviderSettings({
                       ? CLI_PROXY_NAME
                       : gt("{name} · Disabled", { name: CLI_PROXY_NAME })}
                     {label !== source.url ? ` · ${source.url}` : ""}
-                    {source.providerRoute ? ` · Claude provider route ${source.providerRoute}` : ""}
+                    {source.providerRoute
+                      ? gt(" · Claude provider route {route}", { route: source.providerRoute })
+                      : ""}
                   </span>
                 }
                 control={

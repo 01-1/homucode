@@ -1,6 +1,8 @@
+import { m } from "../../i18n/messages";
+import { msg, useGT } from "gt-react-native";
 import type { MenuAction } from "@react-native-menu/menu";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { isMadoHomuThreadPinned, MADOHOMU_SCRATCH_LABEL } from "@t3tools/client-runtime/madohomu";
+import { isMadoHomuThreadPinned } from "@t3tools/client-runtime/madohomu";
 import {
   MADOHOMU_SECTION_NAME_MAX_LENGTH,
   type EnvironmentId,
@@ -23,7 +25,7 @@ export function promptSectionName(
   Dialog.prompt({
     title,
     initialValue,
-    confirmText: "Save",
+    confirmText: m(msg("Save")),
     onConfirm: (value) => {
       const name = value.trim().slice(0, MADOHOMU_SECTION_NAME_MAX_LENGTH);
       if (name) onName(name);
@@ -49,6 +51,7 @@ export function useMadoHomuThreadMenu(input: {
   readonly onReorder?: () => void;
   readonly onStep?: (threadId: ThreadId, direction: "up" | "down") => void;
 }) {
+  const gt = useGT();
   const { environmentId, actions, canEdit } = input;
   const { settings } = actions;
   const [editing, setEditing] = useState<ThreadId | null>(null);
@@ -68,12 +71,12 @@ export function useMadoHomuThreadMenu(input: {
     return [
       {
         id: "extra:move",
-        title: "Move to",
+        title: gt("Move to"),
         image: "folder",
         subactions: [
           {
             id: "extra:section:",
-            title: "Pinned",
+            title: gt("Pinned"),
             state: pinned && filedIn === null ? "on" : "off",
             attributes: disabled,
           },
@@ -85,7 +88,7 @@ export function useMadoHomuThreadMenu(input: {
           })),
           {
             id: "extra:scratch",
-            title: MADOHOMU_SCRATCH_LABEL,
+            title: gt("Scratch", { $context: "MadoHomu thread section" }),
             state: pinned ? "off" : "on",
             attributes: disabled,
           },
@@ -95,7 +98,7 @@ export function useMadoHomuThreadMenu(input: {
             subactions: [
               {
                 id: "extra:new-section",
-                title: "New section…",
+                title: gt("New section…"),
                 image: "folder.badge.plus",
                 attributes: disabled,
               },
@@ -107,7 +110,7 @@ export function useMadoHomuThreadMenu(input: {
         ? [
             {
               id: "extra:reorder",
-              title: "Reorder…",
+              title: gt("Reorder…"),
               image: "arrow.up.arrow.down",
               attributes: disabled,
             } satisfies MenuAction,
@@ -117,19 +120,19 @@ export function useMadoHomuThreadMenu(input: {
         ? [
             {
               id: "extra:up",
-              title: "Move up",
+              title: gt("Move up"),
               image: "arrow.up",
               attributes: { disabled: !canEdit || !manual.canMoveUp },
             } satisfies MenuAction,
             {
               id: "extra:down",
-              title: "Move down",
+              title: gt("Move down"),
               image: "arrow.down",
               attributes: { disabled: !canEdit || !manual.canMoveDown },
             } satisfies MenuAction,
           ]
         : []),
-      { id: "extra:edit", title: "Edit…", image: "pencil", attributes: disabled },
+      { id: "extra:edit", title: gt("Edit…"), image: "pencil", attributes: disabled },
     ];
   };
 
@@ -139,7 +142,11 @@ export function useMadoHomuThreadMenu(input: {
     else if (event === "extra:reorder") input.onReorder?.();
     else if (event === "extra:scratch") void actions.setThreadPlace(threadId, null);
     else if (event === "extra:new-section") {
-      promptSectionName("New section", "", (name) => void actions.moveToNewSection(threadId, name));
+      promptSectionName(
+        m(msg("New section")),
+        "",
+        (name) => void actions.moveToNewSection(threadId, name),
+      );
     } else if (event.startsWith("extra:section:")) {
       const section = event.slice("extra:section:".length);
       void actions.setThreadPlace(threadId, { section: section || null });

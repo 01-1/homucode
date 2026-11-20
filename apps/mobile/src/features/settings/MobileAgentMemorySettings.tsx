@@ -1,3 +1,4 @@
+import { msg, useGT, useMessages } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { AgentMemorySettings, isManagedSettingPath, type EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -12,19 +13,21 @@ import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 
 const LIMITS = [
-  ["perAgentHighBytes", "Per-agent throttle (bytes)"],
-  ["perAgentMaxBytes", "Per-agent cap (bytes)"],
-  ["groupHighBytes", "Group throttle (bytes)"],
-  ["groupMaxBytes", "Group cap (bytes)"],
-  ["minimumReservationBytes", "Minimum reservation (bytes)"],
-  ["headroomPercent", "Reservation headroom (%)"],
-  ["pollIntervalMs", "Poll interval (ms)"],
+  ["perAgentHighBytes", msg("Per-agent throttle (bytes)")],
+  ["perAgentMaxBytes", msg("Per-agent cap (bytes)")],
+  ["groupHighBytes", msg("Group throttle (bytes)")],
+  ["groupMaxBytes", msg("Group cap (bytes)")],
+  ["minimumReservationBytes", msg("Minimum reservation (bytes)")],
+  ["headroomPercent", msg("Reservation headroom (%)")],
+  ["pollIntervalMs", msg("Poll interval (ms)")],
 ] as const;
 
 export function MobileAgentMemorySettings(props: {
   readonly environmentId: EnvironmentId;
   readonly label: string;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { environmentId, label } = props;
   const config = useEnvironmentServerConfig(environmentId);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
@@ -37,10 +40,10 @@ export function MobileAgentMemorySettings(props: {
     void update({ environmentId, input: { patch: { agentMemory } } });
 
   return (
-    <SettingsSection title={`Agent memory controls · ${label}`}>
+    <SettingsSection title={gt("Agent memory controls · {label}", { label })}>
       <SettingsSwitchRow
-        label="Enable memory controls"
-        subtitle="Limit memory for new agents on Linux with systemd and cgroups v2."
+        label={gt("Enable memory controls")}
+        subtitle={gt("Limit memory for new agents on Linux with systemd and cgroups v2.")}
         value={memory.enabled}
         disabled={disabled("enabled")}
         onValueChange={(enabled) => write({ enabled })}
@@ -50,7 +53,7 @@ export function MobileAgentMemorySettings(props: {
         return (
           <MemoryLimitField
             key={key}
-            label={label}
+            label={resolve(label)}
             value={memory[key]}
             automatic={isValid(null)}
             disabled={disabled(key)}
@@ -71,6 +74,7 @@ function MemoryLimitField(props: {
   readonly disabled: boolean;
   readonly onCommit: (value: number | null) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <View className="gap-2 px-4 py-3">
@@ -80,7 +84,7 @@ function MemoryLimitField(props: {
         keyboardType="number-pad"
         editable={!props.disabled}
         value={draft ?? props.value?.toString() ?? ""}
-        placeholder={props.automatic ? "Automatic" : ""}
+        placeholder={props.automatic ? gt("Automatic") : ""}
         onChangeText={setDraft}
         onEndEditing={() => {
           setDraft(null);

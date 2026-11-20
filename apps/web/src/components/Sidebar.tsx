@@ -2006,7 +2006,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           })
         ).filter((thread) => thread.archivedAt === null && thread.deletedAt === null);
       } catch {
-        toastManager.add({ type: "error", title: "Could not load folder threads" });
+        toastManager.add({ type: "error", title: gt("Could not load folder threads") });
         return;
       }
       if (action === "settle") {
@@ -2043,7 +2043,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const choices = threadFolderCollectChoices(folder, threads);
       const choiceItems = (by: "branch" | "worktree", values: ReadonlyArray<string>) =>
         values.length === 0
-          ? [{ id: `collect:${by}:none`, label: "None yet", disabled: true }]
+          ? [{ id: `collect:${by}:none`, label: gt("None yet"), disabled: true }]
           : values.map((value) => ({
               id: `collect:${by}:${value}`,
               label: value,
@@ -2052,35 +2052,35 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
           [
-            { id: "rename", label: "Rename folder", icon: "pencil", disabled: !canOperate },
-            { id: "customize", label: "Customize…", icon: "folder", disabled: !canOperate },
+            { id: "rename", label: gt("Rename folder"), icon: "pencil", disabled: !canOperate },
+            { id: "customize", label: gt("Customize…"), icon: "folder", disabled: !canOperate },
             {
               id: "collect",
-              label: "Collect new threads",
+              label: gt("Collect new threads"),
               icon: "folder-tree",
               disabled: !canOperate,
               children: [
                 {
                   id: "collect:off",
-                  label: "Off",
+                  label: gt("Off", { $context: "thread folder collection setting" }),
                   checked: !folder.autoFile || folder.rule === null,
                 },
-                { id: "collect:topic", label: "By topic", checked: collect.topic },
+                { id: "collect:topic", label: gt("By topic"), checked: collect.topic },
                 {
                   id: "collect:branch",
-                  label: threadFolderCollectLabel("By branch", collect.branches),
+                  label: threadFolderCollectLabel(gt("By branch"), collect.branches),
                   children: choiceItems("branch", choices.branches),
                 },
                 {
                   id: "collect:worktree",
-                  label: threadFolderCollectLabel("By worktree", collect.worktrees),
+                  label: threadFolderCollectLabel(gt("By worktree"), collect.worktrees),
                   children: choiceItems("worktree", choices.worktrees),
                 },
                 ...(collect.custom
                   ? [
                       {
                         id: "collect:custom",
-                        label: "Set by an agent",
+                        label: gt("Set by an agent"),
                         checked: true,
                         disabled: true,
                       },
@@ -2090,7 +2090,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             },
             {
               id: "apply-rule",
-              label: addingRelated ? "Adding related threads…" : "Add related threads",
+              label: addingRelated ? gt("Adding related threads…") : gt("Add related threads"),
               icon: "folder-plus",
               disabled: !canOperate || addingRelated,
             },
@@ -2098,13 +2098,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               ? [
                   {
                     id: "move-up",
-                    label: "Move up",
+                    label: gt("Move up"),
                     disabled: !canOperate || index <= 0,
                     separatorBefore: true,
                   },
                   {
                     id: "move-down",
-                    label: "Move down",
+                    label: gt("Move down"),
                     disabled: !canOperate || index === siblings.length - 1,
                   },
                 ]
@@ -2113,7 +2113,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               ? [
                   {
                     id: "settle",
-                    label: `Settle folder (${settling.length})`,
+                    label: gt("Settle folder ({count})", { count: settling.length }),
                     icon: "circle-check",
                     disabled: !canOperate,
                     separatorBefore: true,
@@ -2123,7 +2123,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 ? [
                     {
                       id: "unsettle",
-                      label: `Un-settle folder (${unsettling.length})`,
+                      label: gt("Un-settle folder ({count})", { count: unsettling.length }),
                       icon: "refresh-cw",
                       disabled: !canOperate,
                       separatorBefore: true,
@@ -2132,16 +2132,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 : []),
             {
               id: "delete-menu",
-              label: "Delete folder",
+              label: gt("Delete folder"),
               icon: "trash",
               destructive: true,
               separatorBefore: true,
               disabled: !canOperate,
               children: [
-                { id: "delete", label: "Keep its threads" },
+                { id: "delete", label: gt("Keep its threads") },
                 {
                   id: "delete-threads",
-                  label: `Delete its threads too (${members.length})`,
+                  label: gt("Delete its threads too ({count})", { count: members.length }),
                   destructive: true,
                   disabled: members.length === 0,
                 },
@@ -2216,8 +2216,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to delete threads",
-                description: error instanceof Error ? error.message : "An error occurred.",
+                title: gt("Failed to delete threads"),
+                description: error instanceof Error ? error.message : gt("An error occurred."),
               }),
             );
             return;
@@ -2245,8 +2245,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const clicked = await settlePromise(() =>
       api.contextMenu.show(
         [
-          { id: "folder:new", label: "New folder", icon: "folder-plus", disabled: !canCreate },
-          { id: "thread:new", label: "New thread", icon: "message-square-plus" },
+          { id: "folder:new", label: gt("New folder"), icon: "folder-plus", disabled: !canCreate },
+          { id: "thread:new", label: gt("New thread"), icon: "message-square-plus" },
         ],
         position,
       ),
@@ -3134,7 +3134,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   threadIds: selectedThreads.map((thread) => thread.id),
                   canOperate: canOperateThreads(selectedThreads),
                 })
-              : [{ id: "folder", label: "Move to folder", disabled: true }]),
+              : [{ id: "folder", label: gt("Move to folder"), disabled: true }]),
             { id: "mark-unread", label: gt("Mark unread ({count})", { count }) },
             {
               id: "delete",
@@ -3527,7 +3527,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: `Failed to ${environmentProject.action} thread`,
+                title:
+                  environmentProject.action === "copy"
+                    ? gt("Failed to copy thread")
+                    : gt("Failed to move thread"),
                 description: String(squashAtomCommandFailure(moved)),
               }),
             );
@@ -3545,7 +3548,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Failed to move thread",
+                title: gt("Failed to move thread"),
                 description: String(squashAtomCommandFailure(moved)),
               }),
             );
@@ -3563,8 +3566,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: stopWithSubagents ? "Failed to stop thread" : "Failed to move thread",
-                description: error instanceof Error ? error.message : "An error occurred.",
+                title: stopWithSubagents
+                  ? gt("Failed to stop thread")
+                  : gt("Failed to move thread"),
+                description: error instanceof Error ? error.message : gt("An error occurred."),
               }),
             );
           }
@@ -4228,7 +4233,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                   >
                     <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
-                    {`Show ${Math.min(hiddenSearchResultCount, SEARCH_RESULTS_PAGE_COUNT)} more`}
+                    {gt("Show {count} more", {
+                      count: Math.min(hiddenSearchResultCount, SEARCH_RESULTS_PAGE_COUNT),
+                    })}
                   </button>
                 ) : null}
               </TooltipProvider>
@@ -4259,7 +4266,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               className="flex items-center gap-2 px-2.5 py-2 text-xs text-sidebar-muted-foreground"
             >
               <span className="min-w-0 flex-1">
-                {`${unloadedSettledCount} older settled ${unloadedSettledCount === 1 ? "thread is" : "threads are"} not loaded.`}
+                {gt(
+                  "{count, plural, =1 {{count} older settled thread is not loaded.} other {{count} older settled threads are not loaded.}}",
+                  { count: unloadedSettledCount },
+                )}
               </span>
               <button
                 type="button"
@@ -4276,10 +4286,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 font-medium hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
               >
                 {searchSettledShelf.loading
-                  ? "Loading"
+                  ? gt("Loading")
                   : searchSettledShelf.failed
-                    ? "Retry"
-                    : "Load more"}
+                    ? gt("Retry")
+                    : gt("Load more")}
               </button>
             </div>
           ) : null}

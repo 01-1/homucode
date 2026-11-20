@@ -18,12 +18,10 @@ import {
   AuthSourceControlWriteScope,
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
-  CommandId,
   MessageId,
   ORCHESTRATION_V2_WS_METHODS,
   RunId,
   WS_METHODS,
-  ORCHESTRATION_V2_WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";

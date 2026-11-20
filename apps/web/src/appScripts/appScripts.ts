@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   appScriptRunRefusal,
@@ -103,6 +105,7 @@ export async function handleRunScriptRequest(
       ...base,
       ok: false,
       code: isAppScriptRefused(error) ? "scripts-disabled" : "script-failed",
+      // oxlint-disable-next-line t3code/no-untranslated-copy -- This response is sent to the terminal caller.
       message: errorMessage(error) || "The app script failed.",
     };
   }
@@ -129,7 +132,7 @@ export function installAppScripts(router: AnyRouter): () => void {
         }).catch((error: unknown) => {
           toastManager.add({
             type: "error",
-            title: `App script ${name} failed`,
+            title: m(msg("App script {name} failed", { name })),
             description: errorMessage(error),
           });
         });

@@ -198,7 +198,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                       >
                         <SearchIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
                         <span className={cn("min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-                          Find in thread
+                          <T>Find in thread</T>
                         </span>
                       </ThreadDetailsControl>
                     ) : null}

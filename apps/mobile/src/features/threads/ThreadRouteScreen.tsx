@@ -354,7 +354,7 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   if (opensDraft && (params.madohomu === true || params.madohomuLinkProjectId !== undefined)) {
     return withInspectorHeader(
       <ThreadUnavailableScreen
-        actionLabel="Back to MadoHomu"
+        actionLabel={gt("Back to MadoHomu")}
         onAction={() => navigation.dispatch(StackActions.popTo("MadoHomu", { environmentId }))}
       />,
     );

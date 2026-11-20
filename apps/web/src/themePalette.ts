@@ -378,13 +378,13 @@ export function getStandardPaintedThemeColors(appearance: ThemeAppearance): Them
 function canonicalizeThemeDefinition(theme: ThemeDefinition): ThemeDefinition {
   return {
     ...theme,
-    colors: decodeThemeColors(theme.colors),
+    colors: decodeThemeColors(theme.colors, m),
     ...(theme.variants
       ? {
           variants: Object.fromEntries(
             Object.entries(theme.variants).map(([appearance, colors]) => [
               appearance,
-              decodeThemeColors(colors),
+              decodeThemeColors(colors, m),
             ]),
           ) as ThemeVariants,
         }

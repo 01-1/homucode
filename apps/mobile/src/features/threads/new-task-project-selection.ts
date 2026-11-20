@@ -1,3 +1,5 @@
+import { m } from "../../i18n/messages";
+import { msg } from "gt-react-native";
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import { isPickableProjectMember } from "@t3tools/client-runtime/state/project-grouping";
@@ -200,16 +202,24 @@ export function madohomuDraftSendBlockReason(
   settings: Pick<ServerConfig["settings"], "madohomuEnabled" | "madohomuProjectId"> | undefined,
 ): string | null {
   if (!selected) {
-    return "Reconnect to the original machine or restore the MadoHomu project, then try again.";
+    return m(
+      msg("Reconnect to the original machine or restore the MadoHomu project, then try again."),
+    );
   }
   if (origin?.environmentId !== selected.environmentId || origin.projectId !== selected.id) {
-    return "Switch this draft back to the machine and project where you opened it, then try again.";
+    return m(
+      msg("Switch this draft back to the machine and project where you opened it, then try again."),
+    );
   }
   if (settings === undefined) {
-    return "Reconnect to the original machine so MadoHomu's settings can load, then try again.";
+    return m(
+      msg("Reconnect to the original machine so MadoHomu's settings can load, then try again."),
+    );
   }
   if (!settings.madohomuEnabled || settings.madohomuProjectId !== selected.id) {
-    return "Enable MadoHomu and select the original project in MadoHomu settings, then try again.";
+    return m(
+      msg("Enable MadoHomu and select the original project in MadoHomu settings, then try again."),
+    );
   }
   return null;
 }

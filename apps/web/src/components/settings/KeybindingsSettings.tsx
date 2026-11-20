@@ -24,7 +24,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages, msg } from "gt-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
@@ -1131,11 +1131,15 @@ function KeybindingHoverRowMenu(props: {
 }
 
 const CUSTOM_SCRIPT_LANGUAGES = [
-  { language: "bash", label: "Bash", tooltip: "Run as a Bash command in the thread's terminal" },
+  {
+    language: "bash",
+    label: "Bash",
+    tooltip: msg("Run as a Bash command in the thread's terminal"),
+  },
   {
     language: "ts",
     label: "TS",
-    tooltip: "TypeScript app scripts are not available in this build yet",
+    tooltip: msg("TypeScript app scripts are not available in this build yet"),
   },
 ] as const satisfies ReadonlyArray<{
   language: CustomScriptLanguage;
@@ -1151,6 +1155,8 @@ function CustomScriptLanguageButtons({
   /** Null means the pressed button was released, which a new row reads as "use a command". */
   onChange: (language: CustomScriptLanguage | null) => void;
 }) {
+  const messages = useMessages();
+  const gt = useGT();
   return CUSTOM_SCRIPT_LANGUAGES.map(({ language, label, tooltip }) => {
     const available = isCustomScriptLanguageAvailable(language);
     return (
@@ -1160,14 +1166,14 @@ function CustomScriptLanguageButtons({
             pressed={value === language}
             disabled={!available}
             onPressedChange={(pressed) => onChange(pressed ? language : null)}
-            aria-label={`${label} script`}
+            aria-label={gt("{language} script", { language: label })}
             variant="outline"
             size="sm"
           >
             {label}
           </Toggle>
         </TooltipTrigger>
-        <TooltipPopup side="top">{tooltip}</TooltipPopup>
+        <TooltipPopup side="top">{messages(tooltip)}</TooltipPopup>
       </Tooltip>
     );
   });
@@ -1190,12 +1196,13 @@ function CustomScriptInput({
   onSubmit: () => void;
   onRevert?: () => void;
 }) {
+  const gt = useGT();
   return (
     <Input
       autoFocus={autoFocus}
       aria-label={label}
       value={value}
-      placeholder="Shell command"
+      placeholder={gt("Shell command")}
       size="sm"
       font="mono"
       className={className}
@@ -1216,6 +1223,8 @@ function CustomScriptInput({
 }
 
 function KeybindingSettingsRow(props: KeybindingRowProps) {
+  const gt = useGT();
+  const messages = useMessages();
   const { row, isSaving, anchorId, allRows, variables, onSave, onReset, onUnassign, onRemove } =
     props;
   const editor = useKeybindingRowEditor({ row, allRows, onSave });
@@ -1253,7 +1262,9 @@ function KeybindingSettingsRow(props: KeybindingRowProps) {
           {editor.savedScript === null ? null : (
             <CustomScriptInput
               value={editor.scriptDraft}
-              label={`Shell command for ${commandLabel(row.command)}`}
+              label={gt("Shell command for {command}", {
+                command: commandLabel(row.command, messages),
+              })}
               className="w-56"
               onChange={(scriptDraft) => editor.setDraft({ scriptDraft })}
               onSubmit={() => {
@@ -1546,7 +1557,7 @@ function NewKeybindingSettingsRow(props: NewKeybindingProps) {
             <CustomScriptInput
               autoFocus
               value={draft.scriptDraft}
-              label="Shell command for new keybinding"
+              label={gt("Shell command for new keybinding")}
               className="w-56"
               onChange={(scriptDraft) => draft.setDraft({ scriptDraft })}
               onSubmit={() => {

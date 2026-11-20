@@ -1,3 +1,4 @@
+import { T } from "gt-react";
 import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
 import { Button } from "./ui/button";
@@ -53,13 +54,17 @@ function NewProjectMoveDialog() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Move to a new project</DialogTitle>
+            <DialogTitle>
+              <T>Move to a new project</T>
+            </DialogTitle>
             <DialogDescription>
-              The thread and its children keep their current working folders.
+              <T>The thread and its children keep their current working folders.</T>
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
-            <Label htmlFor={id}>Project name</Label>
+            <Label htmlFor={id}>
+              <T>Project name</T>
+            </Label>
             <Input
               id={id}
               value={name}
@@ -70,10 +75,10 @@ function NewProjectMoveDialog() {
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => finish(null)}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button type="submit" disabled={!name.trim()}>
-              Create and move
+              <T>Create and move</T>
             </Button>
           </DialogFooter>
         </form>

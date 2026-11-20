@@ -2978,6 +2978,7 @@ const make = Effect.gen(function* () {
             options: input.options,
           },
           providers,
+          cwd: yield* parentWorkspaceCwd(parent),
         });
         modelSelection = resolved.modelSelection;
         yield* resolveRuntimeMode(parent.thread.runtimeMode, parent.thread.runtimeMode, resolved);
@@ -3254,6 +3255,7 @@ const make = Effect.gen(function* () {
           target: input.target ?? DEFAULT_AUTOREVIEW_TARGET,
           // An updated reviewer only changes model; it keeps the modes it was started with.
           providers,
+          cwd: yield* parentWorkspaceCwd(reviewed),
         });
         yield* assertTargetEnabledForProject(reviewed, commandId, target);
         const runtimeMode = yield* resolveRuntimeMode(

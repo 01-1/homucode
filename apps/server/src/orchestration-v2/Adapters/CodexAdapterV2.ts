@@ -8525,6 +8525,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }) {
             const threadId = providerThread.nativeThreadRef?.nativeId;
             if (threadId != null) yield* applyServiceTier(threadId, modelSelection);
+            // The native update sets the tier for subsequent requests, not the running turn’s model or effort.
+            return false;
           }),
           // Dropping this connection's subscription lets the shared app-server
           // shut the native thread (and its MCP servers) down once it is idle.

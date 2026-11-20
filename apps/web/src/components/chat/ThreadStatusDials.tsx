@@ -1,3 +1,4 @@
+import { msg, useGT, useMessages } from "gt-react";
 import {
   formatStatusLineSpan,
   formatStatusLineTokens,
@@ -14,6 +15,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import type { MessageResolver } from "../../i18n/messages";
 
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 const EFFORT_BAR_HEIGHTS = ["h-1", "h-1.5", "h-2", "h-2.5", "h-3"];
@@ -40,10 +42,10 @@ function resetsIn(limit: StatusLineLimit, nowMs: number): string | null {
     : formatStatusLineSpan(limit.resetsAtMs - nowMs);
 }
 
-function limitNote(limit: StatusLineLimit, nowMs: number): string {
-  if (windowEnded(limit, nowMs)) return "window ended";
+function limitNote(limit: StatusLineLimit, nowMs: number, resolve: MessageResolver): string {
+  if (windowEnded(limit, nowMs)) return resolve(msg("window ended"));
   const left = resetsIn(limit, nowMs);
-  return left === null ? "" : `resets in ${left}`;
+  return left === null ? "" : resolve(msg("resets in {time}", { time: left }));
 }
 
 function uptimeText(createdAt: string | null, nowMs: number): string | null {
@@ -151,8 +153,9 @@ function LimitDial(props: {
   readonly title: string;
   readonly className: string;
 }) {
+  const gt = useGT();
   const left = resetsIn(props.limit, props.nowMs);
-  const note = limitNote(props.limit, props.nowMs);
+  const note = limitNote(props.limit, props.nowMs, useMessages());
   return (
     <Dial
       percent={props.limit.usedPercent}
@@ -166,7 +169,15 @@ function LimitDial(props: {
           </>
         )
       }
-      label={`${props.title} ${props.limit.usedPercent}% used${note === "" ? "" : `, ${note}`}`}
+      label={
+        note === ""
+          ? gt("{title} {percent}% used", { title: props.title, percent: props.limit.usedPercent })
+          : gt("{title} {percent}% used, {note}", {
+              title: props.title,
+              percent: props.limit.usedPercent,
+              note,
+            })
+      }
       className={`${props.className} ${windowEnded(props.limit, props.nowMs) ? "opacity-50" : ""}`}
     />
   );
@@ -198,6 +209,7 @@ export function StatusDialStrip(props: {
   readonly createdAt: string | null;
   readonly nowMs: number;
 }) {
+  const gt = useGT();
   const { stats, nowMs } = props;
   const uptime = uptimeText(props.createdAt, nowMs);
   const context = stats.contextTokens === null ? null : formatStatusLineTokens(stats.contextTokens);
@@ -213,23 +225,31 @@ export function StatusDialStrip(props: {
             <span className="max-w-40 truncate">{stats.modelName}</span>
             {stats.effort === null ? null : <Effort effort={stats.effort} />}
             {stats.fastMode ? (
-              <ZapIcon aria-label="Fast mode" className="size-3.5 shrink-0 fill-foreground" />
+              <ZapIcon aria-label={gt("Fast mode")} className="size-3.5 shrink-0 fill-foreground" />
             ) : null}
           </span>
         )}
         {context === null ? null : stats.contextPercent === null ? (
           // No known maximum, so no ring: the count stands in for it.
-          <Stat label={`Context ${context} tokens`} className="@max-[20rem]/dials:hidden">
-            <span className="font-medium text-foreground">context</span>
+          <Stat
+            label={gt("Context {context} tokens", { context })}
+            className="@max-[20rem]/dials:hidden"
+          >
+            <span className="font-medium text-foreground">
+              {gt("context", { $context: "model context window" })}
+            </span>
             {context}
           </Stat>
         ) : (
           <Dial
             percent={stats.contextPercent}
             alerts={CONTEXT_ALERTS}
-            name="context"
+            name={gt("context", { $context: "model context window" })}
             detail={context}
-            label={`Context ${stats.contextPercent}% used, ${context} tokens`}
+            label={gt("Context {percent}% used, {context} tokens", {
+              percent: stats.contextPercent,
+              context,
+            })}
           />
         )}
         {stats.fiveHour === null ? null : (
@@ -237,7 +257,7 @@ export function StatusDialStrip(props: {
             limit={stats.fiveHour}
             nowMs={nowMs}
             name="5h"
-            title="5-hour limit"
+            title={gt("5-hour limit")}
             className="@max-[4rem]/dials:hidden"
           />
         )}
@@ -245,29 +265,35 @@ export function StatusDialStrip(props: {
           <LimitDial
             limit={stats.weekly}
             nowMs={nowMs}
-            name="week"
-            title="Weekly limit"
+            name={gt("week", { $context: "weekly usage limit" })}
+            title={gt("Weekly limit")}
             className="@max-[6.5rem]/dials:hidden"
           />
         )}
         {uptime === null ? null : (
           <>
             <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[29rem]/dials:hidden" />
-            <Stat label={`Uptime ${uptime}`} className="@max-[29rem]/dials:hidden">
+            <Stat label={gt("Uptime {uptime}", { uptime })} className="@max-[29rem]/dials:hidden">
               <TimerIcon />
               {uptime}
             </Stat>
           </>
         )}
         {stats.cachePercent === null ? null : (
-          <Stat label={`Cache hits ${stats.cachePercent}%`} className="@max-[37rem]/dials:hidden">
+          <Stat
+            label={gt("Cache hits {percent}%", { percent: stats.cachePercent })}
+            className="@max-[37rem]/dials:hidden"
+          >
             <DatabaseIcon />
             {stats.cachePercent}%
           </Stat>
         )}
         {stats.inputTokens === null ? null : (
           <Stat
-            label={`${stats.inputTokens} tokens in, ${stats.outputTokens ?? 0} out`}
+            label={gt("{input} tokens in, {output} out", {
+              input: stats.inputTokens,
+              output: stats.outputTokens ?? 0,
+            })}
             className="@max-[44rem]/dials:hidden"
           >
             <ArrowDownIcon />
@@ -312,7 +338,7 @@ function LimitFact(props: {
   readonly limit: StatusLineLimit;
   readonly nowMs: number;
 }) {
-  const note = limitNote(props.limit, props.nowMs);
+  const note = limitNote(props.limit, props.nowMs, useMessages());
   return (
     <Fact
       name={props.name}
@@ -330,6 +356,7 @@ export function StatusDialCard(props: {
   readonly createdAt: string | null;
   readonly nowMs: number;
 }) {
+  const gt = useGT();
   const { stats, nowMs } = props;
   const uptime = uptimeText(props.createdAt, nowMs);
   const model = [stats.modelName, stats.effort, stats.fastMode ? "fast" : null].filter(Boolean);
@@ -338,7 +365,7 @@ export function StatusDialCard(props: {
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] gap-x-6 gap-y-3">
         {stats.contextTokens === null ? null : (
           <Fact
-            name="Context"
+            name={gt("Context", { $context: "model context window" })}
             {...(stats.contextPercent === null
               ? {}
               : { meter: { percent: stats.contextPercent, alerts: CONTEXT_ALERTS } })}
@@ -351,20 +378,27 @@ export function StatusDialCard(props: {
           </Fact>
         )}
         {stats.fiveHour === null ? null : (
-          <LimitFact name="5-hour limit" limit={stats.fiveHour} nowMs={nowMs} />
+          <LimitFact name={gt("5-hour limit")} limit={stats.fiveHour} nowMs={nowMs} />
         )}
         {stats.weekly === null ? null : (
-          <LimitFact name="Weekly limit" limit={stats.weekly} nowMs={nowMs} />
+          <LimitFact name={gt("Weekly limit")} limit={stats.weekly} nowMs={nowMs} />
         )}
-        {uptime === null ? null : <Fact name="Uptime">{uptime}</Fact>}
+        {uptime === null ? null : <Fact name={gt("Uptime")}>{uptime}</Fact>}
         {stats.inputTokens === null ? null : (
-          <Fact name="Tokens">
-            {formatStatusLineTokens(stats.inputTokens)} in ·{" "}
-            {formatStatusLineTokens(stats.outputTokens ?? 0)} out
-            {stats.cachePercent === null ? null : ` · ${stats.cachePercent}% cached`}
+          <Fact name={gt("Tokens")}>
+            {stats.cachePercent === null
+              ? gt("{input} in · {output} out", {
+                  input: formatStatusLineTokens(stats.inputTokens),
+                  output: formatStatusLineTokens(stats.outputTokens ?? 0),
+                })
+              : gt("{input} in · {output} out · {percent}% cached", {
+                  input: formatStatusLineTokens(stats.inputTokens),
+                  output: formatStatusLineTokens(stats.outputTokens ?? 0),
+                  percent: stats.cachePercent,
+                })}
           </Fact>
         )}
-        {model.length === 0 ? null : <Fact name="Model">{model.join(" · ")}</Fact>}
+        {model.length === 0 ? null : <Fact name={gt("Model")}>{model.join(" · ")}</Fact>}
       </div>
       {stats.cwd === null && stats.version === null ? null : (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">

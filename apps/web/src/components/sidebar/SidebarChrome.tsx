@@ -1,3 +1,4 @@
+import { HOMUCODE_WORDMARK_PREFIX, HOMUCODE_WORDMARK_SUFFIX } from "~/branding";
 import { canOpenMadoHomuAtom } from "../../madohomu";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -191,8 +192,10 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
         onBackdrop ? "text-white/70" : "text-muted-foreground",
       )}
     >
-      <span className={onBackdrop ? "text-white" : "text-foreground"}>Homu</span>
-      {"Code"}
+      <span className={onBackdrop ? "text-white" : "text-foreground"}>
+        {HOMUCODE_WORDMARK_PREFIX}
+      </span>
+      {HOMUCODE_WORDMARK_SUFFIX}
     </span>
   );
 }
@@ -294,7 +297,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           {canOpenMadoHomu ? (
             <SidebarUtilityItem
               icon={<span>✦</span>}
-              label="Open MadoHomu"
+              label={gt("Open MadoHomu")}
               onClick={() => {
                 closeMobileSidebar();
                 void navigate({

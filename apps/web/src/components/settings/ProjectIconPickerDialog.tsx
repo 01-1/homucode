@@ -392,6 +392,7 @@ export function ProjectIconPicker({
 }
 
 function ProjectIconPreview({ draft, name }: { draft: ProjectIconDraft; name: string }) {
+  const gt = useGT();
   const automatic = deriveProjectIdentity(name);
   const icon: ProjectIconOverride = projectIconFromDraft(draft) ?? {
     kind: "monogram",
@@ -412,8 +413,8 @@ function ProjectIconPreview({ draft, name }: { draft: ProjectIconDraft; name: st
           {icon.kind === "lucide"
             ? iconLabel(icon.name)
             : icon.kind === "emoji"
-              ? "Emoji"
-              : "Monogram"}
+              ? gt("Emoji")
+              : gt("Monogram")}
         </div>
       </div>
     </div>
@@ -426,7 +427,7 @@ export function ProjectIconPickerDialog({
   open,
   onOpenChange,
   onSelect,
-  title = "Choose project icon",
+  title,
 }: {
   readonly current: ProjectIconOverride | null;
   readonly projectName: string;
@@ -435,6 +436,7 @@ export function ProjectIconPickerDialog({
   readonly onSelect: (icon: ProjectIconOverride) => void;
   readonly title?: string;
 }) {
+  const gt = useGT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="w-full sm:w-[32rem]">
@@ -442,7 +444,7 @@ export function ProjectIconPickerDialog({
         <ProjectIconPickerBody
           current={current}
           projectName={projectName}
-          title={title}
+          title={title ?? gt("Choose project icon")}
           onClose={() => onOpenChange(false)}
           onSelect={onSelect}
         />

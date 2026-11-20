@@ -391,7 +391,7 @@ it.effect("updates a device-local project pin without dispatching a shared proje
     });
     const h = yield* makeHarness(pins);
     h.registry.set(h.storedProject, PROJECT);
-    const result = yield* Effect.promise(() =>
+    const result = yield* Effect.exit(
       h.commands.update.run(h.registry, {
         environmentId: ENVIRONMENT_ID,
         input: { projectId: PROJECT_ID, pinned: true },

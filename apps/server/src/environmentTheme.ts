@@ -15,7 +15,12 @@ import {
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import { findThemeFile, themeOnBase } from "@t3tools/shared/themeBase";
 import { themeCssLoadsRemoteFiles } from "@t3tools/shared/themeCss";
-import { MOBILE_DEFAULT_THEME_ID, UNPUBLISHABLE_THEME_IDS } from "@t3tools/shared/themePalettes";
+import {
+  BUILT_IN_THEME_IDS,
+  MOBILE_DEFAULT_THEME_ID,
+  MOBILE_THEME_IDS,
+  UNPUBLISHABLE_THEME_IDS,
+} from "@t3tools/shared/themePalettes";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -282,11 +287,15 @@ export const readPublishedThemes = Effect.fn(function* (themesDir: string) {
   return themes;
 });
 
-const unknownTheme = (themeId: string, themes: ReadonlyArray<EnvironmentTheme>) =>
+const unknownTheme = (
+  themeId: string,
+  themes: ReadonlyArray<EnvironmentTheme>,
+  builtInThemeIds: ReadonlyArray<string> = BUILT_IN_THEME_IDS,
+) =>
   new EnvironmentThemeRefusedError({
     themeId,
     problem: "is not a built-in or published theme.",
-    known: [...BUILT_IN_THEME_IDS, ...themes.map(({ id }) => id)],
+    known: [...builtInThemeIds, ...themes.map(({ id }) => id)],
   });
 
 /** What `EnvironmentThemeService.read` answers for this setting and these published themes. */
@@ -454,7 +463,7 @@ const make = Effect.gen(function* () {
         const { themes } = yield* refresh;
         if (theme === undefined) {
           if (themeId !== MOBILE_DEFAULT_THEME_ID && findThemeFile(themes, themeId) === undefined) {
-            return yield* unknownTheme(themeId, themes);
+            return yield* unknownTheme(themeId, themes, MOBILE_THEME_IDS);
           }
           return yield* select;
         }

@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m } from "../i18n/messages";
 import {
   type EnvironmentThreadFolder,
   scopedThreadFolderKey,
@@ -52,11 +54,11 @@ export function moveToFolderMenuItem(
   const disabled = !input.canOperate;
   return {
     id: "folder",
-    label: "Move to folder",
+    label: m(msg("Move to folder")),
     icon: "folder",
     disabled,
     children: [
-      { id: "folder:new", label: "New folder…", disabled },
+      { id: "folder:new", label: m(msg("New folder…")), disabled },
       ...folders.map((folder, index) => ({
         id: `${FOLDER_ID_PREFIX}${folder.id}` as const,
         label: folder.name,
@@ -70,7 +72,7 @@ export function moveToFolderMenuItem(
         ? [
             {
               id: "folder:remove" as const,
-              label: "Remove from folder",
+              label: m(msg("Remove from folder")),
               separatorBefore: true,
               disabled,
             },
@@ -95,7 +97,7 @@ export function buildMultiSelectFolderMenuItems(
   return [
     {
       id: "folder:new-from-selection",
-      label: `New folder from selection (${input.threadIds.length})`,
+      label: m(msg("New folder from selection ({count})", { count: input.threadIds.length })),
       icon: "folder",
       disabled: !input.canOperate,
     },

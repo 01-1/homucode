@@ -447,7 +447,7 @@ function SnoozeMenuButton(props: {
             if (choice) onSnooze(choice);
           }}
         >
-          Custom…
+          <T context="opens the custom snooze time dialog">Custom…</T>
         </MenuItem>
         {presets.length > 0 ? <MenuSeparator /> : null}
         {presets.map((preset) => (
@@ -943,7 +943,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     props.showActionsButton && !isRenaming && !props.sortable?.isDragging ? (
       <button
         type="button"
-        aria-label={`Actions for ${thread.title}`}
+        aria-label={gt("Actions for {title}", { title: thread.title })}
         onClick={handleActionsClick}
         onKeyDown={(event) => event.stopPropagation()}
         className="hidden size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:inline-flex focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-focus-within/sidebar-row:inline-flex group-any-hover/sidebar-row:inline-flex pointer-coarse:inline-flex"
@@ -1338,7 +1338,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
       {subagentParentTitle !== null ? (
-        <span className="min-w-0 flex-1 truncate">Subagent of {subagentParentTitle}</span>
+        <span className="min-w-0 flex-1 truncate">
+          <T>
+            Subagent of <Var>{subagentParentTitle}</Var>
+          </T>
+        </span>
       ) : checkoutThread.branch ? (
         <>
           <ThreadWorktreeIndicator thread={checkoutThread} />
@@ -1455,7 +1459,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {isSelected && props.leadingIcon !== undefined ? (
                 <span className="inline-flex shrink-0 text-primary">
                   <CheckIcon aria-hidden className="size-3.5" />
-                  <span className="sr-only">Selected</span>
+                  <span className="sr-only">
+                    <T context="selected thread status">Selected</T>
+                  </span>
                 </span>
               ) : null}
               {draftIndicator}

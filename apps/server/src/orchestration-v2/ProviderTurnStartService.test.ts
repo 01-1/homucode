@@ -7,7 +7,6 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";
 import { it as effectIt } from "@effect/vitest";
 import {
-  ScheduledTaskId,
   CheckpointScopeId,
   CommandId,
   ContextHandoffId,

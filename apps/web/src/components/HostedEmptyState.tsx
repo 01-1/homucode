@@ -5,7 +5,7 @@ import { T } from "gt-react";
 import { CheckIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { APP_DISPLAY_NAME, DESKTOP_DOWNLOAD_URL } from "~/branding";
+import { APP_DISPLAY_NAME, DESKTOP_DOWNLOAD_URL, HOMUCODE_WORDMARK_PREFIX } from "~/branding";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { isElectron } from "../env";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
@@ -32,8 +32,8 @@ export function HostedEmptyState() {
             <span className="text-sm font-medium text-muted-foreground">
               {APP_DISPLAY_NAME.startsWith("HomuCode") ? (
                 <>
-                  <span className="text-foreground">Homu</span>
-                  {APP_DISPLAY_NAME.slice("Homu".length)}
+                  <span className="text-foreground">{HOMUCODE_WORDMARK_PREFIX}</span>
+                  {APP_DISPLAY_NAME.slice(HOMUCODE_WORDMARK_PREFIX.length)}
                 </>
               ) : (
                 APP_DISPLAY_NAME

@@ -701,7 +701,7 @@ export function NewTaskDraftScreen(props: {
         settings,
       );
       if (blockReason !== null) {
-        Dialog.alert("MadoHomu draft kept", blockReason);
+        Dialog.alert(gt("MadoHomu draft kept"), blockReason);
         return null;
       }
     }
@@ -758,13 +758,13 @@ export function NewTaskDraftScreen(props: {
 
   if (!selectedProject && lockedToMadoHomu) {
     return (
-      <ThreadScreenFallback header={<AppBar title="New thread" onBack={goBack} />}>
+      <ThreadScreenFallback header={<AppBar title={gt("New thread")} onBack={goBack} />}>
         <View className="flex-1 items-center justify-center gap-3 p-4">
           <Text className="text-center text-foreground">
-            The original MadoHomu project is unavailable.
+            <T>The original MadoHomu project is unavailable.</T>
           </Text>
           <Text className="text-center text-foreground-muted">
-            Reconnect to its machine or restore the project to continue.
+            <T>Reconnect to its machine or restore the project to continue.</T>
           </Text>
         </View>
       </ThreadScreenFallback>

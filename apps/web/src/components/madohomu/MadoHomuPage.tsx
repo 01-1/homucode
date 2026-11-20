@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { isElectron } from "../../env";
 import { toastManager } from "../ui/toast";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -23,6 +24,7 @@ import {
 } from "./useMadoHomuThreads";
 
 export function MadoHomuPage() {
+  const gt = useGT();
   const environmentId = useMadoHomuEnvironmentId();
   return environmentId ? (
     <MadoHomuWorkspace key={environmentId} environmentId={environmentId} />
@@ -31,7 +33,7 @@ export function MadoHomuPage() {
       <MadoHomuTitlebar />
       <MadoHomuNoProject
         environmentId={null}
-        message="Connect to an environment to use MadoHomu."
+        message={gt("Connect to an environment to use MadoHomu.")}
       />
     </SidebarInset>
   );
@@ -44,6 +46,7 @@ function MadoHomuWindowModeButton({
   environmentId: EnvironmentId;
   threadId?: ThreadId | undefined;
 }) {
+  const gt = useGT();
   const bridge = isElectron ? window.desktopBridge : undefined;
   if (!bridge?.setMadoHomuWindowMode) return null;
   const split = bridge.isMadoHomuWindow?.() === true;
@@ -57,7 +60,7 @@ function MadoHomuWindowModeButton({
         environmentId,
         ...(threadId ? { threadId } : {}),
       })
-      .catch(() => toastManager.add({ type: "error", title: "Could not move MadoHomu" }));
+      .catch(() => toastManager.add({ type: "error", title: gt("Could not move MadoHomu") }));
   return (
     <>
       <Button
@@ -68,7 +71,9 @@ function MadoHomuWindowModeButton({
         onClick={toggle}
       >
         <Icon className="size-3.5" />
-        {split ? "Merge" : "Split"}
+        {split
+          ? gt("Merge", { $context: "verb, return MadoHomu to the main window" })
+          : gt("Split", { $context: "verb, move MadoHomu into its own window" })}
       </Button>
       <Tooltip>
         <TooltipTrigger
@@ -91,6 +96,7 @@ function MadoHomuWindowModeButton({
 }
 
 function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const environment = useEnvironment(environmentId);
   const { settings, project } = useMadoHomuThreads(environmentId);
   const selection = useMadoHomuSelection(environmentId);
@@ -117,10 +123,12 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
           environmentId={environmentId}
           {...(environment?.connection.phase !== "connected"
             ? {
-                message: `Reconnect ${environment?.label ?? "the selected machine"}, or choose a project on another machine.`,
+                message: gt("Reconnect {machine}, or choose a project on another machine.", {
+                  machine: environment?.label ?? gt("the selected machine"),
+                }),
               }
             : !settings.madohomuEnabled
-              ? { message: "Choose a project to enable MadoHomu on its machine." }
+              ? { message: gt("Choose a project to enable MadoHomu on its machine.") }
               : {})}
         />
       </SidebarInset>
@@ -130,7 +138,7 @@ function MadoHomuWorkspace({ environmentId }: { environmentId: EnvironmentId }) 
       <SidebarInset>
         <MadoHomuTitlebar trailing={windowMode} />
         <p className="p-6 text-sm text-muted-foreground" role="status">
-          Loading…
+          <T>Loading…</T>
         </p>
       </SidebarInset>
     );
@@ -164,25 +172,27 @@ function MadoHomuNoThreads({ environmentId }: { environmentId: EnvironmentId }) 
   const { createThread, creating } = useMadoHomuNewThread(environmentId);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-sm text-muted-foreground">No threads yet.</p>
+      <p className="text-sm text-muted-foreground">
+        <T>No threads yet.</T>
+      </p>
       <Button
         disabled={creating || !actions.modelSelection || !actions.canWrite}
         onClick={() => void createThread()}
       >
         <SquarePenIcon aria-hidden />
-        New thread
+        <T>New thread</T>
       </Button>
       {!actions.modelSelection ? (
         <>
           <p className="text-xs text-muted-foreground">
-            No agent is set up yet, so MadoHomu cannot start a thread.
+            <T>No agent is set up yet, so MadoHomu cannot start a thread.</T>
           </p>
           <Button
             variant="outline"
             size="sm"
             render={<Link to="/settings/providers" search={{ environmentId }} />}
           >
-            Open provider settings
+            <T>Open provider settings</T>
           </Button>
         </>
       ) : null}

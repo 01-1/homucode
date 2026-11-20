@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg } from "gt-react";
 import type { ModelSelection } from "@t3tools/contracts";
 import { parseQuickCommand } from "@t3tools/shared/composerTrigger";
 
@@ -23,21 +25,21 @@ export function resolveQuickCommandSend(input: {
   if (command.question === "") {
     return {
       kind: "blocked",
-      title: "Nothing to ask",
-      description: "Type a question after /q.",
+      title: m(msg("Nothing to ask")),
+      description: m(msg("Type a question after /q.")),
     };
   }
   if (input.quickModelSelection === null) {
     return {
       kind: "blocked",
-      title: "No quick model",
-      description: "Pick a quick model in Settings → Threads to use /q.",
+      title: m(msg("No quick model")),
+      description: m(msg("Pick a quick model in Settings → Threads to use /q.")),
     };
   }
   if (!input.threadStarted) {
     return {
       kind: "blocked",
-      title: "Start the thread first",
+      title: m(msg("Start the thread first")),
       description: "/q answers in a thread that has already started. Send a first message.",
     };
   }

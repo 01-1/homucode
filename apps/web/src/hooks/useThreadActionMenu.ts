@@ -308,19 +308,23 @@ export function useThreadActionMenu(input: {
       }
       const environmentProject = parseEnvironmentProjectMenuId(action);
       if (environmentProject !== null) {
-        await reportFailure(`Failed to ${environmentProject.action} thread`, () =>
-          (environmentProject.action === "copy"
-            ? copyThreadToProject
-            : moveThreadToEnvironmentProject)(
-            threadRef,
-            environmentProject.environmentId as EnvironmentId,
-            environmentProject.projectId as ProjectId,
-          ),
+        await reportFailure(
+          environmentProject.action === "copy"
+            ? m(msg("Failed to copy thread"))
+            : m(msg("Failed to move thread")),
+          () =>
+            (environmentProject.action === "copy"
+              ? copyThreadToProject
+              : moveThreadToEnvironmentProject)(
+              threadRef,
+              environmentProject.environmentId as EnvironmentId,
+              environmentProject.projectId as ProjectId,
+            ),
         );
         return;
       }
       if (action.startsWith("move-to-project:")) {
-        await reportFailure("Failed to move thread", () =>
+        await reportFailure(m(msg("Failed to move thread")), () =>
           moveThreadToProject(
             threadRef,
             action.slice("move-to-project:".length) as import("@t3tools/contracts").ProjectId,
@@ -330,7 +334,9 @@ export function useThreadActionMenu(input: {
       }
       const moveParent = moveParentFromMenuId(action);
       if (moveParent !== undefined) {
-        await reportFailure("Failed to move thread", () => moveThread(threadRef, moveParent));
+        await reportFailure(m(msg("Failed to move thread")), () =>
+          moveThread(threadRef, moveParent),
+        );
         return;
       }
       switch (action) {
@@ -390,7 +396,9 @@ export function useThreadActionMenu(input: {
           await reportFailure(m(msg("Failed to pin thread")), () => pinThread(threadRef));
           return;
         case "stop-with-subagents":
-          await reportFailure("Failed to stop thread", () => stopThreadWithSubagents(threadRef));
+          await reportFailure(m(msg("Failed to stop thread")), () =>
+            stopThreadWithSubagents(threadRef),
+          );
           return;
         case "unpin": {
           await reportFailure(m(msg("Failed to unpin thread")), () =>

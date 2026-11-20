@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import type {
   EnvironmentId,
   OrchestrationV2UserInputQuestion,
@@ -44,6 +45,7 @@ function AnswerFile(props: {
 }
 
 function QuestionOptions(props: { question: OrchestrationV2UserInputQuestion; answer: unknown }) {
+  const gt = useGT();
   const { selectedLabels, customText } = getQuestionAnswerSelection(props.question, props.answer);
   return (
     <View className="gap-1">
@@ -55,7 +57,7 @@ function QuestionOptions(props: { question: OrchestrationV2UserInputQuestion; an
         return (
           <View key={option.value ?? option.label} className="flex-row gap-2">
             <Text
-              accessibilityLabel={selected ? "Chosen" : undefined}
+              accessibilityLabel={selected ? gt("Chosen") : undefined}
               className={
                 selected ? "w-3 text-sm text-foreground" : "w-3 text-sm text-foreground-muted"
               }

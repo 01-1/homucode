@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
   type AnsiSegment,
@@ -458,6 +459,7 @@ function HeaderStatusLine(props: {
   readonly result: StatusLineResult;
   readonly items: ReadonlyArray<StatusLineItem>;
 }) {
+  const gt = useGT();
   const { result } = props;
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -480,7 +482,7 @@ function HeaderStatusLine(props: {
       ref={containerRef}
       data-chat-header-status-line={failed ? "error" : "true"}
       tabIndex={0}
-      aria-label="Status line"
+      aria-label={gt("Status line")}
       className="min-w-0 flex-1 rounded-sm text-muted-foreground text-xs outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       onMouseEnter={() => setHovered(true)}
       // On each move, since the line shifts under the pointer when the title beside it changes.
@@ -502,7 +504,7 @@ function HeaderStatusLine(props: {
       {drawn ? (
         <StatusDialStrip stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
       ) : failed ? (
-        <div className="truncate">Status line failed: {result.error}</div>
+        <div className="truncate">{gt("Status line failed: {error}", { error: result.error })}</div>
       ) : (
         <StatusLineRow items={props.items} modelName={result.modelName} />
       )}

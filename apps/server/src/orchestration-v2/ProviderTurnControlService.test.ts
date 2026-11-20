@@ -1,6 +1,5 @@
 import { assert, it } from "@effect/vitest";
 import {
-  MessageId,
   type ModelSelection,
   ChatAttachmentId,
   MessageId,
@@ -145,6 +144,9 @@ function layerProjectionStore(
       countThreads: () => Effect.die("unused countThreads"),
       listActiveShellIndex: () => Effect.die("unused listActiveShellIndex"),
       listActiveThreads: () => Effect.die("unused listActiveThreads"),
+      listActiveThreadTitles: () => Effect.die("unused listActiveThreadTitles"),
+      readConflictingThreadTitleIds: () => Effect.die("unused readConflictingThreadTitleIds"),
+      readWorkActivity: () => Effect.die("unused readWorkActivity"),
       listOlderSettledThreads: () => Effect.die("unused listOlderSettledThreads"),
       readShellSnapshot: () => Effect.die("unused readShellSnapshot"),
       getThreadShell: () => Effect.die("unused getThreadShell"),

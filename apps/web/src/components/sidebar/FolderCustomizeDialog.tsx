@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import type { EnvironmentThreadFolder } from "@t3tools/client-runtime/state/thread-folders";
 import { FolderOpenIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -112,6 +113,7 @@ function FolderCustomizeBody({
   folder: EnvironmentThreadFolder;
   onClose: () => void;
 }) {
+  const gt = useGT();
   const [name, setName] = useState(folder.name);
   const [hasIcon, setHasIcon] = useState(folder.icon !== null);
   const [iconDraft, setIconDraft] = useState(() =>
@@ -138,11 +140,15 @@ function FolderCustomizeBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Customize folder</DialogTitle>
-        <DialogDescription>Change the folder's name, icon, and color.</DialogDescription>
+        <DialogTitle>
+          <T>Customize folder</T>
+        </DialogTitle>
+        <DialogDescription>
+          <T>Change the folder's name, icon, and color.</T>
+        </DialogDescription>
       </DialogHeader>
       <DialogPanel>
-        <Field label="Name" htmlFor="folder-customize-name">
+        <Field label={gt("Name")} htmlFor="folder-customize-name">
           <Input
             id="folder-customize-name"
             value={name}
@@ -161,10 +167,12 @@ function FolderCustomizeBody({
           preview={
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label render={<div />}>Preview</Label>
+                <Label render={<div />}>
+                  <T>Preview</T>
+                </Label>
                 {hasIcon ? (
                   <Button size="xs" variant="ghost-destructive" onClick={() => setHasIcon(false)}>
-                    Remove icon
+                    <T>Remove icon</T>
                   </Button>
                 ) : null}
               </div>
@@ -175,10 +183,10 @@ function FolderCustomizeBody({
       </DialogPanel>
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={saving}>
-          Cancel
+          <T>Cancel</T>
         </Button>
         <Button onClick={() => void save()} disabled={saving || nameInvalid || iconInvalid}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? gt("Saving…") : gt("Save")}
         </Button>
       </DialogFooter>
     </>

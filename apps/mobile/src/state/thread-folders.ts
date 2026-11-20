@@ -1,3 +1,5 @@
+import { m } from "../i18n/messages";
+import { msg, useGT } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import {
   createThreadFolderMemberKeysAtom,
@@ -61,6 +63,7 @@ const FOLDER_REMOVE = "extra:thread-folder:remove";
 const FOLDER_MOVE_PREFIX = "extra:thread-folder:move:";
 
 export function useThreadFolderMenu(folders: ReturnType<typeof useThreadFolders>) {
+  const gt = useGT();
   const writableEnvironments = useAtomValue(writableFolderEnvironmentsAtom);
   const mutate = useAtomCommand(serverEnvironment.mutateThreadFolders, { reportFailure: false });
 
@@ -74,15 +77,15 @@ export function useThreadFolderMenu(folders: ReturnType<typeof useThreadFolders>
     const actions: MenuAction[] = [
       {
         id: "extra:thread-folder",
-        title: "Move to folder",
+        title: gt("Move to folder"),
         image: "folder",
         subactions: [
-          { id: FOLDER_CREATE, title: "New folder…", image: "folder.badge.plus" },
+          { id: FOLDER_CREATE, title: gt("New folder…"), image: "folder.badge.plus" },
           ...destinations.map((folder) => ({
             id: `${FOLDER_MOVE_PREFIX}${folder.id}`,
             title: folder.name,
           })),
-          ...(current ? [{ id: FOLDER_REMOVE, title: "Remove from folder" }] : []),
+          ...(current ? [{ id: FOLDER_REMOVE, title: gt("Remove from folder") }] : []),
         ],
       },
     ];
@@ -95,22 +98,25 @@ export function useThreadFolderMenu(folders: ReturnType<typeof useThreadFolders>
         if (result._tag !== "Failure") return;
         const error = Cause.squash(result.cause);
         Dialog.alert(
-          "Could not update folder",
-          error instanceof Error ? error.message : "The folder could not be updated.",
+          m(msg("Could not update folder")),
+          error instanceof Error ? error.message : m(msg("The folder could not be updated.")),
         );
       });
     };
 
     if (action === FOLDER_CREATE) {
       Dialog.prompt({
-        title: "New folder",
+        title: m(msg("New folder")),
         initialValue: "",
-        placeholder: "Folder name",
-        confirmText: "Create",
+        placeholder: m(msg("Folder name")),
+        confirmText: m(msg("Create")),
         onConfirm: (value) => {
           const name = value.trim();
           if (!isThreadFolderName(name)) {
-            Dialog.alert("Invalid folder name", "Use a name between 1 and 80 characters.");
+            Dialog.alert(
+              m(msg("Invalid folder name")),
+              m(msg("Use a name between 1 and 80 characters.")),
+            );
             return;
           }
           commit({

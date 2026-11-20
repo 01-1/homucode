@@ -320,7 +320,7 @@ describe("searchSettings", () => {
     (offer) => {
       const row = FEATURE_OFFER_SETTINGS[offer.id];
       expect(row).toBeDefined();
-      expect(searchSettings(offer.title)).toContainEqual(
+      expect(searchSettings(decodeMsg(offer.title))).toContainEqual(
         expect.objectContaining({ id: row, to: "/settings/homucode" }),
       );
     },

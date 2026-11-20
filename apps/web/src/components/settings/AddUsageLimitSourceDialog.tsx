@@ -139,10 +139,12 @@ export function AddUsageLimitSourceDialog({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="usage-source-provider-route">Claude provider route (optional)</Label>
+              <Label htmlFor="usage-source-provider-route">
+                <T>Claude provider route (optional)</T>
+              </Label>
               <Input
                 id="usage-source-provider-route"
-                placeholder="Defaults to the hub URL"
+                placeholder={gt("Defaults to the hub URL")}
                 aria-invalid={!routeValid}
                 aria-describedby="usage-source-route-help"
                 value={providerRoute}
@@ -150,8 +152,12 @@ export function AddUsageLimitSourceDialog({
               />
               <p id="usage-source-route-help" className="text-xs text-muted-foreground">
                 {routeValid
-                  ? "Set this when the provider connects at a different URL from the quota source."
-                  : "Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment."}
+                  ? gt(
+                      "Set this when the provider connects at a different URL from the quota source.",
+                    )
+                  : gt(
+                      "Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment.",
+                    )}
               </p>
             </div>
             <div className="grid gap-1.5">

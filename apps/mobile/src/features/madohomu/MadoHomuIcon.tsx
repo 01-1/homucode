@@ -1,3 +1,4 @@
+import { msg } from "gt-react-native";
 import IconBook from "@tabler/icons-react-native/IconBook";
 import IconCalendar from "@tabler/icons-react-native/IconCalendar";
 import IconCode from "@tabler/icons-react-native/IconCode";
@@ -12,15 +13,15 @@ import { DEFAULT_MADOHOMU_ICON } from "@t3tools/contracts";
 import { AppText as Text } from "../../components/ui/AppText";
 
 export const MADOHOMU_ICONS = [
-  { id: "lucide:message-circle", label: "Chat", component: IconMessageCircle },
-  { id: "lucide:list-todo", label: "Tasks", component: IconListCheck },
-  { id: "lucide:calendar-days", label: "Calendar", component: IconCalendar },
-  { id: "lucide:inbox", label: "Inbox", component: IconInbox },
-  { id: "lucide:code", label: "Code", component: IconCode },
-  { id: "lucide:leaf", label: "Leaf", component: IconLeaf },
-  { id: "lucide:heart", label: "Heart", component: IconHeart },
-  { id: "lucide:book-open", label: "Book", component: IconBook },
-  { id: "lucide:sun", label: "Sun", component: IconSun },
+  { id: "lucide:message-circle", label: msg("Chat"), component: IconMessageCircle },
+  { id: "lucide:list-todo", label: msg("Tasks"), component: IconListCheck },
+  { id: "lucide:calendar-days", label: msg("Calendar"), component: IconCalendar },
+  { id: "lucide:inbox", label: msg("Inbox"), component: IconInbox },
+  { id: "lucide:code", label: msg("Code"), component: IconCode },
+  { id: "lucide:leaf", label: msg("Leaf"), component: IconLeaf },
+  { id: "lucide:heart", label: msg("Heart"), component: IconHeart },
+  { id: "lucide:book-open", label: msg("Book"), component: IconBook },
+  { id: "lucide:sun", label: msg("Sun"), component: IconSun },
 ] as const;
 
 export function MadoHomuIcon({

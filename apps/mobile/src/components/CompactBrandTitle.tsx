@@ -16,6 +16,8 @@ export function brandTitleOffset(): number {
   return Platform.isPad && !NATIVE_WORKSPACE_COLUMNS_SUPPORTED ? IPAD_HOME_TITLE_OFFSET : 0;
 }
 
+const HOMUCODE_WORDMARK = { prefix: "Homu", suffix: "Code" };
+
 export function CompactBrandTitle(
   props: {
     readonly allowFontScaling?: boolean;
@@ -56,8 +58,8 @@ export function CompactBrandTitle(
         className="font-t3-medium text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
       >
-        <Text className="font-t3-medium text-foreground">Homu</Text>
-        {"Code"}
+        <Text className="font-t3-medium text-foreground">{HOMUCODE_WORDMARK.prefix}</Text>
+        {HOMUCODE_WORDMARK.suffix}
       </Text>
       {showStage ? (
         <View

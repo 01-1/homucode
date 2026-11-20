@@ -341,6 +341,7 @@ export function ThreadListV2FolderHeader(props: {
   readonly pane: "screen" | "sidebar";
   readonly onToggle: (key: string) => void;
 }) {
+  const gt = useGT();
   const { folder, count, disabled, expanded } = props.item;
   return (
     <ThreadListV2Section
@@ -362,7 +363,7 @@ export function ThreadListV2FolderHeader(props: {
         disabled,
         onToggle: () => props.onToggle(scopedThreadFolderKey(folder)),
         accessibilityLabel: `${folder.name}, ${count} ${count === 1 ? "thread" : "threads"}`,
-        accessibilityHint: expanded ? "Collapses the folder." : "Expands the folder.",
+        accessibilityHint: expanded ? gt("Collapses the folder.") : gt("Expands the folder."),
       }}
     />
   );
@@ -1054,7 +1055,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
-      { id: "snooze:custom", title: "Custom…" },
+      { id: "snooze:custom", title: gt("Custom…") },
       ...snoozePresets.map((preset) => ({
         id: `snooze:${preset.id}`,
         title: preset.label,

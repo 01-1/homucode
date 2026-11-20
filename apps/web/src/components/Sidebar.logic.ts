@@ -1270,14 +1270,14 @@ export const SIDEBAR_SEARCH_SORT_OPTIONS: ReadonlyArray<{
   readonly value: SidebarSearchSort;
   readonly label: string;
 }> = [
-  { value: "recent", label: "Recent activity" },
-  { value: "relevance", label: "Best match" },
-  { value: "opened", label: "Recently opened" },
-  { value: "newest", label: "Newest first" },
-  { value: "oldest", label: "Oldest first" },
-  { value: "stale", label: "Least recent activity" },
-  { value: "title", label: "Title (A–Z)" },
-  { value: "project", label: "Project" },
+  { value: "recent", label: msg("Recent activity") },
+  { value: "relevance", label: msg("Best match") },
+  { value: "opened", label: msg("Recently opened") },
+  { value: "newest", label: msg("Newest first") },
+  { value: "oldest", label: msg("Oldest first") },
+  { value: "stale", label: msg("Least recent activity") },
+  { value: "title", label: msg("Title (A–Z)") },
+  { value: "project", label: msg("Project") },
 ];
 
 export type SidebarSearchStatus = "working" | "needs-you" | "failed" | "unread";

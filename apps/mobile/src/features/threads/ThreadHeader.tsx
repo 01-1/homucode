@@ -37,7 +37,7 @@ export function ThreadHeader(props: {
   const findAction: AppBarAction[] = props.onFindInThread
     ? [
         {
-          accessibilityLabel: "Find in thread",
+          accessibilityLabel: gt("Find in thread"),
           icon: "magnifyingglass",
           separateBackground: false,
           onPress: props.onFindInThread,

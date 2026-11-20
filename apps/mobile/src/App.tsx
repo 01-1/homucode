@@ -4,7 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
-import { useLocale } from "gt-react-native";
+import { useLocale, useGT } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Platform, StatusBar, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -343,6 +343,7 @@ export default function App({ launchSurface }: AppProps) {
 
 // Android's MadoHomu task keeps its own stack when the main task navigates.
 function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavigationTheme> }) {
+  const gt = useGT();
   const { environments, isReady } = useMadoHomuEnvironmentStates();
   const wanted = madohomuLauncherWanted(environments, isReady);
   const destination = useMadoHomuEnvironments()[0]?.environmentId;
@@ -360,8 +361,8 @@ function MadoHomuNavigation({ theme }: { theme: ReturnType<typeof useMobileNavig
         <Text className="text-lg font-semibold text-foreground">MadoHomu</Text>
         <Text className="text-center text-base text-foreground-muted">
           {wanted === false
-            ? "Enable MadoHomu in HomuCode Settings to use it."
-            : "Waiting for a connection to your MadoHomu environment."}
+            ? gt("Enable MadoHomu in HomuCode Settings to use it.")
+            : gt("Waiting for a connection to your MadoHomu environment.")}
         </Text>
       </View>
     );

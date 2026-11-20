@@ -1,4 +1,5 @@
-import { searchableSetting } from "./settingsSearch";
+import { T, useGT } from "gt-react";
+import { useSearchableSetting } from "./settingsSearch";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { BuildToolsRequest, EnvironmentId } from "@t3tools/contracts";
@@ -15,6 +16,8 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { StagedBuildSettingsRow } from "./StagedBuildSettingsRow";
 
 export function BuildToolsSetup({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
@@ -55,8 +58,12 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   if (reason) return <p role="status">{reason}</p>;
   return (
     <div className="grid gap-6">
-      {!canRun ? <p>This connection cannot run build tools.</p> : null}
-      <SettingsSection title="Build folder and launcher">
+      {!canRun ? (
+        <p>
+          <T>This connection cannot run build tools.</T>
+        </p>
+      ) : null}
+      <SettingsSection title={gt("Build folder and launcher")}>
         {(
           [
             ["buildRepoPath", "build-repo-path", "Path to this machine's HomuCode checkout"],
@@ -87,15 +94,19 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           />
         ))}
         <p className="text-sm text-muted-foreground">
-          The build loader launches the newest AppImage in this folder. The default is the running
-          AppImage's folder.
+          <T>
+            The build loader launches the newest AppImage in this folder. The default is the running
+            AppImage's folder.
+          </T>
         </p>
         <StagedBuildSettingsRow environmentId={environmentId} />
       </SettingsSection>
-      <SettingsSection title="Cloud build">
+      <SettingsSection title={gt("Cloud build")}>
         <SettingsRow
           {...searchableSetting("enable-cloud-builds")}
-          description="Build or test a committed revision on a disposable boat.dev machine. Install the boat CLI and run boat login on this machine first."
+          description={gt(
+            "Build or test a committed revision on a disposable boat.dev machine. Install the boat CLI and run boat login on this machine first.",
+          )}
           control={
             <Checkbox
               checked={settings.cloudBuildEnabled}
@@ -105,23 +116,23 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
         />
         <SettingsRow
-          title="Revision"
+          title={gt("Revision")}
           control={
             <Input
               value={ref}
               onChange={(event) => setRef(event.target.value)}
-              aria-label="Build revision"
+              aria-label={gt("Build revision")}
             />
           }
         />
         <SettingsRow
-          title="Focused test files"
-          description="One path per line."
+          title={gt("Focused test files")}
+          description={gt("One path per line.")}
           control={
             <Input
               value={testFile}
               onChange={(event) => setTestFile(event.target.value)}
-              aria-label="Focused test files"
+              aria-label={gt("Focused test files")}
             />
           }
         />
@@ -130,21 +141,23 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
             disabled={!settings.cloudBuildEnabled || actionsDisabled || busy}
             onClick={() => setConfirmation("cloud-build")}
           >
-            Build AppImage
+            <T>Build AppImage</T>
           </Button>
           <Button
             variant="outline"
             disabled={!settings.cloudBuildEnabled || actionsDisabled || busy || !testFile.trim()}
             onClick={() => setConfirmation("cloud-test")}
           >
-            Run focused tests
+            <T>Run focused tests</T>
           </Button>
         </div>
       </SettingsSection>
-      <SettingsSection title="Android APK">
+      <SettingsSection title={gt("Android APK")}>
         <SettingsRow
           {...searchableSetting("enable-android-builds")}
-          description="Build a signed development APK on boat.dev. Uses this machine's existing Android signing key."
+          description={gt(
+            "Build a signed development APK on boat.dev. Uses this machine's existing Android signing key.",
+          )}
           control={
             <Checkbox
               checked={settings.androidBuildEnabled}
@@ -157,11 +170,13 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           disabled={!settings.androidBuildEnabled || actionsDisabled || busy}
           onClick={() => setConfirmation("android")}
         >
-          Build Android APK
+          <T>Build Android APK</T>
         </Button>
         <SettingsRow
           {...searchableSetting("serve-apks-on-lan")}
-          description="Serve ~/app/mobile on port 8767 until switched off or this server stops."
+          description={gt(
+            "Serve ~/app/mobile on port 8767 until switched off or this server stops.",
+          )}
           control={
             <Checkbox
               checked={Boolean(state?.lanUrl)}
@@ -173,17 +188,19 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         {state?.lanUrl ? (
           <p className="break-all text-sm">
             {state.lanUrl}
-            {state.artifactPath?.split("/").at(-1) ?? "<APK filename>"}
+            {state.artifactPath?.split("/").at(-1) ?? <T>&lt;APK filename&gt;</T>}
           </p>
         ) : null}
       </SettingsSection>
-      <SettingsSection title="Load build">
+      <SettingsSection title={gt("Load build")}>
         <SettingsRow
           {...searchableSetting("enable-loading-builds")}
           description={
             state?.appImageAvailable
-              ? "Verify a staged AppImage and restart Homu on it, with automatic rollback if it fails to return."
-              : "Not available: this server is not running inside an AppImage install."
+              ? gt(
+                  "Verify a staged AppImage and restart Homu on it, with automatic rollback if it fails to return.",
+                )
+              : gt("Not available: this server is not running inside an AppImage install.")
           }
           control={
             <Checkbox
@@ -194,7 +211,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
         />
         <SettingsRow
-          title="Staged AppImage"
+          title={gt("Staged AppImage")}
           control={
             <Input
               value={stagedFile}
@@ -204,7 +221,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
         />
         <SettingsRow
-          title="SHA-256"
+          title={gt("SHA-256")}
           control={<Input value={sha256} onChange={(event) => setSha256(event.target.value)} />}
         />
         <Button
@@ -218,15 +235,17 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
           onClick={() => setConfirmation("load")}
         >
-          Load staged build
+          <T>Load staged build</T>
         </Button>
       </SettingsSection>
       {confirmation ? (
         <div className="grid gap-2">
           <p className="text-sm">
             {confirmation === "load"
-              ? "This restarts HomuCode. The loader restores the previous build if the new one fails."
-              : "This starts a disposable cloud machine using your boat.dev account."}
+              ? gt(
+                  "This restarts HomuCode. The loader restores the previous build if the new one fails.",
+                )
+              : gt("This starts a disposable cloud machine using your boat.dev account.")}
           </p>
           <div className="flex gap-2">
             <Button
@@ -236,16 +255,16 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
                 setConfirmation(null);
               }}
             >
-              Confirm
+              <T>Confirm</T>
             </Button>
             <Button variant="ghost" onClick={() => setConfirmation(null)}>
-              Cancel
+              <T>Cancel</T>
             </Button>
           </div>
         </div>
       ) : null}
       <div role="status" className="grid gap-2 text-sm">
-        <p>{query.error ?? state?.message ?? "Loading build tool status…"}</p>
+        <p>{query.error ?? state?.message ?? gt("Loading build tool status…")}</p>
         {state?.artifactPath ? <p className="break-all">{state.artifactPath}</p> : null}
         {state?.output ? (
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{state.output}</pre>

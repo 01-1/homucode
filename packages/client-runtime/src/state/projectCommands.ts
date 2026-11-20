@@ -208,10 +208,7 @@ export function createProjectEnvironmentAtoms<R, E, IdentityError = never>(
           return yield* new DevicePinsPersistenceError({
             cause: "The project has not reached this device yet.",
           });
-        const result = yield* Effect.promise(() =>
-          devicePins.setProject.run(registry, { environmentId, projectId, pinned }),
-        );
-        if (result._tag === "Failure") return yield* Effect.failCause(result.cause);
+        yield* devicePins.setProject.run(registry, { environmentId, projectId, pinned });
         return {
           ...current,
           pinnedAt: registry.get(devicePins.stateAtom(environmentId))?.projects[projectId] ?? null,

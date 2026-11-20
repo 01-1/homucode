@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import {
   PrimaryConnectionTarget,
   RelayConnectionTarget,
@@ -141,13 +142,15 @@ it.each([primary, remote, null])(
     using _set = vi.spyOn(appAtomRegistry, "set").mockImplementation(registry.set.bind(registry));
     using update = vi
       .spyOn(serverEnvironment.updateSettings, "run")
-      .mockImplementation(async (_registry, { input: { patch } }) =>
-        AsyncResult.success({
-          ...DEFAULT_SERVER_SETTINGS,
-          madohomuEnabled: patch.madohomuEnabled ?? false,
-          madohomuProjectId: patch.madohomuProjectId ?? null,
-          madohomuDestinationEnvironmentId: patch.madohomuDestinationEnvironmentId ?? null,
-        }),
+      .mockImplementation((_registry, { input: { patch } }) =>
+        Effect.succeed(
+          AsyncResult.success({
+            ...DEFAULT_SERVER_SETTINGS,
+            madohomuEnabled: patch.madohomuEnabled ?? false,
+            madohomuProjectId: patch.madohomuProjectId ?? null,
+            madohomuDestinationEnvironmentId: patch.madohomuDestinationEnvironmentId ?? null,
+          }),
+        ),
       );
 
     await expect(saveMadoHomuProject(remote, sharedProjectId)).resolves.toBe(true);

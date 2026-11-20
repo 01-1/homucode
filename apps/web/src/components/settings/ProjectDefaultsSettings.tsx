@@ -46,6 +46,8 @@ import {
 } from "./useScopedSettings";
 
 export function LocalThreadsUseDefaultBranchRow() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
@@ -53,12 +55,14 @@ export function LocalThreadsUseDefaultBranchRow() {
       serverScoped
       settingKeys={["newLocalThreadsUseDefaultBranch"]}
       {...searchableSetting("local-default-branch")}
-      description="New threads in the project folder switch it to the default branch first. Skipped when it has uncommitted changes or another thread there is working."
+      description={gt(
+        "New threads in the project folder switch it to the default branch first. Skipped when it has uncommitted changes or another thread there is working.",
+      )}
       resetAction={
         settings.newLocalThreadsUseDefaultBranch !==
         DEFAULT_SERVER_SETTINGS.newLocalThreadsUseDefaultBranch ? (
           <SettingResetButton
-            label="local threads start on the default branch"
+            ariaLabel={gt("Reset local threads start on the default branch to default")}
             onClick={() =>
               updateSettings({
                 newLocalThreadsUseDefaultBranch:
@@ -75,7 +79,7 @@ export function LocalThreadsUseDefaultBranchRow() {
           onCheckedChange={(checked) =>
             updateSettings({ newLocalThreadsUseDefaultBranch: Boolean(checked) })
           }
-          aria-label="Start new local threads on the default branch"
+          aria-label={gt("Start new local threads on the default branch")}
         />
       }
     />
@@ -669,6 +673,8 @@ export function WorktreeSubmodulesRow() {
 }
 
 export function QuickModelRow() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const { scope, target, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -703,11 +709,13 @@ export function QuickModelRow() {
       settingKeys={["quickModelSelection"]}
       mixed={mixedQuick}
       {...searchableSetting("quick-model")}
-      description="Answers a /q message for one turn in the same thread; the next message goes back to the thread's model."
+      description={gt(
+        "Answers a /q message for one turn in the same thread; the next message goes back to the thread's model.",
+      )}
       resetAction={
         mixedQuick || settings.quickModelSelection !== null ? (
           <SettingResetButton
-            label="quick model"
+            ariaLabel={gt("Reset quick model to default")}
             onClick={() => updateSettings({ quickModelSelection: null })}
           />
         ) : null
@@ -723,11 +731,11 @@ export function QuickModelRow() {
               instanceEntries={entries}
               modelOptionsByInstance={quickModelOptions}
               triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-              triggerAriaLabel="Quick model"
+              triggerAriaLabel={gt("Quick model", { $context: "model used for one turn" })}
               {...(mixedQuick
-                ? { triggerLabel: "Mixed" }
+                ? { triggerLabel: gt("Mixed") }
                 : settings.quickModelSelection === null
-                  ? { triggerLabel: "None" }
+                  ? { triggerLabel: gt("None") }
                   : {})}
               getModelDisabledReason={modelDisabledReason}
               onInstanceModelChange={(instanceId, model) => {
@@ -735,7 +743,7 @@ export function QuickModelRow() {
                 if (reason) {
                   toastManager.add({
                     type: "error",
-                    title: "Quick model not saved",
+                    title: gt("Quick model not saved"),
                     description: reason,
                   });
                   return;
@@ -764,7 +772,9 @@ export function QuickModelRow() {
             ) : null}
           </div>
         ) : (
-          <span className="text-sm text-muted-foreground">No providers available</span>
+          <span className="text-sm text-muted-foreground">
+            <T>No providers available</T>
+          </span>
         )
       }
     />

@@ -12,6 +12,8 @@ const DEFAULT_STAGE_LABEL =
       ? msg("Preview", { $context: "app release stage badge" })
       : msg("Beta", { $context: "app release stage badge" });
 
+const HOMUCODE_WORDMARK = { prefix: "Homu", suffix: "Code" };
+
 export function BrandMark(props: { readonly compact?: boolean; readonly stageLabel?: string }) {
   const m = useMessages();
   const compact = props.compact ?? false;
@@ -21,8 +23,8 @@ export function BrandMark(props: { readonly compact?: boolean; readonly stageLab
     <View className="gap-1">
       <View className="flex-row items-center gap-2">
         <Text className="text-lg font-t3-bold tracking-[-0.4px] text-foreground-muted">
-          <Text className="font-t3-bold text-foreground">Homu</Text>
-          {"Code"}
+          <Text className="font-t3-bold text-foreground">{HOMUCODE_WORDMARK.prefix}</Text>
+          {HOMUCODE_WORDMARK.suffix}
         </Text>
         <View className="rounded-full bg-subtle px-2 py-1">
           <Text className="text-3xs font-t3-bold tracking-[1.1px] uppercase text-foreground-muted">

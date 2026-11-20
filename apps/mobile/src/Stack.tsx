@@ -173,6 +173,9 @@ const { title: _compactBrandTitle, ...compactBrandHeaderOptions } = getCompactBr
 // route options stay plain objects because registerPresentedRoutes reads them at load.
 const ROUTE_TITLES: Readonly<Record<string, string>> = {
   Settings: msg("Settings"),
+  SettingsHomuCode: "HomuCode",
+  SettingsBuildingT3: msg("Building Homu"),
+  SettingsMadoHomu: "MadoHomu",
   SettingsEnvironments: msg("Environments"),
   SettingsEnvironmentDetail: msg("Environment"),
   SettingsEnvironmentNewThreads: msg("Threads"),
@@ -307,12 +310,12 @@ const SETTINGS_SCREENS = {
   SettingsHomuCode: createNativeStackScreen({
     screen: SettingsHomuCodeRouteScreen,
     linking: "settings/homucode",
-    options: settingsPage("HomuCode"),
+    options: settingsPage(),
   }),
   SettingsBuildingT3: createNativeStackScreen({
     screen: SettingsBuildingT3RouteScreen,
     linking: "settings/building-t3",
-    options: settingsPage("Building Homu"),
+    options: settingsPage(),
   }),
   SettingsThreads: createNativeStackScreen({
     screen: SettingsThreadsRouteScreen,
@@ -357,7 +360,7 @@ const SETTINGS_SCREENS = {
   SettingsMadoHomu: createNativeStackScreen({
     screen: SettingsMadoHomuRouteScreen,
     linking: "settings/madohomu",
-    options: settingsPage("MadoHomu"),
+    options: settingsPage(),
   }),
   SettingsLanguage: createNativeStackScreen({
     screen: SettingsLanguageRouteScreen,

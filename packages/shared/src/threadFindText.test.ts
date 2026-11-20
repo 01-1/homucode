@@ -65,6 +65,7 @@ it("excludes structured context chips without joining text across them", () => {
       },
       undefined,
       [],
+      undefined,
       "plain",
     ),
   ).toEqual(["hello **world**  + x", "after"]);
@@ -78,6 +79,7 @@ it("excludes structured context chips without joining text across them", () => {
       },
       undefined,
       [],
+      undefined,
       "literal-plus",
     ),
   ).toEqual([

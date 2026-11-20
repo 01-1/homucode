@@ -123,8 +123,8 @@ function providerStarting(
     run.memoryWaiting === true
       ? msg("Waiting for memory")
       : name === undefined
-      ? msg("Starting", { $context: "a provider is launching" })
-      : msg("Starting {provider}", { provider: name });
+        ? msg("Starting", { $context: "a provider is launching" })
+        : msg("Starting {provider}", { provider: name });
   return { providerStartingLabel: markedTextEnglish([label]), providerStartingLabelMsg: label };
 }
 

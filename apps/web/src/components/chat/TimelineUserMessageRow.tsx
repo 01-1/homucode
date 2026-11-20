@@ -322,7 +322,7 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
     <div className="group flex flex-col items-end gap-1" data-user-message-attribution="automation">
       {showSenderLabel ? (
         <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-source="automatic">
-          Automatic · Scheduled task
+          <T>Automatic · Scheduled task</T>
         </p>
       ) : null}
       {row.message.inputIntent === "steer" ||
@@ -451,7 +451,7 @@ export function FoldedMessageHeader(props: {
 function WaitingForPreviousSendNote() {
   return (
     <p className="me-1 text-2xs text-muted-foreground">
-      Sends once your previous message goes through
+      <T>Sends once your previous message goes through</T>
     </p>
   );
 }

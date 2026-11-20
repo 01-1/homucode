@@ -1,3 +1,5 @@
+import { m } from "~/i18n/messages";
+import { msg } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -31,7 +33,10 @@ export function DesktopMadoHomuCoordinator() {
     void bridge
       .configureMadoHomu({ enabled, launcherEnabled, environmentId })
       .catch(() =>
-        toastManager.add({ type: "error", title: "Could not update the MadoHomu desktop app" }),
+        toastManager.add({
+          type: "error",
+          title: m(msg("Could not update the MadoHomu desktop app")),
+        }),
       );
   }, [bridge, enabled, launcherEnabled, environmentId]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- receives navigation requested by the native merge and split window actions

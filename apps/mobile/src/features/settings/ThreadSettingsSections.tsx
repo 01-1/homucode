@@ -230,8 +230,8 @@ export function WorkingSectionSettings() {
         />
         <SettingsSwitchRow
           icon={PullRequestGlyph.pullRequest}
-          label="Keep watched pull requests in Working"
-          subtitle="Keep threads in Working after their pull request checks finish."
+          label={gt("Keep watched pull requests in Working")}
+          subtitle={gt("Keep threads in Working after their pull request checks finish.")}
           disabled={!workingShelfEnabled}
           value={
             AsyncResult.isSuccess(preferences) &&

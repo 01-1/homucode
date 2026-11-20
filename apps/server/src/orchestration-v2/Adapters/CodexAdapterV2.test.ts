@@ -2357,15 +2357,14 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         ),
       );
       assert.isDefined(harness.runtime.applyModelSelection);
-      yield* (
-        harness.runtime.applyModelSelection?.({
-          providerThread: harness.providerThread,
-          modelSelection: {
-            ...CODEX_TEST_MODEL_SELECTION,
-            options: [{ id: "serviceTier", value: "default" }],
-          },
-        }) ?? Effect.void
-      );
+      const appliedLive = yield* harness.runtime.applyModelSelection!({
+        providerThread: harness.providerThread,
+        modelSelection: {
+          ...CODEX_TEST_MODEL_SELECTION,
+          options: [{ id: "serviceTier", value: "default" }],
+        },
+      });
+      assert.isFalse(appliedLive);
       yield* harness.firstTerminal;
       assert.equal(harness.terminalEvents()[0]?.status, "completed");
     }).pipe(
