@@ -7,6 +7,19 @@ export function useThreadListV2ShelfPreferences() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const loaded = AsyncResult.isSuccess(preferencesResult);
+  const collapsedFolderKeys = new Set(
+    loaded ? preferencesResult.value.collapsedThreadFolderKeys : [],
+  );
+  const toggleFolder = (key: string) => {
+    if (!loaded) return;
+    savePreferences({
+      transform: (current) => {
+        const keys = new Set(current.collapsedThreadFolderKeys);
+        if (!keys.delete(key)) keys.add(key);
+        return { collapsedThreadFolderKeys: [...keys] };
+      },
+    });
+  };
   const snoozedShelfExpanded =
     loaded && preferencesResult.value.threadListSnoozedShelfExpanded === true;
   const settledShelfExpanded =
@@ -43,6 +56,8 @@ export function useThreadListV2ShelfPreferences() {
 
   return {
     loaded,
+    collapsedFolderKeys,
+    toggleFolder,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,

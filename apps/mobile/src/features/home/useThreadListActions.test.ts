@@ -1,4 +1,5 @@
 import { makeThreadShellFixture } from "../../test-fixtures";
+import type { EnvironmentThreadFolder } from "@t3tools/client-runtime/state/thread-folders";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   AuthOrchestrationOperateScope,
@@ -7,6 +8,7 @@ import {
   ProviderInstanceId,
   RunId,
   ThreadId,
+  ThreadFolderId,
   type ThreadTitleRegenerationOutcome,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -24,6 +26,7 @@ const state = vi.hoisted(() => ({
   onArchivedRefresh: undefined as (() => void) | undefined,
   scopes: new Map<string, Set<string>>(),
   shells: [] as EnvironmentThreadShell[],
+  folders: [] as EnvironmentThreadFolder[],
   requests: [] as {
     action: string;
     environmentId: string;
@@ -72,6 +75,7 @@ vi.mock("../../state/presentation", () => ({
 }));
 vi.mock("../../state/server", () => ({
   environmentServerConfigsAtom: "server-configs",
+  threadFoldersAtom: "thread-folders",
 }));
 vi.mock("../../state/atom-registry", async () => {
   const registry = (await import("effect/reactivity")).AtomRegistry.make();
@@ -88,24 +92,26 @@ vi.mock("../../state/atom-registry", async () => {
             ? state.holdingRows
             : atom === "thread-shells"
               ? state.shells
-              : atom === "queued-thread-keys"
-                ? new Set<string>()
-                : new Map(
-                    [...state.scopes.keys()].map((environmentId) => [
-                      environmentId,
-                      {
-                        environment: {
-                          capabilities: {
-                            threadSettlement: true,
-                            threadSnooze: true,
-                            threadPinning: true,
-                            threadPinReorder: true,
-                            threadTitleRegeneration: true,
+              : atom === "thread-folders"
+                ? state.folders
+                : atom === "queued-thread-keys"
+                  ? new Set<string>()
+                  : new Map(
+                      [...state.scopes.keys()].map((environmentId) => [
+                        environmentId,
+                        {
+                          environment: {
+                            capabilities: {
+                              threadSettlement: true,
+                              threadSnooze: true,
+                              threadPinning: true,
+                              threadPinReorder: true,
+                              threadTitleRegeneration: true,
+                            },
                           },
                         },
-                      },
-                    ]),
-                  ),
+                      ]),
+                    ),
   };
   // Real atoms such as composerDraftsAtom go to a real registry; strings are stubbed state.
   return {
@@ -225,6 +231,7 @@ beforeEach(() => {
   ]);
   state.requests = [];
   state.shells = [];
+  state.folders = [];
   state.dialogs = [];
   state.alerts = [];
   state.afterRequest = undefined;
@@ -331,6 +338,39 @@ describe("pinned thread operation permissions", () => {
     expect(state.requests).toEqual([
       expect.objectContaining({ action: "reorderPin", environmentId: primaryEnvironmentId }),
     ]);
+  });
+
+  it("moves past the next unfiled row without changing filed threads", async () => {
+    const pinnedAt = "2026-09-02T00:00:00.000Z";
+    const moved = makeThread({ pinnedAt, pinOrderKey: "g" });
+    const filed = makeThread({ id: ThreadId.make("filed"), pinnedAt, pinOrderKey: "m" });
+    const next = makeThread({ id: ThreadId.make("next"), pinnedAt, pinOrderKey: "t" });
+    state.shells = [moved, filed, next];
+    state.folders = [
+      {
+        id: ThreadFolderId.make("folder"),
+        environmentId: primaryEnvironmentId,
+        name: "Folder",
+        icon: null,
+        threadIds: [filed.id],
+        rule: null,
+        autoFile: false,
+        ruleSetAt: null,
+        createdAt: pinnedAt,
+        updatedAt: pinnedAt,
+      },
+    ];
+
+    const { moveThread } = useThreadListActions();
+    expect(await moveThread(filed, "down")).toBe(false);
+    expect(await moveThread(moved, "down")).toBe(true);
+    expect(state.requests).toEqual([
+      expect.objectContaining({
+        action: "reorderPin",
+        input: expect.objectContaining({ threadId: moved.id }),
+      }),
+    ]);
+    expect(state.requests[0]!.input.orderKey! > next.pinOrderKey!).toBe(true);
   });
 
   it("rechecks permission between materialization writes", async () => {

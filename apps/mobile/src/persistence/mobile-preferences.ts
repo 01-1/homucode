@@ -178,6 +178,7 @@ export interface Preferences {
     readonly provider: ProviderInstanceId;
     readonly model: string;
   }>;
+  readonly collapsedThreadFolderKeys?: readonly string[];
   readonly threadListSettledShelfExpanded?: boolean;
   readonly threadListSnoozedShelfExpanded?: boolean;
   readonly threadListWorkingShelfExpanded?: boolean;
@@ -286,6 +287,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     useLastProjectForNewThreads?: boolean;
     lastThreadProject?: typeof ThreadProject.Type;
     modelFavorites?: Preferences["modelFavorites"];
+    collapsedThreadFolderKeys?: readonly string[];
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
@@ -439,6 +441,11 @@ function sanitizePreferences(parsed: Preferences): Preferences {
         favorite.provider.length > 0 &&
         typeof favorite.model === "string" &&
         favorite.model.trim().length > 0,
+    );
+  }
+  if (Array.isArray(parsed.collapsedThreadFolderKeys)) {
+    preferences.collapsedThreadFolderKeys = parsed.collapsedThreadFolderKeys.filter(
+      (key): key is string => typeof key === "string",
     );
   }
   if (typeof parsed.threadListSettledShelfExpanded === "boolean") {

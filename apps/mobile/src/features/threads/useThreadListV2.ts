@@ -46,6 +46,8 @@ function observeInbox(
  */
 export function useThreadListV2(input: {
   readonly threads: LayoutInput["threads"];
+  readonly folders?: LayoutInput["folders"];
+  readonly collapsedFolderKeys?: LayoutInput["collapsedFolderKeys"];
   readonly pendingTasks: ReadonlyArray<PendingNewTask>;
   readonly environmentId: EnvironmentId | null;
   readonly projectRefs: LayoutInput["projectRefs"];
@@ -94,6 +96,7 @@ export function useThreadListV2(input: {
           section === "pinned" ? input.pinReorderEnvironmentIds : input.activeReorderEnvironmentIds,
         ordered: getThreadListV2OrderedSection({
           threads,
+          folders: input.folders,
           section,
           pendingOrder: input.pendingOrder,
           now: layoutTime,
@@ -108,6 +111,7 @@ export function useThreadListV2(input: {
     ]);
   }, [
     threads,
+    input.folders,
     input.pendingOrder,
     input.pinReorderEnvironmentIds,
     input.activeReorderEnvironmentIds,
@@ -138,7 +142,9 @@ export function useThreadListV2(input: {
     () =>
       buildThreadListV2Items({
         pendingOrder: input.pendingOrder,
-        threads: threads.filter((thread) => thread.archivedAt === null),
+        threads,
+        folders: input.folders,
+        collapsedFolderKeys: input.collapsedFolderKeys,
         environmentId: input.environmentId,
         projectRefs: input.projectRefs,
         searchQuery: input.searchQuery,
@@ -171,6 +177,8 @@ export function useThreadListV2(input: {
     [
       input.pendingOrder,
       threads,
+      input.folders,
+      input.collapsedFolderKeys,
       input.environmentId,
       input.projectRefs,
       input.searchQuery,
@@ -216,6 +224,7 @@ export function useThreadListV2(input: {
     () =>
       buildThreadListV2ListItems({
         items: layout.items,
+        folders: layout.folders,
         pendingTasks,
         workingCount: layout.workingCount,
         workingShelfExpanded: input.workingShelfExpanded,
