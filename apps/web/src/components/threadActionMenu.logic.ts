@@ -321,28 +321,27 @@ export function buildThreadActionMenuItems(
       : []),
     ...(state.supports.snooze
       ? [
-          state.isSnoozed
-            ? { id: "unsnooze" as const, label: resolve(msg("Wake thread")), icon: "clock" }
-            : {
-                id: "snooze" as const,
-                label: resolve(msg("Snooze", { $context: "verb, snooze the thread" })),
-                icon: "clock",
-                disabled: !state.canSnoozeNow,
-                children: [
-                  {
-                    id: "snooze:custom" as const,
-                    label: resolve(
-                      msg("Custom…", { $context: "opens the custom snooze time dialog" }),
-                    ),
-                  },
-                  ...state.snoozePresets.map((preset, index) => ({
-                    id: `snooze:${preset.id}` as const,
-                    label: preset.label,
-                    detail: preset.whenLabel,
-                    separatorBefore: index === 0,
-                  })),
-                ],
+          {
+            id: "snooze" as const,
+            label: resolve(msg("Snooze", { $context: "verb, snooze the thread" })),
+            icon: "clock",
+            disabled: !state.canSnoozeNow,
+            children: [
+              {
+                id: "snooze:custom" as const,
+                label: resolve(msg("Custom…", { $context: "opens the custom snooze time dialog" })),
               },
+              ...state.snoozePresets.map((preset, index) => ({
+                id: `snooze:${preset.id}` as const,
+                label: preset.label,
+                detail: preset.whenLabel,
+                separatorBefore: index === 0,
+              })),
+            ],
+          },
+          ...(state.isSnoozed
+            ? [{ id: "unsnooze" as const, label: resolve(msg("Wake thread")), icon: "clock" }]
+            : []),
         ]
       : []),
     ...(state.folderMenu ? [state.folderMenu] : []),
