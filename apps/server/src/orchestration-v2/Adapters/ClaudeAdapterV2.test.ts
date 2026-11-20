@@ -4120,7 +4120,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   });
 
   it.effect.each([false, true])(
-    "resumes a stopped query with empty SDK content and a fresh native process, buffered: %s",
+    "resumes the same session in a fresh process with a continuation prompt when needed, buffered: %s",
     (buffered) =>
       Effect.gen(function* () {
         const harness = yield* makeWakeHarnessWithOptions({
@@ -4157,7 +4157,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         if (buffered) {
           assert.equal(harness.offeredMessages.length, 1);
         } else {
-          assert.deepEqual(harness.offeredMessages.at(-1)?.message.content, []);
+          assert.equal(
+            harness.offeredMessages.at(-1)?.message.content,
+            "Continue where you left off.",
+          );
           yield* harness.offerAndWait(turnOneResult);
         }
         yield* Queue.take(harness.terminalReceipts);
