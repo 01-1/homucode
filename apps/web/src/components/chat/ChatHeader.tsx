@@ -1,3 +1,4 @@
+import type { StatusLineUsageSource } from "@t3tools/client-runtime/status-line";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -61,6 +62,9 @@ interface ChatHeaderProps {
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
   statusLineKey?: string | undefined;
+  statusLineCwd?: string | null | undefined;
+  statusLineProviders?: StatusLineUsageSource["providers"] | undefined;
+  statusLineUsageLimitSources?: StatusLineUsageSource["usageLimitSources"] | undefined;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
@@ -93,6 +97,9 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenThread,
   rightPanelOpen,
   statusLineKey,
+  statusLineCwd,
+  statusLineProviders,
+  statusLineUsageLimitSources,
   onNewThreadInProject,
   onOpenProjectSettings,
   onFindInThread,
@@ -447,7 +454,18 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      <ThreadHeaderStatus statusLineKey={statusLineKey} />
+      <ThreadHeaderStatus
+        statusLineKey={statusLineKey}
+        usage={
+          statusLineProviders && statusLineUsageLimitSources
+            ? {
+                cwd: statusLineCwd ?? null,
+                providers: statusLineProviders,
+                usageLimitSources: statusLineUsageLimitSources,
+              }
+            : undefined
+        }
+      />
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
       {trailingControls}
     </div>

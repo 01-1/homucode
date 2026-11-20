@@ -1,9 +1,12 @@
+import { resolveProvidersForCwd } from "@t3tools/client-runtime/providerSkills";
 import { msg, useGT, useMessages } from "gt-react";
 import {
+  buildStatusLineModelUsage,
   formatStatusLineSpan,
   formatStatusLineTokens,
   type StatusLineLimit,
   type StatusLineStats,
+  type StatusLineUsageSource,
 } from "@t3tools/client-runtime/status-line";
 import {
   ArrowDownIcon,
@@ -412,5 +415,45 @@ export function StatusDialCard(props: {
         </div>
       )}
     </div>
+  );
+}
+
+export function StatusLineModelUsage({
+  source,
+}: {
+  readonly source: StatusLineUsageSource & { readonly cwd: string | null };
+}) {
+  const gt = useGT();
+  const providers = buildStatusLineModelUsage({
+    ...source,
+    providers: resolveProvidersForCwd(source.providers, source.cwd),
+  });
+  if (providers.length === 0) return null;
+  return (
+    <section aria-label={gt("All models")} className="mt-3 grid gap-3 border-t pt-3 tabular-nums">
+      <h3 className="font-semibold">{gt("All models")}</h3>
+      {providers.map((provider) => (
+        <div key={provider.instanceId} className="grid gap-1.5">
+          <h4 className="font-medium">{provider.name}</h4>
+          <p className="break-words text-2xs text-muted-foreground">
+            {provider.models.join(" · ")}
+          </p>
+          {provider.limits.length === 0 ? (
+            <p className="text-2xs text-muted-foreground">{gt("Usage limits unavailable")}</p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,11rem),1fr))] gap-x-6 gap-y-2">
+              {provider.limits.map((limit) => (
+                <LimitFact
+                  key={limit.id}
+                  name={[limit.label, ...limit.scope].join(" · ")}
+                  limit={limit}
+                  nowMs={source.nowMs}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </section>
   );
 }

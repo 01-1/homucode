@@ -1309,12 +1309,12 @@ export default function ChatView(props: ChatViewProps) {
         worktreePath: activeThread?.worktreePath ?? null,
       })
     : null;
-  const providerStatuses = resolveProvidersForCwd(
+  const environmentProviders =
     (providerEnvironmentId === undefined
       ? undefined
-      : providersByEnvironment.get(providerEnvironmentId)) ?? EMPTY_PROVIDERS,
-    gitCwd,
-  );
+      : providersByEnvironment.get(providerEnvironmentId)) ?? EMPTY_PROVIDERS;
+  const providerStatuses = resolveProvidersForCwd(environmentProviders, gitCwd);
+  const usageLimitSources = serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES;
   const composerModelSelectionApplies = draftModelSelectionApplies(
     { modelSelectionExplicit: composerModelSelectionExplicit },
     threadHasStarted(activeThread),
@@ -3536,6 +3536,9 @@ export default function ChatView(props: ChatViewProps) {
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
               statusLineKey={statusLineKey}
+              statusLineProviders={environmentProviders}
+              statusLineCwd={gitCwd}
+              statusLineUsageLimitSources={usageLimitSources}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
@@ -4042,8 +4045,7 @@ export default function ChatView(props: ChatViewProps) {
                       cwd: gitCwd,
                       modelSelection: statusLineThread.modelSelection,
                       providers: providerStatuses,
-                      usageLimitSources:
-                        serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+                      usageLimitSources,
                       contextWindow: activeContextWindow,
                     }}
                   />

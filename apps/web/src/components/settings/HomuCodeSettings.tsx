@@ -9,7 +9,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { AgentMemorySettings } from "./AgentMemorySettings";
 import { AppScriptsSettingsSection } from "./AppScriptsSettings";
-import { BehaviorSettingsSection } from "./BehaviorSettings";
+import { BehaviorSettingsSection, ExtraFeaturesSettings } from "./BehaviorSettings";
 import { BuildToolsSetup } from "./BuildToolsSettings";
 import { MadoHomuSettings } from "./MadoHomuSettings";
 import { LocalThreadsUseDefaultBranchRow, QuickModelRow } from "./ProjectDefaultsSettings";
@@ -76,10 +76,16 @@ export function MadoHomuSettingsPanel() {
 }
 
 export function AgentBehaviorSettingsPanel() {
+  const unavailableReason = useUnavailableReason();
   return (
-    <EnvironmentSettingsPage>
-      <AgentBehaviorSettings />
-    </EnvironmentSettingsPage>
+    <SettingsPageContainer>
+      <ExtraFeaturesSettings showServerOffers={unavailableReason === null} />
+      {unavailableReason === null ? (
+        <AgentBehaviorSettings />
+      ) : (
+        <p className="text-sm text-muted-foreground">{unavailableReason}</p>
+      )}
+    </SettingsPageContainer>
   );
 }
 

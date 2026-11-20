@@ -147,7 +147,9 @@ signal bars, and small icons for uptime, cache hits and tokens in and out. When 
 bar is short of room, the small icons go first, then the captions beside the dials.
 The clock stays at the right of the thread header, even when the status line is off.
 Hover the status line, or focus it with the keyboard, to see every value by name,
-with the folder and version.
+with the folder and version. The expanded view also lists models and their reported limits
+for the thread's environment. To hide that list, turn off **Show all models in status line
+details** under **Settings → HomuCode → Agent behavior → Extra features**.
 
 For providers routed through a [configured CLIProxyAPI hub](usage.md#connect-a-cliproxyapi-hub),
 the status line shows the hub's pooled usage. Each percentage uses the accounts that

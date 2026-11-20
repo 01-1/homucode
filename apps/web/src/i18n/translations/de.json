@@ -12732,5 +12732,12 @@
   "b7df38b7d8792d78": "Leitfaden öffnen",
   "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
   "fdbcf78e0275d350": "Verbinde {label} erneut, um die Einstellungen zu ändern.",
-  "1d91b130c2656404": "Agentenverhalten"
+  "1d91b130c2656404": "Agentenverhalten",
+  "22110503bfeb17af": "Details der Statuszeile",
+  "bb5251fd919e346b": "Alle Modelle",
+  "548123cb74c4abcf": "Nutzungslimits nicht verfügbar",
+  "3adca48d927d36f5": "Alle Modelle in den Details der Statuszeile anzeigen",
+  "b2cc17d714a15e76": "Alle Modelle in den Details der Statuszeile anzeigen",
+  "5416694ec0dacb31": "Zeigt die Modelle und gemeldeten Nutzungslimits für die Umgebung dieses Threads an, wenn du mit der Maus über die Statuszeile fährst oder sie fokussierst.",
+  "e9b5f7b109cc1ded": "Zeigt die Modelle und gemeldeten Nutzungslimits für die Umgebung dieses Threads an, wenn du mit der Maus über die Statuszeile fährst oder sie fokussierst."
 }
