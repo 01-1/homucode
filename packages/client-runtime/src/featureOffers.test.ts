@@ -1,5 +1,5 @@
 import { expect, it } from "vite-plus/test";
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId } from "@t3tools/contracts";
 import {
   FEATURE_OFFERS,
   featureOfferSettingsPatch,
@@ -7,6 +7,8 @@ import {
   featureOfferPages,
   getHomuSetupSupport,
   getHomuSettingUnavailableReason,
+  pendingFeatureOfferPatch,
+  prefilledFeatureOffers,
   supportsHomuSettingsSync,
 } from "./featureOffers.ts";
 
@@ -26,6 +28,20 @@ it("marks every displayed offer seen while applying only opt-ins and preserving 
   expect(
     featureOfferSettingsPatch(settings, FEATURE_OFFERS, new Set(["quick-model"])),
   ).not.toHaveProperty("quickModelSelection");
+  const instanceId = ProviderInstanceId.make("codex");
+  const quickModelSelection = { instanceId, model: "gpt-6.2-sol" };
+  const enabled = { ...settings, madohomuEnabled: true, quickModelSelection };
+  expect(featureOfferSettingsPatch(enabled, offered, new Set())).toMatchObject({
+    madohomuEnabled: false,
+    quickModelSelection: null,
+  });
+  expect(
+    featureOfferSettingsPatch(
+      { ...enabled, defaultModelSelection: { instanceId, model: "gpt-6.2-astra" } },
+      offered,
+      new Set(["madohomu", "quick-model"]),
+    ),
+  ).toEqual({ featureOffersSeen: ["previous-feature", "madohomu", "quick-model"] });
   const phoneOffer = FEATURE_OFFERS.filter((offer) => offer.platform === "mobile");
   expect(unseenFeatureOffers({ featureOffersSeen: ["faster-phone-launch"] }, "mobile")).toEqual(
     expect.arrayContaining(phoneOffer),
@@ -180,3 +196,52 @@ it.each([
     ).toBe(supported);
   },
 );
+
+it("starts from another server's answers only for offers this server has not seen", () => {
+  const done = {
+    ...DEFAULT_SERVER_SETTINGS,
+    featureOffersSeen: FEATURE_OFFERS.map((offer) => offer.id),
+    madohomuEnabled: true,
+    statusLineEnabled: false,
+    messageSentFromEnabled: false,
+  };
+  const fresh = {
+    ...DEFAULT_SERVER_SETTINGS,
+    featureOffersSeen: ["sent-from"],
+    messageSentFromEnabled: true,
+  };
+  const prefilled = prefilledFeatureOffers(fresh, { settingsSyncEnabled: true }, [
+    { label: "msi", settings: done },
+  ]);
+  expect(prefilled.sourceLabel).toBe("msi");
+  expect(prefilled.selected.has("madohomu")).toBe(true);
+  expect(prefilled.selected.has("status-line")).toBe(false);
+  expect(prefilled.selected.has("sent-from")).toBe(true);
+  expect(prefilled.selected.has("settings-sync")).toBe(true);
+  expect(prefilledFeatureOffers(done, {}, [{ label: "fresh", settings: fresh }])).toEqual({
+    selected: prefilledFeatureOffers(done, {}, []).selected,
+    sourceLabel: null,
+  });
+});
+
+it("sends a saved offline choice only for offers the reconnected server supports", () => {
+  const settings = { ...DEFAULT_SERVER_SETTINGS, featureOffersSeen: ["previous-feature"] };
+  const save = {
+    selected: ["status-line"],
+    offered: ["status-line", "background-git", "settings-sync"],
+  };
+  const homu = getHomuSetupSupport({
+    serverVersion: "0.1.10-homu.98",
+    capabilities: { repositoryIdentity: true, homuSetup: true, buildTools: true, statusLine: true },
+  });
+  expect(pendingFeatureOfferPatch(settings, homu, save)).toEqual({
+    statusLineEnabled: true,
+    backgroundGitEnabled: false,
+    featureOffersSeen: ["previous-feature", "status-line", "background-git"],
+  });
+  const upstream = getHomuSetupSupport({
+    serverVersion: "0.1.10",
+    capabilities: { repositoryIdentity: true },
+  });
+  expect(pendingFeatureOfferPatch(settings, upstream, save)).toBeNull();
+});
