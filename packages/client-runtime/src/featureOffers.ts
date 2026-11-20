@@ -1,4 +1,10 @@
-import type { ServerSettings } from "@t3tools/contracts";
+import {
+  isManagedSettingPath,
+  managedCapabilityDenial,
+  type ExecutionEnvironmentDescriptor,
+  type ManagedPolicySummary,
+  type ServerSettings,
+} from "@t3tools/contracts";
 
 type OfferSetting =
   | "preferNativeSubagents"
@@ -173,6 +179,126 @@ export const FEATURE_OFFERS: ReadonlyArray<FeatureOffer> = [
       "A Claude thread stays Working while a command it started in the background is still running, unless the agent releases it. A dev server left running keeps the thread Waiting until it ends.",
   },
 ];
+
+// The tagged 0.1.10 HomuCode builds introduced these patch fields separately.
+const LEGACY_SETUP_INTRODUCED: Partial<Record<keyof ServerSettings, number>> = {
+  applyModelChangeNow: 36,
+  madohomuEnabled: 37,
+  autoUpdateWhenIdle: 52,
+  reaskPendingRequestsAfterRestart: 53,
+};
+
+type HomuSetupEnvironment = Pick<ExecutionEnvironmentDescriptor, "serverVersion" | "capabilities">;
+
+function homuUnavailableReason(environment: HomuSetupEnvironment | null | undefined): string {
+  if (!environment) return "Waiting for server information.";
+  if (/-homu\./.test(environment.serverVersion)) {
+    return `HomuCode ${environment.serverVersion} lacks support for this feature. Update the server to use it.`;
+  }
+  return "This server does not support this HomuCode feature.";
+}
+
+export function getBuildToolsUnavailableReason(
+  environment: HomuSetupEnvironment | null | undefined,
+  canWrite?: boolean,
+): string | null {
+  const legacyRelease = legacyHomuRelease(environment?.serverVersion);
+  if (!(environment?.capabilities.buildTools ?? legacyRelease >= 32)) {
+    return homuUnavailableReason(environment);
+  }
+  return canWrite === false ? "This connection is read-only for build settings." : null;
+}
+
+function legacyHomuRelease(version: string | undefined): number {
+  const release = Number(version?.match(/^v?0\.1\.10-homu\.(\d+)$/)?.[1] ?? 0);
+  return release <= 98 ? release : 0;
+}
+
+interface HomuSetupPermissions {
+  readonly canWrite?: boolean;
+  readonly canWriteAccess?: boolean;
+  readonly canRunBuildTools?: boolean;
+  readonly managedPolicy?: ManagedPolicySummary | undefined;
+}
+
+function managedHomuSettingReason(
+  policy: ManagedPolicySummary | undefined,
+  setting: keyof ServerSettings,
+): string | null {
+  return policy && isManagedSettingPath(policy, setting)
+    ? `${policy.organization} manages this setting.`
+    : null;
+}
+
+export function getHomuSettingUnavailableReason(
+  environment: HomuSetupEnvironment | null | undefined,
+  setting: keyof ServerSettings,
+  permissions: HomuSetupPermissions = {},
+): string | null {
+  const supported =
+    environment?.capabilities.homuSetup ??
+    legacyHomuRelease(environment?.serverVersion) >= (LEGACY_SETUP_INTRODUCED[setting] ?? 32);
+  if (!supported || (setting === "statusLineEnabled" && !environment?.capabilities.statusLine)) {
+    return homuUnavailableReason(environment);
+  }
+  if (setting === "buildToolsSettingsVisible") {
+    const reason = getBuildToolsUnavailableReason(environment, permissions.canWrite);
+    if (reason) return reason;
+  }
+  if (permissions.canWrite === false) return "This connection is read-only for server settings.";
+  const managed = managedHomuSettingReason(permissions.managedPolicy, setting);
+  if (managed) return managed;
+  if (setting === "connectDeviceLongSessions") {
+    return (
+      managedCapabilityDenial(permissions.managedPolicy, "connect") ??
+      (permissions.canWriteAccess === false
+        ? "This connection cannot change access settings."
+        : null)
+    );
+  }
+  return null;
+}
+
+/** Every server advertising homuSetup includes sync, as do tagged builds since homu.3. */
+export function supportsHomuSettingsSync(environment: HomuSetupEnvironment): boolean {
+  return environment.capabilities.homuSetup ?? legacyHomuRelease(environment.serverVersion) >= 3;
+}
+
+export function getHomuSetupSupport(
+  environment: HomuSetupEnvironment | null | undefined,
+  permissions: HomuSetupPermissions = {},
+): {
+  readonly supportedFeatureIds: ReadonlySet<string>;
+  readonly unavailableFeatureReasons: ReadonlyMap<string, string>;
+  readonly buildToolsUnavailableReason: string | null;
+  readonly featureOffersSeenUnavailableReason: string | null;
+} {
+  const buildStatusReason = getBuildToolsUnavailableReason(environment, permissions.canWrite);
+  const supportedFeatureIds = new Set<string>();
+  const unavailableFeatureReasons = new Map<string, string>();
+  for (const offer of FEATURE_OFFERS) {
+    if (offer.id === "faster-phone-launch" || offer.id === "settings-sync") {
+      supportedFeatureIds.add(offer.id);
+      continue;
+    }
+    const setting =
+      offer.setting ?? (offer.id === "madohomu" ? "madohomuEnabled" : "quickModelSelection");
+    const reason = getHomuSettingUnavailableReason(environment, setting, permissions);
+    if (reason) unavailableFeatureReasons.set(offer.id, reason);
+    else supportedFeatureIds.add(offer.id);
+  }
+  return {
+    supportedFeatureIds,
+    unavailableFeatureReasons,
+    featureOffersSeenUnavailableReason: managedHomuSettingReason(
+      permissions.managedPolicy,
+      "featureOffersSeen",
+    ),
+    buildToolsUnavailableReason:
+      buildStatusReason ??
+      (permissions.canRunBuildTools === false ? "This connection cannot run build tools." : null),
+  };
+}
 
 export function unseenFeatureOffers(
   settings: Pick<ServerSettings, "featureOffersSeen">,

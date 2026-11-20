@@ -12,6 +12,7 @@ const { Children, mocks } = vi.hoisted(() => ({
     model: { instanceId: "codex", model: "gpt-6.2-sol" },
     branchNaming: { onChange: (_patch: ServerSettingsPatch) => {} },
     updateSettings: vi.fn(),
+    buildToolsState: vi.fn((_request: { environmentId: string; input: object }) => null),
     alert: vi.fn(),
     targets: [] as ReturnType<typeof environment>[],
     readOnly: new Set<string>(),
@@ -71,7 +72,7 @@ vi.mock("../../state/server", () => ({
         input?.patch.connectDeviceLongSessions === undefined ||
         mocks.accessWriters.has(environmentId),
     },
-    buildToolsState: () => null,
+    buildToolsState: mocks.buildToolsState,
     messageDevices: () => null,
   },
 }));
@@ -203,8 +204,15 @@ function environment(environmentId: string, label: string) {
         sidebarAutoSettleOnMerge: false,
       },
       environment: {
+        serverVersion: "0.1.10",
         platform: { os: "linux" },
-        capabilities: { projectSettingsOverrides: true, threadAutoSettlement: true },
+        capabilities: {
+          homuSetup: true,
+          statusLine: true,
+          buildTools: true,
+          projectSettingsOverrides: true,
+          threadAutoSettlement: true,
+        },
       },
     },
   };
@@ -222,6 +230,7 @@ beforeEach(() => {
   mocks.readOnly = new Set();
   mocks.accessWriters = new Set();
   mocks.alert.mockReset();
+  mocks.buildToolsState.mockClear();
   mocks.updateSettings.mockReset();
   mocks.updateSettings.mockResolvedValue(AsyncResult.success(undefined));
 });
@@ -269,6 +278,23 @@ describe("SettingsServerControlsRouteScreen", () => {
     expect(mocks.updateSettings.mock.calls).toEqual([
       [{ environmentId: "remote", input: { patch: { connectDeviceLongSessions: true } } }],
     ]);
+  });
+
+  it("subscribes to build status only on environments that support it", () => {
+    const upstream = environment("upstream", "Upstream");
+    upstream.serverConfig.environment.capabilities.buildTools = false;
+    upstream.serverConfig.environment.capabilities.homuSetup = false;
+    mocks.targets.push(upstream);
+    act(() => root.render(<SettingsHomuCodeRouteScreen />));
+
+    expect(mocks.buildToolsState.mock.calls).toEqual([[{ environmentId: "local", input: {} }]]);
+    expect(container.textContent).toContain("This server does not support this HomuCode feature.");
+    const buildSwitches = [
+      ...container.querySelectorAll<HTMLButtonElement>('[role="switch"]'),
+    ].filter((button) => button.textContent === "Show Building Homu settings");
+    expect(buildSwitches.map((button) => button.disabled)).toEqual([false, true]);
+    act(() => buildSwitches[1]?.click());
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
   });
 
   it("saves HomuCode server switches across the selected environments", async () => {

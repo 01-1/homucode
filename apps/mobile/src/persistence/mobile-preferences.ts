@@ -108,9 +108,14 @@ const FeatureOffersDraft = Schema.Struct({
   environmentId: Schema.String,
   selected: Schema.Array(Schema.String),
   step: Schema.Number,
+  page: Schema.optionalKey(Schema.String),
+  offered: Schema.optionalKey(Schema.Array(Schema.String)),
+  savedServerOffers: Schema.optionalKey(Schema.Array(Schema.String)),
+  pendingServerOffers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type FeatureOffersDraft = typeof FeatureOffersDraft.Type;
 const isFeatureOffersDraft = Schema.is(FeatureOffersDraft);
+const isFeatureOffersDrafts = Schema.is(Schema.Record(Schema.String, FeatureOffersDraft));
 
 const isDevicePins = Schema.is(Schema.Record(Schema.String, DevicePinsState));
 const isThreadListFilters = Schema.is(ThreadListFilters);
@@ -179,6 +184,8 @@ export interface Preferences {
   readonly featureOffersSeen?: ReadonlyArray<string>;
   /** HomuCode features choices not saved to the server yet; null once they are. */
   readonly featureOffersDraft?: FeatureOffersDraft | null;
+  readonly featureOffersDrafts?: Readonly<Record<string, FeatureOffersDraft>>;
+  readonly featureOffersSnoozedUntil?: string | null;
   /** This phone's name, sent to every server it connects to. */
   readonly deviceName?: string;
   /** Per server, the synced copy this phone last agreed with. */
@@ -279,6 +286,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     fasterPhoneLaunch?: boolean;
     featureOffersSeen?: ReadonlyArray<string>;
     featureOffersDraft?: FeatureOffersDraft;
+    featureOffersDrafts?: Readonly<Record<string, FeatureOffersDraft>>;
+    featureOffersSnoozedUntil?: string;
     deviceName?: string;
     settingsSyncBases?: Readonly<Record<string, SettingsSyncBase>>;
     settingsSyncTheme?: SettingsSyncTheme;
@@ -447,6 +456,13 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     );
   if (isFeatureOffersDraft(parsed.featureOffersDraft))
     preferences.featureOffersDraft = parsed.featureOffersDraft;
+  if (isFeatureOffersDrafts(parsed.featureOffersDrafts))
+    preferences.featureOffersDrafts = parsed.featureOffersDrafts;
+  if (
+    typeof parsed.featureOffersSnoozedUntil === "string" &&
+    Number.isFinite(Date.parse(parsed.featureOffersSnoozedUntil))
+  )
+    preferences.featureOffersSnoozedUntil = parsed.featureOffersSnoozedUntil;
   if (typeof parsed.deviceName === "string" && parsed.deviceName.trim() !== "")
     preferences.deviceName = parsed.deviceName.trim().slice(0, 40);
   if (typeof parsed.settingsSyncEnabled === "boolean") {

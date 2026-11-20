@@ -131,16 +131,18 @@ describe("createClientSettingsSyncRunner", () => {
     expect(state.local.wordWrap).toBe(false);
   });
 
-  it("syncs only with connected servers whose config has loaded", () => {
+  it("syncs only with eligible connected servers whose config has loaded", () => {
     const remote: SyncedClientSettings = { revision: 3, values: {} };
     const configs = new Map([
       ["live" as EnvironmentId, { settings: { syncedClientSettings: remote } }],
       ["offline" as EnvironmentId, { settings: { syncedClientSettings: remote } }],
+      ["restricted" as EnvironmentId, { settings: { syncedClientSettings: remote } }],
     ]);
     expect(
       settingsSyncTargets(
-        ["live", "loading"] as EnvironmentId[],
+        ["live", "loading", "restricted"] as EnvironmentId[],
         configs as unknown as Parameters<typeof settingsSyncTargets>[1],
+        (environmentId) => environmentId !== "restricted",
       ),
     ).toEqual([{ environmentId: "live", remote }]);
   });

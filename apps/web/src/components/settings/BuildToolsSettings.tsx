@@ -2,6 +2,8 @@ import { searchableSetting } from "./settingsSearch";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { BuildToolsRequest, EnvironmentId } from "@t3tools/contracts";
+import { getBuildToolsUnavailableReason } from "@t3tools/client-runtime/feature-offers";
+import { useEnvironment } from "../../state/environments";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -18,8 +20,10 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   const run = useAtomCommand(serverEnvironment.buildToolsRun);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
   const canRun = useAtomValue(serverEnvironment.buildToolsRun.permissionAtom(environmentId));
+  const environment = useEnvironment(environmentId);
+  const reason = getBuildToolsUnavailableReason(environment?.serverConfig?.environment, canWrite);
   const query = useEnvironmentQuery(
-    serverEnvironment.buildToolsState({ environmentId, input: {} }),
+    reason ? null : serverEnvironment.buildToolsState({ environmentId, input: {} }),
   );
   const state = query.data;
   const [ref, setRef] = useState("origin/main");
@@ -27,7 +31,8 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   const [stagedFile, setStagedFile] = useState("");
   const [sha256, setSha256] = useState("");
   const [confirmation, setConfirmation] = useState<BuildToolsRequest["action"] | null>(null);
-  const action = (action: BuildToolsRequest["action"]) =>
+  const action = (action: BuildToolsRequest["action"]) => {
+    if (reason || !canRun || query.error) return;
     void run({
       environmentId,
       input: {
@@ -42,11 +47,15 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         undoneAs: "",
       },
     });
+  };
   const patch = (patch: Parameters<typeof update>[0]["input"]["patch"]) =>
     void update({ environmentId, input: { patch } });
+  const actionsDisabled = !canRun || Boolean(query.error);
   const busy = state?.phase === "running";
+  if (reason) return <p role="status">{reason}</p>;
   return (
     <div className="grid gap-6">
+      {!canRun ? <p>This connection cannot run build tools.</p> : null}
       <SettingsSection title="Build folder and launcher">
         {(
           [
@@ -118,14 +127,14 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         />
         <div className="flex gap-2">
           <Button
-            disabled={!settings.cloudBuildEnabled || !canRun || busy}
+            disabled={!settings.cloudBuildEnabled || actionsDisabled || busy}
             onClick={() => setConfirmation("cloud-build")}
           >
             Build AppImage
           </Button>
           <Button
             variant="outline"
-            disabled={!settings.cloudBuildEnabled || !canRun || busy || !testFile.trim()}
+            disabled={!settings.cloudBuildEnabled || actionsDisabled || busy || !testFile.trim()}
             onClick={() => setConfirmation("cloud-test")}
           >
             Run focused tests
@@ -145,7 +154,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
         />
         <Button
-          disabled={!settings.androidBuildEnabled || !canRun || busy}
+          disabled={!settings.androidBuildEnabled || actionsDisabled || busy}
           onClick={() => setConfirmation("android")}
         >
           Build Android APK
@@ -156,7 +165,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           control={
             <Checkbox
               checked={Boolean(state?.lanUrl)}
-              disabled={!canRun || (!settings.androidBuildEnabled && !state?.lanUrl)}
+              disabled={actionsDisabled || (!settings.androidBuildEnabled && !state?.lanUrl)}
               onCheckedChange={(value) => action(value ? "serve" : "stop-serving")}
             />
           }
@@ -200,7 +209,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         />
         <Button
           disabled={
-            !canRun ||
+            actionsDisabled ||
             !settings.loadBuildEnabled ||
             !state?.appImageAvailable ||
             busy ||
@@ -221,6 +230,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           </p>
           <div className="flex gap-2">
             <Button
+              disabled={actionsDisabled}
               onClick={() => {
                 action(confirmation);
                 setConfirmation(null);

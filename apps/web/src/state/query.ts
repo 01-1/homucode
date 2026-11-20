@@ -1,3 +1,4 @@
+import { formatEnvironmentQueryError } from "@t3tools/client-runtime/errors";
 import { RegistryContext, useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -18,12 +19,7 @@ export interface EnvironmentQueryView<A, E = unknown> {
   readonly refresh: () => void;
 }
 
-export function formatEnvironmentQueryError(cause: Cause.Cause<unknown>): string {
-  const error = Cause.squash(cause);
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "The environment request failed.";
-}
+export { formatEnvironmentQueryError };
 
 function queryUpdatedAt(result: AsyncResult.AsyncResult<unknown, unknown>): number {
   return result._tag === "Success"

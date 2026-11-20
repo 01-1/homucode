@@ -63,13 +63,20 @@ export function createMobilePreferencesState(
   );
   let nextPatchVersion = 0;
 
-  const preferencesAtom = Atom.make((get) => {
+  const persistedPreferencesAtom = Atom.make((get) => {
     const stored = get(storedPreferencesAtom);
     const confirmed = get(confirmedPreferencesAtom);
-    const optimistic = get(optimisticPatchAtom);
     return AsyncResult.map(stored, ({ preferences }) => ({
       ...preferences,
       ...confirmed,
+    }));
+  }).pipe(Atom.keepAlive, Atom.withLabel("mobile:preferences:persisted"));
+
+  const preferencesAtom = Atom.make((get) => {
+    const persisted = get(persistedPreferencesAtom);
+    const optimistic = get(optimisticPatchAtom);
+    return AsyncResult.map(persisted, (preferences) => ({
+      ...preferences,
       ...optimistic.values,
     }));
   }).pipe(Atom.keepAlive, Atom.withLabel("mobile:preferences"));
@@ -154,13 +161,19 @@ export function createMobilePreferencesState(
     )
     .pipe(Atom.keepAlive, Atom.withLabel("mobile:preferences:update"));
 
-  return { preferencesAtom, updatePreferencesAtom, settingsSyncEnabledAtom } as const;
+  return {
+    preferencesAtom,
+    persistedPreferencesAtom,
+    updatePreferencesAtom,
+    settingsSyncEnabledAtom,
+  } as const;
 }
 
 const mobilePreferencesRuntime = Atom.runtime(Runtime.layer);
 const mobilePreferencesState = createMobilePreferencesState(mobilePreferencesRuntime);
 
 export const mobilePreferencesAtom = mobilePreferencesState.preferencesAtom;
+export const persistedMobilePreferencesAtom = mobilePreferencesState.persistedPreferencesAtom;
 export const updateMobilePreferencesAtom = mobilePreferencesState.updatePreferencesAtom;
 
 export const mobileSettingsSyncEnabledAtom = mobilePreferencesState.settingsSyncEnabledAtom;

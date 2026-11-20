@@ -1,3 +1,5 @@
+import { isManagedSettingPath } from "@t3tools/contracts";
+import { supportsHomuSettingsSync } from "@t3tools/client-runtime/feature-offers";
 import {
   createClientSettingsSyncRunner,
   settingsSyncTargets,
@@ -7,7 +9,7 @@ import {
   runAtomCommand,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { AsyncResult } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useSyncExternalStore } from "react";
 
 import type { Preferences } from "../../persistence/mobile-preferences";
@@ -35,14 +37,21 @@ function savePreferences(transform: (current: Preferences) => Partial<Preference
   appAtomRegistry.set(updateMobilePreferencesAtom, { transform });
 }
 
+const syncTargetsAtom = Atom.make((get) =>
+  settingsSyncTargets(
+    get(connectedEnvironmentIdsAtom),
+    get(environmentServerConfigsAtom),
+    (environmentId, config) =>
+      supportsHomuSettingsSync(config.environment) &&
+      !isManagedSettingPath(config.managedPolicy, "syncedClientSettings") &&
+      get(serverEnvironment.updateSettings.permissionAtom(environmentId)),
+  ),
+);
+
 const runner = createClientSettingsSyncRunner({
   isReady: () => readPreferences() !== null,
   isEnabled: () => appAtomRegistry.get(mobileSettingsSyncEnabledAtom),
-  targets: () =>
-    settingsSyncTargets(
-      appAtomRegistry.get(connectedEnvironmentIdsAtom),
-      appAtomRegistry.get(environmentServerConfigsAtom),
-    ),
+  targets: () => appAtomRegistry.get(syncTargetsAtom),
   readLocal: () => syncedValuesFromMobilePreferences(readPreferences() ?? {}),
   applyLocal: async (changed) => {
     const preferences = readPreferences();
@@ -58,6 +67,11 @@ const runner = createClientSettingsSyncRunner({
     }));
   },
   writeRemote: async (environmentId, next) => {
+    if (
+      !appAtomRegistry.get(syncTargetsAtom).some((target) => target.environmentId === environmentId)
+    ) {
+      return null;
+    }
     const result = await runAtomCommand(
       appAtomRegistry,
       serverEnvironment.updateSettings,
@@ -93,7 +107,7 @@ export function setSettingsSyncSheetOpen(open: boolean): void {
   if (!open && runner.getPrompt() !== null) openSheetForPrompt?.();
 }
 
-/** Syncs the phone's settings with every connected server while sync is on. */
+/** Syncs the phone's settings with eligible connected servers while sync is on. */
 export function installClientSettingsSync(openSheet: () => void): () => void {
   openSheetForPrompt = openSheet;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
@@ -105,8 +119,7 @@ export function installClientSettingsSync(openSheet: () => void): () => void {
     }, LOCAL_CHANGE_DELAY_MS);
   };
   const unsubscribes = [
-    appAtomRegistry.subscribe(environmentServerConfigsAtom, runner.requestSync),
-    appAtomRegistry.subscribe(connectedEnvironmentIdsAtom, runner.requestSync),
+    appAtomRegistry.subscribe(syncTargetsAtom, runner.requestSync),
     appAtomRegistry.subscribe(mobilePreferencesAtom, onLocalChange),
     runner.subscribePrompt(() => {
       if (runner.getPrompt() !== null && !sheetOpen) openSheet();

@@ -22,6 +22,17 @@ it.effect.each([
     stored: { featureOffersDraft: { environmentId: "server", selected: ["sent-from"], step: 2 } },
     expected: true,
   },
+  {
+    stored: {
+      featureOffersDraft: { environmentId: "server", selected: ["sent-from"], step: 2 },
+      featureOffersDrafts: {
+        server: { environmentId: "server", selected: ["sent-from"], step: 2 },
+        remote: { environmentId: "remote", selected: ["building-t3"], step: 1 },
+      },
+      featureOffersSnoozedUntil: "2026-11-19T14:30:00.000Z",
+    },
+    expected: true,
+  },
 ])(
   "preserves sync for stored preferences $stored while new devices opt out",
   ({ stored, expected }) =>
