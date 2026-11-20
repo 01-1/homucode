@@ -292,6 +292,7 @@ packageExtensions:
   expo-file-system@*: *expo-modules-core
   expo-image-manipulator@*: *expo-modules-core
   expo-keep-awake@*: *expo-modules-core
+  expo-linking@*: *expo-modules-core
   expo-notifications@*: *expo-modules-core
   expo-splash-screen@*: *expo-modules-core
   expo-updates@*: *expo-modules-core
