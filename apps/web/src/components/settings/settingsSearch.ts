@@ -1895,6 +1895,7 @@ const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
   autoreview: "/settings/agent-behavior",
   "claude-background-commands": "/settings/agent-behavior",
   "building-t3": "/settings/building-homu",
+  "madohomu-brief-time": "/settings/madohomu",
   "authorized-clients": "/settings/access",
   "text-generation": "/settings/threads",
   about: "/settings/about",

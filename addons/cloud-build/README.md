@@ -25,7 +25,7 @@ Modes:
 
 ## In the app
 
-Enable **Show Building T3 settings** in **Settings → HomuCode**, then configure your checkout,
+Enable **Show Building T3 settings** in **Settings → HomuCode → Building Homu**, then configure your checkout,
 boat CLI, machine type and output folder in **Building T3**. Enable cloud builds and choose a
 committed ref to build or focused test files to run. Status reports the result and artifact
 path. `T3_BUILD_BOAT_CLI` overrides the script's boat executable when called directly.

@@ -1,7 +1,7 @@
 # Add-ons
 
 Optional build tools that ship with this repo and stay off until you set them up. Both are
-available in the app. Enable **Show Building T3 settings** in **Settings → HomuCode**, then
+available in the app. Enable **Show Building T3 settings** in **Settings → HomuCode → Building Homu**, then
 configure each tool there. On mobile, open **Building T3** from that section. The tools run the
 scripts from a configured checkout.
 
@@ -27,7 +27,7 @@ as described in [Android builds](../AGENTS.md#android-builds).
 It shows the APK path and can serve the APK folder on the LAN, with an explicit off switch;
 the HTTP server stops with T3. Cloud and Android builds need a signed-in boat CLI on the server.
 Loading builds is available only on AppImage installs and restarts T3, with checksum verification
-and automatic rollback. On desktop, **Settings → HomuCode** shows the staged build and keeps Undo and Redo available while
+and automatic rollback. On desktop, **Settings → HomuCode → Building Homu** shows the staged build and keeps Undo and Redo available while
 the build tools are hidden. All tools start disabled.
 
 ## Install
