@@ -159,7 +159,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     ],
   },
   {
-    heading: "HomuCode",
+    heading: msg("HomuCode"),
     paths: [
       "/settings/homucode",
       "/settings/madohomu",
