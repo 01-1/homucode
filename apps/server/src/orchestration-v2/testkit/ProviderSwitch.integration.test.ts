@@ -5130,8 +5130,11 @@ describe("orchestration v2 provider switching", () => {
           yield* waitForIdle(threadId);
           yield* send("after-clear-reply");
           const turns = () => Ref.get(capturedTurns);
-          const turnFor = (all: ReadonlyArray<CapturedTurn>, name: string) =>
-            all.find((turn) => turn.text.endsWith(name))!;
+          const turnFor = (all: ReadonlyArray<CapturedTurn>, name: string) => {
+            const turn = all.find((turn) => withoutSourceLine(turn.text).endsWith(name));
+            assert.isDefined(turn, `Expected a captured turn for ${name}`);
+            return turn;
+          };
           const oldProviderThreadId = turnFor(yield* turns(), "before-clear").providerThreadId;
           assert.notEqual(
             turnFor(yield* turns(), "after-clear").providerThreadId,

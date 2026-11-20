@@ -488,11 +488,7 @@ export const layer: Layer.Layer<
               const parentId = offered.lineage.parentThreadId;
               const parent =
                 existing === null && parentId !== null
-                  ? yield* projections.getThread(parentId).pipe(
-                      Effect.catchTags({
-                        ProjectionStoreThreadNotFoundError: () => Effect.succeed(null),
-                      }),
-                    )
+                  ? yield* projections.findThread(parentId)
                   : null;
               const inheritPin =
                 parent !== null &&
