@@ -184,6 +184,9 @@ export function WelcomePage({
   const [chosenOffers, setSelectedOffers] = useState<ReadonlySet<string> | null>(null);
   const selectedOffers = chosenOffers ?? selectedFeatureOffers(offerSettings, localSettings);
   const [offerStep, setOfferStep] = useState(0);
+  const [chosenStatusLineAllModels, setStatusLineAllModels] = useState<boolean | null>(null);
+  const statusLineShowAllModels =
+    chosenStatusLineAllModels ?? localSettings.statusLineShowAllModels;
   const canSetLongSessions = useAtomValue(
     serverEnvironment.updateSettings.permissionAtom(environmentId, {
       patch: { connectDeviceLongSessions: true },
@@ -246,7 +249,10 @@ export function WelcomePage({
         });
         if (saved._tag !== "Success") throw new Error("Could not save HomuCode features.");
       }
-      await updateClientSettings({ settingsSyncEnabled: selectedOffers.has("settings-sync") });
+      await updateClientSettings({
+        settingsSyncEnabled: selectedOffers.has("settings-sync"),
+        ...(chosenStatusLineAllModels === null ? {} : { statusLineShowAllModels }),
+      });
       await completeOnboarding();
     })()
       .then(async () => {
@@ -337,6 +343,27 @@ export function WelcomePage({
     void projectImport.runImport(selected);
   };
 
+  const statusLineChoice = (
+    <label className="flex cursor-pointer items-start gap-3 text-sm">
+      <Checkbox
+        checked={statusLineShowAllModels}
+        onCheckedChange={setStatusLineAllModels}
+        disabled={isImporting}
+      />
+      <span>
+        <span className="block font-medium">
+          <T>Show all models in status line details</T>
+        </span>
+        <span className="text-muted-foreground">
+          <T>
+            Show models and reported usage limits for this thread’s environment when you hover or
+            focus the status line.
+          </T>
+        </span>
+      </span>
+    </label>
+  );
+
   return (
     <SidebarInset
       {...workspaceAreaProps("home", 1, gt("Welcome"))}
@@ -408,6 +435,9 @@ export function WelcomePage({
                       </div>
                     ) : null}
                   </WelcomeSection>
+                  {canSaveOffers ? null : (
+                    <WelcomeSection title={gt("Extra features")}>{statusLineChoice}</WelcomeSection>
+                  )}
                   {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
                 </>
               ) : (
@@ -421,12 +451,17 @@ export function WelcomePage({
                   }
                 >
                   {offerStep === 1 ? (
-                    <FeatureOfferChoices
-                      offers={offered.filter((offer) => offer.page === 2)}
-                      selected={selectedOffers}
-                      onChange={setSelectedOffers}
-                      disabled={!canSaveOffers || isImporting}
-                    />
+                    <div className="grid gap-4">
+                      {canSaveOffers ? (
+                        <FeatureOfferChoices
+                          offers={offered.filter((offer) => offer.page === 2)}
+                          selected={selectedOffers}
+                          onChange={setSelectedOffers}
+                          disabled={isImporting}
+                        />
+                      ) : null}
+                      {statusLineChoice}
+                    </div>
                   ) : followup === "device-name" ? (
                     <DeviceNamesSettings environmentId={environmentId} currentOnly />
                   ) : (
@@ -452,12 +487,12 @@ export function WelcomePage({
                 </Button>
               )}
               <div className="flex items-center gap-3">
-                {agentReady ? null : (
+                {!agentReady && offerStep === 0 ? (
                   <span className="text-xs text-muted-foreground">
                     <T>Set up one agent to start.</T>
                   </span>
-                )}
-                <Button disabled={!agentReady || isImporting} onClick={start}>
+                ) : null}
+                <Button disabled={(!agentReady && offerStep === 0) || isImporting} onClick={start}>
                   {offerStep < finalOfferStep
                     ? gt("Next")
                     : isImporting

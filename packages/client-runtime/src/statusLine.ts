@@ -16,6 +16,7 @@ import {
 } from "@t3tools/shared/usageLimits";
 
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
+import { resolveProviderInstanceDisplayName } from "./state/providerInstanceDisplay.ts";
 import { REASONING_EFFORT_OPTION_IDS } from "./state/threadExecution.ts";
 
 export interface StatusLineInputSource {
@@ -29,10 +30,26 @@ export interface StatusLineInputSource {
   readonly nowMs: number;
 }
 
+export type StatusLineUsageSource = Pick<
+  StatusLineInputSource,
+  "providers" | "usageLimitSources" | "nowMs"
+>;
+
+function summaryWindow(provider: ServerProvider, window: ServerProviderUsageWindow): boolean {
+  return (
+    window.modelIds === undefined &&
+    window.providerIds === undefined &&
+    (window.kind === "session" ||
+      (window.kind === "weekly" &&
+        (provider.driver !== "claudeAgent" || window.id === "seven_day" || window.id === "weekly")))
+  );
+}
+
 function hubUsageWindows(
   provider: ServerProvider,
   sources: UsageLimitSourceSnapshots,
   now: number,
+  includeAll: boolean,
 ): ReadonlyArray<ServerProviderUsageWindow> {
   if (!provider.auth.endpoint) return [];
   const hub = usageLimitSourceAtEndpoint(sources, provider.auth.endpoint, {
@@ -57,12 +74,8 @@ function hubUsageWindows(
               ...account.usageLimits,
               windows: account.usageLimits.windows.filter(
                 (window) =>
-                  window.modelIds === undefined &&
-                  window.providerIds === undefined &&
                   (window.resetsAt === undefined || Date.parse(window.resetsAt) > now) &&
-                  (window.kind === "session" ||
-                    (window.kind === "weekly" &&
-                      (account.driver !== "claudeAgent" || window.id === "seven_day"))),
+                  (includeAll || summaryWindow(provider, window)),
               ),
             },
           },
@@ -72,9 +85,12 @@ function hubUsageWindows(
   return (
     pool?.windows.map((window) => {
       const resetsAt = window.resets[0]?.member.window.resetsAt;
+      const reported = window.members[0]?.window;
       return {
-        id: window.id,
+        id: reported?.id ?? window.id,
         label: window.label,
+        ...(reported?.modelIds === undefined ? {} : { modelIds: reported.modelIds }),
+        ...(reported?.providerIds === undefined ? {} : { providerIds: reported.providerIds }),
         kind: window.kind,
         usedPercent: window.usedPercent,
         ...(resetsAt === undefined ? {} : { resetsAt }),
@@ -87,11 +103,19 @@ function usageWindows(source: StatusLineInputSource): ReadonlyArray<ServerProvid
   const instanceId = source.modelSelection?.instanceId;
   const provider = source.providers.find((candidate) => candidate.instanceId === instanceId);
   if (instanceId === undefined || !provider) return [];
-  const hubWindows = hubUsageWindows(provider, source.usageLimitSources, source.nowMs);
-  const providers = [...source.providers];
+  return providerUsageWindows(provider, source, false);
+}
+
+function providerUsageWindows(
+  provider: ServerProvider,
+  source: StatusLineUsageSource,
+  includeAll: boolean,
+): ReadonlyArray<ServerProviderUsageWindow> {
+  const { instanceId } = provider;
+  const hubWindows = hubUsageWindows(provider, source.usageLimitSources, source.nowMs, includeAll);
   const report = collectProviderUsageLimits(
     instanceId,
-    providers,
+    source.providers,
     source.usageLimitSources,
     source.nowMs,
   );
@@ -102,8 +126,43 @@ function usageWindows(source: StatusLineInputSource): ReadonlyArray<ServerProvid
   const nativeWindows = limits?.unavailable === undefined ? (limits?.windows ?? []) : [];
   return [
     ...hubWindows,
-    ...nativeWindows.filter((window) => !hubWindows.some((hub) => hub.kind === window.kind)),
+    ...nativeWindows.filter(
+      (window) =>
+        !hubWindows.some(
+          (hub) =>
+            hub.kind === window.kind &&
+            (!includeAll ||
+              hub.id === window.id ||
+              (summaryWindow(provider, hub) && summaryWindow(provider, window))),
+        ),
+    ),
   ];
+}
+
+export function buildStatusLineModelUsage(source: StatusLineUsageSource) {
+  return source.providers
+    .filter((provider) => provider.enabled && provider.models.length > 0)
+    .map((provider) => {
+      const names = new Map(provider.models.map((model) => [model.slug, model.name]));
+      return {
+        instanceId: provider.instanceId,
+        name: resolveProviderInstanceDisplayName(provider),
+        models: [...names.values()],
+        limits: providerUsageWindows(provider, source, true).map((window) => {
+          const resetsAtMs = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
+          return {
+            id: window.id,
+            label: window.label,
+            scope: [
+              ...(window.modelIds?.map((id) => names.get(id) ?? id) ?? []),
+              ...(window.providerIds ?? []),
+            ],
+            usedPercent: Math.round(window.usedPercent),
+            resetsAtMs: Number.isFinite(resetsAtMs) ? resetsAtMs : null,
+          };
+        }),
+      };
+    });
 }
 
 function rateLimit(

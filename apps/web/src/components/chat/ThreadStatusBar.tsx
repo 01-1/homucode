@@ -15,6 +15,7 @@ import {
   type StatusLineInputSource,
   type StatusLineItem,
   type StatusLineStats,
+  type StatusLineUsageSource,
 } from "@t3tools/client-runtime/status-line";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
@@ -29,11 +30,11 @@ import {
 } from "react";
 
 import { useNowMinuteMs } from "../../hooks/useNowMinute";
-import { usePrimarySettings } from "../../hooks/useSettings";
+import { useClientSettings, usePrimarySettings } from "../../hooks/useSettings";
 import { formatShortTimestamp } from "../../timestampFormat";
 import { observeResize } from "~/lib/observeResize";
 import { serverEnvironment } from "../../state/server";
-import { StatusDialCard, StatusDialStrip } from "./ThreadStatusDials";
+import { StatusDialCard, StatusDialStrip, StatusLineModelUsage } from "./ThreadStatusDials";
 
 // Claude Code redraws on events; the timer keeps clocks and countdowns current while idle.
 const REFRESH_MS = 30_000;
@@ -435,7 +436,14 @@ function LocalHeaderTime() {
   return <time dateTime={now}>{formatShortTimestamp(now, timestampFormat)}</time>;
 }
 
-export function ThreadHeaderStatus(props: { readonly statusLineKey: string | undefined }) {
+type HeaderStatusLineUsage = Omit<StatusLineUsageSource, "nowMs"> & {
+  readonly cwd: string | null;
+};
+
+export function ThreadHeaderStatus(props: {
+  readonly statusLineKey: string | undefined;
+  readonly usage?: HeaderStatusLineUsage | undefined;
+}) {
   const result = useAtomValue(statusLineResultAtom(props.statusLineKey));
   const custom = result !== null && "lines" in result ? result : null;
   const items = custom?.lines.flatMap(splitStatusLineItems) ?? [];
@@ -446,7 +454,12 @@ export function ThreadHeaderStatus(props: { readonly statusLineKey: string | und
   return (
     <>
       {showStatusLine ? (
-        <HeaderStatusLine key={custom === null ? "dials" : "text"} result={result} items={values} />
+        <HeaderStatusLine
+          key={custom === null ? "dials" : "text"}
+          result={result}
+          items={values}
+          usage={props.usage}
+        />
       ) : null}
       <span className="ms-auto shrink-0 whitespace-nowrap pe-2 font-sans text-muted-foreground text-2xs tabular-nums">
         {clock === undefined ? <LocalHeaderTime /> : <Segments line={clock.segments} />}
@@ -458,9 +471,11 @@ export function ThreadHeaderStatus(props: { readonly statusLineKey: string | und
 function HeaderStatusLine(props: {
   readonly result: StatusLineResult;
   readonly items: ReadonlyArray<StatusLineItem>;
+  readonly usage?: HeaderStatusLineUsage | undefined;
 }) {
   const gt = useGT();
   const { result } = props;
+  const showAllModels = useClientSettings((settings) => settings.statusLineShowAllModels);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   // Where the line starts in the top bar, which is where the dials' card starts.
@@ -471,6 +486,7 @@ function HeaderStatusLine(props: {
   useLayoutEffect(() => keepBodyFont(containerRef.current));
   const drawn = "stats" in result;
   const failed = !drawn && result.lines.length === 0;
+  const usage = showAllModels && props.usage ? { ...props.usage, nowMs } : null;
   const measure = (line: HTMLElement) => {
     const bar = line.offsetParent?.getBoundingClientRect().left ?? 0;
     setLeft(line.getBoundingClientRect().left - bar);
@@ -484,19 +500,25 @@ function HeaderStatusLine(props: {
       tabIndex={0}
       aria-label={gt("Status line")}
       className="min-w-0 flex-1 rounded-sm text-muted-foreground text-xs outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={(event) => {
+        measure(event.currentTarget);
+        setHovered(true);
+      }}
       // On each move, since the line shifts under the pointer when the title beside it changes.
       onMouseMove={(event) => measure(event.currentTarget)}
       onMouseLeave={() => setHovered(false)}
       onFocus={(event) => {
         // A click focuses it too, and must not pin the panel open.
-        if (!event.currentTarget.matches(":focus-visible")) return;
+        if (!event.target.matches(":focus-visible")) return;
         measure(event.currentTarget);
         setFocused(true);
       }}
-      onBlur={() => setFocused(false)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
+        if (event.target !== event.currentTarget) event.currentTarget.focus();
         setHovered(false);
         setFocused(false);
       }}
@@ -508,26 +530,36 @@ function HeaderStatusLine(props: {
       ) : (
         <StatusLineRow items={props.items} modelName={result.modelName} />
       )}
-      {failed || !(hovered || focused) ? null : drawn ? (
+      {(!failed || usage !== null) && (hovered || focused) ? (
         <div
-          className={`${PANEL} w-3xl px-4 py-3`}
-          style={{ left, maxWidth: `calc(100% - ${left}px - 0.75rem)` }}
+          className={`${PANEL} ${drawn ? "w-3xl" : "inset-x-0"}`}
+          style={drawn ? { left, maxWidth: `calc(100% - ${left}px - 0.75rem)` } : undefined}
         >
-          <StatusDialCard stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
+          <div
+            role="region"
+            aria-label={gt("Status line details")}
+            tabIndex={usage === null ? undefined : 0}
+            className={`max-h-[min(28rem,60dvh)] overflow-y-auto overscroll-contain ${drawn ? "px-4 py-3" : "px-2 py-1.5"}`}
+          >
+            {drawn ? (
+              <StatusDialCard stats={result.stats} createdAt={result.createdAt} nowMs={nowMs} />
+            ) : (
+              <div
+                data-labels="long"
+                className="group/status-line flex flex-col gap-0.5 tabular-nums"
+              >
+                {result.lines.map((line, lineIndex) => (
+                  // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
+                  <div key={lineIndex} className="whitespace-pre-wrap break-words">
+                    <Segments line={line} modelName={result.modelName} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {usage === null ? null : <StatusLineModelUsage source={usage} />}
+          </div>
         </div>
-      ) : (
-        <div
-          data-labels="long"
-          className={`group/status-line ${PANEL} inset-x-0 flex flex-col gap-0.5 px-2 py-1.5 tabular-nums`}
-        >
-          {result.lines.map((line, lineIndex) => (
-            // oxlint-disable-next-line react/no-array-index-key -- lines have no identity beyond order
-            <div key={lineIndex} className="whitespace-pre-wrap break-words">
-              <Segments line={line} modelName={result.modelName} />
-            </div>
-          ))}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -10,7 +10,11 @@ import {
   FEATURE_OFFERS,
   getBuildToolsUnavailableReason,
 } from "@t3tools/client-runtime/feature-offers";
-import { useEnvironmentSettings } from "../../hooks/useSettings";
+import {
+  updateClientSettings,
+  useClientSettings,
+  useEnvironmentSettings,
+} from "../../hooks/useSettings";
 import { useProjects } from "../../state/entities";
 import { useEnvironment, useEnvironments } from "../../state/environments";
 import { useManagedPolicy } from "../../state/managedPolicy";
@@ -179,21 +183,36 @@ export function DeviceNamesSettings({
   );
 }
 
-export function BehaviorSettingsSection() {
+export function ExtraFeaturesSettings({
+  showServerOffers,
+}: {
+  readonly showServerOffers: boolean;
+}) {
   const messages = useMessages();
   const searchableSetting = useSearchableSetting();
   const gt = useGT();
-  const { targets, scope, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const update = useUpdateScopedSettings();
-  const environmentId =
-    targets.length === 1 && (scope.kind === "all" || scope.kind === "environment")
-      ? targets[0]?.environmentId
-      : undefined;
+  const showAllModels = useClientSettings((settings) => settings.statusLineShowAllModels);
   return (
-    <>
-      <SettingsSection title={gt("Extra features")}>
-        {FEATURE_OFFERS.map((offer) => {
+    <SettingsSection title={gt("Extra features")}>
+      <SettingsRow
+        {...searchableSetting("status-line-all-models")}
+        description={gt(
+          "Show models and reported usage limits for this thread’s environment when you hover or focus the status line.",
+        )}
+        control={
+          <Checkbox
+            checked={showAllModels}
+            aria-label={gt("Show all models in status line details")}
+            onCheckedChange={(statusLineShowAllModels) =>
+              void updateClientSettings({ statusLineShowAllModels })
+            }
+          />
+        }
+      />
+      {showServerOffers &&
+        FEATURE_OFFERS.map((offer) => {
           const id = FEATURE_OFFER_SETTINGS[offer.id];
           const key = offer.setting;
           if (offer.page !== 2 || !key || key === "claudeHoldBackgroundCommands" || id !== offer.id)
@@ -219,7 +238,20 @@ export function BehaviorSettingsSection() {
             />
           );
         })}
-      </SettingsSection>
+    </SettingsSection>
+  );
+}
+
+export function BehaviorSettingsSection() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
+  const { targets, scope, connectedEnvironments } = useSettingsScope();
+  const environmentId =
+    targets.length === 1 && (scope.kind === "all" || scope.kind === "environment")
+      ? targets[0]?.environmentId
+      : undefined;
+  return (
+    <>
       {environmentId ? (
         <EnvironmentBehaviorSettings environmentId={environmentId} />
       ) : (

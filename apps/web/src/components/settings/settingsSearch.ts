@@ -927,6 +927,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["statusline claude code footer context usage limits model effort"],
   },
   {
+    id: "status-line-all-models",
+    title: msg("Show all models in status line details"),
+    to: "/settings/agent-behavior",
+    searchTerms: ["statusline hover focus quota usage extra features"],
+  },
+  {
     id: "status-line-command",
     title: msg("Status line command"),
     to: "/settings/agent-behavior",

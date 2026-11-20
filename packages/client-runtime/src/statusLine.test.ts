@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ContextWindowSnapshot } from "./state/contextWindow.ts";
 import {
   buildStatusLineInput,
+  buildStatusLineModelUsage,
   buildStatusLineStats,
   expandStatusLineLabel,
   formatStatusLineSpan,
@@ -408,6 +409,23 @@ describe("buildStatusLineInput", () => {
       ],
     };
 
+    expect(buildStatusLineModelUsage(routed)[0]?.limits).toEqual([
+      {
+        id: "five_hour",
+        label: "Session",
+        scope: [],
+        usedPercent: 50,
+        resetsAtMs: Date.parse(reset),
+      },
+      { id: "seven_day", label: "Weekly", scope: [], usedPercent: 60, resetsAtMs: null },
+      {
+        id: "weekly-fable",
+        label: "Fable",
+        scope: ["claude-fable-5-2"],
+        usedPercent: 90,
+        resetsAtMs: null,
+      },
+    ]);
     expect(buildStatusLineStats(routed)).toMatchObject({
       fiveHour: { usedPercent: 50, resetsAtMs: Date.parse(reset) },
       weekly: { usedPercent: 60, resetsAtMs: null },
@@ -533,6 +551,27 @@ describe("buildStatusLineInput", () => {
         ],
       }).weekly,
     ).toEqual({ usedPercent: 43, resetsAtMs: null });
+  });
+
+  it("lists every enabled provider's models and keeps their limits separate", () => {
+    const claude = source.providers[0]!;
+    const codex = {
+      ...claude,
+      instanceId: ProviderInstanceId.make("codex"),
+      driver: ProviderDriverKind.make("codex"),
+      displayName: "Work Codex",
+      models: [{ ...claude.models[0]!, slug: "gpt-6.2-sol", name: "GPT-6.2 Sol" }],
+      usageLimits: { checkedAt: claude.checkedAt, windows: [] },
+    };
+    const usage = buildStatusLineModelUsage({
+      ...source,
+      providers: [claude, codex, { ...codex, enabled: false }],
+    });
+
+    expect(usage).toMatchObject([
+      { name: "Claude", models: ["Claude Opus 5.5"], limits: [{ id: "weekly-fable" }, {}, {}] },
+      { name: "Work Codex", models: ["GPT-6.2 Sol"], limits: [] },
+    ]);
   });
 
   it("gives a client the same facts to draw itself", () => {
