@@ -78,6 +78,8 @@ it.each([
   ["az repos pr update --id=19 --status=abandoned", [19]],
   ["gh pr merge --squash", [], true],
   ['gh pr merge 42 --body "Release with -R flag"', [42]],
+  ['gh pr merge 42 --body "-R"', [42]],
+  ['gh pr merge 42 --subject "--repo=acme/web"', [42]],
   ["gh pr merge 19 -R different/repository", []],
   ["gh stack merge", [], true],
   ["gh pr merge 19 && gh pr merge --auto", [19], true],

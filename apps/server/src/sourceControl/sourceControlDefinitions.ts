@@ -32,6 +32,19 @@ const SHELL_WORD = /"((?:\\[\s\S]|[^"\\])*)"?|'([^']*)'?|((?:\\[\s\S]|[^\s"'\\])
 // A whole word that names one, so a number inside `--subject "Release 20"` does not.
 const NAMED_CHANGE_REQUEST = /^(?:--?[\w-]+=)?#?(\d+)$|^\S*\/(?:pulls?|merge_requests)\/(\d+)\/?$/u;
 
+const CLOSE_OPTION_VALUES = new Set([
+  "--body",
+  "-b",
+  "--body-file",
+  "-F",
+  "--subject",
+  "-t",
+  "--match-head-commit",
+  "--message",
+  "-m",
+  "--comment",
+]);
+
 /** The explicit and branch-based targets of merge or close commands in one shell invocation. */
 export function changeRequestsClosedBy(command: string): {
   readonly named: ReadonlySet<number | string>;
@@ -50,14 +63,28 @@ export function changeRequestsClosedBy(command: string): {
         words.push(double ?? single ?? bare ?? "");
       }
       let target: number | string | undefined;
+      let repositorySpecified = false;
+      let skipValue = false;
       for (const word of words) {
+        if (skipValue) {
+          skipValue = false;
+          continue;
+        }
+        if (/^(?:-R|--repo)(?:=|$)/u.test(word)) {
+          repositorySpecified = true;
+          skipValue = !word.includes("=");
+          continue;
+        }
+        if (CLOSE_OPTION_VALUES.has(word)) {
+          skipValue = true;
+          continue;
+        }
+        if (target !== undefined) continue;
         const [, number, url] = NAMED_CHANGE_REQUEST.exec(word) ?? [];
         if (number !== undefined || url !== undefined) {
           target = number === undefined ? word : Number(number);
-          break;
         }
       }
-      const repositorySpecified = words.some((word) => /^(?:-R|--repo)(?:=|$)/u.test(word));
       if (typeof target === "string" || (target !== undefined && !repositorySpecified)) {
         named.add(target);
       } else if (target === undefined && !repositorySpecified) {
