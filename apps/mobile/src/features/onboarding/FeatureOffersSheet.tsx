@@ -89,6 +89,7 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
       preferences?.featureOffersSeen,
     ).filter(
       (offer) =>
+        support.supportedFeatureIds.has(offer.id) &&
         !(offer.id === "settings-sync" && preferences?.featureOffersSeen?.includes(offer.id)),
     );
     return {
@@ -96,18 +97,17 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
       support,
       pending: pending.length > 0,
       remotePending: pending.some(
-        (offer) =>
-          support.supportedFeatureIds.has(offer.id) &&
-          offer.platform !== "mobile" &&
-          offer.id !== "settings-sync",
+        (offer) => offer.platform !== "mobile" && offer.id !== "settings-sync",
       ),
     };
   });
+  const draft = preferences?.featureOffersDraft;
   const target =
     targets.find((target) => target.environment.environmentId === selectedEnvironmentId) ??
     targets.find(
       (target) =>
-        target.environment.environmentId === preferences?.featureOffersDraft?.environmentId,
+        target.environment.environmentId === draft?.environmentId &&
+        (draft.offered?.some((id) => target.support.supportedFeatureIds.has(id)) ?? true),
     ) ??
     targets.find((target) => target.remotePending) ??
     targets.find((target) => target.pending);
@@ -147,11 +147,31 @@ function EnvironmentFeatureOffers({
     (preferences.featureOffersDraft?.environmentId === environmentId
       ? preferences.featureOffersDraft
       : undefined);
-  const [chosen, setSelected] = useState<ReadonlySet<string> | null>(() =>
-    draft ? new Set(draft.selected) : null,
+  const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
+  const unseen = unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
+    (offer) => !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
   );
+  const defaults = selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled });
+  const savedOfferIds = draft?.offered;
+  const newOffers =
+    savedOfferIds && !savedOfferIds.some((id) => support.supportedFeatureIds.has(id))
+      ? unseen.filter((offer) => support.supportedFeatureIds.has(offer.id))
+      : [];
+  const [chosen, setSelected] = useState<ReadonlySet<string> | null>(() => {
+    if (!draft) return null;
+    const selected = new Set(draft.selected);
+    for (const offer of newOffers) {
+      if (defaults.has(offer.id)) selected.add(offer.id);
+      else selected.delete(offer.id);
+    }
+    return selected;
+  });
   const [attemptOffers, setAttemptOffers] = useState<ReadonlyArray<FeatureOffer> | null>(() =>
-    draft?.offered ? FEATURE_OFFERS.filter((offer) => draft.offered?.includes(offer.id)) : null,
+    savedOfferIds
+      ? FEATURE_OFFERS.filter(
+          (offer) => savedOfferIds.includes(offer.id) || newOffers.includes(offer),
+        )
+      : null,
   );
   const pendingPhoneSave = useRef<Parameters<typeof savePreferences>[0] | null>(null);
   const savedServerOffers = useRef<ReadonlyArray<string>>(draft?.savedServerOffers ?? []);
@@ -170,12 +190,7 @@ function EnvironmentFeatureOffers({
     const timer = setTimeout(() => setSettled(true), STRAY_TOUCH_GUARD_MS);
     return () => clearTimeout(timer);
   }, []);
-  const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
-  const selected =
-    chosen ?? selectedFeatureOffers(settings, { ...preferences, settingsSyncEnabled });
-  const unseen = unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
-    (offer) => !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
-  );
+  const selected = chosen ?? defaults;
   const offers = attemptOffers ?? (unseen.length > 0 ? unseen : FEATURE_OFFERS);
   const available = offers.filter((offer) => support.supportedFeatureIds.has(offer.id));
   const pages = featureOfferPages(offers);

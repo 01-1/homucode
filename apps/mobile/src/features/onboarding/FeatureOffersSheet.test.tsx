@@ -333,6 +333,7 @@ it.each(["upstream", "read-only"])(
         capabilities: { homuSetup: false, buildTools: false, statusLine: true },
       };
     } else mocks.readOnly = true;
+    mocks.preferences = { ...mocks.preferences, fasterPhoneLaunch: true };
     act(() => screen.root.render(<FeatureOffersSheet active />));
     expect(screen.container.textContent).toContain("pbox");
     expect(screen.container.textContent).toContain(
@@ -346,6 +347,33 @@ it.each(["upstream", "read-only"])(
     await screen.click("Save");
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.preferences.settingsSyncEnabled).toBe(true);
+    act(() => screen.root.render(null));
+    act(() => screen.root.render(<FeatureOffersSheet active />));
+    expect(screen.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(mocks.preferences.featureOffersDraft?.offered).toContain("building-t3");
+    expect(mocks.preferences.featureOffersDraft?.selected).toContain("faster-phone-launch");
+
+    mocks.preferences = {
+      ...mocks.preferences,
+      fasterPhoneLaunch: false,
+      featureOffersSeen: mocks.preferences.featureOffersSeen?.filter(
+        (id) => id !== "faster-phone-launch",
+      ),
+    };
+    act(() => screen.root.render(<FeatureOffersSheet active />));
+    expect(screen.container.textContent).toContain("Faster phone launch");
+    await screen.click("Save");
+    expect(mocks.preferences.fasterPhoneLaunch).toBe(false);
+    expect(mocks.preferences.featureOffersDraft?.offered).toContain("building-t3");
+    act(() => screen.root.render(null));
+
+    mocks.readOnly = false;
+    mocks.descriptor = {
+      serverVersion: "0.1.10-homu.98",
+      capabilities: { homuSetup: true, buildTools: true, statusLine: true },
+    };
+    act(() => screen.root.render(<FeatureOffersSheet active />));
+    expect(screen.container.querySelector('[role="dialog"]')).not.toBeNull();
   },
 );
 
