@@ -1880,17 +1880,27 @@ it.effect("delivers agent messages queued behind /compact before a later one ste
       yield* finishTurn(1);
       yield* Fiber.join(alphaRunning);
       yield* lock;
+      const agentPrompt = (text: string) =>
+        timestampedBy(text, automaticLine("the agent in thread thread:orchestrator"));
       assert.deepEqual(
-        started.map((turn) => turn.message.text.split("\n").at(-1)),
-        ["first", "/compact", "ALPHA"],
+        started.map((turn) => turn.message.text),
+        [timestamped("first"), "/compact", agentPrompt("ALPHA")],
       );
 
       yield* sendFromAgent("CHARLIE");
-      const delivered = [...steered, ...started.slice(3).map((turn) => turn.message.text)]
-        .map((text) => text.split("\n").at(-1))
-        .filter((text) => text === "BRAVO" || text === "CHARLIE");
-      // Whatever reaches the agent so far does so in send order: CHARLIE never before BRAVO.
-      assert.deepEqual(delivered, ["BRAVO", "CHARLIE"].slice(0, delivered.length));
+      assert.deepEqual(steered, []);
+      const bravoRunning = yield* nextRunning();
+      yield* finishTurn(2);
+      yield* Fiber.join(bravoRunning);
+      yield* lock;
+      const charlieRunning = yield* nextRunning();
+      yield* finishTurn(3);
+      yield* Fiber.join(charlieRunning);
+      yield* lock;
+      assert.deepEqual(
+        started.slice(3).map((turn) => turn.message.text),
+        [agentPrompt("BRAVO"), agentPrompt("CHARLIE")],
+      );
     }).pipe(Effect.provide(layer));
   }),
 );

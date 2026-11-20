@@ -28,6 +28,7 @@ import {
   assertNotLinked,
   assertSameLink,
   callerLinkOrigin,
+  fencingLinkOrigin,
 } from "./linkOrigin.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { resolveInteractionMode, resolveRuntimeMode } from "./delegatedTaskModes.ts";
@@ -406,14 +407,11 @@ export const writesEnvironment = <P, A, E, R>(
   },
 ) => {
   const live = orchestratingCaller.pipe(
-    Effect.tap((caller) =>
-      options.linkedCallers === "allowed"
-        ? Effect.void
-        : assertNotLinked(caller, changesEnvironment),
-    ),
-    Effect.tap((caller) =>
-      assertFullAccessNamingLink(caller, fullAccessRequired, changesEnvironment),
-    ),
+    Effect.tap((caller) => {
+      if (options.linkedCallers !== "allowed") return assertNotLinked(caller, changesEnvironment);
+      if (fencingLinkOrigin(caller) === undefined) return Effect.void;
+      return assertFullAccessNamingLink(caller, fullAccessRequired, changesEnvironment);
+    }),
   );
   const approved = (params: P) =>
     Effect.tap(live, (caller) => approvedByUser(caller, options.approval(params)));

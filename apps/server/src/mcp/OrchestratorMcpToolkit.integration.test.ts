@@ -83,6 +83,7 @@ const projectId = ProjectId.make("project:mcp-orchestrator");
 const codexInstanceId = ProviderInstanceId.make("codex");
 const codexModel = "gpt-5.4";
 const parentPrompt = "Keep this parent turn active while orchestration tools are tested.";
+const delegatedTitle = "Inspect the delegated API boundary";
 const delegatedPrompt = "Inspect the delegated API boundary and return the result.";
 const delegatedResult = "Delegated API boundary inspected.";
 const cancellationPrompt = "Remain active until the parent cancels this delegated task.";
@@ -112,10 +113,14 @@ const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTran
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(NodeURL.fileURLToPath(delegatedTaskStatusTranscriptFile));
     // The recording names the parent, then the child, after the fixture's titles; this test's differ.
-    const threadNames = ["MCP replay parent", delegatedPrompt];
+    const threadNames = ["MCP replay parent", delegatedTitle];
+    const recordedAgentPrefix = JSON.stringify(
+      `[T3 Code: the agent in T3 thread "${parentThreadId}" sent this message, not the user.]\n\n`,
+    ).slice(1, -1);
     const transcript = yield* decodeProviderReplayNdjson(
       text
         .replaceAll(queuedFollowupResult, followupResult)
+        .replaceAll(recordedAgentPrefix, "")
         .replace(
           /"name":"Replay fixture: delegated_task_status"/g,
           () => `"name":${JSON.stringify(threadNames.shift())}`,
@@ -385,6 +390,7 @@ describe("orchestrator MCP toolkit", () => {
         const delegationStartSequence = yield* orchestrator.getThreadEventSequence(parentThreadId);
         const delegatedCall = yield* invoke("delegate_task", {
           task: delegatedPrompt,
+          title: delegatedTitle,
           target: {
             providerInstanceId: codexInstanceId,
             model: codexModel,

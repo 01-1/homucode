@@ -91,7 +91,7 @@ it.each([
     ["https://github.com/acme/web/pull/42"],
     true,
   ],
-] as const)("%s closes %j", (command, expected, implicit) => {
+] as const)("%s closes %j", (command, expected, implicit?: boolean) => {
   const closed = changeRequestsClosedBy(command);
   expect([...closed.named]).toEqual(expected);
   expect(closed.implicit).toBe(implicit ?? false);

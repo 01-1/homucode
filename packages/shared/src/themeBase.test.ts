@@ -1,4 +1,4 @@
-import { EnvironmentThemeFile } from "@t3tools/contracts";
+import { EnvironmentThemeFile, THEME_CSS_MAX_LENGTH } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -77,7 +77,11 @@ describe("themeOnBase", () => {
       }),
     ).toMatchObject({ problem: expect.stringMatching(/canvas or accent/) });
     expect(
-      themeOnBase(lavender, { name: "Long", appearance: "light", css: "x".repeat(50_000) }),
+      themeOnBase(lavender, {
+        name: "Long",
+        appearance: "light",
+        css: "x".repeat(THEME_CSS_MAX_LENGTH + 1),
+      }),
     ).toMatchObject({ problem: expect.stringMatching(/CSS/) });
   });
 });

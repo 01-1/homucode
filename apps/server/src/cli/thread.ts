@@ -845,9 +845,14 @@ export const parseLaunchOptions = Effect.fn("cli.thread.parseLaunchOptions")(fun
     const at = option.indexOf("=");
     const id = option.slice(0, at).trim();
     const value = option.slice(at + 1).trim();
-    if (at <= 0 || !id || !value || options.some((existing) => existing.id === id)) {
+    if (at <= 0 || !id || !value) {
       return yield* new ThreadUsageError({
-        detail: "Each --option must be a unique ID=VALUE with a nonempty value.",
+        detail: "Each --option must be an ID=VALUE with a nonempty value.",
+      });
+    }
+    if (options.some((existing) => existing.id === id)) {
+      return yield* new ThreadUsageError({
+        detail: `--option ${id} is given more than once.`,
       });
     }
     options.push({ id, value: value === "true" ? true : value === "false" ? false : value });

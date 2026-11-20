@@ -948,78 +948,80 @@ describe("thread outbox recovery rollback", () => {
     }),
   );
 
-  it("reopens a rejected MadoHomu branch draft from Unsent after a restart", async () => {
-    const queued: QueuedThreadMessage = {
-      ...queuedMessage({ messageId: "madohomu-branch-restore", text: "new task text" }),
-      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
-      creation: {
-        projectId: ProjectId.make("madohomu-project"),
-        workspaceMode: "local",
+  it.effect("reopens a rejected MadoHomu branch draft from Unsent after a restart", () =>
+    Effect.gen(function* () {
+      const queued: QueuedThreadMessage = {
+        ...queuedMessage({ messageId: "madohomu-branch-restore", text: "new task text" }),
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+        creation: {
+          projectId: ProjectId.make("madohomu-project"),
+          workspaceMode: "local",
+          branch: "feature",
+          worktreePath: "/worktrees/feature",
+          madohomu: true,
+        },
+      };
+      const message = decodeQueuedThreadMessage(
+        JSON.parse(JSON.stringify(encodeQueuedThreadMessage(queued))),
+      );
+      expect(message).toEqual(queued);
+      yield* Effect.promise(() => harness.manager.enqueue(message));
+      expect(yield* restoreRejectedQueuedMessage(message, "rejected by server")).toBe("restored");
+      expect(remainingMessages()).toEqual([]);
+      composerDrafts.setComposerDraftText(
+        `${message.environmentId}:${message.threadId}`,
+        "Keep my setup edits",
+      );
+      yield* Effect.promise(() => recoverFailedThreadDraft(message));
+
+      appAtomRegistry.set(composerDrafts.composerDraftsAtom, {});
+      composerDrafts.resetComposerDraftsLoadState();
+      yield* Effect.promise(() => composerDrafts.waitForComposerDraftsLoaded());
+      const [unsent] = buildPendingNewTasks({
+        queuedMessages: [],
+        drafts: appAtomRegistry.get(composerDrafts.composerDraftsAtom),
+        sendGate: {
+          connectedEnvironmentIds: new Set(),
+          operableEnvironmentIds: new Set(),
+          shellStatuses: new Map(),
+          retryingMessageIds: {},
+        },
+      });
+      if (unsent?.kind !== "draft") throw new Error("Expected the recovered draft in Unsent");
+      expect(unsent.draft.text).toBe("new task text\n\nKeep my setup edits");
+      expect(unsent.draft.workspaceSelection).toMatchObject({
         branch: "feature",
         worktreePath: "/worktrees/feature",
+      });
+      expect(unsent.draft.project).toMatchObject({
+        environmentId: queued.environmentId,
+        projectId: queued.creation!.projectId,
         madohomu: true,
-      },
-    };
-    const message = decodeQueuedThreadMessage(
-      JSON.parse(JSON.stringify(encodeQueuedThreadMessage(queued))),
-    );
-    expect(message).toEqual(queued);
-    await harness.manager.enqueue(message);
-    await expect(
-      Effect.runPromise(restoreRejectedQueuedMessage(message, "rejected by server")),
-    ).resolves.toBe("restored");
-    expect(remainingMessages()).toEqual([]);
-    composerDrafts.setComposerDraftText(
-      `${message.environmentId}:${message.threadId}`,
-      "Keep my setup edits",
-    );
-    await recoverFailedThreadDraft(message);
-
-    appAtomRegistry.set(composerDrafts.composerDraftsAtom, {});
-    composerDrafts.resetComposerDraftsLoadState();
-    await composerDrafts.waitForComposerDraftsLoaded();
-    const [unsent] = buildPendingNewTasks({
-      queuedMessages: [],
-      drafts: appAtomRegistry.get(composerDrafts.composerDraftsAtom),
-      sendGate: {
-        connectedEnvironmentIds: new Set(),
-        operableEnvironmentIds: new Set(),
-        shellStatuses: new Map(),
-        retryingMessageIds: {},
-      },
-    });
-    if (unsent?.kind !== "draft") throw new Error("Expected the recovered draft in Unsent");
-    expect(unsent.draft.text).toBe("new task text\n\nKeep my setup edits");
-    expect(unsent.draft.workspaceSelection).toMatchObject({
-      branch: "feature",
-      worktreePath: "/worktrees/feature",
-    });
-    expect(unsent.draft.project).toMatchObject({
-      environmentId: queued.environmentId,
-      projectId: queued.creation!.projectId,
-      madohomu: true,
-    });
-    const other = { environmentId: EnvironmentId.make("other"), projectId: unsent.projectId };
-    await expect(composerDrafts.retargetSavedNewTaskDraft(unsent.draftKey, other)).resolves.toBe(
-      "locked",
-    );
-    expect(composerDrafts.getComposerDraftSnapshot(unsent.draftKey).project).toEqual(
-      unsent.draft.project,
-    );
-    expect(
-      resolveRouteDraft({
-        flow: INITIAL_NEW_TASK_FLOW_STATE,
-        routeDraftId: unsent.draftKey,
-        draftsLoaded: true,
-        stamp: unsent.draft.project,
-        projects: [{ environmentId: other.environmentId, id: other.projectId }],
-        stampedEnvironmentLoading: false,
-      }),
-    ).toMatchObject({
-      kind: "open",
-      flow: { environmentId: queued.environmentId, draftKey: unsent.draftKey },
-    });
-  });
+      });
+      const other = { environmentId: EnvironmentId.make("other"), projectId: unsent.projectId };
+      expect(
+        yield* Effect.promise(() =>
+          composerDrafts.retargetSavedNewTaskDraft(unsent.draftKey, other),
+        ),
+      ).toBe("locked");
+      expect(composerDrafts.getComposerDraftSnapshot(unsent.draftKey).project).toEqual(
+        unsent.draft.project,
+      );
+      expect(
+        resolveRouteDraft({
+          flow: INITIAL_NEW_TASK_FLOW_STATE,
+          routeDraftId: unsent.draftKey,
+          draftsLoaded: true,
+          stamp: unsent.draft.project,
+          projects: [{ environmentId: other.environmentId, id: other.projectId }],
+          stampedEnvironmentLoading: false,
+        }),
+      ).toMatchObject({
+        kind: "open",
+        flow: { environmentId: queued.environmentId, draftKey: unsent.draftKey },
+      });
+    }),
+  );
 
   it.effect("keeps the draft unchanged when a standalone goal command is rejected", () =>
     Effect.gen(function* () {

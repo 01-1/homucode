@@ -175,7 +175,7 @@ vi.mock("./use-composer-drafts", async () => {
     setFreshSessionPending: vi.fn(),
     undoComposerDraftMerge: vi.fn(),
     updateComposerDraftSettings: vi.fn(),
-    waitForComposerDraftsLoaded: vi.fn(),
+    waitForComposerDraftsLoaded: vi.fn(async () => {}),
   };
 });
 

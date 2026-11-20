@@ -5924,8 +5924,15 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         attemptId,
         text: "Run the slow build.",
         attachments: [],
+        runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          ...CLAUDE_TEST_RUNTIME_POLICY,
+          runtimeMode: "approval-required",
+        }),
       });
-      yield* harness.runtime.startTurn(input);
+      yield* harness.runtime.startTurn({
+        ...input,
+        appThread: { ...input.appThread, runtimeMode: "approval-required" },
+      });
       const steer = (id: string) =>
         harness.runtime.steerTurn({
           threadId: harness.threadId,
@@ -6018,10 +6025,17 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         ),
       ).pipe(Effect.forkScoped);
       const first = yield* Effect.raceFirst(
-        Queue.take(harness.runtimeRequestReceipts).pipe(Effect.as("request")),
-        Fiber.join(decision).pipe(Effect.map((result) => result?.behavior)),
+        Queue.take(harness.runtimeRequestReceipts),
+        Fiber.join(decision),
       );
-      assert.notEqual(first, "deny");
+      if (!("runtimeRequest" in first)) {
+        throw new Error(`Expected a tool approval request for the steer, got ${first.behavior}.`);
+      }
+      yield* harness.runtime.respondToRuntimeRequest({
+        requestId: first.runtimeRequest.id,
+        decision: "accept",
+      });
+      assert.equal((yield* Fiber.join(decision)).behavior, "allow");
       yield* harness.offerAndWait(
         makeAssistantTextFrame({
           uuid: "00000000-0000-4000-8000-000000002397",
@@ -15104,6 +15118,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             taskId: taskB,
             description: "work on B",
             kind: "command",
+            awaited: true,
             nativeItemId: "toolu-roster-b",
           },
         ]);
