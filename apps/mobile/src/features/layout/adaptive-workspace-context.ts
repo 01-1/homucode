@@ -41,6 +41,7 @@ export interface AdaptiveWorkspaceActions {
 /** Changes only with the window (size, fold, hinge), never with a pane toggle or the keyboard. */
 interface AdaptiveWorkspaceLayoutValue extends AdaptiveWorkspaceActions {
   readonly layout: Layout;
+  readonly hasNavigationRail: boolean;
   readonly nativeInspectorWidth: number;
   /** Android split: the width a workspace page (Usage) opens at; null without columns. */
   readonly workspacePageWidth?: number | null;
@@ -76,6 +77,7 @@ const compactFileInspector = deriveFileInspectorPaneLayout({
 });
 export const AdaptiveWorkspaceContext = createContext<AdaptiveWorkspaceLayoutValue>({
   layout: compactLayout,
+  hasNavigationRail: false,
   startNewTask: () => undefined,
   registerWorkspaceInspector: () => () => undefined,
   setPrimarySidebarSearchQuery: () => undefined,

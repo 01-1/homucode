@@ -943,8 +943,14 @@ function AdaptiveWorkspaceLayoutContent(
       setNativeInspectorWidthFraction(inspectorWidthFor(width / viewportWidth) / viewportWidth),
   });
   const contextValue = useMemo(
-    () => ({ ...actions, layout, nativeInspectorWidth, workspacePageWidth }),
-    [actions, layout, nativeInspectorWidth, workspacePageWidth],
+    () => ({
+      ...actions,
+      layout,
+      hasNavigationRail: shouldRenderNavigationRail,
+      nativeInspectorWidth,
+      workspacePageWidth,
+    }),
+    [actions, layout, shouldRenderNavigationRail, nativeInspectorWidth, workspacePageWidth],
   );
   const sidebarToggleable = layout.usesSplitView && !primarySidebarPinned && !workspacePage;
   const paneState = useMemo(

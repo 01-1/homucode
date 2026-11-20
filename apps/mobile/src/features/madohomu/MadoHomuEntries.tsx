@@ -2,6 +2,7 @@ import { View } from "react-native";
 
 import { ListActionRow } from "../../components/ui/ListActionRow";
 import { rootNavigationRef } from "../../lib/rootNavigation";
+import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import { useMadoHomuDestination } from "./useMadoHomuDestination";
 
 export function useMadoHomuEnvironments() {
@@ -18,8 +19,9 @@ export function openMadoHomu(environmentId: string) {
 }
 
 export function MadoHomuEntries() {
+  const { hasNavigationRail } = useAdaptiveWorkspaceLayout();
   const enabled = useMadoHomuEnvironments();
-  if (enabled.length === 0) return null;
+  if (hasNavigationRail || enabled.length === 0) return null;
   return (
     <View className="px-5">
       {enabled.map((environment) => (
