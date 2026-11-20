@@ -409,7 +409,10 @@ it("saves one set of choices to several servers, sending an offline server's whe
     label: "o",
     connection: { phase: "disconnected" },
     serverConfig: {
-      settings: { ...DEFAULT_SERVER_SETTINGS, featureOffersSeen: [] as string[] },
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        featureOffersSeen: mocks.settings.featureOffersSeen.filter((id) => id !== "status-line"),
+      },
       environment: mocks.descriptor,
     },
   };
@@ -438,6 +441,8 @@ it("saves one set of choices to several servers, sending an offline server's whe
   await screen.click("main");
   await screen.click("o");
   expect(pressed()).toEqual(["main", "o", "pbox"]);
+  expect(screen.container.textContent).toContain("Status line");
+  expect(screen.container.textContent).toContain("o (when online)");
   await screen.click("Next");
   expect(screen.container.textContent).toContain("Build controls");
   await screen.click("Save");

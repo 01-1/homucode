@@ -122,18 +122,17 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
     ? (preferences?.featureOffersDrafts?.[fallbackId] ??
       (draft?.environmentId === fallbackId ? draft : undefined))
     : undefined;
+  // In the order chosen; the first stays primary while others connect or drop.
   const environmentIds = (
     chosenEnvironmentIds ??
     fallbackDraft?.environmentIds ??
     (fallbackId ? [fallbackId] : [])
-  ).filter((id) => targets.some((target) => target.environment.environmentId === id));
-  const chosenTargets = targets.filter((target) =>
-    environmentIds.includes(target.environment.environmentId),
-  );
+  ).flatMap((id) => {
+    const match = targets.find((target) => target.environment.environmentId === id);
+    return match ? [match.environment.environmentId] : [];
+  });
   const target =
-    chosenTargets.find((target) => target.environment.connection.phase === "connected") ??
-    chosenTargets[0] ??
-    fallback;
+    targets.find((target) => target.environment.environmentId === environmentIds[0]) ?? fallback;
   usePendingFeatureOfferSaves(targets, writable, preferences?.featureOffersPendingSaves);
   return active &&
     preferences !== null &&
@@ -145,9 +144,9 @@ export function FeatureOffersSheet({ active }: { readonly active: boolean }) {
       environmentId={target.environment.environmentId}
       support={target.support}
       targets={targets}
-      environmentIds={(chosenTargets.length > 0 ? chosenTargets : [target]).map(
-        ({ environment }) => environment.environmentId,
-      )}
+      environmentIds={
+        environmentIds.length > 0 ? environmentIds : [target.environment.environmentId]
+      }
       onEnvironmentsChange={setChosenEnvironmentIds}
       onDismiss={(until) => setDismissedUntil(until ? Date.parse(until) : Infinity)}
     />
@@ -220,11 +219,23 @@ function EnvironmentFeatureOffers({
       ? preferences.featureOffersDraft
       : undefined);
   const settings = config?.settings ?? DEFAULT_SERVER_SETTINGS;
-  const unseen = unseenFeatureOffers(settings, "mobile", preferences.featureOffersSeen).filter(
-    (offer) => !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
-  );
   const selectedTargets = targets.filter((target) =>
     environmentIds.includes(target.environment.environmentId),
+  );
+  const unseenIds = new Set(
+    [
+      settings,
+      ...selectedTargets.flatMap(({ environment }) =>
+        environment.serverConfig ? [environment.serverConfig.settings] : [],
+      ),
+    ].flatMap((entry) =>
+      unseenFeatureOffers(entry, "mobile", preferences.featureOffersSeen).map((offer) => offer.id),
+    ),
+  );
+  const unseen = FEATURE_OFFERS.filter(
+    (offer) =>
+      unseenIds.has(offer.id) &&
+      !(offer.id === "settings-sync" && preferences.featureOffersSeen?.includes(offer.id)),
   );
   const primaryConnected = selectedTargets.some(
     (target) =>
@@ -495,11 +506,7 @@ function EnvironmentFeatureOffers({
       ? environmentIds.filter((entry) => entry !== id)
       : [...environmentIds, id];
     if (next.length === 0) return;
-    const nextTargets = targets.filter((target) => next.includes(target.environment.environmentId));
-    const primary = (
-      nextTargets.find((target) => target.environment.connection.phase === "connected") ??
-      nextTargets[0]
-    )?.environment.environmentId;
+    const primary = next[0];
     if (primary && primary !== environmentId) {
       const carried = {
         environmentId: primary,
