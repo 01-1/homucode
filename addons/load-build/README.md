@@ -8,7 +8,7 @@ returns failure twice.
 t3-load-build <staged-file> <sha256> <wake-message-file> [--detach] [--live PATH] [--settle SECONDS]
 ```
 
-On AppImage installs, enable **Show Building T3 settings** in **Settings → HomuCode**
+On AppImage installs, enable **Show Building T3 settings** in **Settings → HomuCode → Building Homu**
 and use **Building T3** to load a build.
 `T3_BUILD_FOLDER` selects the folder whose newest AppImage the loader starts; the app
 passes its configured AppImage folder. Without this variable, it

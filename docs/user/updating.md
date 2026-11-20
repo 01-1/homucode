@@ -12,7 +12,7 @@ Builds you package yourself need a rebuild unless you configured an update feed.
 The upstream release channels, standalone CLI releases, and app-store updates described below
 do not supply HomuCode's fork features.
 
-For an AppImage staged to load on the next start, **Settings → HomuCode** shows the staged
+For an AppImage staged to load on the next start, **Settings → HomuCode → Building Homu** shows the staged
 build. When the **Building Homu** page is enabled, look there.
 **Undo** disables that AppImage so the preceding staged build loads instead; the notice offers **Redo**.
 
@@ -58,7 +58,7 @@ provider updates once none of that provider's threads on that machine have run
 for five minutes, so a busy Codex thread does not hold back a Claude update.
 Each version is tried once per start, so a failed update waits for you.
 
-It is on by default. Turn it off for a machine under **Settings → HomuCode →
+It is on by default. Turn it off for a machine under **Settings → HomuCode → Agent behavior →
 Extra features → Update when agents are idle**.
 
 ## Switch between Stable and Nightly
@@ -220,7 +220,7 @@ update queued for the next suitable moment.
 
 ## Build a development version
 
-Enable **Show Building Homu settings** in **Settings → HomuCode**. On mobile, open **Building Homu** there.
+Enable **Show Building Homu settings** in **Settings → HomuCode → Building Homu**. On mobile, open **Building Homu** there.
 Choose the server's T3 Code checkout, boat CLI, machine type and output folder. Enable cloud
 builds or Android APK builds, choose a committed ref (default `origin/main`), and confirm the
 build. The boat CLI must be installed and signed in on that server. Status reports the result
@@ -234,4 +234,4 @@ On AppImage installs, enable loading builds, choose a staged AppImage and its SH
 and confirm loading. T3 restarts and automatically rolls back if it fails to return. Set the
 AppImage folder to control which folder the loader launches from. The running and next builds
 are shown there; Undo excludes the newest build from the next launch, and Redo restores it.
-On desktop, Undo is available in **Settings → HomuCode** while Building Homu is hidden.
+On desktop, Undo is available in **Settings → HomuCode → Building Homu** while Building Homu is hidden.
