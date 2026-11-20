@@ -84,7 +84,7 @@ it("excludes structured context chips without joining text across them", () => {
     ),
   ).toEqual([
     "option",
-    " + x",
+    "  + x",
     "+ quoted",
     "+ code\n",
     "+ quoted code\n",

@@ -109,7 +109,6 @@ interface TextTree {
   readonly properties?: ChatMarkdownImageProperties & {
     readonly href?: unknown;
     readonly dataInlineCode?: unknown;
-    readonly dataLeadingWhitespace?: unknown;
   };
   readonly children?: ReadonlyArray<TextTree>;
 }
@@ -237,18 +236,8 @@ function markdownThreadFindText(
       node.tagName === "code" || node.tagName === "a"
         ? false
         : inlineSkills || node.tagName === "p" || node.tagName === "li";
-    const children = node.children ?? [];
-    for (const [index, child] of children.entries()) {
-      if (
-        userMessage &&
-        child.type === "text" &&
-        child.value === "\n" &&
-        children[index - 1]?.tagName === "br" &&
-        children[index + 1]?.properties?.dataLeadingWhitespace !== undefined
-      )
-        continue;
+    for (const child of node.children ?? [])
       visit(child, inPre || node.tagName === "pre", renderSkills);
-    }
     if (block) flush();
   };
   visit(tree);
