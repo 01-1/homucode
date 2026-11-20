@@ -6,6 +6,8 @@ import {
   unseenFeatureOffers,
   featureOfferPages,
   getHomuSetupSupport,
+  getHomuSettingUnavailableReason,
+  supportsHomuSettingsSync,
 } from "./featureOffers.ts";
 
 it("marks every displayed offer seen while applying only opt-ins and preserving future offers", () => {
@@ -123,3 +125,58 @@ it("uses the tagged legacy HomuCode support and honors explicit capability denia
   expect(denied.supportedFeatureIds.has("building-t3")).toBe(false);
   expect(denied.supportedFeatureIds.has("background-git")).toBe(true);
 });
+
+it("reports managed settings and Connect policy per offer while keeping local choices available", () => {
+  const environment = {
+    serverVersion: "0.1.10",
+    capabilities: { repositoryIdentity: true, homuSetup: true, buildTools: true, statusLine: true },
+  };
+  const permissions = {
+    managedPolicy: {
+      organization: "Example Corp",
+      lockedSettings: [
+        "quickModelSelection.model",
+        "bareStopWaitEnabled",
+        "featureOffersSeen",
+        "deviceNames",
+      ],
+      limits: { connect: false },
+    },
+  };
+  const support = getHomuSetupSupport(environment, permissions);
+  expect(support.unavailableFeatureReasons.get("quick-model")).toBe(
+    "Example Corp manages this setting.",
+  );
+  expect(support.supportedFeatureIds.has("bare-stop-wait")).toBe(false);
+  expect(support.unavailableFeatureReasons.get("connect-long-sessions")).toBe(
+    "Example Corp's policy does not allow T3 Connect.",
+  );
+  expect(support.featureOffersSeenUnavailableReason).toBe("Example Corp manages this setting.");
+  expect(support.supportedFeatureIds.has("settings-sync")).toBe(true);
+  expect(support.supportedFeatureIds.has("building-t3")).toBe(true);
+  expect(getHomuSettingUnavailableReason(environment, "deviceNames", permissions)).toBe(
+    "Example Corp manages this setting.",
+  );
+});
+
+it.each([
+  ["0.1.10", undefined, false],
+  ["0.1.10-homu.2", undefined, false],
+  ["0.1.10-homu.3", undefined, true],
+  ["0.1.10-homu.98", false, false],
+  ["0.1.10-homu.99", undefined, false],
+  ["0.1.10-homu.99", true, true],
+])(
+  "checks settings sync server support for %s with homuSetup %s",
+  (serverVersion, homuSetup, supported) => {
+    expect(
+      supportsHomuSettingsSync({
+        serverVersion,
+        capabilities: {
+          repositoryIdentity: true,
+          ...(homuSetup === undefined ? {} : { homuSetup }),
+        },
+      }),
+    ).toBe(supported);
+  },
+);

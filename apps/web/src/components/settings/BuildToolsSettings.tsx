@@ -50,8 +50,9 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
   };
   const patch = (patch: Parameters<typeof update>[0]["input"]["patch"]) =>
     void update({ environmentId, input: { patch } });
+  const actionsDisabled = !canRun || Boolean(query.error);
   const busy = state?.phase === "running";
-  if (reason || query.error) return <p role="status">{reason ?? query.error}</p>;
+  if (reason) return <p role="status">{reason}</p>;
   return (
     <div className="grid gap-6">
       {!canRun ? <p>This connection cannot run build tools.</p> : null}
@@ -126,14 +127,14 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         />
         <div className="flex gap-2">
           <Button
-            disabled={!settings.cloudBuildEnabled || !canRun || busy}
+            disabled={!settings.cloudBuildEnabled || actionsDisabled || busy}
             onClick={() => setConfirmation("cloud-build")}
           >
             Build AppImage
           </Button>
           <Button
             variant="outline"
-            disabled={!settings.cloudBuildEnabled || !canRun || busy || !testFile.trim()}
+            disabled={!settings.cloudBuildEnabled || actionsDisabled || busy || !testFile.trim()}
             onClick={() => setConfirmation("cloud-test")}
           >
             Run focused tests
@@ -153,7 +154,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           }
         />
         <Button
-          disabled={!settings.androidBuildEnabled || !canRun || busy}
+          disabled={!settings.androidBuildEnabled || actionsDisabled || busy}
           onClick={() => setConfirmation("android")}
         >
           Build Android APK
@@ -164,7 +165,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           control={
             <Checkbox
               checked={Boolean(state?.lanUrl)}
-              disabled={!canRun || (!settings.androidBuildEnabled && !state?.lanUrl)}
+              disabled={actionsDisabled || (!settings.androidBuildEnabled && !state?.lanUrl)}
               onCheckedChange={(value) => action(value ? "serve" : "stop-serving")}
             />
           }
@@ -208,7 +209,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         />
         <Button
           disabled={
-            !canRun ||
+            actionsDisabled ||
             !settings.loadBuildEnabled ||
             !state?.appImageAvailable ||
             busy ||
@@ -229,6 +230,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
           </p>
           <div className="flex gap-2">
             <Button
+              disabled={actionsDisabled}
               onClick={() => {
                 action(confirmation);
                 setConfirmation(null);
@@ -243,7 +245,7 @@ export function BuildToolsSetup({ environmentId }: { readonly environmentId: Env
         </div>
       ) : null}
       <div role="status" className="grid gap-2 text-sm">
-        <p>{state?.message ?? "Loading build tool status…"}</p>
+        <p>{query.error ?? state?.message ?? "Loading build tool status…"}</p>
         {state?.artifactPath ? <p className="break-all">{state.artifactPath}</p> : null}
         {state?.output ? (
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{state.output}</pre>

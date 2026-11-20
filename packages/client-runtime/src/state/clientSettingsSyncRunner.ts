@@ -26,13 +26,14 @@ export interface ClientSettingsSyncTarget {
  * Every connected server whose config has loaded. A disconnected server's config is only a cache,
  * and without a config the default revision 0 would read as an empty server.
  */
-export function settingsSyncTargets(
+export function settingsSyncTargets<Config extends Pick<ServerConfig, "settings">>(
   connected: ReadonlyArray<EnvironmentId>,
-  configs: ReadonlyMap<EnvironmentId, Pick<ServerConfig, "settings">>,
+  configs: ReadonlyMap<EnvironmentId, Config>,
+  canSync?: (environmentId: EnvironmentId, config: Config) => boolean,
 ): ReadonlyArray<ClientSettingsSyncTarget> {
   return connected.flatMap((environmentId) => {
     const config = configs.get(environmentId);
-    return config === undefined
+    return config === undefined || canSync?.(environmentId, config) === false
       ? []
       : [{ environmentId, remote: config.settings.syncedClientSettings }];
   });

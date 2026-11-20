@@ -3,8 +3,6 @@ import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 import { TextInput, View } from "react-native";
 import {
-  isManagedSettingPath,
-  managedCapabilityDenial,
   type BuildToolsRequest,
   type EnvironmentId,
   type ModelSelection,
@@ -14,6 +12,8 @@ import {
 import {
   FEATURE_OFFERS,
   getBuildToolsUnavailableReason,
+  getHomuSettingUnavailableReason,
+  getHomuSetupSupport,
 } from "@t3tools/client-runtime/feature-offers";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
@@ -94,10 +94,19 @@ export function MobileThisDeviceName() {
 }
 
 export function MobileDeviceNames({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const settings = useEnvironmentServerConfig(environmentId)?.settings;
-  const query = useEnvironmentQuery(serverEnvironment.messageDevices({ environmentId, input: {} }));
+  const config = useEnvironmentServerConfig(environmentId);
+  const settings = config?.settings;
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
+  const unsupported = getHomuSettingUnavailableReason(config?.environment, "deviceNames");
+  const reason = getHomuSettingUnavailableReason(config?.environment, "deviceNames", {
+    canWrite,
+    managedPolicy: config?.managedPolicy,
+  });
+  const query = useEnvironmentQuery(
+    unsupported ? null : serverEnvironment.messageDevices({ environmentId, input: {} }),
+  );
+  if (unsupported) return <Text className="text-foreground-muted">{unsupported}</Text>;
   const devices = [...(query.data?.devices ?? []), ...(query.data?.rules ?? [])].filter(
     (device, index, all) =>
       all.findIndex(
@@ -108,6 +117,7 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
   );
   return (
     <View className="gap-3">
+      {reason ? <Text className="text-foreground-muted">{reason}</Text> : null}
       {devices.map((entry) => {
         const {
           deviceName: _name,
@@ -128,13 +138,14 @@ export function MobileDeviceNames({ environmentId }: { readonly environmentId: E
             </Text>
             <TextInput
               accessibilityLabel="Device name"
-              editable={canWrite}
+              editable={!reason}
               key={rule?.name ?? ""}
               defaultValue={rule?.name ?? _name ?? _ruleName ?? ""}
               placeholder="Name this device"
               maxLength={40}
               className="rounded-lg border border-border p-3 text-foreground"
               onEndEditing={(event) => {
+                if (reason) return;
                 const name = event.nativeEvent.text.trim();
                 const others = settings?.deviceNames.filter((entry) => entry !== rule) ?? [];
                 void update({
@@ -167,7 +178,10 @@ export function MobileBuildVisibility({
   const config = useEnvironmentServerConfig(environmentId);
   const update = useAtomCommand(serverEnvironment.updateSettings);
   const canWrite = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
-  const reason = getBuildToolsUnavailableReason(config?.environment, canWrite);
+  const reason = getHomuSettingUnavailableReason(config?.environment, "buildToolsSettingsVisible", {
+    canWrite,
+    managedPolicy: config?.managedPolicy,
+  });
   return (
     <SettingsSwitchRow
       label="Show Building Homu settings"
@@ -176,22 +190,24 @@ export function MobileBuildVisibility({
       }
       disabled={reason !== null}
       value={config?.settings.buildToolsSettingsVisible ?? false}
-      onValueChange={(buildToolsSettingsVisible) =>
-        void update({ environmentId, input: { patch: { buildToolsSettingsVisible } } })
-      }
+      onValueChange={(buildToolsSettingsVisible) => {
+        if (reason) return;
+        void update({ environmentId, input: { patch: { buildToolsSettingsVisible } } });
+      }}
     />
   );
 }
 
 function MobileQuickModelSetting({
   config,
-  disabled,
+  reason,
   onChange,
 }: {
   readonly config: ServerConfig;
-  readonly disabled: boolean;
+  readonly reason: string | null;
   readonly onChange: (selection: ModelSelection | null) => void;
 }) {
+  const disabled = reason !== null;
   const [open, setOpen] = useState(false);
   const selection = config.settings.quickModelSelection;
   const models = buildModelOptions(config, selection, undefined, null);
@@ -201,6 +217,7 @@ function MobileQuickModelSetting({
       model.selection.model === selection.model,
   );
   const choose = (next: ModelSelection | null) => {
+    if (disabled) return;
     onChange(next);
     setOpen(false);
   };
@@ -209,7 +226,7 @@ function MobileQuickModelSetting({
     <>
       <ListActionRow
         label="Quick model"
-        description="Choose the model used by /q on web and desktop."
+        description={reason ?? "Choose the model used by /q on web and desktop."}
         detail={selected?.label ?? selection?.model ?? "Off"}
         disabled={disabled}
         onPress={() => setOpen(true)}
@@ -263,13 +280,22 @@ export function MobileExtraSettings({
   );
   if (!config) return null;
   const { settings } = config;
-  const isManaged = (key: keyof ServerSettings) =>
-    config.managedPolicy !== undefined && isManagedSettingPath(config.managedPolicy, key);
+  const permissions = {
+    canWrite,
+    canWriteAccess: canSetLongSessions,
+    managedPolicy: config.managedPolicy,
+  };
+  const { unavailableFeatureReasons } = getHomuSetupSupport(config.environment, permissions);
+  const workAssistanceReason = getHomuSettingUnavailableReason(
+    config.environment,
+    "workAssistanceTarget",
+    permissions,
+  );
   return (
     <SettingsSection title={`Extra features · ${label}`}>
       <MobileQuickModelSetting
         config={config}
-        disabled={!canWrite || isManaged("quickModelSelection")}
+        reason={unavailableFeatureReasons.get("quick-model") ?? null}
         onChange={(quickModelSelection) =>
           void update({ environmentId, input: { patch: { quickModelSelection } } })
         }
@@ -279,6 +305,7 @@ export function MobileExtraSettings({
           offer.page === 2 && offer.setting && offer.setting !== "buildToolsSettingsVisible",
       ).map((offer) => {
         const key = offer.setting!;
+        const reason = unavailableFeatureReasons.get(offer.id);
         return (
           <SettingsSwitchRow
             key={offer.id}
@@ -290,19 +317,15 @@ export function MobileExtraSettings({
                   : offer.title
             }
             subtitle={
-              key === "claudeHoldBackgroundCommands"
+              reason ??
+              (key === "claudeHoldBackgroundCommands"
                 ? "Keep Claude threads working until background commands finish or the agent releases them."
-                : offer.description
+                : offer.description)
             }
             value={settings[key] === (offer.enabledValue ?? true)}
-            disabled={
-              isManaged(key) ||
-              (key === "connectDeviceLongSessions"
-                ? !canSetLongSessions ||
-                  managedCapabilityDenial(config.managedPolicy, "connect") !== undefined
-                : !canWrite)
-            }
-            onValueChange={(checked) =>
+            disabled={reason !== undefined}
+            onValueChange={(checked) => {
+              if (reason) return;
               void update({
                 environmentId,
                 input: {
@@ -310,8 +333,8 @@ export function MobileExtraSettings({
                     [key]: checked ? (offer.enabledValue ?? true) : !(offer.enabledValue ?? true),
                   },
                 },
-              })
-            }
+              });
+            }}
           />
         );
       })}
@@ -331,20 +354,26 @@ export function MobileExtraSettings({
         Untested. Lets a signed-in local t3 client add a helper agent to a thread in this project
         that has worked nonstop for over 5 minutes. HomuCode never starts helpers by itself.
       </Text>
-      <MobileWorkAssistancePicker
-        environmentId={environmentId}
-        value={settings.workAssistanceTarget}
-        onChange={(workAssistanceTarget) => {
-          if (canWrite) void update({ environmentId, input: { patch: { workAssistanceTarget } } });
-        }}
-      />
-      <Button
-        label="Turn off work assistance"
-        disabled={!canWrite || !settings.workAssistanceTarget}
-        onPress={() =>
-          void update({ environmentId, input: { patch: { workAssistanceTarget: null } } })
-        }
-      />
+      {workAssistanceReason ? (
+        <Text className="text-foreground-muted">{workAssistanceReason}</Text>
+      ) : (
+        <>
+          <MobileWorkAssistancePicker
+            environmentId={environmentId}
+            value={settings.workAssistanceTarget}
+            onChange={(workAssistanceTarget) =>
+              void update({ environmentId, input: { patch: { workAssistanceTarget } } })
+            }
+          />
+          <Button
+            label="Turn off work assistance"
+            disabled={!settings.workAssistanceTarget}
+            onPress={() =>
+              void update({ environmentId, input: { patch: { workAssistanceTarget: null } } })
+            }
+          />
+        </>
+      )}
       <Text>Device names</Text>
       <MobileDeviceNames environmentId={environmentId} />
     </SettingsSection>
@@ -398,9 +427,9 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
       },
     });
   };
+  const actionsDisabled = !canRun || Boolean(query.error);
   const busy = query.data?.phase === "running";
   if (reason) return <Text>{reason}</Text>;
-  if (query.error) return <Text selectable>{query.error}</Text>;
   if (!settings) return null;
   return (
     <View className="gap-4">
@@ -438,11 +467,15 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
       </Text>
       <Button
         label="Undo a staged build"
-        disabled={!canRun || !query.data?.stagedBuilds?.previous}
+        disabled={actionsDisabled || !query.data?.stagedBuilds?.previous}
         onPress={() => action("undo")}
       />
       {query.data?.undoneAs ? (
-        <Button label="Redo staged build" disabled={!canRun} onPress={() => action("redo")} />
+        <Button
+          label="Redo staged build"
+          disabled={actionsDisabled}
+          onPress={() => action("redo")}
+        />
       ) : null}
       {(
         [
@@ -479,24 +512,24 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
       />
       <Button
         label="Build AppImage"
-        disabled={!canRun || busy || !settings.cloudBuildEnabled}
+        disabled={actionsDisabled || busy || !settings.cloudBuildEnabled}
         onPress={() => setConfirm("cloud-build")}
       />
       <Button
         label="Run focused tests"
-        disabled={!canRun || busy || !settings.cloudBuildEnabled || !testFile.trim()}
+        disabled={actionsDisabled || busy || !settings.cloudBuildEnabled || !testFile.trim()}
         onPress={() => setConfirm("cloud-test")}
       />
       <Button
         label="Build Android APK"
-        disabled={!canRun || busy || !settings.androidBuildEnabled}
+        disabled={actionsDisabled || busy || !settings.androidBuildEnabled}
         onPress={() => setConfirm("android")}
       />
       <SettingsSwitchRow
         label="Serve APKs on LAN"
         subtitle="Serve ~/app/mobile on port 8767 until switched off or the server stops."
         value={Boolean(query.data?.lanUrl)}
-        disabled={!canRun || (!settings.androidBuildEnabled && !query.data?.lanUrl)}
+        disabled={actionsDisabled || (!settings.androidBuildEnabled && !query.data?.lanUrl)}
         onValueChange={(value) => action(value ? "serve" : "stop-serving")}
       />
       {query.data?.lanUrl ? (
@@ -522,7 +555,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
       <Button
         label="Load staged build"
         disabled={
-          !canRun ||
+          actionsDisabled ||
           busy ||
           !settings.loadBuildEnabled ||
           !query.data?.appImageAvailable ||
@@ -540,6 +573,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
           </Text>
           <Button
             label="Confirm"
+            disabled={actionsDisabled}
             onPress={() => {
               action(confirm);
               setConfirm(null);
@@ -548,7 +582,7 @@ export function MobileBuildTools({ environmentId }: { readonly environmentId: En
           <Button label="Cancel" tone="text" onPress={() => setConfirm(null)} />
         </View>
       ) : null}
-      <Text selectable>{query.data?.message ?? "Loading status…"}</Text>
+      <Text selectable>{query.error ?? query.data?.message ?? "Loading status…"}</Text>
       {query.data?.artifactPath ? <Text selectable>{query.data.artifactPath}</Text> : null}
       {query.data?.output ? <Text selectable>{query.data.output}</Text> : null}
     </View>

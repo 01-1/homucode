@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as Layer from "effect/Layer";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { vi } from "vite-plus/test";
@@ -66,6 +67,50 @@ function makePreferencesState(
 }
 
 describe("mobile preferences state", () => {
+  it.effect.each([false, true])(
+    "keeps optimistic snoozes out of persisted preferences until storage settles (failure %s)",
+    (fail) =>
+      Effect.gen(function* () {
+        const stored = { featureOffersSnoozedUntil: "2026-11-19T12:00:00.000Z" };
+        const patch = { featureOffersSnoozedUntil: "2026-11-20T12:00:00.000Z" };
+        const started = yield* Deferred.make<void>();
+        const saved = yield* Deferred.make<
+          MobilePreferences.Preferences,
+          MobilePreferences.MobilePreferencesSaveError
+        >();
+        const state = makePreferencesState({
+          load: Effect.succeed(stored),
+          savePatch: () =>
+            Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(saved))),
+        });
+        const registry = AtomRegistry.make();
+        const unmount = registry.mount(state.preferencesAtom);
+        yield* AtomRegistry.getResult(registry, state.preferencesAtom, { suspendOnWaiting: true });
+        registry.set(state.updatePreferencesAtom, patch);
+        yield* Deferred.await(started);
+        expect(yield* AtomRegistry.getResult(registry, state.preferencesAtom)).toEqual(patch);
+        expect(yield* AtomRegistry.getResult(registry, state.persistedPreferencesAtom)).toEqual(
+          stored,
+        );
+        if (fail)
+          yield* Deferred.fail(
+            saved,
+            new MobilePreferences.MobilePreferencesSaveError({ cause: "disk full" }),
+          );
+        else yield* Deferred.succeed(saved, patch);
+        yield* AtomRegistry.getResult(registry, state.updatePreferencesAtom, {
+          suspendOnWaiting: true,
+        }).pipe(Effect.exit);
+        expect(yield* AtomRegistry.getResult(registry, state.persistedPreferencesAtom)).toEqual(
+          fail ? stored : patch,
+        );
+        expect(yield* AtomRegistry.getResult(registry, state.preferencesAtom)).toEqual(
+          fail ? stored : patch,
+        );
+        unmount();
+        registry.dispose();
+      }),
+  );
   it.effect("preserves an optimistic patch when the initial load finishes later", () =>
     Effect.gen(function* () {
       const pendingLoad = deferred<MobilePreferences.Preferences>();

@@ -207,6 +207,8 @@ function environment(environmentId: string, label: string) {
         serverVersion: "0.1.10",
         platform: { os: "linux" },
         capabilities: {
+          homuSetup: true,
+          statusLine: true,
           buildTools: true,
           projectSettingsOverrides: true,
           threadAutoSettlement: true,
@@ -281,6 +283,7 @@ describe("SettingsServerControlsRouteScreen", () => {
   it("subscribes to build status only on environments that support it", () => {
     const upstream = environment("upstream", "Upstream");
     upstream.serverConfig.environment.capabilities.buildTools = false;
+    upstream.serverConfig.environment.capabilities.homuSetup = false;
     mocks.targets.push(upstream);
     act(() => root.render(<SettingsHomuCodeRouteScreen />));
 
