@@ -6028,14 +6028,14 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         Queue.take(harness.runtimeRequestReceipts),
         Fiber.join(decision),
       );
-      if (!("runtimeRequest" in first)) {
-        throw new Error(`Expected a tool approval request for the steer, got ${first.behavior}.`);
+      if (first === null || !("runtimeRequest" in first)) {
+        throw new Error(`Expected a tool approval request for the steer, got ${first?.behavior}.`);
       }
       yield* harness.runtime.respondToRuntimeRequest({
         requestId: first.runtimeRequest.id,
         decision: "accept",
       });
-      assert.equal((yield* Fiber.join(decision)).behavior, "allow");
+      assert.equal((yield* Fiber.join(decision))?.behavior, "allow");
       yield* harness.offerAndWait(
         makeAssistantTextFrame({
           uuid: "00000000-0000-4000-8000-000000002397",
