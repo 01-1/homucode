@@ -26,9 +26,10 @@ export const isChangeRequestCloseCommand = (command: string) =>
     (definition) => definition.changeRequestCloseCommand?.test(command) === true,
   );
 
-// A quoted or bare shell word. An unclosed quote, as Codex's `/bin/zsh -lc "gh pr merge 19"`
-// leaves after the match, runs to the end.
-const SHELL_WORD = /"((?:\\[\s\S]|[^"\\])*)"?|'([^']*)'?|((?:\\[\s\S]|[^\s"'\\])+)/gu;
+// A shell word may join quoted and unquoted parts, as in --body="-R".
+const SHELL_TOKEN = /[;&|\n]|(?:\\[^\n]|"(?:\\[\s\S]|[^"\\])*"?|'[^']*'?|[^\s"'\\;&|])+/gu;
+const SHELL_QUOTING = /"((?:\\[\s\S]|[^"\\])*)"?|'([^']*)'?|\\([\s\S])/gu;
+const SHELL_SEPARATOR = /^[;&|\n]$/u;
 // A whole word that names one, so a number inside `--subject "Release 20"` does not.
 const NAMED_CHANGE_REQUEST = /^(?:--?[\w-]+=)?#?(\d+)$|^\S*\/(?:pulls?|merge_requests)\/(\d+)\/?$/u;
 
@@ -41,7 +42,6 @@ const CLOSE_OPTION_VALUES = new Set([
   "-t",
   "--match-head-commit",
   "--message",
-  "-m",
   "--comment",
 ]);
 
@@ -56,11 +56,16 @@ export function changeRequestsClosedBy(command: string): {
     if (close === undefined) continue;
     for (const match of command.matchAll(new RegExp(close.source, `${close.flags}g`))) {
       // Start at the match: Azure's pattern runs through --id to --status.
-      const args = command.slice(match.index).split(/[;&|\n]/u, 1)[0] ?? "";
+      const args = command.slice(match.index);
       const words: string[] = [];
-      for (const [, double, single, bare] of args.matchAll(SHELL_WORD)) {
-        if (bare !== undefined && /^#(?!\d+$)/u.test(bare)) break;
-        words.push(double ?? single ?? bare ?? "");
+      for (const [raw] of args.matchAll(SHELL_TOKEN)) {
+        if (SHELL_SEPARATOR.test(raw) || /^#(?!\d+$)/u.test(raw)) break;
+        words.push(
+          raw.replace(
+            SHELL_QUOTING,
+            (_, double, single, escaped) => double ?? single ?? escaped ?? "",
+          ),
+        );
       }
       let target: number | string | undefined;
       let repositorySpecified = false;
