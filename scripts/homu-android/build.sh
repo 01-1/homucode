@@ -25,8 +25,8 @@ if git -C "$repo" grep -q T3CODE_EAS_PROJECT_ID "$rev" -- apps/mobile/app.config
     exit 1
   fi
   eas_config=("$eas_owner" "$eas_project")
-elif [[ $MODE == ota ]]; then
-  printf 'This ref predates EAS updates. Build an APK instead.\n' >&2
+elif [[ $MODE == ota || $PUBLISH_OTA == 1 ]]; then
+  printf 'This ref has no fork EAS configuration. Use an OTA-capable ref for releases or PUBLISH_OTA=0 for an APK-only build.\n' >&2
   exit 1
 fi
 suffix=$VARIANT; [[ $MODE == apk ]] || suffix+=-$MODE
@@ -94,6 +94,6 @@ cp app.apk "$apk_output"
 chmod --reference=app.apk "$apk_output"
 mv -f -- "$apk_output" "$OUT/$name"
 echo "DONE $OUT/$name (runtime $runtime)"
-if [[ $PUBLISH_OTA == 1 && ${#eas_config[@]} -gt 0 ]]; then
+if [[ $PUBLISH_OTA == 1 ]]; then
   publish_ota || { printf 'Signed APK saved at %s/%s.\n' "$OUT" "$name" >&2; exit 1; }
 fi

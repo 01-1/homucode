@@ -96,7 +96,10 @@ PUBLISH_OTA=0 run build-only "$scripts/build.sh" HEAD
 if updates_enabled=false run updates-disabled "$scripts/build.sh" HEAD; then exit 1; fi
 [[ $(<"$trace") == $'apk\ntoken\ndelete' ]]
 grep -q 'Android OTA requires enabled updates' "$temp/updates-disabled-work/${revision:0:10}-development"/run.*/ota.log
-run pre-eas "$scripts/build.sh" pre-eas
+if run pre-eas-release "$scripts/build.sh" pre-eas; then exit 1; fi
+[[ ! -e $trace ]]
+grep -q 'This ref has no fork EAS configuration' "$temp/pre-eas-release.log"
+PUBLISH_OTA=0 run pre-eas "$scripts/build.sh" pre-eas
 [[ $(<"$trace") == $'apk\ndelete' ]]
 if run pre-eas-ota "$scripts/ota.sh" pre-eas; then exit 1; fi
 [[ ! -e "$trace" ]]
