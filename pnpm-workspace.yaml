@@ -295,6 +295,9 @@ packageExtensions:
   expo-notifications@*: *expo-modules-core
   expo-splash-screen@*: *expo-modules-core
   expo-updates@*: *expo-modules-core
+  expo-widgets@58.0.27:
+    dependencies:
+      "@expo/spawn-async": 1.8.0
   # Optional integrations the app itself provides; as optional peers they share
   # the app's copy.
   "@legendapp/list@*":
