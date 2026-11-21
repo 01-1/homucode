@@ -12743,5 +12743,7 @@
   "3adca48d927d36f5": "Mostrar todos os modelos nos detalhes da linha de status",
   "b2cc17d714a15e76": "Mostrar todos os modelos nos detalhes da linha de status",
   "5416694ec0dacb31": "Mostra os modelos e os limites de uso informados para o ambiente desta conversa ao passar o ponteiro sobre a linha de status ou colocá-la em foco.",
-  "e9b5f7b109cc1ded": "Mostra os modelos e os limites de uso informados para o ambiente desta conversa ao passar o ponteiro sobre a linha de status ou colocá-la em foco."
+  "e9b5f7b109cc1ded": "Mostra os modelos e os limites de uso informados para o ambiente desta conversa ao passar o ponteiro sobre a linha de status ou colocá-la em foco.",
+  "f311f5a32d4dec24": "Modelo disponível em {duration}",
+  "82c863fc509de21d": "Verificando a disponibilidade do modelo"
 }

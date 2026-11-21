@@ -12740,5 +12740,7 @@
   "3adca48d927d36f5": "Mostrar todos los modelos en los detalles de la línea de estado",
   "b2cc17d714a15e76": "Mostrar todos los modelos en los detalles de la línea de estado",
   "5416694ec0dacb31": "Muestra los modelos y los límites de uso disponibles para el entorno de este hilo al pasar el puntero sobre la línea de estado o al enfocarla.",
-  "e9b5f7b109cc1ded": "Muestra los modelos y los límites de uso disponibles para el entorno de este hilo al pasar el puntero sobre la línea de estado o al enfocarla."
+  "e9b5f7b109cc1ded": "Muestra los modelos y los límites de uso disponibles para el entorno de este hilo al pasar el puntero sobre la línea de estado o al enfocarla.",
+  "f311f5a32d4dec24": "Modelo disponible en {duration}",
+  "82c863fc509de21d": "Comprobando la disponibilidad del modelo"
 }

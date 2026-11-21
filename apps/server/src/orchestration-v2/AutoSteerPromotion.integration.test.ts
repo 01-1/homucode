@@ -19,6 +19,8 @@ import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
+import { ModelCooldowns } from "../usage/UsageLimitSources.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Events from "./EventSink.ts";
@@ -390,4 +392,122 @@ it.effect("queues a new steer behind held steers, and never auto-steers a /compa
     assert.equal(runOf("compact")?.status, "queued");
     assert.isUndefined(runOf("compact")?.autoSteer);
   }).pipe(Effect.provide(layer)),
+);
+
+it.effect.each(["start_immediately", "defer_start", "cancel"] as const)(
+  "waits for a cooling model without losing another queued send (%s)",
+  (scenario) => {
+    const dispatchType = scenario === "defer_start" ? scenario : "start_immediately";
+    const retryAt = "2026-11-21T05:01:00.000Z";
+    const extendedRetryAt = "2026-11-21T05:02:00.000Z";
+    let freshDeadline: string | null | undefined;
+    const coolingLayer = layer.pipe(
+      Layer.provide(
+        Layer.succeed(ModelCooldowns, {
+          retryAt: (selection, now) =>
+            Effect.succeed(
+              selection.model === modelSelection.model && now < Date.parse(retryAt)
+                ? retryAt
+                : null,
+            ),
+          recheck: () => Effect.sync(() => freshDeadline),
+        }),
+      ),
+    );
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-11-21T05:00:00.000Z"));
+      const engine = yield* Orchestrator.OrchestratorV2;
+      const store = yield* Projections.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:model-cooldown");
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create:model-cooldown"),
+        threadId,
+        projectId: ProjectId.make("project:model-cooldown"),
+        title: "Model cooldown",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* engine.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("send:model-cooldown"),
+        threadId,
+        messageId: MessageId.make("message:model-cooldown"),
+        text: "Send after reset",
+        attachments: [],
+        dispatchMode: { type: dispatchType },
+        createdBy: "user",
+        creationSource: "web",
+      });
+      const readRuns = Effect.map(
+        store.getThreadProjection(threadId),
+        (projection) => projection.runs,
+      );
+      if (dispatchType === "defer_start") {
+        const preparing = yield* readRuns;
+        assert.equal(preparing[0]?.status, "preparing");
+        yield* engine.dispatch({
+          type: "prepared-run.release",
+          commandId: CommandId.make("release:model-cooldown"),
+          threadId,
+          runId: preparing[0]!.id,
+        });
+      }
+      yield* engine.resumeModelCooldownQueue;
+      const queued = yield* readRuns;
+      assert.lengthOf(queued, 1);
+      assert.equal(queued[0]?.status, "queued");
+      assert.equal(queued[0]?.modelCooldownUntil, retryAt);
+      if (scenario === "cancel") {
+        const nextMessageId = MessageId.make("message:model-cooldown:next");
+        yield* engine.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("send:model-cooldown:next"),
+          threadId,
+          messageId: nextMessageId,
+          text: "Send on another model",
+          attachments: [],
+          modelSelection: { ...modelSelection, model: "gpt-5.4" },
+          dispatchMode: { type: "start_immediately" },
+          createdBy: "user",
+          creationSource: "web",
+        });
+        assert.equal(
+          (yield* readRuns).find((run) => run.userMessageId === nextMessageId)?.status,
+          "queued",
+        );
+        yield* engine.dispatch({
+          type: "queued-run.cancel",
+          commandId: CommandId.make("cancel:model-cooldown"),
+          threadId,
+          runId: queued[0]!.id,
+        });
+        assert.equal(
+          (yield* readRuns).find((run) => run.userMessageId === nextMessageId)?.status,
+          "starting",
+        );
+        return;
+      }
+      yield* TestClock.adjust("1 minute");
+      yield* engine.resumeModelCooldownQueue;
+      assert.equal((yield* readRuns)[0]?.status, "queued");
+      freshDeadline = extendedRetryAt;
+      yield* engine.resumeModelCooldownQueue;
+      assert.equal((yield* readRuns)[0]?.modelCooldownUntil, extendedRetryAt);
+      yield* TestClock.adjust("1 minute");
+      freshDeadline = null;
+      yield* engine.resumeModelCooldownQueue;
+      yield* engine.resumeModelCooldownQueue;
+      const started = yield* readRuns;
+      assert.lengthOf(started, 1);
+      assert.equal(started[0]?.id, queued[0]?.id);
+      assert.equal(started[0]?.status, "starting");
+      assert.isUndefined(started[0]?.modelCooldownUntil);
+    }).pipe(Effect.provide(coolingLayer));
+  },
 );

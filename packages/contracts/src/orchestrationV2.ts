@@ -840,6 +840,7 @@ export const OrchestrationV2Run = Schema.Struct({
   status: OrchestrationV2RunStatus,
   queuePosition: Schema.optional(Schema.NullOr(PositiveInt)),
   queueHeld: Schema.optional(Schema.Boolean),
+  modelCooldownUntil: Schema.optional(IsoDateTime),
   memoryWaiting: Schema.optional(Schema.Boolean),
   /** Sent to steer (auto/steer) but queued only because the turn could not take a steer yet. */
   autoSteer: Schema.optional(Schema.Boolean),

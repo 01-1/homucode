@@ -287,6 +287,19 @@ export function usageLimitSourceAtEndpoint(
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+export function codexModelCooldownAt(
+  sources: UsageLimitSourceSnapshots,
+  endpoint: string | undefined,
+  model: string,
+): string | null {
+  if (endpoint === undefined) return null;
+  return (
+    usageLimitSourceAtEndpoint(sources, endpoint)?.codexModelCooldowns?.find(
+      (entry) => entry.model === model.toLowerCase(),
+    )?.retryAt ?? null
+  );
+}
+
 export interface LimitAccount {
   readonly key: string;
   readonly driver: ServerProvider["driver"];

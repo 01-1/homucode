@@ -2,11 +2,40 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 
-import { makeCliproxyApi } from "./cliproxyApi.ts";
+import { cliproxyCodexCooldowns, makeCliproxyApi } from "./cliproxyApi.ts";
+
+it("reports the first Codex account ready to serve a model", () => {
+  const now = Date.parse("2026-11-21T05:00:00Z");
+  const cooldown = (scope: string, minutes: number) => ({
+    scope,
+    model_key: scope === "model" ? "gpt-6.2-sol" : undefined,
+    reason: "transient_rate_limit",
+    retry_at: DateTime.formatIso(DateTime.makeUnsafe(now + minutes * 60_000)),
+  });
+  const first = { provider: "codex", cooldowns: [cooldown("model", 2), cooldown("credential", 6)] };
+  const second = { provider: "codex", cooldowns: [cooldown("model", 4)] };
+  expect(cliproxyCodexCooldowns([first, second], now)).toEqual([
+    { model: "gpt-6.2-sol", retryAt: "2026-11-21T05:04:00.000Z" },
+  ]);
+  expect(cliproxyCodexCooldowns([first, { ...second, cooldowns: [] }], now)).toEqual([]);
+  expect(cliproxyCodexCooldowns([first, { ...second, cooldowns: undefined }], now)).toBeUndefined();
+  const unsupported = {
+    provider: "codex",
+    cooldowns: [
+      cooldown("credential", 1),
+      { ...cooldown("model", 60), reason: "model_not_supported" },
+    ],
+  };
+  expect(cliproxyCodexCooldowns([unsupported], now)).toEqual([]);
+  expect(cliproxyCodexCooldowns([unsupported, second], now)).toEqual([
+    { model: "gpt-6.2-sol", retryAt: "2026-11-21T05:04:00.000Z" },
+  ]);
+});
 
 const config = {
   kind: "cliproxy",
@@ -47,18 +76,27 @@ type RequestBody = typeof RequestBody.Type;
 const decodeRequest = Schema.decodeUnknownSync(Schema.fromJsonString(RequestBody));
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
+type FixtureAccounts = Array<{
+  id: string;
+  auth_index: string;
+  provider: string;
+  email?: string;
+  disabled?: boolean;
+  status?: string;
+  status_message?: string;
+  unavailable?: boolean;
+  requires_sign_in?: boolean;
+  access_token_expires_at?: string;
+  cooldowns?: Array<{ scope: string; model_key?: string; reason: string; retry_at: string }>;
+  project_id?: string;
+  quota?: { observed_at?: string; signals?: Record<string, string> };
+  id_token?: { chatgpt_account_id: string; plan_type?: string; chatgpt_plan_type?: string };
+}>;
+
 function fixture(
   options: {
-    accounts?: Array<{
-      id: string;
-      auth_index: string;
-      provider: string;
-      email?: string;
-      disabled?: boolean;
-      project_id?: string;
-      quota?: { observed_at?: string; signals?: Record<string, string> };
-      id_token?: { chatgpt_account_id: string; plan_type?: string; chatgpt_plan_type?: string };
-    }>;
+    accounts?: FixtureAccounts;
+    detailedAccounts?: FixtureAccounts;
     upstream?: (request: RequestBody) => { status: number; body: unknown };
     cooldownStatus?: number;
   } = {},
@@ -73,6 +111,13 @@ function fixture(
           ? decodeRequest(new TextDecoder().decode(request.body.body))
           : undefined;
       requests.push({ path, ...(body ? { body } : {}) });
+      if (path.endsWith("/credentials"))
+        return HttpClientResponse.fromWeb(
+          request,
+          options.detailedAccounts === undefined
+            ? new Response(null, { status: 404 })
+            : Response.json({ files: options.detailedAccounts }),
+        );
       if (path.endsWith("/auth-files"))
         return HttpClientResponse.fromWeb(
           request,
@@ -199,6 +244,66 @@ describe("CLIProxyAPI hub failures", () => {
 });
 
 describe("CLIProxyAPI built-in management API", () => {
+  it.effect("only clears Codex cooldowns with an observed ready account", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-11-21T05:00:00Z"));
+      const model = "gpt-6.2-sol";
+      const retryAt = "2026-11-21T05:04:00.000Z";
+      const timer = {
+        scope: "model",
+        model_key: model,
+        reason: "transient_rate_limit",
+        retry_at: retryAt,
+      };
+      const ready = { ...accounts[0]!, status: "active", unavailable: false, cooldowns: [] };
+      const cooling = {
+        ...accounts[1]!,
+        status: "error",
+        unavailable: true,
+        cooldowns: [timer],
+      };
+      const blocked = {
+        ...ready,
+        status: "error",
+        status_message: "token expired",
+        unavailable: true,
+      };
+      const malformed = { ...ready, cooldowns: [{ ...timer, retry_at: "invalid" }] };
+      const recheck = (files: FixtureAccounts, detailedAccounts?: FixtureAccounts) =>
+        fixture({ accounts: files, ...(detailedAccounts && { detailedAccounts }) }).api.pipe(
+          Effect.flatMap((api) => api.recheckCodexCooldown(config, model)),
+        );
+      expect(yield* recheck([blocked])).toBeUndefined();
+      expect(yield* recheck([malformed])).toBeUndefined();
+      expect(
+        yield* recheck([{ ...ready, cooldowns: [{ ...timer, retry_at: "2026-02-30T00:00:00Z" }] }]),
+      ).toBeUndefined();
+      expect(
+        yield* recheck([
+          { ...ready, cooldowns: [{ ...timer, retry_at: "2026-11-21T05:00:00.000000001Z" }] },
+        ]),
+      ).toBe("2026-11-21T05:00:00.001Z");
+      expect(yield* recheck([blocked, cooling])).toBe(retryAt);
+      expect(yield* recheck([{ ...blocked, cooldowns: [timer] }])).toBeUndefined();
+      expect(yield* recheck([ready, cooling])).toBeNull();
+      const unrelated = {
+        ...cooling,
+        ...accounts[0]!,
+        status_message: "quota exhausted",
+        cooldowns: [{ ...timer, model_key: "other" }],
+      };
+      const expired = {
+        ...unrelated,
+        requires_sign_in: false,
+        access_token_expires_at: "2026-11-21T04:00:00Z",
+      };
+      expect(yield* recheck([unrelated, cooling])).toBe(retryAt);
+      expect(yield* recheck([unrelated, cooling], [expired, cooling])).toBe(retryAt);
+      expect(yield* recheck([unrelated], [expired])).toBeUndefined();
+      expect(yield* recheck([unrelated], [{ ...unrelated, requires_sign_in: false }])).toBeNull();
+    }),
+  );
+
   it.effect(
     "reads both accounts and their earliest unexpired credits without plugin endpoints",
     () =>

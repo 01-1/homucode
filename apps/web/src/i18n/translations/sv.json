@@ -12752,5 +12752,7 @@
   "3adca48d927d36f5": "Visa alla modeller i statusradens detaljer",
   "b2cc17d714a15e76": "Visa alla modeller i statusradens detaljer",
   "5416694ec0dacb31": "Visar modeller och rapporterade användningsgränser för den här trådens miljö när du håller pekaren över statusraden eller fokuserar på den.",
-  "e9b5f7b109cc1ded": "Visar modeller och rapporterade användningsgränser för den här trådens miljö när du håller pekaren över statusraden eller fokuserar på den."
+  "e9b5f7b109cc1ded": "Visar modeller och rapporterade användningsgränser för den här trådens miljö när du håller pekaren över statusraden eller fokuserar på den.",
+  "f311f5a32d4dec24": "Modellens väntetid: {duration}",
+  "82c863fc509de21d": "Kontrollerar om modellen är tillgänglig"
 }

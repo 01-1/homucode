@@ -4,6 +4,7 @@ import {
   type ProviderConsumeResetCreditResult,
   type UsageLimitSourceAccount,
   type UsageLimitSourceConfig,
+  type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
@@ -45,6 +46,23 @@ const AuthFile = Schema.Struct({
   provider: Schema.String,
   email: Schema.optional(Schema.String),
   disabled: Schema.optional(Schema.Boolean),
+  status: Schema.optional(Schema.String),
+  status_message: Schema.optional(Schema.String),
+  unavailable: Schema.optional(Schema.Boolean),
+  requires_sign_in: Schema.optional(Schema.Boolean),
+  access_token_expires_at: Schema.optional(Schema.String),
+  cooldowns: Schema.optional(
+    Schema.NullOr(
+      Schema.Array(
+        Schema.Struct({
+          scope: Schema.String,
+          model_key: Schema.optional(Schema.String),
+          reason: Schema.String,
+          retry_at: Schema.String,
+        }),
+      ),
+    ),
+  ),
   project_id: Schema.optional(Schema.String),
   quota: Schema.optional(Schema.Unknown),
   id_token: Schema.optional(
@@ -56,6 +74,117 @@ const AuthFile = Schema.Struct({
   ),
 });
 const AuthFiles = Schema.Struct({ files: Schema.Array(AuthFile) });
+
+type CodexCooldowns = NonNullable<UsageLimitSourceSnapshot["codexModelCooldowns"]>;
+const timedRoutingReasons = new Set([
+  "quota",
+  "credential_quota",
+  "transient_error",
+  "transient_rate_limit",
+]);
+
+type CooldownAccount = Pick<
+  AuthFile,
+  | "provider"
+  | "disabled"
+  | "status"
+  | "status_message"
+  | "unavailable"
+  | "requires_sign_in"
+  | "access_token_expires_at"
+  | "cooldowns"
+>;
+
+function codexCooldownAccounts(files: ReadonlyArray<CooldownAccount>) {
+  const accounts = files.filter(
+    (file) => file.provider === "codex" && !file.disabled && file.status !== "disabled",
+  );
+  return accounts.length === 0 || accounts.some((account) => account.cooldowns == null)
+    ? undefined
+    : accounts;
+}
+
+function parseCooldownRetryAt(value: string): number {
+  // CLIProxyAPI serializes its UTC time.Time with up to nine fractional digits.
+  const utc = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(value);
+  if (!utc) return NaN;
+  const fraction = (utc[2] ?? "").padEnd(3, "0");
+  const normalized = `${utc[1]}.${fraction.slice(0, 3)}Z`;
+  const millis = Date.parse(normalized);
+  if (!Number.isFinite(millis) || DateTime.formatIso(DateTime.makeUnsafe(millis)) !== normalized)
+    return NaN;
+  return millis + (/[1-9]/.test(fraction.slice(3)) ? 1 : 0);
+}
+
+function codexCooldownForModel(
+  accounts: ReadonlyArray<CooldownAccount>,
+  model: string,
+  now: number,
+): string | null | undefined {
+  const deadlines = accounts.flatMap((account) => {
+    const statusMessage = account.status_message?.trim().toLowerCase();
+    if (
+      account.requires_sign_in ||
+      statusMessage === "token expired" ||
+      statusMessage?.startsWith("unauthorized") ||
+      (account.access_token_expires_at !== undefined &&
+        !(Date.parse(account.access_token_expires_at) > now))
+    ) {
+      return [];
+    }
+    const timers = (account.cooldowns ?? []).map((entry) => ({
+      entry,
+      retryAt: parseCooldownRetryAt(entry.retry_at),
+    }));
+    // The aggregate flag can be set by other models. An unavailable account with
+    // no active timers has no observed recovery path.
+    if (account.unavailable && !timers.some(({ retryAt }) => retryAt > now)) return [];
+    let deadline = now;
+    for (const { entry, retryAt } of timers) {
+      if (
+        entry.scope !== "credential" &&
+        !(entry.scope === "model" && entry.model_key?.trim().toLowerCase() === model)
+      ) {
+        continue;
+      }
+      if (!Number.isFinite(retryAt)) return [];
+      if (retryAt <= now) continue;
+      if (!timedRoutingReasons.has(entry.reason)) return [];
+      deadline = Math.max(deadline, retryAt);
+    }
+    // The legacy response cannot tell whether the flag represents a failed
+    // credential or other models cooling. Only the detailed response can clear it.
+    if (deadline === now && account.unavailable && account.requires_sign_in === undefined)
+      return [];
+    return [deadline];
+  });
+  if (deadlines.length === 0) return undefined;
+  const retryAt = Math.min(...deadlines);
+  return retryAt > now ? DateTime.formatIso(DateTime.makeUnsafe(retryAt)) : null;
+}
+
+export function cliproxyCodexCooldowns(
+  files: ReadonlyArray<CooldownAccount>,
+  now: number,
+): CodexCooldowns | undefined {
+  const accounts = codexCooldownAccounts(files);
+  if (accounts === undefined) return undefined;
+  const models = new Set(
+    accounts.flatMap(({ cooldowns }) =>
+      (cooldowns ?? []).flatMap((entry) =>
+        entry.scope === "model" && timedRoutingReasons.has(entry.reason) && entry.model_key?.trim()
+          ? [entry.model_key.trim().toLowerCase()]
+          : [],
+      ),
+    ),
+  );
+  return Array.from(models)
+    .sort()
+    .flatMap((model) => {
+      const retryAt = codexCooldownForModel(accounts, model, now);
+      return retryAt == null ? [] : [{ model, retryAt }];
+    });
+}
 const ApiResponse = Schema.Struct({ status_code: Schema.Number, body: Schema.String });
 const CodexWindow = Schema.Struct({
   used_percent: Schema.Number,
@@ -377,13 +506,14 @@ export const makeCliproxyApi = Effect.gen(function* () {
     hub: CliproxyHub,
     path: string,
     body?: unknown,
+    version: "v0" | "v8" = "v0",
   ) {
     const url = yield* Effect.try({
       try: () => {
         const base = new URL(hub.url);
         // Users often paste the hub's web panel URL, which ends in management.html.
         base.pathname = base.pathname.replace(/(\/management\.html)?\/?$/i, "/");
-        return new URL(`v0/management/${path}`, base).toString();
+        return new URL(`${version}/management/${path}`, base).toString();
       },
       catch: () => new UsageLimitSourceError({ detail: "The hub URL is not valid." }),
     });
@@ -407,6 +537,23 @@ export const makeCliproxyApi = Effect.gen(function* () {
     const response = yield* management(hub, "auth-files");
     return (yield* decodeAuthFiles(response)).files;
   });
+
+  const cooldownAuthFiles = (hub: CliproxyHub, accounts: ReadonlyArray<AuthFile>) =>
+    // The v0 response omits OAuth expiry and sign-in state even when cooldowns
+    // are present. Resolve ambiguous accounts without changing quota probes.
+    accounts.some(
+      (account) =>
+        account.provider === "codex" &&
+        !account.disabled &&
+        account.unavailable &&
+        account.cooldowns?.length,
+    )
+      ? management(hub, "credentials", undefined, "v8").pipe(
+          Effect.flatMap(decodeAuthFiles),
+          Effect.map((response) => response.files),
+          Effect.orElseSucceed(() => accounts),
+        )
+      : Effect.succeed(accounts);
 
   const apiCall = Effect.fn("CliproxyApi.apiCall")(function* (
     hub: CliproxyHub,
@@ -453,9 +600,15 @@ export const makeCliproxyApi = Effect.gen(function* () {
     return { id: account.id, driver: provider.driver, ...reading };
   });
 
-  const readAccounts = Effect.fn("CliproxyApi.readAccounts")(function* (
+  const readSnapshot = Effect.fn("CliproxyApi.readSnapshot")(function* (
     hub: CliproxyHub,
-  ): Effect.fn.Return<ReadonlyArray<UsageLimitSourceAccount>, UsageLimitSourceError> {
+  ): Effect.fn.Return<
+    {
+      readonly accounts: ReadonlyArray<UsageLimitSourceAccount>;
+      readonly codexModelCooldowns: CodexCooldowns | undefined;
+    },
+    UsageLimitSourceError
+  > {
     const accounts = yield* authFiles(hub).pipe(
       Effect.mapError((error) =>
         isUsageLimitSourceError(error)
@@ -463,7 +616,8 @@ export const makeCliproxyApi = Effect.gen(function* () {
           : new UsageLimitSourceError({ detail: "The hub could not list accounts." }),
       ),
     );
-    const checkedAt = DateTime.formatIso(yield* DateTime.now);
+    const now = yield* DateTime.now;
+    const checkedAt = DateTime.formatIso(now);
     const reads = accounts.flatMap((account) => {
       if (account.disabled) return [];
       // Claude quota comes from headers recorded during Claude Code requests.
@@ -472,7 +626,35 @@ export const makeCliproxyApi = Effect.gen(function* () {
       const provider = HUB_PROVIDERS.get(account.provider);
       return provider ? [readAccount(hub, account, provider)] : [];
     });
-    return yield* Effect.all(reads, { concurrency: 4 });
+    return {
+      accounts: yield* Effect.all(reads, { concurrency: 4 }),
+      codexModelCooldowns: cliproxyCodexCooldowns(
+        yield* cooldownAuthFiles(hub, accounts),
+        DateTime.toEpochMillis(now),
+      ),
+    };
+  });
+
+  const readAccounts = (hub: CliproxyHub) =>
+    readSnapshot(hub).pipe(Effect.map((result) => result.accounts));
+  const readCodexCooldowns = Effect.fn("CliproxyApi.readCodexCooldowns")(function* (
+    hub: CliproxyHub,
+  ) {
+    const accounts = yield* cooldownAuthFiles(hub, yield* authFiles(hub));
+    return cliproxyCodexCooldowns(accounts, DateTime.toEpochMillis(yield* DateTime.now));
+  });
+
+  const recheckCodexCooldown = Effect.fn("CliproxyApi.recheckCodexCooldown")(function* (
+    hub: CliproxyHub,
+    model: string,
+  ) {
+    const accounts = codexCooldownAccounts(yield* cooldownAuthFiles(hub, yield* authFiles(hub)));
+    if (accounts === undefined) return undefined;
+    return codexCooldownForModel(
+      accounts,
+      model.trim().toLowerCase(),
+      DateTime.toEpochMillis(yield* DateTime.now),
+    );
   });
 
   const consume = Effect.fn("CliproxyApi.consume")(function* (
@@ -533,5 +715,5 @@ export const makeCliproxyApi = Effect.gen(function* () {
       ),
     );
   });
-  return { readAccounts, consume };
+  return { readAccounts, readSnapshot, readCodexCooldowns, recheckCodexCooldown, consume };
 });

@@ -58,6 +58,7 @@ import { GuestMessageName } from "./guestMessageStyle";
 import { TimelineRowTimestamp } from "./TimelineRowParts";
 import { FoldedMessageHeader, useScheduledTaskTitle } from "./TimelineUserMessageRow";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
+import { ModelCooldownCountdown } from "./ModelCooldownCountdown";
 
 /** Fresh sessions and one-turn models (`/q`) run as their own turn; they never steer in. */
 const startsOwnTurn = (run: {
@@ -168,6 +169,7 @@ export function QueuedRunsControl({
       runId: run.id,
       messageId: run.userMessageId,
       freshContext: startsOwnTurn(run),
+      modelCooldownUntil: run.modelCooldownUntil,
       serverIndex,
       text,
       // A guest's message keeps the guest's words; the owner can cancel it, not rewrite it.
@@ -190,6 +192,7 @@ export function QueuedRunsControl({
       runId: null,
       messageId: null,
       freshContext: false,
+      modelCooldownUntil: undefined,
       serverIndex: null,
       text: message.text,
       editable: true,
@@ -201,6 +204,8 @@ export function QueuedRunsControl({
   ];
 
   const sendQueuedMessage = async (queuedRunId: RunId) => {
+    if (queued.some(({ run }) => run.id === queuedRunId && run.modelCooldownUntil !== undefined))
+      return;
     const freshContext = queued.some(({ run }) => run.id === queuedRunId && startsOwnTurn(run));
     if (!canSendRun(freshContext) || steerInFlightRef.current) return;
     steerInFlightRef.current = true;
@@ -268,13 +273,20 @@ export function QueuedRunsControl({
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
       const next = queued[0];
-      if (!next || !canSendRun(startsOwnTurn(next.run))) return false;
+      if (
+        !next ||
+        next.run.modelCooldownUntil !== undefined ||
+        !canSendRun(startsOwnTurn(next.run))
+      )
+        return false;
       if (!repeat && busyRunId === null) void sendQueuedMessage(next.run.id);
       return true;
     },
     steerAll() {
       if (activeRun === null || workflow?.canPromoteToSteer !== true) return false;
-      const firstOwnTurn = queued.findIndex(({ run }) => startsOwnTurn(run));
+      const firstOwnTurn = queued.findIndex(
+        ({ run }) => startsOwnTurn(run) || run.modelCooldownUntil !== undefined,
+      );
       const steerable = (firstOwnTurn === -1 ? queued : queued.slice(0, firstOwnTurn)).map(
         ({ run }) => run.id,
       );
@@ -369,7 +381,11 @@ export function QueuedRunsControl({
                 onOpenThread={props.onOpenThread}
                 onImageExpand={props.onImageExpand}
               >
-                {canSendRun(item.freshContext) && !isEditing ? (
+                {item.modelCooldownUntil !== undefined ? (
+                  <span className="text-xs text-muted-foreground">
+                    <ModelCooldownCountdown retryAt={item.modelCooldownUntil} />
+                  </span>
+                ) : canSendRun(item.freshContext) && !isEditing ? (
                   <>
                     <Tooltip>
                       <TooltipTrigger render={<span className="flex shrink-0" />}>

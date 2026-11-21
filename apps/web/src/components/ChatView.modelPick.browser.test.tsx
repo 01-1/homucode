@@ -1,5 +1,5 @@
 import { createMemoryHistory } from "@tanstack/react-router";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId, UsageLimitSourceId } from "@t3tools/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import type * as Context from "effect/Context";
 import { expect, it, vi } from "vite-plus/test";
@@ -12,6 +12,7 @@ import "~/components/ChatView";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { getRouter } from "~/router";
 import {
+  CODEX_PROVIDER,
   ENVIRONMENT_ID,
   dispatchedCommands,
   installFakeEnvironment,
@@ -36,7 +37,7 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 }));
 
 // Its own file: the app's shell subscription outlives a test, and it must list this thread.
-it("a model picked for an existing thread reaches the server before any message is sent", async () => {
+it("applies picks before sending and lets a cooling model receive queued messages", async () => {
   const stored = {
     instanceId: ProviderInstanceId.make("codex"),
     model: "gpt-5.4",
@@ -47,7 +48,30 @@ it("a model picked for an existing thread reaches the server before any message 
     ...threadWithHistory("thread-model-alias", 1),
     modelSelection: { ...stored, model: "gpt-5-codex" },
   };
-  using _environment = installFakeEnvironment([thread, aliasThread], { acceptCommands: true });
+  const cooling = {
+    ...threadWithHistory("thread-model-cooldown", 1),
+    modelSelection: { ...stored, model: "gpt-6.2-sol" },
+  };
+  const endpoint = "http://127.0.0.1:8317";
+  const checkedAt = "2026-11-21T05:00:00.000Z";
+  const retryAt = "2026-11-21T05:02:00.000Z";
+  using _clock = { [Symbol.dispose]: () => vi.useRealTimers() };
+  vi.setSystemTime(Date.parse(checkedAt));
+  using _environment = installFakeEnvironment([thread, aliasThread, cooling], {
+    acceptCommands: true,
+    providers: [{ ...CODEX_PROVIDER, auth: { ...CODEX_PROVIDER.auth, endpoint } }],
+    usageLimitSources: [
+      {
+        id: UsageLimitSourceId.make("cooldown-hub"),
+        kind: "cliproxy",
+        label: "Cooldown hub",
+        endpoint,
+        checkedAt,
+        accounts: [],
+        codexModelCooldowns: [{ model: cooling.modelSelection.model, retryAt }],
+      },
+    ],
+  });
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
@@ -85,6 +109,25 @@ it("a model picked for an existing thread reaches the server before any message 
   await vi.waitFor(() =>
     expect(modelSets().at(-1)).toEqual(
       expect.objectContaining({ threadId: aliasThread.id, modelSelection: stored }),
+    ),
+  );
+
+  await userEvent.keyboard("{Escape}");
+  await router.navigate({ href: `/${ENVIRONMENT_ID}/${cooling.id}` });
+  await expect.element(page.getByText(/Model cooldown: .+/)).toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: /^gpt-6\.2-sol$/i }))
+    .toHaveAccessibleDescription(/Model cooldown: .+/);
+  await userEvent.click(page.getByTestId("composer-editor"));
+  await userEvent.keyboard("Send after cooldown{Enter}");
+  await vi.waitFor(() =>
+    expect(dispatchedCommands()).toContainEqual(
+      expect.objectContaining({
+        type: "message.dispatch",
+        threadId: cooling.id,
+        modelSelection: expect.objectContaining({ model: cooling.modelSelection.model }),
+        text: "Send after cooldown",
+      }),
     ),
   );
 });

@@ -226,6 +226,7 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ServerSettings from "../serverSettings.ts";
+import { ModelCooldowns } from "../usage/UsageLimitSources.ts";
 import { AgentMemory } from "@t3tools/shared/AgentScope";
 
 const isMessageQuestionAnswer = Schema.is(
@@ -412,6 +413,7 @@ export interface OrchestratorV2DispatchResult {
 
 export interface OrchestratorV2Shape {
   readonly resumeQueuedRuns: Effect.Effect<number, OrchestratorV2Error>;
+  readonly resumeModelCooldownQueue: Effect.Effect<number, OrchestratorV2Error>;
   readonly startQueuedFollowUp: (
     threadId: ThreadId,
     endedRunId: RunId,
@@ -1686,6 +1688,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const providerSessions = yield* ProviderSessionManagerV2;
   const providerSwitchService = yield* ProviderSwitchServiceV2;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const modelCooldowns = yield* ModelCooldowns;
   const agentMemory = yield* AgentMemory;
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
@@ -2597,6 +2600,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         modelSelection,
         providerInstanceId: modelSelection.instanceId,
       };
+      if (queuedRun.modelCooldownUntil !== undefined) {
+        const now = yield* DateTime.now;
+        const nowMs = DateTime.toEpochMillis(now);
+        if (Date.parse(queuedRun.modelCooldownUntil) > nowMs) return;
+        const retryAt = yield* modelCooldowns.recheck(modelSelection);
+        if (retryAt === undefined) return;
+        if (retryAt !== null) {
+          yield* writeSystemEvents([
+            {
+              type: "run.updated",
+              threadId,
+              runId: storedQueuedRun.id,
+              providerInstanceId: storedQueuedRun.providerInstanceId,
+              occurredAt: now,
+              payload: { ...storedQueuedRun, modelCooldownUntil: retryAt },
+            },
+          ]);
+          return;
+        }
+      }
       // A limited provider would fail and consume every waiting message.
       if (
         usageLimitHoldsQueue(
@@ -3114,6 +3137,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           : "automatic-queue";
       const startingRun: OrchestrationV2Run = {
         ...queuedRun,
+        modelCooldownUntil: undefined,
         providerThreadId: queuedProviderThread.id,
         ordinal,
         status: "starting",
@@ -3664,28 +3688,29 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
   });
 
-  const resumeQueuedRuns = Effect.gen(function* () {
-    const threadIds = yield* projectionStore.getRecoveryThreadIds("queued-runs");
-    let resumed = 0;
-    for (const threadId of threadIds) {
-      const resumedThread = yield* Effect.gen(function* () {
-        if (!(yield* projectionStore.canStartQueuedRun(threadId))) return false;
-        yield* threadDispatch.withLock(threadId, startNextQueuedRun(threadId));
-        return true;
-      }).pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning("Failed to resume queued V2 run after recovery", {
-            threadId,
-            cause,
-          }).pipe(Effect.as(false)),
-        ),
-      );
-      if (resumedThread) {
-        resumed += 1;
+  const resumeQueuedRuns = Effect.fn("Orchestrator.resumeQueuedRuns")(
+    function* (kind: "queued-runs" | "model-cooldown-queue") {
+      const threadIds = yield* projectionStore.getRecoveryThreadIds(kind);
+      let resumed = 0;
+      for (const threadId of threadIds) {
+        const resumedThread = yield* Effect.gen(function* () {
+          if (!(yield* projectionStore.canStartQueuedRun(threadId))) return false;
+          yield* threadDispatch.withLock(threadId, startNextQueuedRun(threadId));
+          return true;
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Failed to resume queued V2 run after recovery", {
+              threadId,
+              cause,
+            }).pipe(Effect.as(false)),
+          ),
+        );
+        if (resumedThread) {
+          resumed += 1;
+        }
       }
-    }
-    return resumed;
-  }).pipe(
+      return resumed;
+    },
     Effect.mapError(
       (cause) =>
         new OrchestratorDispatchError({
@@ -8148,6 +8173,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       dispatchMode = { type: "start_immediately" };
     }
     const freshContext = command.freshContext === true;
+    const modelCooldownUntil =
+      command.createdBy === "user" && dispatchMode.type !== "defer_start"
+        ? yield* modelCooldowns.retryAt(modelSelection, DateTime.toEpochMillis(yield* DateTime.now))
+        : null;
+    const cooldownQueued = projection.runs.some(
+      (run) =>
+        run.status === "queued" && run.modelCooldownUntil !== undefined && run.queueHeld !== true,
+    );
+    if (
+      modelCooldownUntil !== null ||
+      (cooldownQueued &&
+        (dispatchMode.type === "start_immediately" || dispatchMode.type === "steer_active"))
+    ) {
+      dispatchMode = { type: "queue_after_active" };
+    }
     // A fresh session, or a one-turn model, cannot join a turn that is already running.
     if (
       (freshContext || command.turnOnlyModelSelection === true) &&
@@ -8165,7 +8205,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     let queuedRunStop:
       | { readonly runId: RunId; readonly reason: string; readonly skipsHeldQueue?: true }
       | undefined;
-    if (goalCommand !== null) {
+    if (goalCommand !== null && modelCooldownUntil === null) {
       // A goal command never joins a running turn. One that starts or ends goal
       // work stops the run and goes first in the queue; the rest wait. A send
       // that asked to be queued (no delivery intent) only queues, and a run
@@ -8556,15 +8596,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       dispatchMode.type === "defer_start" ||
       dispatchMode.type === "start_immediately" ||
       dispatchMode.type === "queue_after_active";
-    const shouldQueue = queueBehindRun !== undefined && startsOrQueuesRun;
+    const shouldQueue =
+      (queueBehindRun !== undefined || modelCooldownUntil !== null || cooldownQueued) &&
+      startsOrQueuesRun;
     // An explicit pick queued ahead reaches the thread only when its run starts. A goal or
     // restart command that stops the active run goes first, so nothing queued applies before it.
     // Buffered provider wakes drain output their own provider already produced.
     const incomingMessage = { ...command, delegatedCompletion };
     if (
       shouldQueue &&
+      modelCooldownUntil === null &&
       // A steer whose run ended keeps the thread's selection, as it did before it queued.
-      queueBehindRun !== steerFollowUpSource &&
+      (steerFollowUpSource === undefined || queueBehindRun !== steerFollowUpSource) &&
       steerWhenReadyRunId === undefined &&
       command.modelSelection === undefined &&
       queuedRunStop === undefined &&
@@ -8611,9 +8654,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const queueProviderThread =
         activeProviderThread ??
         projection.providerThreads.find(
-          (candidate) => candidate.id === queueBehindRun.providerThreadId,
+          (candidate) => candidate.id === queueBehindRun?.providerThreadId,
         );
-      if (queueProviderThread === undefined) {
+      if (queueBehindRun !== undefined && queueProviderThread === undefined) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
           commandType: command.type,
@@ -8625,7 +8668,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const runId = idAllocator.derive.run({ threadId: command.threadId, ordinal });
       const targetProviderThread = freshContext
         ? undefined
-        : modelSelection.instanceId === queueProviderThread.providerInstanceId
+        : modelSelection.instanceId === queueProviderThread?.providerInstanceId
           ? queueProviderThread
           : rootProviderThreadsForProvider(projection, modelSelection.instanceId)[0];
       const queuedAdapter = yield* providerAdapters
@@ -8672,7 +8715,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const attemptId = idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 });
       const rootNodeId = idAllocator.derive.rootNode({ runId });
       const checkpointScope =
-        queueBehindRun.status === "preparing" || worktreeMissingRun !== undefined
+        queueBehindRun?.status === "preparing" || worktreeMissingRun !== undefined
           ? null
           : yield* runtimePolicy.resolve({ thread: projection.thread, modelSelection }).pipe(
               Effect.flatMap((resolvedRuntimePolicy) =>
@@ -8752,7 +8795,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         rootNodeId,
         activeAttemptId: attemptId,
         status: "queued",
-        ...(steerWhenReadyRunId === undefined ? {} : { steerWhenReadyRunId }),
+        ...(modelCooldownUntil === null ? {} : { modelCooldownUntil }),
+        ...(steerWhenReadyRunId === undefined || modelCooldownUntil !== null
+          ? {}
+          : { steerWhenReadyRunId }),
         // A restart cancels its run; nobody knows whether the provider read the steer, so a person decides.
         ...(worktreeMissingRun !== undefined ||
         stoppedRunHoldingFindings !== undefined ||
@@ -8766,6 +8812,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // A send that asked to steer but had to queue (compaction, turn not started yet)
         // is promoted to a steer by AutoSteerQueuedService once the turn can take it.
         ...((command.deliveryIntent === "auto" || command.deliveryIntent === "steer") &&
+        modelCooldownUntil === null &&
+        !cooldownQueued &&
         !isNativeMaintenanceCommand(command) &&
         command.notification === undefined &&
         command.delegatedCompletion === undefined &&
@@ -12671,6 +12719,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         cause: `Queued run ${command.queuedRunId} is not queued.`,
       });
     }
+    if (queuedRun.modelCooldownUntil !== undefined) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: "The message is queued to start when its model cooldown ends.",
+      });
+    }
     // Automatic selectors read outside this dispatch lock. Revalidate their snapshot
     // before cancelling/reassigning a queued message or interrupting compaction.
     if (String(command.commandId).startsWith("server:auto-steer:")) {
@@ -13324,6 +13379,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
       const now = yield* DateTime.now;
+      const retryAt = yield* modelCooldowns.retryAt(
+        state.run.modelSelection,
+        DateTime.toEpochMillis(now),
+      );
       const resolvedRuntimePolicy = yield* runtimePolicy
         .resolve({ thread: projection.thread, modelSelection: state.run.modelSelection })
         .pipe(mapDispatchError(command));
@@ -13384,17 +13443,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         nodeId: state.rootNode.id,
         providerInstanceId: state.run.providerInstanceId,
         occurredAt: now,
-        payload: { ...state.run, status: "starting" },
+        payload:
+          retryAt === null
+            ? { ...state.run, status: "starting" }
+            : { ...state.run, status: "queued", modelCooldownUntil: retryAt },
       });
-      yield* Ref.update(effects, (existing) => [
-        ...existing,
-        {
-          id: `effect:${command.commandId}:provider-turn.start:${state.run.id}`,
-          commandId: command.commandId,
-          threadId: command.threadId,
-          request: { type: "provider-turn.start", runId: state.run.id },
-        } satisfies PendingOrchestrationEffectV2,
-      ]);
+      if (retryAt === null)
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:${command.commandId}:provider-turn.start:${state.run.id}`,
+            commandId: command.commandId,
+            threadId: command.threadId,
+            request: { type: "provider-turn.start", runId: state.run.id },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
     },
   );
 
@@ -17219,6 +17282,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
     }
     if (
+      command.type === "queued-run.cancel" &&
+      committed.storedEvents.some(
+        ({ event }) =>
+          event.type === "run.updated" &&
+          event.payload.id === command.runId &&
+          event.payload.modelCooldownUntil !== undefined &&
+          event.payload.queueHeld !== true,
+      )
+    ) {
+      yield* mapDispatchError(command)(startNextQueuedRun(command.threadId));
+    }
+    if (
       command.type === "notification.delivery.accept" ||
       // A steer restart that settled a wake can reserve the next one for its siblings.
       ((command.type === "message.dispatch" ||
@@ -17895,7 +17970,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     new OrchestratorProjectionError({ threadId: ThreadId.make("thread:shell"), cause });
 
   return OrchestratorV2.of({
-    resumeQueuedRuns,
+    resumeQueuedRuns: resumeQueuedRuns("queued-runs"),
+    resumeModelCooldownQueue: resumeQueuedRuns("model-cooldown-queue"),
     startQueuedFollowUp: Effect.fn("OrchestratorV2.startQueuedFollowUp")(
       function (threadId, endedRunId) {
         return messageIntake
