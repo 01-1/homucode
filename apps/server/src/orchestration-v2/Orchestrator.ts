@@ -2975,6 +2975,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 toProviderThreadId: queuedProviderThread.id,
                 fromProviderInstanceId: latestHandoffRun.providerInstanceId,
                 toProviderInstanceId: queuedRun.providerInstanceId,
+                modelTransition: {
+                  source:
+                    providerTurnForRun(projection, latestHandoffRun)?.model ??
+                    latestHandoffRun.modelSelection.model,
+                  destination: queuedRun.modelSelection.model,
+                },
                 coveredRunOrdinals: {
                   from: coveredRuns[0]!.ordinal,
                   to: coveredRuns.at(-1)!.ordinal,
@@ -7280,6 +7286,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           toProviderThreadId: targetProviderThreadBase.id,
           fromProviderInstanceId: targetRun.providerInstanceId,
           toProviderInstanceId: input.modelSelection.instanceId,
+          ...(targetRun.providerInstanceId === input.modelSelection.instanceId
+            ? {}
+            : {
+                modelTransition: {
+                  source:
+                    providerTurnForRun(input.projection, targetRun)?.model ??
+                    targetRun.modelSelection.model,
+                  destination: input.modelSelection.model,
+                },
+              }),
           coveredRunOrdinals: { from: Math.max(1, contextBoundary), to: targetRun.ordinal },
           strategy: "full_thread_summary",
           items: yield* readHandoffItems(
@@ -9685,6 +9701,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               toProviderThreadId: ensuredProviderThread.id,
               fromProviderInstanceId: sourceRun.providerInstanceId,
               toProviderInstanceId: modelSelection.instanceId,
+              ...(sourceRun.providerInstanceId === modelSelection.instanceId
+                ? {}
+                : {
+                    modelTransition: {
+                      source:
+                        providerTurnForRun(sourceProjection, sourceRun)?.model ??
+                        sourceRun.modelSelection.model,
+                      destination: modelSelection.model,
+                    },
+                  }),
               coveredRunOrdinals: visibleDeltaRunOrdinals(sourceProjection, portableForkItems),
               strategy: "full_thread_summary",
               items: portableForkItems,
@@ -9816,6 +9842,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               toProviderThreadId: ensuredProviderThread.id,
               fromProviderInstanceId: latestHandoffRun.providerInstanceId,
               toProviderInstanceId: modelSelection.instanceId,
+              modelTransition: {
+                source:
+                  providerTurnForRun(projection, latestHandoffRun)?.model ??
+                  latestHandoffRun.modelSelection.model,
+                destination: modelSelection.model,
+              },
               coveredRunOrdinals: {
                 from: providerSwitchCoveredRuns[0]!.ordinal,
                 to: providerSwitchCoveredRuns.at(-1)!.ordinal,

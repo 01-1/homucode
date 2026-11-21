@@ -1601,6 +1601,7 @@ export const layer: Layer.Layer<
           resumedRetryHandoff = yield* prepareRetryHandoff(context);
           const fits = yield* deliverContextHandoffs({
             handoffs: [...handoffs, ...resumedRetryHandoff.handoffs],
+            destinationModel: run.modelSelection.model,
             providerThread: { ...resumed.success, id: providerThread.id },
             budget: context.budget,
             deferInline: isCompactionCommandMessage(providerMessage) || goalCommand,
@@ -1616,6 +1617,7 @@ export const layer: Layer.Layer<
           const { handoff } = yield* recoveryHandoff;
           const fitsFresh = yield* deliverContextHandoffs({
             handoffs: withRecoveryHandoff(handoff),
+            destinationModel: run.modelSelection.model,
             providerThread: freshThread,
             budget: freshContext.budget,
             alreadyDeliveredItemIds: freshContext.deliveredItemIds,
@@ -2015,6 +2017,7 @@ export const layer: Layer.Layer<
         function* (turnInput: Parameters<typeof session.startTurn>[0], compact = false) {
           const delivery = yield* deliverContextHandoffs({
             handoffs: [...effectiveHandoffs, ...retryHandoff.handoffs],
+            destinationModel: turnInput.modelSelection.model,
             deferInline: compact || goalCommand,
             providerThread: runningProviderThread,
             budget,

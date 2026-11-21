@@ -1311,6 +1311,12 @@ export const OrchestrationV2ContextHandoff = Schema.Struct({
     Schema.Struct({
       messages: Schema.Array(OrchestrationV2HistoricalMessage),
       coverage: Schema.String,
+      modelTransition: Schema.optional(
+        Schema.Struct({
+          source: TrimmedNonEmptyString,
+          destination: TrimmedNonEmptyString,
+        }),
+      ),
       omittedItems: NonNegativeInt,
       omittedItemIds: Schema.optional(Schema.Array(TurnItemId)),
     }),

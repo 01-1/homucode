@@ -19,6 +19,7 @@ import {
   DEFAULT_HANDOFF_TOKEN_CAP,
   handoffTokenCapConfig,
   handoffCoverage,
+  handoffModelHeader,
   historicalMessage,
   renderHistory,
   selectHistory,
@@ -78,6 +79,9 @@ export interface ContextHandoffServiceV2Shape {
     readonly fromProviderInstanceId: ProviderInstanceId;
     readonly toProviderInstanceId: ProviderInstanceId;
     readonly coveredRunOrdinals: OrchestrationV2ContextHandoff["coveredRunOrdinals"];
+    readonly modelTransition?: NonNullable<
+      OrchestrationV2ContextHandoff["history"]
+    >["modelTransition"];
     readonly runs?: ReadonlyArray<OrchestrationV2Run>;
     readonly strategy: Extract<
       OrchestrationV2ContextHandoff["strategy"],
@@ -487,24 +491,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
 
     const prepareProviderHandoff = Effect.fn(
       "orchestrationV2.contextHandoff.prepareProviderHandoff",
-    )(function* (input: {
-      readonly threadId: ThreadId;
-      readonly sourceThreadId?: ThreadId;
-      readonly targetRunId: RunId;
-      readonly transferId: OrchestrationV2ContextHandoff["transferId"];
-      readonly fromProviderThreadIds: ReadonlyArray<ProviderThreadId>;
-      readonly toProviderThreadId: ProviderThreadId;
-      readonly fromProviderInstanceId: ProviderInstanceId;
-      readonly toProviderInstanceId: ProviderInstanceId;
-      readonly coveredRunOrdinals: OrchestrationV2ContextHandoff["coveredRunOrdinals"];
-      readonly runs?: ReadonlyArray<OrchestrationV2Run>;
-      readonly strategy: Extract<
-        OrchestrationV2ContextHandoff["strategy"],
-        "delta_since_target_last_seen" | "full_thread_summary"
-      >;
-      readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
-      readonly createdAt: DateTime.Utc;
-    }) {
+    )(function* (input: Parameters<ContextHandoffServiceV2Shape["prepareProviderHandoff"]>[0]) {
       const handoffId = yield* idAllocator.allocate
         .contextHandoff({
           threadId: input.threadId,
@@ -540,7 +527,11 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
                 },
               ];
         }),
-        coverage,
+        coverage:
+          input.modelTransition === undefined
+            ? coverage
+            : `${handoffModelHeader(input.modelTransition)}
+${coverage}`,
         budget: tokenCap,
       });
       return {
@@ -558,6 +549,9 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
         history: {
           messages: selected.messages,
           coverage,
+          ...(input.modelTransition === undefined
+            ? {}
+            : { modelTransition: input.modelTransition }),
           omittedItems: selected.omittedItems,
           omittedItemIds: selected.omittedItemIds,
         },

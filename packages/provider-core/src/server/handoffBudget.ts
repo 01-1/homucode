@@ -280,6 +280,12 @@ export function selectHistory(input: {
   };
 }
 
+export function handoffModelHeader(
+  transition: NonNullable<NonNullable<OrchestrationV2ContextHandoff["history"]>["modelTransition"]>,
+): string {
+  return `Source model: ${transition.source}. Destination model: ${transition.destination}.`;
+}
+
 export function handoffCoverage(input: {
   readonly threadId: string;
   readonly coveredRunOrdinals: OrchestrationV2ContextHandoff["coveredRunOrdinals"];

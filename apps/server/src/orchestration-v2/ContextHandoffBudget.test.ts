@@ -549,7 +549,13 @@ describe("handoff delivery", () => {
     "defers unsupported compaction history until a normal turn without marking delivery uncertain",
     () =>
       Effect.gen(function* () {
-        let durable = handoff;
+        let durable: OrchestrationV2ContextHandoff = {
+          ...handoff,
+          history: {
+            ...handoff.history!,
+            modelTransition: { source: "source-model", destination: "compaction-model" },
+          },
+        };
         const persist = (value: OrchestrationV2ContextHandoff) =>
           Effect.sync(() => {
             durable = value;
@@ -567,6 +573,7 @@ describe("handoff delivery", () => {
         assert.equal(compact.context, "");
         assert.isUndefined((() => durable.delivery)());
         const next = yield* deliverContextHandoffs({
+          destinationModel: "next-model",
           handoffs: [durable],
           providerThread,
           budget: 16_000,
@@ -575,6 +582,7 @@ describe("handoff delivery", () => {
           persist,
         });
         assert.include(next.context, messages[0]!.text);
+        assert.include(next.context, "Source model: source-model. Destination model: next-model.");
         yield* next.delivered;
         assert.equal(durable.delivery?.status, "inline");
       }),
@@ -665,6 +673,29 @@ describe("handoff delivery", () => {
       assert.equal(serialized.split("Partial work").length - 1, 1);
       assert.include(serialized, "Latest result");
     }),
+  );
+
+  it.effect(
+    "keeps compact coverage deliverable when the model header alone exceeds the budget",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* deliverContextHandoffs({
+          handoffs: [
+            {
+              ...handoff,
+              history: {
+                ...handoff.history!,
+                modelTransition: { source: "long-source-model".repeat(200), destination: "target" },
+              },
+            },
+          ],
+          providerThread,
+          budget: 1_000,
+          alreadyDeliveredItemIds: new Set(),
+          persist: () => Effect.void,
+        });
+        assert.include(result.context, "detailed coverage references omitted");
+      }),
   );
 
   it.effect("fails before delivery when even the coverage marker cannot fit", () =>
