@@ -494,24 +494,26 @@ describe("instance-scoped model selection", () => {
     });
   });
 
-  it("falls back from an explicit non-OpenCode draft with a missing model", () => {
+  it.each([false, true])("preserves an unavailable Codex model (started=%s)", (started) => {
     const instanceId = ProviderInstanceId.make("codex");
     const driver = ProviderDriverKind.make("codex");
     const providers = [provider({ provider: driver, instanceId, models: ["gpt-5.6-sol"] })];
     const state = deriveEffectiveComposerModelState({
-      threadStarted: false,
-      draft: {
-        activeProvider: instanceId,
-        modelSelectionByProvider: {
-          [instanceId]: createModelSelection(instanceId, "gpt-missing", [
-            { id: "effort", value: "max" },
-          ]),
-        },
-      },
+      threadStarted: started,
+      draft: started
+        ? null
+        : {
+            activeProvider: instanceId,
+            modelSelectionByProvider: {
+              [instanceId]: createModelSelection(instanceId, "gpt-missing", [
+                { id: "effort", value: "max" },
+              ]),
+            },
+          },
       providers,
       selectedProvider: driver,
       selectedInstanceId: instanceId,
-      threadModelSelection: null,
+      threadModelSelection: started ? createModelSelection(instanceId, "gpt-missing", []) : null,
       projectModelSelection: null,
       settings: settingsWithProviderInstances(),
     });
@@ -522,7 +524,14 @@ describe("instance-scoped model selection", () => {
       modelOptions: state.modelOptions?.[instanceId],
     });
 
-    expect(state.selectedModel).toBe("gpt-5.6-sol");
+    expect(state.selectedModel).toBe("gpt-missing");
+    const entry = deriveProviderInstanceEntries(providers)[0]!;
+    const options = getAppModelOptionsForInstance(
+      settingsWithProviderInstances(),
+      entry,
+      state.selectedModel,
+    );
+    expect(options.find((option) => option.slug === state.selectedModel)?.isUnavailable).toBe(true);
     expect(dispatch.modelOptionsForDispatch).toBeUndefined();
   });
 

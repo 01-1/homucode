@@ -2,6 +2,8 @@
 
 Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pingdotgg/t3code). The [README](./README.md#changes-compared-to-t3-code) has a short summary.
 
+- **Unavailable chat models.** Web and desktop keep a missing model visible and ask you to choose an available model before sending.
+
 - **Linux desktop updates.** The AppImage update feed points to a verified Linux build. If you installed `homucode-v0.0.0-rc.1`, download the [latest Linux AppImage](https://github.com/homura-ai/homucode/releases/latest) and replace your existing AppImage once to get automatic updates.
 
 - **HomuCode branding.** The web, desktop, and mobile apps use HomuCode as the product name and Homu as its short form. Headers render HomuCode as a single line of text with Homu emphasized. The app icon is a multicolour 炎 (flame) in place of the T3 mark, on black for production and dark purple for development; nightly keeps its night sky. Timeline actions such as sending to a Homu thread also use the flame icon. Its Inkscape sources are in `assets/brand-marks/`.

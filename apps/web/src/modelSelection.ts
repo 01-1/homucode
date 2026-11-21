@@ -25,7 +25,6 @@ import * as Result from "effect/Result";
 import {
   getDefaultServerModel,
   getProviderModels,
-  hasRuntimeModelCatalog,
   isRuntimeModelDefaultAlias,
   resolveSelectableProvider,
 } from "./providerModels";
@@ -76,17 +75,16 @@ export interface AppModelOption {
 
 function appendUnavailableDynamicModelSelection(
   options: AppModelOption[],
-  rawModels: ReadonlyArray<ServerProvider["models"][number]>,
+  catalog: ReadonlyArray<AppModelOption>,
   provider: ProviderDriverKind,
   selectedModel: string | null | undefined,
   hiddenModels: ReadonlyArray<string>,
 ): AppModelOption[] {
-  if (!hasRuntimeModelCatalog(provider)) return options;
   const slug = normalizeCustomModelSlug(selectedModel);
   if (!slug) return options;
   if (isRuntimeModelDefaultAlias(provider, slug)) return options;
 
-  if (resolveSelectableModel(provider, slug, rawModels) !== null) return options;
+  if (resolveSelectableModel(provider, slug, catalog) !== null) return options;
   if (hiddenModels.includes(slug)) return options;
   if (options.some((option) => option.slug === slug)) return options;
 
@@ -199,7 +197,7 @@ function getAppModelOptions(
   const preferences = readInstanceModelPreferences(settings, defaultInstanceId);
   return appendUnavailableDynamicModelSelection(
     applyInstanceModelPreferences(options, preferences),
-    rawModels,
+    options,
     provider,
     selectedModel,
     preferences.hiddenModels,
@@ -240,7 +238,7 @@ export function getAppModelOptionsForInstance(
   const preferences = readInstanceModelPreferences(settings, entry.instanceId);
   return appendUnavailableDynamicModelSelection(
     applyInstanceModelPreferences(options, preferences),
-    entry.models,
+    options,
     entry.driverKind,
     selectedModel,
     preferences.hiddenModels,
@@ -281,7 +279,7 @@ export function resolveAppModelSelectionForInstance(
   if (resolvedSelection) {
     return resolvedSelection;
   }
-  if (resolutionOptions?.preserveUnavailableSelection && hasRuntimeModelCatalog(entry.driverKind)) {
+  if (resolutionOptions?.preserveUnavailableSelection) {
     const unavailableSelection = normalizeCustomModelSlug(selectedModel);
     const hiddenModels = readInstanceModelPreferences(settings, entry.instanceId).hiddenModels;
     if (
