@@ -2237,8 +2237,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   const openEmptySidebarMenu = async (position: { x: number; y: number }) => {
     const api = readLocalApi();
-    if (!api || primaryEnvironmentId === null) return;
-    const environmentId = primaryEnvironmentId;
+    if (!api) return;
+    const scopedEnvironmentIds = new Set(scopedProjectRefs.map((ref) => ref.environmentId));
+    const environmentId =
+      (scopedEnvironmentIds.size === 1 ? scopedProjectRefs[0]!.environmentId : null) ??
+      routeThreadRef?.environmentId ??
+      routeDraftThread?.environmentId ??
+      primaryEnvironmentId;
+    if (environmentId === null) return;
     const canCreate =
       readEnvironmentSupportsThreadFolders(environmentId) &&
       readEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
@@ -2256,7 +2262,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       handleNewThreadClick();
       return;
     }
-    runThreadFolderMenuAction(clicked.value, { environmentId, threadIds: [] });
+    if (canCreate) runThreadFolderMenuAction(clicked.value, { environmentId, threadIds: [] });
   };
   const [folderReorder, setFolderReorder] = useState<{
     readonly key: string;
