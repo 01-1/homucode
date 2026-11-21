@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Sofort anwenden",
+  "934216569af07a0e": "Modell und Denkaufwand beim Schließen der Auswahl anwenden",
+  "a128266d98e000a2": "Beim Schließen der Auswahl werden das zuletzt gewählte Modell und der Denkaufwand auf den laufenden Turn angewendet, statt ihn für jede Auswahl neu zu starten. „Sofort anwenden“ hat Vorrang.",
   "4bcfa3b976a421cf": "Nebenchat",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread auf {machine}",

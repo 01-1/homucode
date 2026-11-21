@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Aplicar al instante",
+  "934216569af07a0e": "Aplicar el modelo y el esfuerzo al cerrar el selector",
+  "a128266d98e000a2": "Aplica el modelo y el esfuerzo finales al turno en curso al cerrar el selector, en lugar de reiniciar el turno con cada selección. La casilla «Aplicar al instante» tiene prioridad.",
   "4bcfa3b976a421cf": "Chat lateral",
   "23be753133ae6950": "Hilo",
   "0001ae5846061bb6": "Hilo en {machine}",

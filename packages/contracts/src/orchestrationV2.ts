@@ -3517,6 +3517,7 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     modelSelection: ModelSelection,
+    applyNow: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     type: Schema.Literal("provider-session.detach"),

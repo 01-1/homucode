@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Aplicar imediatamente",
+  "934216569af07a0e": "Aplicar o modelo e o esforço ao fechar o seletor",
+  "a128266d98e000a2": "Aplica o modelo e o esforço finais ao turno em andamento ao fechar o seletor, em vez de reiniciar o turno a cada escolha. A caixa “Aplicar imediatamente” tem prioridade.",
   "4bcfa3b976a421cf": "Chat paralelo",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread em {machine}",

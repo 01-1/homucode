@@ -20,7 +20,7 @@ export function useApplyThreadModelPick() {
   const setModelSelection = useOrchestrationCommand(threadEnvironment.setModelSelection, {
     label: "change model",
   });
-  return async (target: ComposerThreadTarget) => {
+  return async (target: ComposerThreadTarget, applyNow?: true) => {
     if (typeof target === "string") return;
     const store = useComposerDraftStore.getState();
     const draft = store.draftsByThreadKey[scopedThreadKey(target)];
@@ -33,7 +33,11 @@ export function useApplyThreadModelPick() {
     if (pick.instanceId !== thread.modelSelection.instanceId) return;
     const result = await setModelSelection({
       environmentId: target.environmentId,
-      input: { threadId: target.threadId, modelSelection: pick },
+      input: {
+        threadId: target.threadId,
+        modelSelection: pick,
+        ...(applyNow ? { applyModelSelectionNow: applyNow } : {}),
+      },
     });
     if (result._tag === "Success") {
       useComposerDraftStore.getState().releaseModelSelection(target, pick);
