@@ -172,7 +172,7 @@ For mobile verification, a missing or outdated native client is an install step,
 
 ## Pull requests
 
-- Never make a PR unless the developer explicitly asks you to do so.
+- **Full send is required for every permanent HomuCode patch.** This standing instruction triggers the `full-send` skill; do not wait for Homura to say “full send” or ask for a PR. Verify the change, run the review loop, open the PR, follow checks and reviews, and merge once the merge gate passes. A tested local patch or an open PR is not done. If Homura names a different workflow, use it; “no rev” means skip review skills, not PR delivery. For upstream changes, wait for an explicit PR request.
 - PRs go to HomuCode (`homura-ai/homucode`) unless the developer asks for upstream. A PR to the upstream T3 Code repo (`pingdotgg/t3code`) must follow [docs/upstream_contributing.md](docs/upstream_contributing.md), upstream's contribution policy, and must not carry HomuCode-only changes.
 - Every user-visible change to HomuCode adds or updates its entry in [CHANGES.md](CHANGES.md), and the short summary in the [README](README.md#changes-compared-to-t3-code) when it changes what that summary says. Do this in the same PR. Internal refactors, tests and CI need no entry.
 - `origin` is not always GitHub. Check `git remote get-url origin` before your first forge command and use that forge's CLI and skill. See [Forge mirror](docs/operations/development.md#forge-mirror-optional).
