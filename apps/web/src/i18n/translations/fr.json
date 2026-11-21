@@ -12744,5 +12744,7 @@
   "3adca48d927d36f5": "Afficher tous les modèles dans les détails de la barre d’état",
   "b2cc17d714a15e76": "Afficher tous les modèles dans les détails de la barre d’état",
   "5416694ec0dacb31": "Affiche les modèles et les limites d’utilisation signalées pour l’environnement de ce fil lorsque vous survolez la barre d’état ou lui donnez le focus.",
-  "e9b5f7b109cc1ded": "Affiche les modèles et les limites d’utilisation signalées pour l’environnement de ce fil lorsque vous survolez la barre d’état ou lui donnez le focus."
+  "e9b5f7b109cc1ded": "Affiche les modèles et les limites d’utilisation signalées pour l’environnement de ce fil lorsque vous survolez la barre d’état ou lui donnez le focus.",
+  "f311f5a32d4dec24": "Modèle disponible dans {duration}",
+  "82c863fc509de21d": "Vérification de la disponibilité du modèle"
 }
