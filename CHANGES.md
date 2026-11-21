@@ -22,6 +22,8 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 ## Threads and subagents
 
+- **Provider switch context.** The handoff names the source run’s model and the destination run’s selected model. When the source provider reports which model ran, the handoff uses that identifier.
+
 - **Claude context after Resume.** Stopping a resumed Claude turn before it answers preserves the conversation for the next turn.
 
 - **Full access command approvals.** Codex and Claude threads, including delegated threads, no longer pause for native tool approvals in Full access. If a provider still requires confirmation for a command, HomuCode refuses it automatically and gives the agent the reason.

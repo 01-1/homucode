@@ -121,6 +121,7 @@ function makeTestAdapter(input: {
   readonly responseByRunOrdinal: Readonly<Record<number, string>>;
   readonly responseByThreadId?: Readonly<Record<string, Readonly<Record<number, string>>>>;
   readonly capturedTurns: Ref.Ref<ReadonlyArray<CapturedTurn>>;
+  readonly reportedModel?: string;
   readonly injectedHistory?: Ref.Ref<ReadonlyArray<unknown>>;
   readonly failStartOnce?: Ref.Ref<boolean>;
   readonly refuseStarts?: Ref.Ref<number>;
@@ -420,6 +421,7 @@ function makeTestAdapter(input: {
                     },
                     ordinal: turnInput.runOrdinal,
                     status: terminalStatus,
+                    ...(input.reportedModel === undefined ? {} : { model: input.reportedModel }),
                     startedAt: eventTime,
                     completedAt: eventTime,
                   },
@@ -6374,6 +6376,8 @@ describe("orchestration v2 provider switching", () => {
         Effect.gen(function* () {
           const cwd = yield* checkpointWorkspace("quick-provider-turn");
           const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+          const injectedHistory = yield* Ref.make<ReadonlyArray<unknown>>([]);
+          const reportedClaudeModel = "claude-haiku-test";
           const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
             makeTestAdapter({
               instanceId: CODEX_MODEL_SELECTION.instanceId,
@@ -6381,6 +6385,7 @@ describe("orchestration v2 provider switching", () => {
               capabilities: CodexProviderCapabilitiesV2,
               modelSelection: CODEX_MODEL_SELECTION,
               responseByRunOrdinal: { 1: "Long working answer", 3: "Back on Codex" },
+              injectedHistory,
               capturedTurns,
             }),
             makeTestAdapter({
@@ -6389,6 +6394,7 @@ describe("orchestration v2 provider switching", () => {
               capabilities: ClaudeProviderCapabilitiesV2,
               modelSelection: CLAUDE_MODEL_SELECTION,
               responseByRunOrdinal: { 2: "Quick answer" },
+              reportedModel: reportedClaudeModel,
               capturedTurns,
             }),
           ]);
@@ -6450,6 +6456,14 @@ describe("orchestration v2 provider switching", () => {
             );
             // Back on Codex, its own native conversation resumes; nothing was summarized away.
             assert.equal(turns[2]!.providerThreadId, turns[0]!.providerThreadId);
+            assert.include(
+              turns[1]!.text,
+              `Source model: ${CODEX_MODEL_SELECTION.model}. Destination model: ${CLAUDE_MODEL_SELECTION.model}.`,
+            );
+            assert.include(
+              JSON.stringify((yield* Ref.get(injectedHistory))[0]),
+              `Source model: ${reportedClaudeModel}. Destination model: ${CODEX_MODEL_SELECTION.model}.`,
+            );
             const projection = yield* orchestrator.getThreadProjection(threadId);
             assert.deepEqual(projection.thread.modelSelection, CODEX_MODEL_SELECTION);
             const [outbound, back] = projection.contextHandoffs;

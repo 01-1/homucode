@@ -7,6 +7,7 @@ import { ContextHandoffBudgetError } from "@t3tools/provider-core/server/failure
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
+  handoffModelHeader,
   historyCost,
   renderHistory,
   selectHistory,
@@ -21,6 +22,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
   function* <InjectError = never, PersistError = never, BudgetError = never>(input: {
     readonly handoffs: ReadonlyArray<OrchestrationV2ContextHandoff>;
     readonly providerThread: OrchestrationV2ProviderThread;
+    readonly destinationModel?: string;
     readonly budget: number | Effect.Effect<number, BudgetError>;
     readonly deferInline?: boolean;
     readonly alreadyDeliveredItemIds: ReadonlySet<string>;
@@ -39,18 +41,31 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
     if (pending.length === 0 || (input.deferInline && input.inject === undefined))
       return { context: "", delivered: Effect.void, unsent: Effect.void };
     const budget = typeof input.budget === "number" ? input.budget : yield* input.budget;
+    const modelHeaders = pending.map(({ history }) => {
+      const transition = history?.modelTransition;
+      return transition === undefined
+        ? ""
+        : handoffModelHeader({
+            ...transition,
+            destination: input.destinationModel ?? transition.destination,
+          });
+    });
     let coverage = pending
       .map(
-        (handoff) =>
+        (handoff, index) =>
           `Context handoff (${handoff.strategy === "fork_delta_summary" ? "merge_back / fork_delta_summary" : handoff.strategy}):\n${
+            modelHeaders[index] ? `${modelHeaders[index]}\n` : ""
+          }${
             handoff.history?.coverage ??
             `From thread ${handoff.threadId}, runs ${handoff.coveredRunOrdinals.from}-${handoff.coveredRunOrdinals.to}. Recover history with t3_thread_read, view=activity, afterPosition=-1; paginate with afterPosition=nextPosition, and use itemId/textOffset for long items.`
           }`,
       )
       .join("\n");
+    let compactModelHeader: string | undefined;
     if (historyCost([], coverage) > Math.min(4_000, budget / 2)) {
       const strategies = Array.from(new Set(pending.map((handoff) => handoff.strategy)));
       coverage = `Context handoff (${strategies.join(", ")}). ${pending.length} handoff records; detailed coverage references omitted. Recover an omitted item only when the request needs it, with t3_thread_read({threadId:"${input.providerThread.appThreadId ?? pending[0]!.threadId}",view:"activity",itemId:"<omitted item ID>",maxCharsPerItem:4000}); continue long text with textOffset=nextTextOffset until null. Follow fork/handoff source references in activity. Items included below need no read.`;
+      compactModelHeader = modelHeaders.findLast((header) => header !== "");
     }
     const seen = new Set(input.alreadyDeliveredItemIds);
     const messages = pending
@@ -68,13 +83,26 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       oldContext && historyCost([], `${coverage}\n${oldContext}`) + 512 <= budget
         ? `${coverage}\n${oldContext}`
         : coverage;
-    const selected = selectHistory({
-      messages,
-      coverage: fullCoverage,
-      omittedItems: pending.reduce((sum, handoff) => sum + (handoff.history?.omittedItems ?? 0), 0),
-      omittedItemIds: pending.flatMap((handoff) => handoff.history?.omittedItemIds ?? []),
-      budget,
-    });
+    const select = (coverage: string) =>
+      selectHistory({
+        messages,
+        coverage,
+        omittedItems: pending.reduce(
+          (sum, handoff) => sum + (handoff.history?.omittedItems ?? 0),
+          0,
+        ),
+        omittedItemIds: pending.flatMap((handoff) => handoff.history?.omittedItemIds ?? []),
+        budget,
+      });
+    let selected = select(
+      compactModelHeader === undefined ? fullCoverage : `${compactModelHeader}\n${fullCoverage}`,
+    );
+    if (
+      compactModelHeader !== undefined &&
+      historyCost(selected.messages, selected.context) > budget
+    ) {
+      selected = select(fullCoverage);
+    }
     if (historyCost(selected.messages, selected.context) > budget) {
       if (input.deferInline) return { context: "", delivered: Effect.void, unsent: Effect.void };
       return yield* new ContextHandoffBudgetError();
