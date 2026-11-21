@@ -7,7 +7,7 @@ What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summar
 ## Task-specific instructions
 
 - Run Android in-app verification on a Boat emulator through the T3 Device panel. Launch the app and exercise the changed flow before reporting it verified. See [Android development](docs/operations/android-development.md).
-- Publish HomuCode release candidates as regular GitHub releases. Use `--prerelease=false` and keep the RC designation in the tag and title.
+- Publish HomuCode release candidates as regular GitHub releases. Use `--prerelease=false --latest=false` and keep the RC designation in the tag and title. The Linux desktop workflow owns GitHub's Latest release.
 - Publish HomuCode Android updates over the air from Boat using the fork's EAS project. For a new native runtime, build a signed OTA-enabled APK with the existing release key and verify its channel and runtime. See [Android development](docs/operations/android-development.md#releasing-android-updates).
 - For product spelling, text wordmarks, and compact icons, read [HomuCode brand design](docs/internals/brand-design.md).
 

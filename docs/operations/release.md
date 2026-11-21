@@ -7,8 +7,13 @@
 [Homu desktop (Linux)](../../.github/workflows/homu-desktop-linux.yml) builds a Linux x86_64
 AppImage on pushes to `main` and manual dispatches in `homura-ai/homucode`. It publishes a
 GitHub release with the AppImage and `latest-linux.yml`, and embeds this fork's update feed.
-PRs changing that workflow build without publishing. A rerun of an older build does not replace
-a newer release as latest. Other platforms can be [built locally](./development.md#desktop-artifacts).
+The workflow checks that the manifest resolves to the built AppImage, then uploads both files
+to a draft before publishing. An older build stays out of Latest when a newer Linux build holds it.
+PRs changing the workflow build and validate without publishing.
+
+The AppImage updater reads GitHub's Latest release. Publish release candidates with
+`--prerelease=false --latest=false` so they appear in the release list while Linux builds
+continue to supply the updater. Other platforms can be [built locally](./development.md#desktop-artifacts).
 
 ## Upstream release workflow
 
