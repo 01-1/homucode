@@ -18,8 +18,10 @@ export function useOpenLinkedThread() {
     target: { readonly environmentId: string; readonly threadId: string },
     localParentProjectId?: ProjectId,
   ) => {
+    const routeFlag = madohomuLinkFlag(rootStackState(navigation), target, localParentProjectId);
+    const inspectorTarget = { type: "thread" as const, ...target, ...routeFlag };
     if (openInInspector) {
-      openInInspector({ type: "thread", ...target });
+      openInInspector(inspectorTarget);
       return;
     }
     const state = navigation.getState();
@@ -31,17 +33,12 @@ export function useOpenLinkedThread() {
       route.params.threadId &&
       openInspector(
         { environmentId: route.params.environmentId, threadId: route.params.threadId },
-        { type: "thread", ...target },
+        inspectorTarget,
       )
     )
       return;
     if (step === "pop") navigation.dispatch(StackActions.pop());
     else if (step === "push")
-      navigation.dispatch(
-        StackActions.push("Thread", {
-          ...target,
-          ...madohomuLinkFlag(rootStackState(navigation), target, localParentProjectId),
-        }),
-      );
+      navigation.dispatch(StackActions.push("Thread", { ...target, ...routeFlag }));
   };
 }

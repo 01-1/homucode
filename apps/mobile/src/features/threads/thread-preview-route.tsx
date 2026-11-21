@@ -22,6 +22,7 @@ import type {
 } from "@react-navigation/native-stack";
 import type { ReactNode } from "react";
 
+import type { MadoHomuThreadRouteParams } from "./thread-route-state";
 import { useMobileNavigationTheme } from "../../lib/useMobileNavigationTheme";
 
 function ThreadPreviewNavigator({
@@ -69,7 +70,10 @@ function createThreadPreviewNavigator<
   return createNavigatorFactory(ThreadPreviewNavigator)(config);
 }
 
-type ThreadPreviewParams = { readonly environmentId: string; readonly threadId: string };
+type ThreadPreviewParams = {
+  readonly environmentId: string;
+  readonly threadId: string;
+} & MadoHomuThreadRouteParams;
 
 const Preview = createThreadPreviewNavigator<{ Thread: ThreadPreviewParams }>();
 
@@ -85,13 +89,15 @@ export function ThreadPreviewRoute(
 ) {
   const host = useNavigation();
   const theme = useMobileNavigationTheme();
-  const { environmentId, threadId } = props;
+  const { children, ...params } = props;
   return (
     <NavigationIndependentTree>
       <NavigationContainer theme={theme} onUnhandledAction={host.dispatch}>
-        <Preview.Navigator key={`${environmentId}:${threadId}`}>
-          <Preview.Screen name="Thread" initialParams={{ environmentId, threadId }}>
-            {(screen) => props.children(screen.route)}
+        <Preview.Navigator
+          key={`${params.environmentId}:${params.threadId}:${params.madohomu ?? ""}:${params.madohomuLinkProjectId ?? ""}`}
+        >
+          <Preview.Screen name="Thread" initialParams={params}>
+            {(screen) => children(screen.route)}
           </Preview.Screen>
         </Preview.Navigator>
       </NavigationContainer>

@@ -2,6 +2,7 @@ import { StackActions, useNavigation } from "@react-navigation/native";
 import { createContext, use } from "react";
 import { Platform } from "react-native";
 
+import type { MadoHomuThreadRouteParams } from "./thread-route-state";
 import { useWorkspacePaneState } from "../layout/AdaptiveWorkspaceLayout";
 
 export type ThreadInspectorMode = "route" | "git" | "files" | "preview";
@@ -13,7 +14,7 @@ export type ThreadInspectorTarget = {
   readonly deviceKey?: string;
   /** The environment's localhost page a "localPreview" shows. */
   readonly url?: string;
-};
+} & MadoHomuThreadRouteParams;
 
 export const ThreadInspectorNavigationContext = createContext<
   ((target: ThreadInspectorTarget) => void) | null

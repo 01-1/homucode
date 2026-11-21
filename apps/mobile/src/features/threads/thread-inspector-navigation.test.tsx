@@ -9,11 +9,12 @@ const harness = vi.hoisted(() => ({
   dispatch: (_action: unknown) => {},
   getState: (): unknown => undefined,
   getRoute: (): unknown => undefined,
+  madohomu: false,
 }));
 
-// Ordinary thread navigation must work without initializing native environment state.
-vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
-vi.mock("../../state/threads", () => ({ environmentThreadShells: {} }));
+vi.mock("../madohomu/madohomuLinkFlag", () => ({
+  madohomuLinkFlag: () => (harness.madohomu ? { madohomuLinkProjectId: "focused-project" } : {}),
+}));
 vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 vi.mock("../layout/AdaptiveWorkspaceLayout", () => ({
   useWorkspacePaneState: () => ({ fileInspector: { supported: true } }),
@@ -25,7 +26,11 @@ vi.mock("@react-navigation/native", async () => {
   );
   return {
     StackActions: requireNavigation("@react-navigation/routers").StackActions,
-    useNavigation: () => ({ dispatch: harness.dispatch, getState: harness.getState }),
+    useNavigation: () => ({
+      dispatch: harness.dispatch,
+      getState: harness.getState,
+      getParent: () => undefined,
+    }),
     useRoute: () => harness.getRoute(),
   };
 });
@@ -41,7 +46,8 @@ const { StackRouter, StackActions } = requireNavigation("@react-navigation/route
   StackActions: typeof import("@react-navigation/native").StackActions;
 };
 
-function setup(fromAgents: boolean, fullscreen = false) {
+function setup(fromAgents: boolean, fullscreen = false, madohomu = false) {
+  harness.madohomu = madohomu;
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const router = StackRouter({});
   const options = {
@@ -124,18 +130,26 @@ it("opens a subagent from the Agents sheet without replacing the parent thread",
   });
 });
 
-it("opens a completion link in the parent inspector", () => {
-  using screen = setup(false);
-  screen.openLinked("child");
-  expect(screen.state.routes).toHaveLength(2);
-  expect(screen.state.routes.at(-1)).toMatchObject({
-    key: screen.parentKey,
-    params: {
+it.each([false, true])(
+  "opens a completion link in the parent inspector (MadoHomu: %s)",
+  (madohomu) => {
+    using screen = setup(false, false, madohomu);
+    screen.openLinked("child");
+    expect(screen.state.routes).toHaveLength(2);
+    const route = screen.state.routes.at(-1);
+    expect(route?.key).toBe(screen.parentKey);
+    expect(route?.params).toEqual({
       ...screen.source,
-      inspector: { type: "thread", environmentId: screen.source.environmentId, threadId: "child" },
-    },
-  });
-});
+      prompt: "retained prompt",
+      inspector: {
+        type: "thread",
+        environmentId: screen.source.environmentId,
+        threadId: "child",
+        ...(madohomu ? { madohomuLinkProjectId: "focused-project" } : {}),
+      },
+    });
+  },
+);
 
 it("switches between subagents and devices in the same parent route", () => {
   using screen = setup(false);

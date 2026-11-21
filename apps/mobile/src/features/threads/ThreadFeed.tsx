@@ -122,7 +122,12 @@ import { imageMimeType } from "@t3tools/shared/image";
 import { videoMimeType } from "@t3tools/shared/video";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { textDirection } from "@t3tools/shared/textDirection";
-import { useFocusEffect, useIsFocused, useNavigation } from "@react-navigation/native";
+import {
+  StackActions,
+  useFocusEffect,
+  useIsFocused,
+  useNavigation,
+} from "@react-navigation/native";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import { useDeviceType } from "../../native/native-layout-metrics";
 import { isDuoDevice } from "../../lib/device-type";
@@ -334,6 +339,8 @@ import { ZoomableImagePressable } from "./ZoomableImagePressable";
 import { openSettings } from "../settings/settings-navigation";
 import { loopbackUrlForDevice } from "../browser/browserTabs";
 import { useOpenLocalPreview } from "../browser/useOpenLocalPreview";
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { useMessageTimeFormatter } from "./useMessageTimeFormatter";
 
@@ -494,6 +501,7 @@ function AssistantForkButton(props: {
   });
   const gt = useGT();
   const forkFromRun = useAtomCommand(threadEnvironment.forkFromRun, "fork from response");
+  const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
   const [busy, setBusy] = useState(false);
   const canFork = canForkProjectedAssistantItem({
@@ -511,6 +519,7 @@ function AssistantForkButton(props: {
       disabled={busy}
       onPress={() => {
         const targetThreadId = ThreadId.make(uuidv4());
+        const sourceStack = rootStackState(navigation);
         setBusy(true);
         void Haptics.selectionAsync();
         void forkFromRun({
@@ -544,10 +553,13 @@ function AssistantForkButton(props: {
               );
               return;
             }
-            selectDetail({
-              name: "Thread",
-              params: { environmentId: props.environmentId, threadId: targetThreadId },
-            });
+            const target = { environmentId: props.environmentId, threadId: targetThreadId };
+            const routeFlag = madohomuLinkFlag(sourceStack, target);
+            if (routeFlag.madohomu || routeFlag.madohomuLinkProjectId) {
+              navigation.dispatch(StackActions.replace("Thread", { ...target, ...routeFlag }));
+              return;
+            }
+            selectDetail({ name: "Thread", params: target });
           })
           .finally(() => setBusy(false));
       }}

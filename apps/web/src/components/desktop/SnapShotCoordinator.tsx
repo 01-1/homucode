@@ -7,6 +7,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
+import { useLocation } from "@tanstack/react-router";
 import { msg } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
@@ -248,7 +249,8 @@ export function SnapShotCoordinator() {
     null,
     lastUsedProjectKeySchema,
   );
-  const currentProject = activeThread ?? activeDraftThread;
+  const inMadoHomu = useLocation({ select: (location) => location.pathname === "/madohomu" });
+  const currentProject = inMadoHomu ? null : (activeThread ?? activeDraftThread);
   const currentProjectKey = currentProject
     ? scopedProjectKey({
         environmentId: currentProject.environmentId,

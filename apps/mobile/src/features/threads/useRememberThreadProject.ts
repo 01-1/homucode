@@ -3,17 +3,20 @@ import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { AsyncResult } from "effect/reactivity";
-import { useCallback } from "react";
+import { useCallback, useContext } from "react";
 
+import { AndroidTaskSurfaceContext } from "../../lib/backHandler";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
 
 export function useRememberThreadProject(project: EnvironmentProject | null) {
+  const taskSurface = useContext(AndroidTaskSurfaceContext);
   const serverConfig = useEnvironmentServerConfig(project?.environmentId ?? null);
   const environmentId = project?.environmentId;
   const projectId = project?.id;
   const remember =
+    taskSurface !== "madohomu" &&
     project !== null &&
     serverConfig !== null &&
     !isScratchProject(project, serverConfig.scratchWorkspaceRoot);
