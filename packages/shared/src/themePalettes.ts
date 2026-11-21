@@ -1067,11 +1067,11 @@ code,pre,kbd,.chat-markdown-codeblock{font-family:"Adwaita Mono","Fira Mono",ui-
 .dark [data-chat-header]{background-color:#000000!important}
 .dark .composer-tiptap .is-editor-empty::before,.dark .composer-tiptap p.is-empty::before,.dark [data-chat-composer-form] ::placeholder{color:#E1B8FF!important;opacity:1!important}
 .dark [data-slot="toggle"][data-pressed],.dark [data-slot="toggle-group-item"][data-pressed],.dark [data-chat-header] [aria-pressed="true"]{background-color:#50007D!important}
-.dark :has(> [aria-label="Diff layout"]) [data-slot="toggle"][data-pressed]{background-color:#230036!important}
+.dark [data-diff-layout-toolbar] [data-slot="toggle"][data-pressed]{background-color:#230036!important}
 .dark [data-app-sidebar] [data-sidebar-row] [class*="text-foreground"]{color:#F0DCFF!important}
 .dark [data-app-sidebar] [data-sidebar-row] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-sidebar-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row] [class*="text-foreground/75"]{color:#DDADFF!important}
 .dark [data-app-sidebar] [data-sidebar-row] [class*="text-start"]{color:#FFFFFF!important}
-.dark [data-app-sidebar] [data-sidebar-row]:has([class*="font-medium text-muted-foreground"]) [class*="text-start"]{color:#F0DCFF!important}
+.dark [data-app-sidebar] [data-sidebar-row] [class*="font-medium text-muted-foreground"][class*="text-start"]{color:#F0DCFF!important}
 .dark [data-app-sidebar] [data-sidebar-row][class*="opacity-70"] [class*="text-start"]{color:#DDADFF!important}
 .dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-start"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground"]{color:#FFFFFF!important}
 .dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-muted-foreground"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-secondary-label"],.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-foreground/75"]:not([class*="text-start"]),.dark [data-app-sidebar] [data-sidebar-row][aria-current="page"] [class*="text-sidebar-muted-foreground"]{color:#F2E0FF!important}

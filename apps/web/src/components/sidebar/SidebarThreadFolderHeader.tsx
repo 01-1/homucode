@@ -222,7 +222,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
       data-testid="sidebar-thread-folder"
       data-thread-folder-drop={folderKey}
       className={cn(
-        "group/thread-folder list-none mt-2 first:mt-0",
+        "group/thread-folder has-focus-visible:[--folder-count:none] has-focus-visible:[--folder-action:inline-flex] has-focus-visible:[--folder-chevron:block] list-none mt-2 first:mt-0",
         props.style === "tabs"
           ? "rounded-md"
           : [
@@ -309,7 +309,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
         {collapsed && hiddenThreads.length > 0 ? (
           <span
             aria-hidden
-            className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground group-has-focus-visible/thread-folder:hidden group-hover/thread-folder:hidden"
+            className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground [display:var(--folder-count,inline)] group-hover/thread-folder:hidden"
           >
             {hiddenThreads.length}
           </span>
@@ -333,7 +333,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
-                  className="hidden size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:text-sidebar-foreground group-has-focus-visible/thread-folder:inline-flex group-hover/thread-folder:inline-flex pointer-coarse:inline-flex"
+                  className="size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-sidebar-muted-foreground hover:text-sidebar-foreground [display:var(--folder-action,none)] group-hover/thread-folder:inline-flex pointer-coarse:inline-flex"
                 />
               }
             >
@@ -350,7 +350,7 @@ export const SidebarThreadFolderHeader = memo(function SidebarThreadFolderHeader
           <ChevronDownIcon
             aria-hidden
             className={cn(
-              "hidden size-3 shrink-0 text-sidebar-muted-foreground transition-transform group-has-focus-visible/thread-folder:block group-hover/thread-folder:block pointer-coarse:block",
+              "size-3 shrink-0 text-sidebar-muted-foreground transition-transform [display:var(--folder-chevron,none)] group-hover/thread-folder:block pointer-coarse:block",
               collapsed && "-rotate-90",
             )}
           />

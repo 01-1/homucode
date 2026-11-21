@@ -10,6 +10,8 @@ Everything HomuCode changes compared to upstream [T3 Code](https://github.com/pi
 
 - **Upstream v0.1.11.** Includes upstream fixes and features through the v0.1.11 release, with HomuCode's thread controls, branding, and mobile sheet fixes retained.
 
+- **No document-wide restyles from `:has()`.** The web client no longer uses CSS `:has()` selectors that style something outside the element holding the `:has()` (composer banner surface, chat header status line, details split buttons, PR rows, sidebar folders and update pill, input groups, dialogs and the Lavender theme palette). In Chromium each DOM change made them restyle the whole page, which made resizing, typing, scrolling and hover lag in large threads. The components now set data attributes from state they already know.
+
 ## Server speed
 
 - **Longer T3 Connect passes (off by default).** HomuCode can keep T3 Connect devices signed in for 30 days instead of one hour, avoiding a cloud round trip on most launches. Turn on **Stay signed in for 30 days** beside device approval in Settings → Sharing & access. Removing a device from the T3 Connect account no longer cuts off its existing pass within the hour; revoke it from **T3 Connect devices** on the host instead. Direct pairing keeps its existing lifetime.

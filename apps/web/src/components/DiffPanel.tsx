@@ -1190,6 +1190,7 @@ export default function DiffPanel({
         )}
       </div>
       <div
+        data-diff-layout-toolbar
         className={cn(
           "flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]",
           headerCommitSha !== null && "gap-0",
