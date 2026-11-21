@@ -2,7 +2,7 @@
 
 On web and desktop, choose a project in Settings → HomuCode → MadoHomu. Projects are listed with their machines. Choosing one enables MadoHomu on that machine and makes it the destination for future launches. Open MadoHomu from the sidebar or the “Open MadoHomu” command palette action.
 
-On mobile, use Settings → HomuCode → MadoHomu to enable it, choose its project and configure the morning brief. On Android, open MadoHomu from the navigation rail when it is visible. Otherwise, open it from the home thread list. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
+On mobile, use Settings → HomuCode → MadoHomu to enable it, choose its project and configure the morning brief. On Android, open MadoHomu from the navigation rail when it is visible. On iOS, open it from the home thread list. On Android, turn on **Show MadoHomu in the home thread list** in MadoHomu settings to restore the row on layouts without a rail. Threads open in your normal mobile chat and composer; use Back to return to MadoHomu.
 
 On Android, enabling MadoHomu adds a MadoHomu icon to the app launcher. Use it to open your selected workspace in its own Recents task. You can keep HomuCode and MadoHomu open side by side in Android split screen. The launcher icon disappears when you disable MadoHomu on your last enabled environment.
 

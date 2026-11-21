@@ -189,6 +189,7 @@ export interface Preferences {
   readonly themeMode?: MobileThemeMode;
   readonly appliedDefaultThemes?: Readonly<Record<string, string>>;
   readonly androidNavigationStyle?: AndroidNavigationStyle;
+  readonly showAndroidMadoHomuHomeRow?: boolean;
   readonly baseFontSize?: number;
   readonly terminalFontSize?: number | null;
   readonly markdownFontSize?: number;
@@ -307,6 +308,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     themeMode?: MobileThemeMode;
     appliedDefaultThemes?: Readonly<Record<string, string>>;
     androidNavigationStyle?: AndroidNavigationStyle;
+    showAndroidMadoHomuHomeRow?: boolean;
     baseFontSize?: number;
     terminalFontSize?: number | null;
     markdownFontSize?: number;
@@ -402,6 +404,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     parsed.themeMode === "dark"
   ) {
     preferences.themeMode = parsed.themeMode;
+  }
+  if (typeof parsed.showAndroidMadoHomuHomeRow === "boolean") {
+    preferences.showAndroidMadoHomuHomeRow = parsed.showAndroidMadoHomuHomeRow;
   }
   if (parsed.androidNavigationStyle === "one-ui" || parsed.androidNavigationStyle === "material") {
     preferences.androidNavigationStyle = parsed.androidNavigationStyle;

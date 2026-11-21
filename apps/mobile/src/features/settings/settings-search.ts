@@ -99,6 +99,7 @@ const SETTINGS_SEARCH_TERMS = {
     msg("Enable loading AppImages", { $context: "settings search keyword" }),
     msg("Serve APKs on LAN", { $context: "settings search keyword" }),
 
+    msg("show MadoHomu in the home thread list", { $context: "settings search keyword" }),
     msg("madohomu", { $context: "settings search keyword" }),
     msg("duet", { $context: "settings search keyword" }),
     msg("show madohomu threads in homu code", { $context: "settings search keyword" }),

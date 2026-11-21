@@ -1,7 +1,10 @@
-import { View } from "react-native";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/reactivity";
+import { Platform, View } from "react-native";
 
 import { ListActionRow } from "../../components/ui/ListActionRow";
 import { rootNavigationRef } from "../../lib/rootNavigation";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import { useMadoHomuDestination } from "./useMadoHomuDestination";
 
@@ -16,6 +19,14 @@ export function useMadoHomuEnvironments() {
 
 export function openMadoHomu(environmentId: string) {
   rootNavigationRef.navigate("MadoHomu", { environmentId });
+}
+
+export function MadoHomuHomeEntries() {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const showAndroidRow =
+    AsyncResult.isSuccess(preferences) && preferences.value.showAndroidMadoHomuHomeRow === true;
+  if (Platform.OS === "android" && !showAndroidRow) return null;
+  return <MadoHomuEntries />;
 }
 
 export function MadoHomuEntries() {
