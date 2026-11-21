@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Apply instantly",
+  "934216569af07a0e": "Apply model and effort when closing the picker",
+  "a128266d98e000a2": "Apply the final model and effort to the running turn when you close the picker, rather than restarting for each choice. The picker's Apply instantly checkbox takes precedence.",
   "4bcfa3b976a421cf": "Side chat",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread on {machine}",

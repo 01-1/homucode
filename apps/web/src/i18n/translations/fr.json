@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Appliquer immédiatement",
+  "934216569af07a0e": "Appliquer le modèle et l’effort à la fermeture du sélecteur",
+  "a128266d98e000a2": "Applique le modèle et l’effort définitifs au tour en cours à la fermeture du sélecteur, au lieu de le relancer à chaque choix. La case « Appliquer immédiatement » est prioritaire.",
   "4bcfa3b976a421cf": "Discussion annexe",
   "23be753133ae6950": "Fil",
   "0001ae5846061bb6": "Fil sur {machine}",

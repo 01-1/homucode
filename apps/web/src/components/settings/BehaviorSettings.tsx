@@ -197,6 +197,19 @@ export function ExtraFeaturesSettings({
   return (
     <SettingsSection title={gt("Extra features")}>
       <SettingsRow
+        {...searchableSetting("apply-model-picker-on-close")}
+        description={gt(
+          "Apply the final model and effort to the running turn when you close the picker, rather than restarting for each choice. The picker's Apply instantly checkbox takes precedence.",
+        )}
+        control={
+          <Checkbox
+            aria-label={gt("Apply model and effort when closing the picker")}
+            checked={settings.applyModelPickerOnClose}
+            onCheckedChange={(checked) => update({ applyModelPickerOnClose: checked })}
+          />
+        }
+      />
+      <SettingsRow
         {...searchableSetting("status-line-all-models")}
         description={gt(
           "Show models and reported usage limits for this thread’s environment when you hover or focus the status line.",

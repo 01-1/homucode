@@ -5682,7 +5682,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerSessionId &&
         // A live-applied pick leaves the run's selection stale, so compare with the thread's.
         !modelSelectionsEqual(thread.modelSelection, command.modelSelection) &&
-        (yield* serverSettings.getSettings.pipe(Effect.orDie)).applyModelChangeNow
+        (command.applyNow ||
+          (yield* serverSettings.getSettings.pipe(Effect.orDie)).applyModelChangeNow)
       ) {
         yield* Ref.update(effects, (existing) => [
           ...existing,

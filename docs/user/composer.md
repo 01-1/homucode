@@ -102,6 +102,12 @@ new setting, and the agent carries on without a new message; otherwise the chang
 the next turn. Codex loses most of its prompt cache when effort changes. The other two
 options start off.
 
+On web and desktop, check **Apply instantly** in the model picker to apply each change to the
+running turn regardless of the environment's setting. To apply only the final selection, leave
+that checkbox off and enable **Apply model and effort when closing the picker** under
+**Settings → HomuCode → Agent behavior → Extra features**. With both picker options off, the environment setting
+continues to apply. Switching provider instances still waits until you send a message.
+
 ## Queue messages offline on mobile
 
 Mobile keeps local copies of draft attachments, so you can preview them and queue

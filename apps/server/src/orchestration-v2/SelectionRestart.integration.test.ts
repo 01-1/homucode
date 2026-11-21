@@ -648,9 +648,11 @@ it.live.each([
   "overlapping restart",
   "changed and back",
   "off",
+  "forced by picker",
 ] as const)("applyModelChangeNow restarts a running turn on a new effort (%s)", (mode) =>
   Effect.gen(function* () {
-    const applyModelChangeNow = mode !== "off";
+    const applyModelChangeNow = mode !== "off" && mode !== "forced by picker";
+    const shouldRestart = mode !== "off" && mode !== "changed and back";
     const name = `apply-model-change-now-${mode.replaceAll(" ", "-")}`;
     const cwd = yield* checkpointWorkspace(name);
     const threadId = ThreadId.make(`thread:${name}`);
@@ -811,9 +813,10 @@ it.live.each([
         commandId: CommandId.make(`${name}:effort`),
         threadId,
         modelSelection: target,
+        ...(mode === "forced by picker" ? { applyNow: true } : {}),
       });
       yield* worker.drain();
-      if (applyModelChangeNow && mode !== "changed and back") yield* Fiber.join(restartedRunning);
+      if (shouldRestart) yield* Fiber.join(restartedRunning);
       yield* worker.drain();
       return yield* orchestrator.getThreadProjection(threadId);
     }).pipe(
@@ -843,7 +846,7 @@ it.live.each([
       assert.isBelow(liveMarker!.ordinal, restartMarker!.ordinal);
       return;
     }
-    if (!applyModelChangeNow || mode === "changed and back") {
+    if (!shouldRestart) {
       assert.deepEqual(
         turns.map((turn) => turn.selection),
         [high],

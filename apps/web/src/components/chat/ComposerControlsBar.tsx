@@ -22,8 +22,6 @@ import {
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { cn } from "~/lib/utils";
 import { resolveComposerTraitsInput } from "./composerProviderState";
-import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
-import { useStableCallback } from "../../hooks/useStableCallback";
 import {
   ComposerEffortColumn,
   ComposerPickerFooter,
@@ -85,6 +83,9 @@ export function ComposerControlsBar(props: {
   terminalOpen: boolean;
   modelPickerOpen: boolean;
   onModelPickerOpenChange: (open: boolean) => void;
+  onPickerModelSelectionChange: () => void;
+  applyModelPickerInstantly: boolean;
+  onApplyModelPickerInstantlyChange: (checked: boolean) => void;
   modelPickerIconClassName: string | undefined;
   getModelDisabledReason: ChatComposerProps["getModelDisabledReason"];
 }) {
@@ -148,13 +149,11 @@ export function ComposerControlsBar(props: {
   const controlSize = composerControlsCollapsed ? "xs" : "sm";
   const gt = useGT();
   const m = useMessages();
-  const applyThreadModelPick = useApplyThreadModelPick();
-  const applyRouteThreadModelPick = useStableCallback(() => applyThreadModelPick(routeThreadRef));
   const traitsInput = resolveComposerTraitsInput({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
     ...(routeKind === "server"
-      ? { threadRef: routeThreadRef, onDraftModelOptionsChange: applyRouteThreadModelPick }
+      ? { threadRef: routeThreadRef, onDraftModelOptionsChange: props.onPickerModelSelectionChange }
       : {}),
     ...(routeKind === "draft" && draftId ? { draftId } : {}),
     model: selectedModel,
@@ -197,7 +196,12 @@ export function ComposerControlsBar(props: {
       multipleModelSelections={multipleModelSelections}
       onMultipleModelSelectionsChange={onMultipleModelSelectionsChange}
       selectedModelSelection={selectedModelSelection}
-      onProviderModelSelect={onProviderModelSelect}
+      onProviderModelSelect={(instanceId, model, options) =>
+        onProviderModelSelect(instanceId, model, {
+          ...options,
+          onDraftModelSelectionChange: props.onPickerModelSelectionChange,
+        })
+      }
       activeInstanceId={
         providerCatalogPending
           ? (activeThreadModelSelection?.instanceId ?? selectedInstanceId)
@@ -231,6 +235,14 @@ export function ComposerControlsBar(props: {
           runtimeMode={compatibleRuntimeMode}
           runtimeModeOptions={compatibleRuntimeModeOptions}
           onRuntimeModeChange={handleRuntimeModeChange}
+          {...(routeKind === "server"
+            ? {
+                applyInstantly: {
+                  checked: props.applyModelPickerInstantly,
+                  onCheckedChange: props.onApplyModelPickerInstantlyChange,
+                },
+              }
+            : {})}
         />
       }
       terminalOpen={terminalOpen}

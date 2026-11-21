@@ -272,6 +272,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { updateClientSettings } from "../../hooks/useSettings";
 import { usePanelAnimationSettings } from "../../panelAnimations";
 import { readEnvironmentScope, readPreparedConnection } from "../../state/session";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
@@ -480,7 +481,7 @@ export interface ChatComposerProps {
   onProviderModelSelect: (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean },
+    options?: { focusComposer?: boolean; onDraftModelSelectionChange?: () => void },
   ) => void;
   onOpenProviderSetup: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
@@ -1032,6 +1033,37 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
+  const modelPickerTargetKey = useRef(composerDraftTargetKey);
+  const pendingModelPickerPick = useRef<ScopedThreadRef | null>(null);
+  const flushModelPickerPick = useStableCallback(() => {
+    const target = pendingModelPickerPick.current;
+    pendingModelPickerPick.current = null;
+    if (target) void applyThreadModelPick(target, true);
+  });
+  const onModelPickerOpenChange = useStableCallback((open: boolean) => {
+    if (!open) flushModelPickerPick();
+    setIsComposerModelPickerOpen(open);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- dismisses the popup when navigation reuses this composer for another thread
+  useLayoutEffect(() => {
+    if (modelPickerTargetKey.current !== composerDraftTargetKey) {
+      modelPickerTargetKey.current = composerDraftTargetKey;
+      setIsComposerModelPickerOpen(false);
+    }
+    return flushModelPickerPick;
+  }, [composerDraftTargetKey, flushModelPickerPick]);
+  const onPickerModelSelectionChange = useStableCallback(() => {
+    if (routeKind !== "server") return;
+    if (!settings.applyModelPickerInstantly && settings.applyModelPickerOnClose) {
+      pendingModelPickerPick.current = routeThreadRef;
+    } else {
+      void applyThreadModelPick(routeThreadRef, settings.applyModelPickerInstantly || undefined);
+    }
+  });
+  const onApplyModelPickerInstantlyChange = useStableCallback((checked: boolean) => {
+    if (checked) flushModelPickerPick();
+    void updateClientSettings({ applyModelPickerInstantly: checked });
+  });
   const isMobileViewport = useMediaQuery("max-sm");
   const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -2482,9 +2514,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // The collapsed mobile web composer keeps a second controls row inside the card.
   const showInlineRestingControls = isComposerCollapsedMobile;
   const composerControlsHidden = showInlineRestingControls && !restingControlsVisible;
-  if (composerControlsHidden && isComposerModelPickerOpen) {
-    setIsComposerModelPickerOpen(false);
-  }
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hiding the picker commits a staged selection just like dismissing the popup
+  useLayoutEffect(() => {
+    if (composerControlsHidden && isComposerModelPickerOpen) onModelPickerOpenChange(false);
+  }, [composerControlsHidden, isComposerModelPickerOpen, onModelPickerOpenChange]);
   const collapsedComposerImagePreviews =
     standaloneComposerImages.length > 0 ? (
       <ComposerRestingImagePreviews
@@ -2559,7 +2592,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       modelOptionsByInstance={modelOptionsByInstance}
       terminalOpen={terminalOpen}
       modelPickerOpen={isComposerModelPickerOpen}
-      onModelPickerOpenChange={setIsComposerModelPickerOpen}
+      onModelPickerOpenChange={onModelPickerOpenChange}
+      onPickerModelSelectionChange={onPickerModelSelectionChange}
+      applyModelPickerInstantly={settings.applyModelPickerInstantly}
+      onApplyModelPickerInstantlyChange={onApplyModelPickerInstantlyChange}
       modelPickerIconClassName={composerProviderState.modelPickerIconClassName}
       getModelDisabledReason={getModelDisabledReason}
     />
@@ -3180,7 +3216,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             model: selectedModel,
             persistSticky: true,
           });
-        applyThreadModelPick(composerDraftTarget);
+        if (isComposerModelPickerOpen) onPickerModelSelectionChange();
+        else void applyThreadModelPick(composerDraftTarget);
         if (change.prompt !== promptRef.current) {
           applyPromptReplacementStable(0, promptRef.current.length, change.prompt, {
             expandedCursorAfterReplace: change.cursor,
@@ -3189,7 +3226,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       },
       toggleModelPicker: () => {
         if (isComposerModelPickerOpen) {
-          setIsComposerModelPickerOpen(false);
+          onModelPickerOpenChange(false);
         } else {
           openModelPickerStable();
         }
@@ -3367,6 +3404,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       projectSelectionRequired,
       applyPromptReplacementStable,
       isComposerModelPickerOpen,
+      onModelPickerOpenChange,
+      onPickerModelSelectionChange,
       openModelPickerStable,
       readComposerSnapshotStable,
       resetComposerTrigger,

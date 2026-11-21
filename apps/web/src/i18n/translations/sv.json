@@ -1,4 +1,7 @@
 {
+  "73c3f7422e41544e": "Tillämpa direkt",
+  "934216569af07a0e": "Tillämpa modell och resonemangsnivå när väljaren stängs",
+  "a128266d98e000a2": "Tillämpa den slutliga modellen och resonemangsnivån på den pågående turen när väljaren stängs, i stället för att starta om turen vid varje val. Kryssrutan ”Tillämpa direkt” har företräde.",
   "4bcfa3b976a421cf": "Sidochatt",
   "23be753133ae6950": "Tråd",
   "0001ae5846061bb6": "Tråd på {machine}",

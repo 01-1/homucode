@@ -132,9 +132,11 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   const onProviderModelSelect = (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean },
+    options?: { focusComposer?: boolean; onDraftModelSelectionChange?: () => void },
   ) => {
     if (!activeThread) return;
+    const savePick =
+      options?.onDraftModelSelectionChange ?? (() => applyThreadModelPick(threadRef));
     const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
     const resolvedDriverKind = entry?.driver ?? null;
     if (
@@ -189,7 +191,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
         shownSelection.model === resolvedModel)
     ) {
       // Re-picking the shown model keeps its options and saves it again if that save failed.
-      if (resolvedModel && !isLocalDraftThread) applyThreadModelPick(threadRef);
+      if (resolvedModel && !isLocalDraftThread) void savePick();
       if (options?.focusComposer !== false) scheduleComposerFocus();
       return;
     }
@@ -234,7 +236,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
       replaceOptions: true,
     });
     setStickyComposerModelSelection(nextModelSelection);
-    if (!isLocalDraftThread) applyThreadModelPick(threadRef);
+    if (!isLocalDraftThread) void savePick();
     if (options?.focusComposer !== false) scheduleComposerFocus();
   };
   const onProviderModelSelectStable = useStableCallback(onProviderModelSelect);

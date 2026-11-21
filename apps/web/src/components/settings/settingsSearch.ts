@@ -812,6 +812,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("test voice speech model transcription recognition")],
   },
   {
+    id: "apply-model-picker-on-close",
+    title: msg("Apply model and effort when closing the picker"),
+    to: "/settings/agent-behavior",
+    searchTerms: ["instant model switch reasoning effort apply close picker restart turn"],
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: msg("Auto-settle inactive threads"),
     to: "/settings/threads",

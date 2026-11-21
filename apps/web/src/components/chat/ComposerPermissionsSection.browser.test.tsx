@@ -100,6 +100,7 @@ it("returns focus to the editor after a pick", async () => {
 // Mirrors the model picker: a composer popover whose footer nests the Permissions menu.
 function PickerWithPermissions() {
   const [mode, setMode] = useState<RuntimeMode>("full-access");
+  const [applyInstantly, setApplyInstantly] = useState(false);
   const composerMenuProps = useComposerMenuProps();
   return (
     <>
@@ -112,12 +113,26 @@ function PickerWithPermissions() {
             runtimeMode={mode}
             runtimeModeOptions={options}
             onRuntimeModeChange={setMode}
+            applyInstantly={{ checked: applyInstantly, onCheckedChange: setApplyInstantly }}
           />
         </PopoverPopup>
       </Popover>
     </>
   );
 }
+
+it("toggles instant apply by keyboard without closing the model picker", async () => {
+  await using screen = await render(<PickerWithPermissions />, { router: false }); // no routes involved
+  await userEvent.click(screen.getByRole("button", { name: "Model" }));
+  const applyInstantly = page.getByRole("checkbox", { name: "Apply instantly" });
+  await expect.element(applyInstantly).toHaveFocus();
+  await userEvent.keyboard(" ");
+  await expect.element(applyInstantly).toBeChecked();
+  await userEvent.tab();
+  await expect
+    .element(page.getByRole("button", { name: "Permissions: Full access" }))
+    .toHaveFocus();
+});
 
 it("on a touch tablet, tapping outside the Permissions menu leaves the editor unfocused", async () => {
   const realMatchMedia = window.matchMedia.bind(window);
