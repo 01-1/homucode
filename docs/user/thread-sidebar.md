@@ -204,6 +204,8 @@ The phone remembers which folders you collapse and keeps settled folders above t
 
 On web and desktop, right-click empty space in the sidebar and choose **New folder**, open a
 thread's menu and choose **Move to folder → New folder…**, or press `mod+g` on the open thread.
+A folder created from empty space uses the project filter if it covers one environment.
+Otherwise, it uses the open thread or draft, or the primary environment if neither is open.
 To start one from several threads, select them and right-click → **New folder from selection**.
 Type the name right away, or double-click a folder later to rename it. Drag a thread onto a folder
 to file it, or drag it onto a loose thread to take it out. Press `mod+g` again, or choose
