@@ -967,7 +967,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const selectedModelUnavailable = modelOptionsByInstance
     .get(selectedInstanceId)
     ?.some((option) => option.slug === selectedModel && option.isUnavailable);
-  const missingModelReason = gt("Choose an available model before sending.");
+  const missingModelReason = gt("Choose a model");
   const multipleModelUnavailable = multipleModelSelections?.some((selection) => {
     const entry = providerInstanceEntries.find(
       (entry) => entry.instanceId === selection.instanceId,
