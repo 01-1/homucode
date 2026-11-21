@@ -148,20 +148,39 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Status line
 
-Enable **Settings → HomuCode → Agent behavior → Status line** to show the thread's status in the top bar beside
-its title. Three dials show what runs out: context use, the 5-hour limit and the weekly
-limit, each with the percentage used inside. Beside them are the model, its effort as
-signal bars, and small icons for uptime, cache hits and tokens in and out. When the top
-bar is short of room, the small icons go first, then the captions beside the dials.
-The clock stays at the right of the thread header, even when the status line is off.
-Hover the status line, or focus it with the keyboard, to see every value by name,
-with the folder and version. The expanded view also lists models and their reported limits
-for the thread's environment. To hide that list, turn off **Show all models in status line
-details** under **Settings → HomuCode → Agent behavior → Extra features**.
+Enable **Settings → HomuCode → Agent behavior → Status line** to show context use and quota
+in the top bar. The context dial shows the percentage used and the token count. The 5-hour
+and weekly dials show the percentage remaining. A tick marks the projected remainder at
+reset, and the dial takes its color from that projection when timing is available. In a
+narrow bar, labels shorten and the weekly limit stays visible longer than the 5-hour limit.
+On desktop and web, the model picker colors the reasoning effort. On mobile, the status
+line colors the model and effort together. As space gets tight, it shortens the model
+name while keeping its version, such as `A6.2 hi`.
 
-For providers routed through a [configured CLIProxyAPI hub](usage.md#connect-a-cliproxyapi-hub),
-the status line shows the hub's pooled usage. Each percentage uses the accounts that
-reported a current reading for that window, and the countdown shows the next reported reset.
+Thread cost covers recorded main-agent usage in the active provider thread. It uses the
+API price and estimates a subscription share for supported plans. Claude Ultra estimates
+use 3.2% for non-Fable models and 5.7% for Fable. Turn on **Use API prices for thread cost**
+to always see API prices. A ≥ means some turns could only be partially priced or had no
+pricing data. Claude also reports API time and output style on completed turns.
+
+The reset countdown blends from green to red based on recent usage. Green means at least
+twice as much time to run out as to reset, and red means near exhaustion. Hover or focus
+the status line on desktop and web, or tap it on mobile, to see the details and change
+**5-hour burn-rate smoothing** or **Weekly burn-rate smoothing**. The same controls are
+in Settings. Longer durations make the colors less sensitive to recent usage. The
+defaults are 30 minutes and one day.
+
+For a [configured CLIProxyAPI hub](usage.md#connect-a-cliproxyapi-hub), the percentages pool
+accounts with a current reading, and the countdown shows the next reported reset.
+Turn on **5-hour depletion ratio** and **Weekly depletion ratio** independently in Settings
+to show each percentage beside its dial label. The ratio compares time until reset with
+projected time until the quota runs out. Above 100% means quota is projected to run out
+first. A negative projected remainder shows how far past the limit the current pace
+would take you.
+
+Turn off **Show all models in status line details** under **Settings → HomuCode → Agent
+behavior → Extra features** to hide the environment's model and quota list on desktop and
+web.
 
 To draw your own, set **Status line command** to any shell command: it receives Claude
 Code's status line JSON on stdin and runs in the thread's folder, so a script written for
@@ -170,9 +189,9 @@ place of the dials. Colors take the matching colors of your theme, percentages a
 as bars, and when room is short the version, `user@host` and the directory are left out
 first.
 
-On mobile the status line is a line of text under the composer: your command's output, or
-without one the [01-1/statusline](https://github.com/01-1/statusline) script on the thread's
-machine, which needs `bash` and `jq`.
+On mobile, the status line sits beside the title when there is room and appears as a compact
+button beneath the top bar on narrower screens. Tap it for the full details. A custom
+command displays its text in the same place, with the full output available on tap.
 
 ## Quote an assistant response
 

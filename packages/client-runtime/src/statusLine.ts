@@ -3,6 +3,7 @@ import type {
   ServerProvider,
   ServerProviderModel,
   ServerProviderUsageWindow,
+  StatusLineAccounting,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
@@ -12,6 +13,9 @@ import {
 import {
   collectLimitPools,
   collectProviderUsageLimits,
+  projectedWindowUsedPercent,
+  remainingPercent,
+  usageDepletionRatioPercent,
   usageLimitSourceAtEndpoint,
 } from "@t3tools/shared/usageLimits";
 
@@ -28,12 +32,22 @@ export interface StatusLineInputSource {
   readonly contextWindow: ContextWindowSnapshot | null;
   /** Usage limits are read as of this time. */
   readonly nowMs: number;
+  readonly showSessionDepletionRatio?: boolean;
+  readonly showWeeklyDepletionRatio?: boolean;
+  readonly accounting?: StatusLineAccounting | null;
+  readonly useApiPrice?: boolean;
 }
 
 export type StatusLineUsageSource = Pick<
   StatusLineInputSource,
   "providers" | "usageLimitSources" | "nowMs"
 >;
+
+type StatusLineUsageWindow = ServerProviderUsageWindow & {
+  readonly remainingPercent?: number;
+  readonly projectedUsedPercent?: number | null;
+  readonly depletionRatioPercent?: number | null;
+};
 
 function summaryWindow(provider: ServerProvider, window: ServerProviderUsageWindow): boolean {
   return (
@@ -50,7 +64,7 @@ function hubUsageWindows(
   sources: UsageLimitSourceSnapshots,
   now: number,
   includeAll: boolean,
-): ReadonlyArray<ServerProviderUsageWindow> {
+): ReadonlyArray<StatusLineUsageWindow> {
   if (!provider.auth.endpoint) return [];
   const hub = usageLimitSourceAtEndpoint(sources, provider.auth.endpoint, {
     useProviderRoute: provider.driver === "claudeAgent",
@@ -93,13 +107,21 @@ function hubUsageWindows(
         ...(reported?.providerIds === undefined ? {} : { providerIds: reported.providerIds }),
         kind: window.kind,
         usedPercent: window.usedPercent,
+        remainingPercent: window.remainingPercent,
+        projectedUsedPercent: window.projectedUsedPercent,
+        depletionRatioPercent: window.depletionRatioPercent,
         ...(resetsAt === undefined ? {} : { resetsAt }),
+        ...(window.burnRatePercentPerSecond === undefined
+          ? {}
+          : {
+              burnRatePercentPerSecond: window.burnRatePercentPerSecond,
+            }),
       };
     }) ?? []
   );
 }
 
-function usageWindows(source: StatusLineInputSource): ReadonlyArray<ServerProviderUsageWindow> {
+function usageWindows(source: StatusLineInputSource): ReadonlyArray<StatusLineUsageWindow> {
   const instanceId = source.modelSelection?.instanceId;
   const provider = source.providers.find((candidate) => candidate.instanceId === instanceId);
   if (instanceId === undefined || !provider) return [];
@@ -110,7 +132,7 @@ function providerUsageWindows(
   provider: ServerProvider,
   source: StatusLineUsageSource,
   includeAll: boolean,
-): ReadonlyArray<ServerProviderUsageWindow> {
+): ReadonlyArray<StatusLineUsageWindow> {
   const { instanceId } = provider;
   const hubWindows = hubUsageWindows(provider, source.usageLimitSources, source.nowMs, includeAll);
   const report = collectProviderUsageLimits(
@@ -128,11 +150,12 @@ function providerUsageWindows(
     ...hubWindows,
     ...nativeWindows.filter(
       (window) =>
+        // Claude's scoped weekly windows, such as `seven_day_fable`, never stand in for its main one.
+        (includeAll || provider.driver !== "claudeAgent" || summaryWindow(provider, window)) &&
         !hubWindows.some(
           (hub) =>
             hub.kind === window.kind &&
-            (!includeAll ||
-              hub.id === window.id ||
+            (hub.id === window.id ||
               (summaryWindow(provider, hub) && summaryWindow(provider, window))),
         ),
     ),
@@ -149,7 +172,6 @@ export function buildStatusLineModelUsage(source: StatusLineUsageSource) {
         name: resolveProviderInstanceDisplayName(provider),
         models: [...names.values()],
         limits: providerUsageWindows(provider, source, true).map((window) => {
-          const resetsAtMs = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
           return {
             id: window.id,
             label: window.label,
@@ -157,20 +179,26 @@ export function buildStatusLineModelUsage(source: StatusLineUsageSource) {
               ...(window.modelIds?.map((id) => names.get(id) ?? id) ?? []),
               ...(window.providerIds ?? []),
             ],
-            usedPercent: Math.round(window.usedPercent),
-            resetsAtMs: Number.isFinite(resetsAtMs) ? resetsAtMs : null,
+            ...limitFromWindow(window, source.nowMs),
           };
         }),
       };
     });
 }
 
-function rateLimit(
-  windows: ReadonlyArray<ServerProviderUsageWindow>,
+function findUsageWindow(
+  windows: ReadonlyArray<StatusLineUsageWindow>,
   kind: ServerProviderUsageWindow["kind"],
 ) {
   const matching = windows.filter((window) => window.kind === kind);
-  const window = matching.find((candidate) => candidate.modelIds === undefined) ?? matching[0];
+  return matching.find((candidate) => candidate.modelIds === undefined) ?? matching[0];
+}
+
+function rateLimit(
+  windows: ReadonlyArray<StatusLineUsageWindow>,
+  kind: ServerProviderUsageWindow["kind"],
+) {
+  const window = findUsageWindow(windows, kind);
   if (window === undefined) return undefined;
   const resetsAt = window.resetsAt === undefined ? Number.NaN : Date.parse(window.resetsAt);
   return {
@@ -207,6 +235,22 @@ function effortLevel(
   return undefined;
 }
 
+function statusLineFastMode(
+  selection: ModelSelection | null,
+  model: ServerProviderModel | undefined,
+): boolean | null {
+  const tier = getModelSelectionStringOptionValue(selection, "serviceTier");
+  if (tier !== undefined) return ["fast", "priority", "ultrafast"].includes(tier);
+  return (
+    getModelSelectionBooleanOptionValue(selection, "fastMode") ??
+    (model?.capabilities?.optionDescriptors?.some(
+      (option) => option.id === "fastMode" || option.id === "serviceTier",
+    )
+      ? false
+      : null)
+  );
+}
+
 function selectedModel(source: Pick<StatusLineInputSource, "modelSelection" | "providers">) {
   const selection = source.modelSelection;
   const provider =
@@ -226,8 +270,34 @@ export function statusLineInputModelName(
 }
 
 export interface StatusLineLimit {
-  readonly usedPercent: number;
+  readonly remainingPercent: number;
+  readonly projectedRemainingPercent: number | null;
+  readonly depletionRatioPercent?: number;
   readonly resetsAtMs: number | null;
+  readonly usedPercent?: number;
+  readonly burnRatePercentPerSecond?: number;
+}
+
+interface StatusLineDisplayCost {
+  readonly amount: string;
+  readonly basis: "api" | "subscription";
+  readonly partial: boolean;
+}
+
+export function statusLineDisplayCost(
+  accounting: StatusLineAccounting | null | undefined,
+  useApiPrice: boolean,
+): StatusLineDisplayCost | null {
+  if (accounting == null) return null;
+  const subscription = !useApiPrice && accounting.subscriptionCostUsd !== null;
+  const cost = subscription ? accounting.subscriptionCostUsd : accounting.apiCostUsd;
+  if (cost === null || !Number.isFinite(cost) || cost < 0) return null;
+  return {
+    amount:
+      cost > 0 && cost < 0.01 ? "<$0.01" : `${accounting.partial ? "≥" : ""}$${cost.toFixed(2)}`,
+    basis: subscription ? "subscription" : "api",
+    partial: accounting.partial,
+  };
 }
 
 /** What a client draws its own status line from, when no custom command draws it. */
@@ -236,6 +306,9 @@ export interface StatusLineStats {
   readonly effort: string | null;
   readonly fastMode: boolean | null;
   readonly version: string | null;
+  readonly cost: StatusLineDisplayCost | null;
+  readonly apiTime: string | null;
+  readonly outputStyle: string | null;
   readonly cwd: string | null;
   readonly contextPercent: number | null;
   readonly contextTokens: number | null;
@@ -247,16 +320,38 @@ export interface StatusLineStats {
   readonly outputTokens: number | null;
 }
 
-function statusLineLimit(
-  windows: ReadonlyArray<ServerProviderUsageWindow>,
-  kind: ServerProviderUsageWindow["kind"],
-): StatusLineLimit | null {
-  const limit = rateLimit(windows, kind);
-  if (limit === undefined) return null;
+function limitFromWindow(
+  window: StatusLineUsageWindow,
+  nowMs: number,
+  showDepletionRatio = false,
+): StatusLineLimit {
+  const resetsAtMs = window.resetsAt === undefined ? Number.NaN : Date.parse(window.resetsAt);
+  const projected = window.projectedUsedPercent ?? projectedWindowUsedPercent(window, nowMs);
+  const depletionRatio = showDepletionRatio
+    ? (window.depletionRatioPercent ?? usageDepletionRatioPercent(window.usedPercent, projected))
+    : null;
   return {
-    usedPercent: limit.used_percentage,
-    resetsAtMs: limit.resets_at === undefined ? null : limit.resets_at * 1000,
+    remainingPercent: window.remainingPercent ?? remainingPercent(window),
+    projectedRemainingPercent: projected === null ? null : Math.round(100 - projected),
+    ...(depletionRatio === null ? {} : { depletionRatioPercent: depletionRatio }),
+    resetsAtMs: Number.isFinite(resetsAtMs) ? resetsAtMs : null,
+    ...(window.burnRatePercentPerSecond === undefined
+      ? {}
+      : {
+          usedPercent: window.usedPercent,
+          burnRatePercentPerSecond: window.burnRatePercentPerSecond,
+        }),
   };
+}
+
+function statusLineLimit(
+  windows: ReadonlyArray<StatusLineUsageWindow>,
+  kind: ServerProviderUsageWindow["kind"],
+  nowMs: number,
+  showDepletionRatio = false,
+): StatusLineLimit | null {
+  const window = findUsageWindow(windows, kind);
+  return window === undefined ? null : limitFromWindow(window, nowMs, showDepletionRatio);
 }
 
 /** The same facts `buildStatusLineInput` gives a script, typed for a client to draw. */
@@ -269,24 +364,162 @@ export function buildStatusLineStats(source: StatusLineInputSource): StatusLineS
   return {
     modelName: statusLineInputModelName(source),
     effort: effortLevel(selection, model) ?? null,
-    fastMode: getModelSelectionBooleanOptionValue(selection, "fastMode") ?? null,
+    fastMode: statusLineFastMode(selection, model),
     version: provider?.version || null,
+    cost: statusLineDisplayCost(source.accounting, source.useApiPrice === true),
+    apiTime:
+      source.accounting?.apiDurationMs == null
+        ? null
+        : formatStatusLineApiTime(source.accounting.apiDurationMs),
+    outputStyle: source.accounting?.outputStyle ?? null,
     cwd: source.cwd,
     contextPercent:
-      context === null || context.usedPercentage === null
-        ? null
-        : Math.round(context.usedPercentage),
+      context === null || context.usedPercentage === null ? null : context.usedPercentage,
     contextTokens: context?.usedTokens ?? null,
     contextMaxTokens: context?.maxTokens ?? null,
-    fiveHour: statusLineLimit(windows, "session"),
-    weekly: statusLineLimit(windows, "weekly"),
+    fiveHour: statusLineLimit(windows, "session", source.nowMs, source.showSessionDepletionRatio),
+    weekly: statusLineLimit(windows, "weekly", source.nowMs, source.showWeeklyDepletionRatio),
     cachePercent:
       inputTokens !== null && inputTokens > 0 && cachedInputTokens !== null
-        ? Math.round(Math.min(1, cachedInputTokens / inputTokens) * 100)
+        ? 100 * Math.min(1, cachedInputTokens / inputTokens)
         : null,
     inputTokens,
     outputTokens: context?.outputTokens ?? null,
   };
+}
+
+export const STATUS_LINE_EFFORT_COLORS = [
+  ["#6322b6", "#be9dff"],
+  ["#8835a0", "#dc9af5"],
+  ["#a60068", "#ff83c7"],
+  ["#ba124a", "#ff769d"],
+  ["#bd171c", "#ff7775"],
+] as const;
+
+export function statusLineEffortPosition(effort: string): number | undefined {
+  switch (effort.toLowerCase()) {
+    case "minimal":
+    case "low":
+      return 0;
+    case "medium":
+      return 25;
+    case "high":
+      return 50;
+    case "xhigh":
+    case "extra high":
+    case "extra-high":
+    case "extra_high":
+      return 75;
+    case "max":
+    case "ultra":
+    case "ultrathink":
+    case "ultracode":
+      return 100;
+    default:
+      return undefined;
+  }
+}
+
+function clampPercent(percent: number): number {
+  return Math.max(0, Math.min(100, percent));
+}
+
+export function statusLineGaugePercent(percent: number): number {
+  return Math.round(clampPercent(percent));
+}
+
+export function statusLineGaugeUsedPercent(
+  percent: number,
+  kind: "context" | "limit",
+  projectedRemainingPercent?: number | null,
+): number {
+  return clampPercent(kind === "context" ? percent : 100 - (projectedRemainingPercent ?? percent));
+}
+
+// A 2% miss is halfway along the scale, and a 10% miss reaches red.
+export function statusLineCacheRisk(percent: number): number {
+  const miss = Math.max(0, 100 - percent);
+  return clampPercent(miss <= 2 ? 25 * miss : 50 + (50 * (miss - 2)) / 8);
+}
+
+export function statusLineBurnRisk(limit: StatusLineLimit, nowMs: number): number {
+  const used = limit.usedPercent ?? 100 - limit.remainingPercent;
+  if (used >= 100) return 100;
+  const left = ((limit.resetsAtMs ?? nowMs) - nowMs) / 1_000;
+  const rate = limit.burnRatePercentPerSecond ?? 0;
+  if (rate <= 0 || left <= 0) return 0;
+  return clampPercent(100 - (50 * (100 - used)) / rate / left);
+}
+
+export function statusLineColorMix(
+  percent: number,
+  colors: readonly [string, string, ...string[]],
+  mix: (from: string, to: string, amount: number) => string,
+): string {
+  const position = (clampPercent(percent) / 100) * (colors.length - 1);
+  const index = Math.floor(position);
+  const from = colors[index]!;
+  const to = colors[index + 1];
+  return to === undefined || position === index ? from : mix(from, to, position - index);
+}
+
+export function statusLineNativeColorMix(from: string, to: string, amount: number): string {
+  const channels = (color: string) => {
+    const hex = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(color)?.[1];
+    if (hex) return [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
+    return /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i.exec(color)?.slice(1).map(Number);
+  };
+  const start = channels(from);
+  const end = channels(to);
+  if (!start || !end) return from;
+  return `rgb(${start.map((channel, index) => Math.round(channel + (end[index]! - channel) * amount)).join(", ")})`;
+}
+
+export function fitStatusLineItems<Item extends string>(
+  width: number,
+  core: { readonly full: number; readonly compact: number },
+  items: ReadonlyArray<{ readonly id: Item; readonly full: number; readonly compact?: number }>,
+): { readonly compact: boolean; readonly visible: ReadonlySet<Item> } {
+  const compact = core.full + items.reduce((sum, item) => sum + item.full, 0) > width;
+  let available = width - (compact ? core.compact : core.full);
+  const visible = new Set<Item>();
+  for (const item of items) {
+    const itemWidth = compact ? (item.compact ?? item.full) : item.full;
+    if (itemWidth > available) continue;
+    visible.add(item.id);
+    available -= itemWidth;
+  }
+  return { compact, visible };
+}
+
+export const STATUS_LINE_BURN_TAU_PRESETS = {
+  statusLineSessionBurnTauMinutes: [15, 30, 60, 120],
+  statusLineWeeklyBurnTauMinutes: [360, 720, 1440, 2880],
+} as const;
+export type StatusLineBurnTauKey = keyof typeof STATUS_LINE_BURN_TAU_PRESETS;
+
+export function parseStatusLineBurnTau(input: string): number | null {
+  const minutes = Number(input.trim());
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
+export function statusLineGaugeTickRotation(percent: number): number {
+  return statusLineGaugePercent(percent) * 3.6;
+}
+
+export function statusLineLimitEnded(limit: StatusLineLimit, nowMs: number): boolean {
+  return limit.resetsAtMs !== null && limit.resetsAtMs <= nowMs;
+}
+
+export function statusLineLimitRemaining(limit: StatusLineLimit, nowMs: number): string | null {
+  return limit.resetsAtMs === null || statusLineLimitEnded(limit, nowMs)
+    ? null
+    : formatStatusLineSpan(limit.resetsAtMs - nowMs);
+}
+
+export function statusLineUptime(createdAt: string | null, nowMs: number): string | null {
+  const startedMs = createdAt === null ? Number.NaN : Date.parse(createdAt);
+  return Number.isFinite(startedMs) ? formatStatusLineSpan(nowMs - startedMs) : null;
 }
 
 /** A token count the way the status line writes it: `588`, `68.8k`, `341k`, `1.2M`. */
@@ -307,6 +540,10 @@ export function formatStatusLineSpan(ms: number): string {
   return `${minutes}m`;
 }
 
+function formatStatusLineApiTime(ms: number): string {
+  return ms < 60_000 ? `${Math.floor(ms / 1000)}s` : formatStatusLineSpan(ms);
+}
+
 /** Claude Code's status line JSON, so scripts written for it run unchanged. Unknown fields are left out. */
 export function buildStatusLineInput(source: StatusLineInputSource): Record<string, unknown> {
   const { selection, provider, model } = selectedModel(source);
@@ -315,6 +552,15 @@ export function buildStatusLineInput(source: StatusLineInputSource): Record<stri
   const fastMode = getModelSelectionBooleanOptionValue(selection, "fastMode");
   const context = source.contextWindow;
   const windows = usageWindows(source);
+  const accounting = source.accounting;
+  const cost = {
+    ...(accounting?.apiCostUsd == null || accounting.partial
+      ? {}
+      : { total_cost_usd: accounting.apiCostUsd }),
+    ...(accounting?.apiDurationMs == null
+      ? {}
+      : { total_api_duration_ms: accounting.apiDurationMs }),
+  };
   const fiveHour = rateLimit(windows, "session");
   const sevenDay = rateLimit(windows, "weekly");
   const inputTokens = context?.inputTokens ?? null;
@@ -322,6 +568,8 @@ export function buildStatusLineInput(source: StatusLineInputSource): Record<stri
 
   return {
     session_id: source.threadId,
+    ...(Object.keys(cost).length > 0 ? { cost } : {}),
+    ...(accounting?.outputStyle == null ? {} : { output_style: { name: accounting.outputStyle } }),
     ...(source.cwd === null
       ? {}
       : { cwd: source.cwd, workspace: { current_dir: source.cwd, project_dir: source.cwd } }),
@@ -367,7 +615,13 @@ export function stampStatusLineInput(
 ): Record<string, unknown> {
   const started = createdAt === null ? Number.NaN : Date.parse(createdAt);
   return Number.isFinite(started)
-    ? { ...input, cost: { total_duration_ms: Math.max(0, nowMs - started) } }
+    ? {
+        ...input,
+        cost: {
+          ...(typeof input.cost === "object" && input.cost !== null ? input.cost : {}),
+          total_duration_ms: Math.max(0, nowMs - started),
+        },
+      }
     : input;
 }
 

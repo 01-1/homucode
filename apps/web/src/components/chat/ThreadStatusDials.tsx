@@ -2,8 +2,15 @@ import { resolveProvidersForCwd } from "@t3tools/client-runtime/providerSkills";
 import { msg, useGT, useMessages } from "gt-react";
 import {
   buildStatusLineModelUsage,
-  formatStatusLineSpan,
   formatStatusLineTokens,
+  statusLineBurnRisk,
+  statusLineCacheRisk,
+  statusLineGaugeUsedPercent,
+  statusLineGaugePercent,
+  statusLineGaugeTickRotation,
+  statusLineLimitEnded,
+  statusLineLimitRemaining,
+  statusLineUptime,
   type StatusLineLimit,
   type StatusLineStats,
   type StatusLineUsageSource,
@@ -15,79 +22,42 @@ import {
   FolderIcon,
   RotateCwIcon,
   TimerIcon,
-  ZapIcon,
+  ClockIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { observeResize } from "~/lib/observeResize";
 import type { MessageResolver } from "../../i18n/messages";
 
-const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
-const EFFORT_BAR_HEIGHTS = ["h-1", "h-1.5", "h-2", "h-2.5", "h-3"];
+import { APP_VERSION } from "../../branding";
+import { statusEffortColor, statusUsedColor } from "./statusLineColors";
 
-// A long context window is fine half full; a usage limit half spent is worth a look.
-const CONTEXT_ALERTS = [70, 90] as const;
-const LIMIT_ALERTS = [50, 80] as const;
-
-type Alerts = readonly [warnAt: number, errorAt: number];
-
-function gaugeColor(percent: number, [warnAt, errorAt]: Alerts): string {
-  if (percent >= errorAt) return "var(--destructive)";
-  return percent >= warnAt ? "var(--warning-foreground)" : "var(--success-foreground)";
-}
-
-// Past its reset time a limit's number is the old window's, until the provider reports again.
-function windowEnded(limit: StatusLineLimit, nowMs: number): boolean {
-  return limit.resetsAtMs !== null && limit.resetsAtMs <= nowMs;
-}
-
-function resetsIn(limit: StatusLineLimit, nowMs: number): string | null {
-  return limit.resetsAtMs === null || windowEnded(limit, nowMs)
-    ? null
-    : formatStatusLineSpan(limit.resetsAtMs - nowMs);
+function gaugeColor(
+  percent: number,
+  kind: "context" | "limit",
+  projectedRemainingPercent?: number | null,
+): string {
+  return statusUsedColor(statusLineGaugeUsedPercent(percent, kind, projectedRemainingPercent));
 }
 
 function limitNote(limit: StatusLineLimit, nowMs: number, resolve: MessageResolver): string {
-  if (windowEnded(limit, nowMs)) return resolve(msg("window ended"));
-  const left = resetsIn(limit, nowMs);
+  if (statusLineLimitEnded(limit, nowMs)) return resolve(msg("window ended"));
+  const left = statusLineLimitRemaining(limit, nowMs);
   return left === null ? "" : resolve(msg("resets in {time}", { time: left }));
 }
 
-function uptimeText(createdAt: string | null, nowMs: number): string | null {
-  const startedMs = createdAt === null ? Number.NaN : Date.parse(createdAt);
-  return Number.isFinite(startedMs) ? formatStatusLineSpan(nowMs - startedMs) : null;
-}
-
-/** Effort as signal bars, one lit for low and all five for max. Other levels are written out. */
-function Effort(props: { readonly effort: string }) {
-  const level = props.effort.startsWith("ultra") ? 5 : EFFORT_LEVELS.indexOf(props.effort) + 1;
-  if (level === 0) {
-    return <span className="font-normal text-2xs text-muted-foreground">{props.effort}</span>;
-  }
-  return (
-    <span
-      role="img"
-      aria-label={`${props.effort} effort`}
-      className="flex shrink-0 items-end gap-px"
-    >
-      {EFFORT_BAR_HEIGHTS.map((height, index) => (
-        <span
-          key={height}
-          className={`w-[3px] rounded-xs ${height} ${index < level ? "bg-foreground" : "bg-foreground/30"}`}
-        />
-      ))}
-    </span>
-  );
-}
-
-// At the error level the disc fills too, since a theme's error color can sit close to its accent.
-function Ring(props: { readonly percent: number; readonly alarm: boolean }) {
+function Ring(props: {
+  readonly percent: number;
+  readonly usedPercent: number;
+  readonly projectedRemainingPercent?: number | null;
+}) {
   return (
     <svg viewBox="0 0 26 26" className="size-[26px] shrink-0" aria-hidden>
       <circle
         cx="13"
         cy="13"
         r="10.5"
-        fill={props.alarm ? "currentColor" : "none"}
-        fillOpacity="0.3"
+        fill="currentColor"
+        fillOpacity={0.3 * (props.usedPercent / 100) ** 4}
         stroke="currentColor"
         strokeOpacity="0.22"
         strokeWidth="3"
@@ -106,6 +76,18 @@ function Ring(props: { readonly percent: number; readonly alarm: boolean }) {
           transform="rotate(-90 13 13)"
         />
       )}
+      {props.projectedRemainingPercent == null ? null : (
+        <line
+          x1="13"
+          y1="1"
+          x2="13"
+          y2="6"
+          stroke="var(--foreground)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          transform={`rotate(${statusLineGaugeTickRotation(props.projectedRemainingPercent)} 13 13)`}
+        />
+      )}
       <text
         x="13"
         y="13.4"
@@ -122,25 +104,34 @@ function Ring(props: { readonly percent: number; readonly alarm: boolean }) {
 /** A ring filled to `percent` with the number inside, then what it measures and a detail. */
 function Dial(props: {
   readonly percent: number;
-  readonly alerts: Alerts;
-  readonly name: string;
+  readonly kind: "context" | "limit";
+  readonly projectedRemainingPercent?: number | null;
+  readonly name: ReactNode;
   readonly detail: ReactNode;
   readonly label: string;
-  readonly className?: string;
+  readonly dimmed?: boolean;
 }) {
-  const percent = Math.max(0, Math.min(100, Math.round(props.percent)));
+  const percent = statusLineGaugePercent(props.percent);
   return (
     <span
       role="img"
       aria-label={props.label}
-      className={`flex shrink-0 items-center gap-1.5 ${props.className ?? ""}`}
-      style={{ color: gaugeColor(percent, props.alerts) }}
+      className={`flex shrink-0 items-center gap-1.5 ${props.dimmed ? "opacity-50" : ""}`}
+      style={{ color: gaugeColor(props.percent, props.kind, props.projectedRemainingPercent) }}
     >
-      <Ring percent={percent} alarm={percent >= props.alerts[1]} />
-      <span className="grid @max-[20rem]/dials:hidden">
+      <Ring
+        percent={percent}
+        projectedRemainingPercent={props.projectedRemainingPercent ?? null}
+        usedPercent={statusLineGaugeUsedPercent(
+          props.percent,
+          props.kind,
+          props.projectedRemainingPercent,
+        )}
+      />
+      <span className="grid">
         <span className="font-medium text-2xs/3.5 text-foreground">{props.name}</span>
         {props.detail === null ? null : (
-          <span className="flex items-center gap-0.5 text-3xs/3 text-muted-foreground @max-[24rem]/dials:hidden [&_svg]:size-2.5">
+          <span className="flex items-center gap-0.5 text-3xs/3 text-muted-foreground [&_svg]:size-2.5">
             {props.detail}
           </span>
         )}
@@ -152,36 +143,47 @@ function Dial(props: {
 function LimitDial(props: {
   readonly limit: StatusLineLimit;
   readonly nowMs: number;
-  readonly name: string;
+  readonly name: ReactNode;
   readonly title: string;
-  readonly className: string;
 }) {
   const gt = useGT();
-  const left = resetsIn(props.limit, props.nowMs);
+  const left = statusLineLimitRemaining(props.limit, props.nowMs);
   const note = limitNote(props.limit, props.nowMs, useMessages());
+  const { remainingPercent, projectedRemainingPercent, depletionRatioPercent } = props.limit;
+  const remaining = gt("{percent}% remaining", { percent: remainingPercent });
+  const projected =
+    projectedRemainingPercent === null
+      ? ""
+      : gt("{percent}% projected remaining at reset", { percent: projectedRemainingPercent });
+  const depletionRatio =
+    depletionRatioPercent === undefined
+      ? null
+      : gt("Reset / depletion {percent}%", { percent: depletionRatioPercent });
   return (
     <Dial
-      percent={props.limit.usedPercent}
-      alerts={LIMIT_ALERTS}
-      name={props.name}
+      percent={remainingPercent}
+      kind="limit"
+      projectedRemainingPercent={projectedRemainingPercent}
+      name={
+        <>
+          {props.name}
+          {left !== null && depletionRatioPercent !== undefined ? (
+            <span className="ms-1 text-3xs text-muted-foreground">{depletionRatioPercent}%</span>
+          ) : null}
+        </>
+      }
       detail={
         left === null ? null : (
           <>
             <RotateCwIcon />
-            {left}
+            <span style={{ color: statusUsedColor(statusLineBurnRisk(props.limit, props.nowMs)) }}>
+              {left}
+            </span>
           </>
         )
       }
-      label={
-        note === ""
-          ? gt("{title} {percent}% used", { title: props.title, percent: props.limit.usedPercent })
-          : gt("{title} {percent}% used, {note}", {
-              title: props.title,
-              percent: props.limit.usedPercent,
-              note,
-            })
-      }
-      className={`${props.className} ${windowEnded(props.limit, props.nowMs) ? "opacity-50" : ""}`}
+      label={[props.title, remaining, note, projected, depletionRatio].filter(Boolean).join(", ")}
+      dimmed={statusLineLimitEnded(props.limit, props.nowMs)}
     />
   );
 }
@@ -202,11 +204,53 @@ function Stat(props: {
   );
 }
 
-/**
- * The status line as gauges in the top bar. What runs out (context and the usage limits) is a
- * dial; the rest are small icons. As the bar narrows the icons leave first, then the captions,
- * and the dials last.
- */
+function CompactLabel(props: { readonly label: string; readonly short: string }) {
+  return (
+    <>
+      <span className="@max-[58rem]/dials:hidden">{props.label}</span>
+      <span className="@min-[58rem]/dials:hidden">{props.short}</span>
+    </>
+  );
+}
+
+function useStatusDialVisibility(hasContext: boolean, hasWeekly: boolean, hasFiveHour: boolean) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const contextRef = useRef<HTMLSpanElement>(null);
+  const weeklyRef = useRef<HTMLSpanElement>(null);
+  const fiveHourRef = useRef<HTMLSpanElement>(null);
+  const [visibility, setVisibility] = useState({ weekly: true, fiveHour: true });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures rendered dial widths to keep weekly ahead of the 5-hour dial
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (row === null) return;
+    const context = hasContext ? contextRef.current : null;
+    const { current: weekly } = weeklyRef;
+    const { current: fiveHour } = fiveHourRef;
+    const measure = () => {
+      const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0;
+      const width = (element: HTMLSpanElement | null) =>
+        element === null ? 0 : element.getBoundingClientRect().width + gap;
+      const room = row.getBoundingClientRect().width + gap - width(context);
+      const weeklyWidth = width(weekly);
+      const showWeekly = hasWeekly && weeklyWidth <= room;
+      const showFiveHour = hasFiveHour && width(fiveHour) <= room - (showWeekly ? weeklyWidth : 0);
+      setVisibility((previous) =>
+        previous.weekly === showWeekly && previous.fiveHour === showFiveHour
+          ? previous
+          : { weekly: showWeekly, fiveHour: showFiveHour },
+      );
+    };
+    measure();
+    const stop = [row, context, weekly, fiveHour]
+      .filter((element) => element !== null)
+      .map((element) => observeResize(element, measure));
+    return () => stop.forEach((unobserve) => unobserve());
+  }, [hasContext, hasWeekly, hasFiveHour]);
+  return { rowRef, contextRef, weeklyRef, fiveHourRef, visibility };
+}
+
+const HIDDEN_DIAL = "invisible pointer-events-none absolute left-0 top-0 w-max";
+
 export function StatusDialStrip(props: {
   readonly stats: StatusLineStats;
   readonly createdAt: string | null;
@@ -214,95 +258,131 @@ export function StatusDialStrip(props: {
 }) {
   const gt = useGT();
   const { stats, nowMs } = props;
-  const uptime = uptimeText(props.createdAt, nowMs);
+  const uptime = statusLineUptime(props.createdAt, nowMs);
   const context = stats.contextTokens === null ? null : formatStatusLineTokens(stats.contextTokens);
-  const hasDial = stats.contextPercent !== null || stats.fiveHour !== null || stats.weekly !== null;
+  const { rowRef, contextRef, weeklyRef, fiveHourRef, visibility } = useStatusDialVisibility(
+    context !== null,
+    stats.weekly !== null,
+    stats.fiveHour !== null,
+  );
+  const contextName = (
+    <CompactLabel
+      label={gt("context", { $context: "model context window" })}
+      short={gt("ctx", { $context: "short label for model context" })}
+    />
+  );
+  const cost = stats.cost;
+  const fastLabel =
+    stats.fastMode === null ? null : stats.fastMode ? gt("Fast mode on") : gt("Fast mode off");
   return (
     <div className="@container/dials">
-      <div className="flex items-center gap-3.5 overflow-hidden whitespace-nowrap tabular-nums">
-        {stats.modelName === null ? null : (
-          <span
-            // Beside dials the model goes when room is short; alone it stays, or nothing would.
-            className={`flex min-w-0 items-center gap-1.5 font-medium text-foreground ${hasDial ? "@max-[14rem]/dials:hidden" : ""}`}
-          >
-            <span className="max-w-40 truncate">{stats.modelName}</span>
-            {stats.effort === null ? null : <Effort effort={stats.effort} />}
-            {stats.fastMode ? (
-              <ZapIcon aria-label={gt("Fast mode")} className="size-3.5 shrink-0 fill-foreground" />
-            ) : null}
+      <div
+        ref={rowRef}
+        className="relative flex items-center gap-2 overflow-hidden whitespace-nowrap tabular-nums"
+      >
+        {context === null ? null : (
+          <span ref={contextRef} className="shrink-0">
+            {stats.contextPercent === null ? (
+              <Stat label={gt("Context {context} tokens", { context })} className="">
+                {contextName}
+                {context}
+              </Stat>
+            ) : (
+              <Dial
+                percent={stats.contextPercent}
+                kind="context"
+                name={contextName}
+                detail={context}
+                label={gt("Context {percent}% used, {context} tokens", {
+                  percent: statusLineGaugePercent(stats.contextPercent),
+                  context,
+                })}
+              />
+            )}
           </span>
         )}
-        {context === null ? null : stats.contextPercent === null ? (
-          // No known maximum, so no ring: the count stands in for it.
-          <Stat
-            label={gt("Context {context} tokens", { context })}
-            className="@max-[20rem]/dials:hidden"
-          >
-            <span className="font-medium text-foreground">
-              {gt("context", { $context: "model context window" })}
-            </span>
-            {context}
-          </Stat>
-        ) : (
-          <Dial
-            percent={stats.contextPercent}
-            alerts={CONTEXT_ALERTS}
-            name={gt("context", { $context: "model context window" })}
-            detail={context}
-            label={gt("Context {percent}% used, {context} tokens", {
-              percent: stats.contextPercent,
-              context,
-            })}
-          />
-        )}
         {stats.fiveHour === null ? null : (
-          <LimitDial
-            limit={stats.fiveHour}
-            nowMs={nowMs}
-            name="5h"
-            title={gt("5-hour limit")}
-            className="@max-[4rem]/dials:hidden"
-          />
+          <span ref={fiveHourRef} className={visibility.fiveHour ? "shrink-0" : HIDDEN_DIAL}>
+            <LimitDial limit={stats.fiveHour} nowMs={nowMs} name="5h" title={gt("5-hour limit")} />
+          </span>
         )}
         {stats.weekly === null ? null : (
-          <LimitDial
-            limit={stats.weekly}
-            nowMs={nowMs}
-            name={gt("week", { $context: "weekly usage limit" })}
-            title={gt("Weekly limit")}
-            className="@max-[6.5rem]/dials:hidden"
-          />
+          <span ref={weeklyRef} className={visibility.weekly ? "shrink-0" : HIDDEN_DIAL}>
+            <LimitDial
+              limit={stats.weekly}
+              nowMs={nowMs}
+              name={
+                <CompactLabel
+                  label={gt("week", { $context: "weekly usage limit" })}
+                  short={gt("wk", { $context: "short label for weekly usage" })}
+                />
+              }
+              title={gt("Weekly limit")}
+            />
+          </span>
+        )}
+        {cost === null ? null : (
+          <Stat
+            label={cost.basis === "api" ? gt("API cost") : gt("Subscription cost estimate")}
+            className="@max-[14rem]/dials:hidden"
+          >
+            {cost.amount}
+            {cost.basis === "api" ? " API" : ""}
+          </Stat>
         )}
         {uptime === null ? null : (
-          <>
-            <span aria-hidden className="h-4 w-px shrink-0 bg-border @max-[29rem]/dials:hidden" />
-            <Stat label={gt("Uptime {uptime}", { uptime })} className="@max-[29rem]/dials:hidden">
-              <TimerIcon />
-              {uptime}
-            </Stat>
-          </>
+          <Stat label={gt("Uptime {uptime}", { uptime })} className="@max-[17rem]/dials:hidden">
+            <TimerIcon />
+            {uptime}
+          </Stat>
         )}
         {stats.cachePercent === null ? null : (
           <Stat
-            label={gt("Cache hits {percent}%", { percent: stats.cachePercent })}
-            className="@max-[37rem]/dials:hidden"
+            label={gt("Cache hits {percent}%", { percent: Math.round(stats.cachePercent) })}
+            className="@max-[21rem]/dials:hidden"
           >
             <DatabaseIcon />
-            {stats.cachePercent}%
+            <span style={{ color: statusUsedColor(statusLineCacheRisk(stats.cachePercent)) }}>
+              {Math.round(stats.cachePercent)}%
+            </span>
           </Stat>
         )}
-        {stats.inputTokens === null ? null : (
+        {stats.inputTokens === null || stats.outputTokens === null ? null : (
           <Stat
             label={gt("{input} tokens in, {output} out", {
               input: stats.inputTokens,
-              output: stats.outputTokens ?? 0,
+              output: stats.outputTokens,
             })}
-            className="@max-[44rem]/dials:hidden"
+            className="@max-[27rem]/dials:hidden"
           >
             <ArrowDownIcon />
             {formatStatusLineTokens(stats.inputTokens)}
             <ArrowUpIcon />
-            {formatStatusLineTokens(stats.outputTokens ?? 0)}
+            {formatStatusLineTokens(stats.outputTokens)}
+          </Stat>
+        )}
+        {stats.apiTime === null ? null : (
+          <Stat label={gt("API time")} className="@max-[31rem]/dials:hidden">
+            <ClockIcon />
+            {stats.apiTime}
+          </Stat>
+        )}
+        {fastLabel === null ? null : (
+          <Stat label={fastLabel} className="@max-[35rem]/dials:hidden">
+            {fastLabel}
+          </Stat>
+        )}
+        {stats.outputStyle === null ? null : (
+          <Stat label={gt("Output style")} className="@max-[42rem]/dials:hidden">
+            {stats.outputStyle}
+          </Stat>
+        )}
+        <Stat label={gt("HomuCode version")} className="@max-[48rem]/dials:hidden">
+          v{APP_VERSION}
+        </Stat>
+        {stats.version === null ? null : (
+          <Stat label={gt("Provider version")} className="@max-[55rem]/dials:hidden">
+            v{stats.version}
           </Stat>
         )}
       </div>
@@ -312,8 +392,14 @@ export function StatusDialStrip(props: {
 
 function Fact(props: {
   readonly name: string;
-  readonly meter?: { readonly percent: number; readonly alerts: Alerts };
+  readonly meter?: {
+    readonly percent: number;
+    readonly kind: "context" | "limit";
+    readonly projectedRemainingPercent?: number | null;
+  };
   readonly dimmed?: boolean;
+  readonly note?: ReactNode;
+  readonly details?: ReadonlyArray<string>;
   readonly children: ReactNode;
 }) {
   return (
@@ -324,7 +410,13 @@ function Fact(props: {
         <span
           aria-hidden
           className="mt-0.5 h-1 overflow-hidden rounded-full bg-current/20"
-          style={{ color: gaugeColor(props.meter.percent, props.meter.alerts) }}
+          style={{
+            color: gaugeColor(
+              props.meter.percent,
+              props.meter.kind,
+              props.meter.projectedRemainingPercent,
+            ),
+          }}
         >
           <span
             className="block h-full rounded-full bg-current"
@@ -332,6 +424,12 @@ function Fact(props: {
           />
         </span>
       )}
+      {props.note === undefined ? null : <span className="text-2xs">{props.note}</span>}
+      {props.details?.map((detail) => (
+        <span key={detail} className="text-2xs break-words text-muted-foreground tabular-nums">
+          {detail}
+        </span>
+      ))}
     </div>
   );
 }
@@ -341,14 +439,37 @@ function LimitFact(props: {
   readonly limit: StatusLineLimit;
   readonly nowMs: number;
 }) {
+  const gt = useGT();
   const note = limitNote(props.limit, props.nowMs, useMessages());
+  const { remainingPercent, projectedRemainingPercent, depletionRatioPercent } = props.limit;
   return (
     <Fact
       name={props.name}
-      meter={{ percent: props.limit.usedPercent, alerts: LIMIT_ALERTS }}
-      dimmed={windowEnded(props.limit, props.nowMs)}
+      meter={{ percent: remainingPercent, kind: "limit", projectedRemainingPercent }}
+      dimmed={statusLineLimitEnded(props.limit, props.nowMs)}
+      note={
+        note === "" ? undefined : (
+          <span style={{ color: statusUsedColor(statusLineBurnRisk(props.limit, props.nowMs)) }}>
+            {note}
+          </span>
+        )
+      }
+      details={[
+        ...(projectedRemainingPercent === null
+          ? []
+          : [
+              gt("{percent}% projected remaining at reset", {
+                percent: projectedRemainingPercent,
+              }),
+            ]),
+        ...(depletionRatioPercent === undefined
+          ? []
+          : [gt("Reset / depletion {percent}%", { percent: depletionRatioPercent })]),
+      ]}
     >
-      {props.limit.usedPercent}%{note === "" ? null : ` · ${note}`}
+      <span className="tabular-nums">
+        {gt("{percent}% remaining", { percent: remainingPercent })}
+      </span>
     </Fact>
   );
 }
@@ -361,8 +482,7 @@ export function StatusDialCard(props: {
 }) {
   const gt = useGT();
   const { stats, nowMs } = props;
-  const uptime = uptimeText(props.createdAt, nowMs);
-  const model = [stats.modelName, stats.effort, stats.fastMode ? "fast" : null].filter(Boolean);
+  const uptime = statusLineUptime(props.createdAt, nowMs);
   return (
     <div className="grid gap-3 tabular-nums">
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] gap-x-6 gap-y-3">
@@ -371,9 +491,11 @@ export function StatusDialCard(props: {
             name={gt("Context", { $context: "model context window" })}
             {...(stats.contextPercent === null
               ? {}
-              : { meter: { percent: stats.contextPercent, alerts: CONTEXT_ALERTS } })}
+              : { meter: { percent: stats.contextPercent, kind: "context" } })}
           >
-            {stats.contextPercent === null ? null : `${stats.contextPercent}% · `}
+            {stats.contextPercent === null
+              ? null
+              : `${statusLineGaugePercent(stats.contextPercent)}% · `}
             {formatStatusLineTokens(stats.contextTokens)}
             {stats.contextMaxTokens === null
               ? null
@@ -386,32 +508,64 @@ export function StatusDialCard(props: {
         {stats.weekly === null ? null : (
           <LimitFact name={gt("Weekly limit")} limit={stats.weekly} nowMs={nowMs} />
         )}
-        {uptime === null ? null : <Fact name={gt("Uptime")}>{uptime}</Fact>}
-        {stats.inputTokens === null ? null : (
-          <Fact name={gt("Tokens")}>
-            {stats.cachePercent === null
-              ? gt("{input} in · {output} out", {
-                  input: formatStatusLineTokens(stats.inputTokens),
-                  output: formatStatusLineTokens(stats.outputTokens ?? 0),
-                })
-              : gt("{input} in · {output} out · {percent}% cached", {
-                  input: formatStatusLineTokens(stats.inputTokens),
-                  output: formatStatusLineTokens(stats.outputTokens ?? 0),
-                  percent: stats.cachePercent,
-                })}
+        {stats.cost === null ? null : (
+          <Fact
+            name={stats.cost.basis === "api" ? gt("API cost") : gt("Subscription cost estimate")}
+            details={[
+              gt("Recorded main-agent usage for the current provider thread."),
+              ...(stats.cost.partial ? [gt("Some turns could not be priced in full.")] : []),
+            ]}
+          >
+            {stats.cost.amount}
           </Fact>
         )}
-        {model.length === 0 ? null : <Fact name={gt("Model")}>{model.join(" · ")}</Fact>}
-      </div>
-      {stats.cwd === null && stats.version === null ? null : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
-          {stats.cwd === null ? null : (
-            <span className="flex min-w-0 items-center gap-1">
-              <FolderIcon className="size-3 shrink-0" />
-              <span className="break-all">{stats.cwd}</span>
+        {uptime === null ? null : <Fact name={gt("Uptime")}>{uptime}</Fact>}
+        {stats.cachePercent === null ? null : (
+          <Fact name={gt("Cache hits")}>
+            <span style={{ color: statusUsedColor(statusLineCacheRisk(stats.cachePercent)) }}>
+              {Math.round(stats.cachePercent)}%
             </span>
-          )}
-          {stats.version === null ? null : <span>version {stats.version}</span>}
+          </Fact>
+        )}
+        {stats.inputTokens === null || stats.outputTokens === null ? null : (
+          <Fact name={gt("Tokens")}>
+            {gt("{input} in · {output} out", {
+              input: formatStatusLineTokens(stats.inputTokens),
+              output: formatStatusLineTokens(stats.outputTokens),
+            })}
+          </Fact>
+        )}
+        {stats.apiTime === null ? null : <Fact name={gt("API time")}>{stats.apiTime}</Fact>}
+        {stats.fastMode === null ? null : (
+          <Fact name={gt("Fast mode")}>
+            {stats.fastMode
+              ? gt("On", { $context: "option state" })
+              : gt("Off", { $context: "option state" })}
+          </Fact>
+        )}
+        {stats.outputStyle === null ? null : (
+          <Fact name={gt("Output style")}>{stats.outputStyle}</Fact>
+        )}
+        {stats.modelName === null ? null : (
+          <Fact name={gt("Model")}>
+            {stats.modelName}
+            {stats.effort === null ? null : (
+              <>
+                {" "}
+                <span style={{ color: statusEffortColor(stats.effort) }}>{stats.effort}</span>
+              </>
+            )}
+          </Fact>
+        )}
+        <Fact name={gt("HomuCode version")}>{APP_VERSION}</Fact>
+        {stats.version === null ? null : <Fact name={gt("Provider version")}>{stats.version}</Fact>}
+      </div>
+      {stats.cwd === null ? null : (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-1">
+            <FolderIcon className="size-3 shrink-0" />
+            <span className="break-all">{stats.cwd}</span>
+          </span>
         </div>
       )}
     </div>
