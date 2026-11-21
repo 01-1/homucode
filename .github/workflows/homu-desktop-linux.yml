@@ -36,14 +36,17 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      # Patch is bumped so a build always outranks the plain upstream version it
-      # sits on (0.1.9-rc.N would sort below 0.1.9); the run number orders builds.
+      # Builds sit under the newest hand-made HomuCode RC (homucode-v0.0.0-rc.R),
+      # so the next RC outranks them; the run number orders builds.
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          base=$(jq -r .version apps/desktop/package.json)
-          IFS=. read -r major minor patch <<< "$base"
-          version="$major.$minor.$((patch + 1))-rc.$GITHUB_RUN_NUMBER"
+          rc=$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name' \
+            | sed -n 's/^homucode-v0\.0\.0-rc\.\([0-9]\+\)$/\1/p' | sort -n | tail -1)
+          [[ -n "$rc" ]] || { echo "no homucode-v0.0.0-rc.N tag" >&2; exit 1; }
+          version="0.0.0-rc.$rc.$GITHUB_RUN_NUMBER"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building $version"
 
@@ -135,7 +138,7 @@ jobs:
             current=
           fi
           latest=true
-          if [[ "$current" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(homu|rc)\.[0-9]+$ && "$(printf '%s\n%s\n' "$current" "$tag" | sort -V | tail -1)" != "$tag" ]]; then
+          if [[ "$current" =~ ^v0\.0\.0-rc\.[0-9]+\.[0-9]+$ && "$(printf '%s\n%s\n' "$current" "$tag" | sort -V | tail -1)" != "$tag" ]]; then
             latest=false
           fi
           # gh uploads the required assets to a draft before publishing it.

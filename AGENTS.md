@@ -7,7 +7,7 @@ What is different from upstream is listed in [CHANGES.md](CHANGES.md) and summar
 ## Task-specific instructions
 
 - Run Android in-app verification on a Boat emulator through the T3 Device panel. Launch the app and exercise the changed flow before reporting it verified. See [Android development](docs/operations/android-development.md).
-- HomuCode desktop builds and updates are release candidates: versions end in `-rc.N` and release titles say HomuCode. Never go back to `-homu.N` versions or "Homu" titles. GitHub's Latest release and the update feed follow the newest RC. Publish a hand-made RC as a regular release (`--prerelease=false`) with `rcN` in the tag and title, and attach the Linux updater assets (`latest-linux.yml` and the AppImage) so installed apps can update from it.
+- HomuCode desktop builds and updates are release candidates: versions are `0.0.0-rc.R.N` (R is the newest hand-made RC, N the build) and release titles say HomuCode. Never go back to `0.1.x` or `-homu.N` versions or "Homu" titles. GitHub's Latest release and the update feed follow the newest RC. Publish a hand-made RC as a regular release (`--prerelease=false`) with `rcN` in the tag and title, and attach the Linux updater assets (`latest-linux.yml` and the AppImage) so installed apps can update from it.
 - Publish HomuCode Android updates over the air from Boat using the fork's EAS project. For a new native runtime, build a signed OTA-enabled APK with the existing release key and verify its channel and runtime. See [Android development](docs/operations/android-development.md#releasing-android-updates).
 - For product spelling, text wordmarks, and compact icons, read [HomuCode brand design](docs/internals/brand-design.md).
 
