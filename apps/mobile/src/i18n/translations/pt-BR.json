@@ -5685,5 +5685,10 @@
   "ad208e3e32c85029": "Ocultar todas",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Chamadas de ferramentas no chat",
-  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem."
+  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem.",
+  "f001dec61668de0d": "Uma lista focada em um único projeto, com um resumo matinal opcional. Ao ativar o recurso, um ícone separado do MadoHomu aparece no iniciador de apps.",
+  "b59f1c1a0992ad7a": "Mostrar MadoHomu na lista de conversas da tela inicial",
+  "448af54674847a0f": "Adiciona uma linha do MadoHomu quando a barra de navegação está oculta.",
+  "4bf18286798b16c2": "Uma lista focada em um único projeto. Ao ativar o recurso, um ícone separado do MadoHomu aparece no iniciador de apps.",
+  "aa8ef7cc9b76974e": "Mostrar MadoHomu na lista de conversas da tela inicial"
 }
