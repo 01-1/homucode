@@ -12,6 +12,9 @@ import {
   useState,
 } from "react";
 import { cn } from "~/lib/utils";
+import { createPartsPresence } from "./parts-presence";
+
+const dialogParts = createPartsPresence<"panel" | "header" | "bare-footer">();
 import { useNativeTitlebarHeight } from "~/lib/windowControlsOverlay";
 import { Button, type ButtonVariant } from "~/components/ui/button";
 import {
@@ -123,6 +126,7 @@ function DialogPopup({
 }) {
   const gt = useGT();
   const { popupRef, initialFocus } = useDialogActionInitialFocus();
+  const { Provider: PartsProvider, register, has } = dialogParts.useParts();
   const popup = useRender({
     ref: popupRef,
     render: (
@@ -135,11 +139,14 @@ function DialogPopup({
           className,
         )}
         data-slot="dialog-popup"
+        data-has-panel={has("panel")}
+        data-has-header={has("header")}
+        data-has-bare-footer={has("bare-footer")}
         initialFocus={initialFocus}
         render={renderRetainedPopup}
         {...props}
       >
-        {children}
+        <PartsProvider value={register}>{children}</PartsProvider>
         {showCloseButton && (
           <DialogPrimitive.Close
             aria-label={gt("Close", { $context: "button, closes the dialog" })}
@@ -188,10 +195,11 @@ function DialogAction(props: DialogActionProps) {
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+  dialogParts.usePart("header");
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-3 max-sm:pb-4",
+        "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup][data-has-panel]]:pb-3 max-sm:pb-4",
         className,
       )}
       data-slot="dialog-header"
@@ -207,6 +215,10 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   variant?: "default" | "bare";
 }) {
+  dialogParts.usePart(
+    "bare-footer",
+    !(variant === "default" || /(^|\s)border-t(\s|$)/.test(className ?? "")),
+  );
   return (
     <div
       className={cn(
@@ -246,11 +258,12 @@ function DialogPanel({
   scrollFade = true,
   ...props
 }: React.ComponentProps<"div"> & { scrollFade?: boolean }) {
+  dialogParts.usePart("panel");
   return (
     <ScrollArea scrollFade={scrollFade}>
       <div
         className={cn(
-          "space-y-4 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:has([data-slot=dialog-footer]:not(.border-t))]:pb-1",
+          "space-y-4 p-6 in-[[data-slot=dialog-popup][data-has-header]]:pt-1 in-[[data-slot=dialog-popup][data-has-bare-footer]]:pb-1",
           className,
         )}
         data-slot="dialog-panel"

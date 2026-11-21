@@ -3,6 +3,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
+import { inputGroupParts } from "./input-group-parts";
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
   size?: "sm" | "default" | "lg" | number;
@@ -16,6 +17,7 @@ function Textarea({
   rows,
   ...props
 }: TextareaProps) {
+  inputGroupParts.usePart("control");
   return (
     <span
       className={
