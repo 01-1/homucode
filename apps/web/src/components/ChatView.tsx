@@ -1398,8 +1398,8 @@ export default function ChatView(props: ChatViewProps) {
     entries: providerInstanceEntries,
     candidateInstanceIds: [
       selectedProviderByThreadId,
-      activeRuntime?.providerInstanceId,
       activeThreadModelInstanceId,
+      activeRuntime?.providerInstanceId,
       activeProjectDefaultModelSelection?.instanceId,
     ],
     lockedProvider,
@@ -1408,8 +1408,12 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
+  const conversationProviderInstanceId =
+    serverProjection?.providerThreads.find(
+      (thread) => thread.id === serverProjection.thread.activeProviderThreadId,
+    )?.providerInstanceId ?? activeRuntime?.providerInstanceId;
   const conversationProviderStatus =
-    providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
+    providerStatuses.find((status) => status.instanceId === conversationProviderInstanceId) ??
     activeProviderStatus;
   const supportsConversationRollback =
     canOperateThread &&

@@ -3,6 +3,7 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import { RegistryContext } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -28,15 +29,21 @@ export function useApplyThreadModelPick() {
     const pick = draft.modelSelectionByProvider[draft.activeProvider];
     const thread = registry.get(environmentThreadShells.threadShellAtom(target));
     if (!pick || !thread || store.draftThreadsByThreadKey[scopedThreadKey(target)]) return;
-    // Another instance replaces the live session, which may hold an open question; that pick
-    // still waits for a sent message.
-    if (pick.instanceId !== thread.modelSelection.instanceId) return;
+    const switchesProvider = pick.instanceId !== thread.modelSelection.instanceId;
+    if (
+      switchesProvider &&
+      (threadRuntimeIsActive(thread.runtime) ||
+        thread.hasPendingApprovals ||
+        thread.hasPendingUserInput)
+    )
+      return;
     const result = await setModelSelection({
       environmentId: target.environmentId,
       input: {
         threadId: target.threadId,
         modelSelection: pick,
         ...(applyNow ? { applyModelSelectionNow: applyNow } : {}),
+        ...(switchesProvider ? { deferProviderSwitch: true } : {}),
       },
     });
     if (result._tag === "Success") {

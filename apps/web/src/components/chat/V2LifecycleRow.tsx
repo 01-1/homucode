@@ -637,7 +637,6 @@ export function FreshSessionRow() {
   return <TimelineSystemDivider label={gt("New session")} icon={EraserIcon} />;
 }
 
-/** A same-harness model or effort change. Shows only what changed. */
 export function ModelSwitchRow(props: {
   readonly environmentId: EnvironmentId;
   readonly modelSwitch: OrchestrationV2ModelSwitch;
@@ -647,13 +646,20 @@ export function ModelSwitchRow(props: {
     EMPTY_SERVER_PROVIDERS;
   const change = resolveModelSwitchChange(props.modelSwitch, providers);
   if (change === null) return null;
+  const { from, to } = props.modelSwitch;
+  const showProvider = from.instanceId !== to.instanceId && from.model === to.model;
   const describe = (selection: ModelSelection, effort: string | undefined) => {
     const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
     const model = provider?.models.find((candidate) => candidate.slug === selection.model);
     const modelName = model ? getTriggerDisplayModelName(model, provider?.driver) : selection.model;
-    return [change.modelChanged ? modelName : null, effort].filter(Boolean).join(" ");
+    return [
+      showProvider ? (provider?.displayName ?? selection.instanceId) : null,
+      change.modelChanged ? modelName : null,
+      effort,
+    ]
+      .filter(Boolean)
+      .join(" ");
   };
-  const { from, to } = props.modelSwitch;
   return (
     <TimelineSystemDivider
       label={`${describe(from, change.effort?.from)} → ${describe(to, change.effort?.to)}`}

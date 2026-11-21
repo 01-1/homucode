@@ -1622,19 +1622,15 @@ export function deriveThreadPendingBackgroundTasks(projection: ThreadStructure |
 
 /**
  * Run ordinals the conversation can be reverted to: those whose provider turn belongs to the
- * active provider thread, plus 0 for the thread start. Empty without a live provider session
- * on the thread's selected instance.
+ * active provider thread, plus 0 for the thread start.
  */
 export function deriveAvailableRevertTurnCounts(projection: ThreadStructure | null) {
   const available = new Set<number>();
-  const providerThread = projection?.providerThreads.find(
+  if (projection === null) return available;
+  const providerThread = projection.providerThreads.find(
     (candidate) => candidate.id === projection.thread.activeProviderThreadId,
   );
-  if (
-    !providerThread?.providerSessionId ||
-    providerThread.providerInstanceId !== projection?.thread.modelSelection.instanceId
-  )
-    return available;
+  if (!providerThread?.providerSessionId) return available;
   available.add(0);
   const attemptsById = new Map(projection.attempts.map((attempt) => [attempt.id, attempt]));
   const providerTurnsById = new Map<

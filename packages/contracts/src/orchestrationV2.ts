@@ -3525,6 +3525,7 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     modelSelection: ModelSelection,
     applyNow: Schema.optionalKey(Schema.Literal(true)),
+    deferProviderSwitch: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     type: Schema.Literal("provider-session.detach"),

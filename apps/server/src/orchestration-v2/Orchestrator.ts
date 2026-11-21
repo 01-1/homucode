@@ -4796,6 +4796,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           )
           .pipe(mapDispatchError(command))
       : null;
+    const modelSwitch =
+      command.type === "thread.model-selection.set"
+        ? modelSwitchBetween(thread.modelSelection, command.modelSelection)
+        : undefined;
+    const selectionRuns =
+      modelSwitch === undefined
+        ? undefined
+        : (yield* projectionStore
+            .getThreadRecords(thread.id, ["runs"], {
+              runStatuses: ["preparing", "starting", "running", "waiting"],
+            })
+            .pipe(mapDispatchError(command))).runs;
     const providerSwitchPlan =
       command.type === "thread.model-selection.set" || command.type === "provider.switch"
         ? yield* Effect.gen(function* () {
@@ -4816,10 +4828,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               })
               .pipe(mapDispatchError(command));
             if (plan.instanceChanged || plan.releaseProviderSessionIds.length > 0) {
-              const projection = yield* loadProjectionForCommand(command, ["runs"], {
-                turnItemTypes: [],
-              });
-              if (projection.runs.some(isActiveRun)) {
+              const runs =
+                selectionRuns ??
+                (yield* loadProjectionForCommand(command, ["runs"], {
+                  turnItemTypes: [],
+                })).runs;
+              if (runs.some(isActiveRun)) {
                 return yield* new OrchestratorProviderSelectionBusyError({
                   commandId: command.commandId,
                   threadId: command.threadId,
@@ -4845,7 +4859,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                   (session) => !session.capabilities.sessions.supportsRuntimeModeSwitchInSession,
                 )
                 .map((session) => session.id)
-            : (providerSwitchPlan?.releaseProviderSessionIds ?? []),
+            : command.type === "thread.model-selection.set" &&
+                command.deferProviderSwitch === true &&
+                providerSwitchPlan?.instanceChanged
+              ? []
+              : (providerSwitchPlan?.releaseProviderSessionIds ?? []),
     );
     const liveSessions = (providerContext?.providerSessions ?? []).filter(
       (session) =>
@@ -5693,6 +5711,37 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       occurredAt: now,
       payload: updatedThread,
     });
+    if (modelSwitch !== undefined && selectionRuns?.length === 0) {
+      yield* emit(
+        events,
+        command,
+      )({
+        type: "turn-item.updated",
+        threadId: thread.id,
+        providerInstanceId: updatedThread.providerInstanceId,
+        occurredAt: now,
+        payload: {
+          id: TurnItemId.make(`turn-item:${command.commandId}`),
+          threadId: thread.id,
+          runId: null,
+          nodeId: null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: yield* nextTurnItemOrdinal({ thread }),
+          status: "completed",
+          title: null,
+          startedAt: now,
+          completedAt: now,
+          updatedAt: now,
+          type: "system_notice",
+          message: "Model settings changed",
+          level: "info",
+          modelSwitch,
+        },
+      });
+    }
     // Archiving ends the guest share, so its waiting files go too.
     yield* releaseGuestAttachments(command, thread.guestShare, updatedThread.guestShare, effects);
 
@@ -15363,14 +15412,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
 
-      const modelSelection = projection.thread.modelSelection;
-      const capabilities = yield* providerAdapters.get(modelSelection.instanceId).pipe(
+      const providerInstanceId = providerThread.providerInstanceId;
+      const capabilities = yield* providerAdapters.get(providerInstanceId).pipe(
         Effect.flatMap((adapter) => adapter.getCapabilities()),
         Effect.mapError(
           (cause) =>
             new OrchestratorProviderAdapterError({
               commandId: command.commandId,
-              providerInstanceId: modelSelection.instanceId,
+              providerInstanceId,
               cause,
             }),
         ),
@@ -15379,7 +15428,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         commandPolicy.ensureRollback({
           commandId: command.commandId,
           threadId: command.threadId,
-          providerInstanceId: modelSelection.instanceId,
+          providerInstanceId,
           capabilities,
         }),
       );
@@ -15493,7 +15542,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       )({
         type: "checkpoint.rollback-requested",
         threadId: command.threadId,
-        providerInstanceId: modelSelection.instanceId,
+        providerInstanceId,
         occurredAt: now,
         payload: {
           scopeId: targetScope.id,

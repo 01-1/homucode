@@ -1,5 +1,6 @@
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -29,18 +30,26 @@ export function selectThreadModel(
   const modelSelection = { ...value };
   updateComposerDraftSettings(threadKey, { modelSelection });
   const thread = appAtomRegistry.get(environmentThreadShells.threadShellAtom(ref));
-  // Another instance replaces the live session, which may hold an open question; that pick
-  // still waits for a sent message.
+  if (!thread || !readEnvironmentScope(ref.environmentId, AuthOrchestrationOperateScope)) return;
+  const switchesProvider = thread.modelSelection.instanceId !== modelSelection.instanceId;
   if (
-    thread?.modelSelection.instanceId !== modelSelection.instanceId ||
-    !readEnvironmentScope(ref.environmentId, AuthOrchestrationOperateScope)
-  ) {
+    switchesProvider &&
+    (threadRuntimeIsActive(thread.runtime) ||
+      thread.hasPendingApprovals ||
+      thread.hasPendingUserInput)
+  )
     return;
-  }
   void runAtomCommand(
     appAtomRegistry,
     threadEnvironment.setModelSelection,
-    { environmentId: ref.environmentId, input: { threadId: ref.threadId, modelSelection } },
+    {
+      environmentId: ref.environmentId,
+      input: {
+        threadId: ref.threadId,
+        modelSelection,
+        ...(switchesProvider ? { deferProviderSwitch: true } : {}),
+      },
+    },
     { label: "change model", reportFailure: true, reportDefect: true },
   ).then((result) => {
     // Released on the reply, so a later change from another client shows.

@@ -8,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
+import * as DateTime from "effect/DateTime";
 
 export function modelSwitchBetween(
   from: ModelSelection | undefined,
@@ -84,8 +85,26 @@ export function modelSwitchSince(
     if (!anchorsModelSwitch(run, shown) && !markedRuns.has(run.id)) continue;
     if (previous === undefined || runRanAfter(run, previous)) previous = run;
   }
+  const idlePick = projection.turnItems.findLast(
+    (item) =>
+      item.type === "system_notice" && item.runId === null && item.modelSwitch !== undefined,
+  );
+  const previousItem =
+    previous === undefined
+      ? undefined
+      : projection.turnItems.findLast((item) => item.runId === previous.id);
+  const idlePickIsLatest =
+    idlePick?.type === "system_notice" &&
+    (previous === undefined ||
+      (previous.completedAt !== null &&
+        DateTime.isGreaterThanOrEqualTo(idlePick.updatedAt, previous.completedAt) &&
+        (previousItem === undefined || idlePick.ordinal > previousItem.ordinal)));
   const modelSwitch = modelSwitchBetween(
-    previous === undefined ? baseline : modelSelectionAtRun(previous, projection.turnItems),
+    idlePickIsLatest
+      ? idlePick.modelSwitch?.to
+      : previous === undefined
+        ? baseline
+        : modelSelectionAtRun(previous, projection.turnItems),
     to,
   );
   return modelSwitch === undefined ? {} : { modelSwitch };

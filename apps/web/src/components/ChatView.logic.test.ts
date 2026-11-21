@@ -1468,10 +1468,17 @@ describe("deriveAvailableRevertTurnCounts", () => {
   }
 
   it("offers the thread start and runs whose latest turn is on the active provider thread", () => {
-    const available = deriveAvailableRevertTurnCounts(
-      projection({ providerSessionId: ProviderSessionId.make("session") }),
-    );
-    expect([...available].toSorted()).toEqual([0, 1, 3]);
+    const native = projection({ providerSessionId: ProviderSessionId.make("session") });
+    expect([...deriveAvailableRevertTurnCounts(native)].toSorted()).toEqual([0, 1, 3]);
+    const nextSelection = { instanceId: ProviderInstanceId.make("claudeAgent"), model: "opus" };
+    expect(
+      [
+        ...deriveAvailableRevertTurnCounts({
+          ...native,
+          thread: { ...native.thread, modelSelection: nextSelection },
+        }),
+      ].toSorted(),
+    ).toEqual([0, 1, 3]);
   });
 
   it("offers nothing without a provider session to rewind", () => {

@@ -3863,6 +3863,14 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           INDEXED BY orchestration_v2_projection_turn_items_failed_error_idx
         WHERE thread_id = ${threadId} AND type = 'error' AND status = 'failed'
       `.pipe(Effect.flatMap(decodeRows(decodeTurnItemPayload, threadId)));
+      const idlePick = yield* sql<PayloadRow>`
+        SELECT payload_json
+        FROM orchestration_v2_projection_turn_items
+        WHERE thread_id = ${threadId} AND run_id IS NULL AND type = 'system_notice'
+          AND json_type(payload_json, '$.modelSwitch') = 'object'
+        ORDER BY ordinal DESC, turn_item_id DESC
+        LIMIT 1
+      `.pipe(Effect.flatMap(decodeRows(decodeTurnItemPayload, threadId)));
       const readPrompts = (runIds: ReadonlyArray<string>) =>
         sql<PayloadRow>`
           SELECT payload_json
@@ -3898,7 +3906,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         }
         if (batch.some((run) => anchorsModelSwitch(run, shownMessageIds))) break;
       }
-      return [...errors, ...prompts].toSorted(
+      return [...errors, ...prompts, ...idlePick].toSorted(
         (left, right) =>
           left.ordinal - right.ordinal || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
       );
@@ -6483,8 +6491,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               scope === undefined ||
               checkpoint.scopeId !== scope.id ||
               (checkpoint.status !== "ready" && checkpoint.status !== "missing") ||
-              providerThread.id !== thread.activeProviderThreadId ||
-              providerThread.providerInstanceId !== thread.modelSelection.instanceId
+              providerThread.id !== thread.activeProviderThreadId
             )
               return context;
 

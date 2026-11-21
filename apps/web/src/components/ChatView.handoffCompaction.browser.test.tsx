@@ -105,6 +105,15 @@ it("sends a Codex follow-up on a cold Claude thread without compacting first", a
   await page.getByRole("option", { name: "GPT-5.4", exact: false }).click();
   await expect.element(page.getByRole("button", { name: "GPT-5.4", exact: true })).toBeVisible();
   await expect.element(compactAndSend).not.toBeInTheDocument();
+  await vi.waitFor(() =>
+    expect(dispatchedCommands()).toContainEqual(
+      expect.objectContaining({
+        type: "thread.model-selection.set",
+        threadId: thread.id,
+        modelSelection: { instanceId: CODEX_PROVIDER.instanceId, model: "gpt-5.4" },
+      }),
+    ),
+  );
   // Picking a model leaves the composer's settings menu open.
   await userEvent.keyboard("{Escape}");
 
