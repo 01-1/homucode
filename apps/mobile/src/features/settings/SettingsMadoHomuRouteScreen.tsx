@@ -1,6 +1,8 @@
 import { T, msg, useGT, useMessages } from "gt-react-native";
 import { useRef, useState } from "react";
-import { TextInput, View } from "react-native";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/reactivity";
+import { Platform, TextInput, View } from "react-native";
 import type { EnvironmentId, ServerSettings } from "@t3tools/contracts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -8,6 +10,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { MadoHomuProjectPicker } from "../madohomu/MadoHomuProjectPicker";
 import { useMadoHomuActions } from "../madohomu/useMadoHomuActions";
 import {
@@ -61,6 +64,9 @@ const WORKING_PLACEMENT_OPTIONS: ReadonlyArray<{
 ];
 
 export function SettingsMadoHomuRouteScreen() {
+  const gt = useGT();
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const menu = useSettingsEnvironmentMenu();
   const { selectedTargets, selectedIds, selectedProjectKey, selectAll } =
     useSettingsEnvironmentFilter();
@@ -79,6 +85,22 @@ export function SettingsMadoHomuRouteScreen() {
         contentContainerClassName="gap-5 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        {Platform.OS === "android" ? (
+          <SettingsSection title={gt("This phone")}>
+            <SettingsSwitchRow
+              label={gt("Show MadoHomu in the home thread list")}
+              subtitle={gt("Add a MadoHomu row when the navigation rail is hidden.")}
+              value={
+                AsyncResult.isSuccess(preferences) &&
+                preferences.value.showAndroidMadoHomuHomeRow === true
+              }
+              disabled={!AsyncResult.isSuccess(preferences) || preferences.waiting}
+              onValueChange={(showAndroidMadoHomuHomeRow) =>
+                savePreferences({ showAndroidMadoHomuHomeRow })
+              }
+            />
+          </SettingsSection>
+        ) : null}
         {selectedProjectKey !== null ? (
           <Text className="text-base text-foreground-muted">
             <T>Choose an environment in the filter to configure MadoHomu.</T>
@@ -142,9 +164,15 @@ function EnvironmentMadoHomuSettings(props: {
     <SettingsSection title={props.label}>
       <SettingsSwitchRow
         label={gt("Enable MadoHomu")}
-        subtitle={gt(
-          "A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned.",
-        )}
+        subtitle={
+          Platform.OS === "android"
+            ? gt(
+                "A focused view for one project. Enabling it adds a separate MadoHomu icon to your app launcher.",
+              )
+            : gt(
+                "A focused view for one project, with your threads in sections. Every MadoHomu thread starts pinned.",
+              )
+        }
         value={actions.settings.madohomuEnabled}
         disabled={busy || projectSelection.isSelecting || !actions.canWrite}
         onValueChange={(madohomuEnabled) => void run(() => actions.save({ madohomuEnabled }))}

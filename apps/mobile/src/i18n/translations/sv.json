@@ -5691,5 +5691,10 @@
   "ad208e3e32c85029": "Dölj alla",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Verktygsanrop i chatten",
-  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid."
+  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid.",
+  "f001dec61668de0d": "En fokuserad vy för ett projekt med en valfri morgonöversikt. När du aktiverar den får MadoHomu en egen ikon i appstartaren.",
+  "b59f1c1a0992ad7a": "Visa MadoHomu i trådlistan på startsidan",
+  "448af54674847a0f": "Lägger till en rad för MadoHomu när navigeringsfältet är dolt.",
+  "4bf18286798b16c2": "En fokuserad vy för ett projekt. När du aktiverar den får MadoHomu en egen ikon i appstartaren.",
+  "aa8ef7cc9b76974e": "Visa MadoHomu i trådlistan på startsidan"
 }

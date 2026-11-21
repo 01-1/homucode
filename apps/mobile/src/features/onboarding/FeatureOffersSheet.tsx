@@ -30,7 +30,7 @@ import {
 } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { STRAY_TOUCH_GUARD_MS, useHoldTouchesOnAppear } from "../../lib/strayTouchGuard";
-import { AppState, TextInput, View } from "react-native";
+import { AppState, Platform, TextInput, View } from "react-native";
 import { resolveCustomSnooze } from "@t3tools/client-runtime/state/thread-settled";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -636,7 +636,14 @@ function EnvironmentFeatureOffers({
                       <>
                         <SettingsSwitchRow
                           label={resolve(offer.title)}
-                          subtitle={unavailable ?? resolve(offer.description)}
+                          subtitle={
+                            unavailable ??
+                            (offer.id === "madohomu" && Platform.OS === "android"
+                              ? gt(
+                                  "A focused view for one project, with an optional morning brief. Enabling it adds a separate MadoHomu icon to your app launcher.",
+                                )
+                              : resolve(offer.description))
+                          }
                           value={selected.has(offer.id)}
                           disabled={busy || Boolean(unavailable)}
                           onValueChange={(value) => select(offer.id, value)}

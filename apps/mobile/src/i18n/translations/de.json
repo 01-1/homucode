@@ -5691,5 +5691,10 @@
   "ad208e3e32c85029": "Alle ausblenden",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Tool-Aufrufe im Chat",
-  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt."
+  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt.",
+  "f001dec61668de0d": "Eine fokussierte Ansicht für ein Projekt mit optionaler Morgenzusammenfassung. Wenn du sie aktivierst, erscheint ein eigenes MadoHomu-Symbol im App-Launcher.",
+  "b59f1c1a0992ad7a": "MadoHomu in der Thread-Liste auf der Startseite anzeigen",
+  "448af54674847a0f": "MadoHomu als Eintrag anzeigen, wenn die Navigationsleiste ausgeblendet ist.",
+  "4bf18286798b16c2": "Eine fokussierte Ansicht für ein Projekt. Wenn du sie aktivierst, erscheint ein eigenes MadoHomu-Symbol im App-Launcher.",
+  "aa8ef7cc9b76974e": "MadoHomu in der Thread-Liste auf der Startseite anzeigen"
 }

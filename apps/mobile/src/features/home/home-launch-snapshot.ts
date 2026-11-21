@@ -8,6 +8,7 @@ const HOME_LOOK_PREFERENCES = [
   "baseFontSize",
   "language",
   "androidNavigationStyle",
+  "showAndroidMadoHomuHomeRow",
   "navigationTabOrder",
   "hiddenNavigationTabs",
   "projectGroupingEnabled",
