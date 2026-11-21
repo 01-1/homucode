@@ -23,7 +23,7 @@ export interface TurnItemPositionStoreV2Shape {
     readonly runId: RunId | null;
     readonly runOrdinal?: number;
     // `run_start` takes the run's unused first slot, ahead of its items, and appends once it is taken.
-    readonly placement?: "append" | "run_start";
+    readonly placement?: "append" | "run_start" | "thread_tail";
     // Keep an existing position even when it lies outside the run's range.
     readonly keepExisting?: boolean;
   }) => Effect.Effect<number, TurnItemPositionStoreError>;
@@ -71,7 +71,8 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
               `;
           const runOrdinal = suppliedRunOrdinal ?? runRows[0]?.ordinal ?? null;
           const lowerBound = runOrdinal === null ? 0 : runOrdinal * 1_000_000;
-          const upperBound = runOrdinal === null ? 999_999 : lowerBound + 999_999;
+          const upperBound =
+            placement === "thread_tail" ? Number.MAX_SAFE_INTEGER : lowerBound + 999_999;
           const current = existing[0]?.ordinal;
           if (current !== undefined) {
             // A steer that missed its turn starts the next run; it moves into that run's range.
@@ -145,6 +146,10 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
           threadId: item.threadId,
           turnItemId: item.id,
           runId: item.runId,
+          // An idle pick belongs after the last turn and survives a rewind of that turn.
+          ...(item.type === "system_notice" && item.runId === null && item.modelSwitch !== undefined
+            ? { placement: "thread_tail" as const }
+            : {}),
           // Queued steers keep their submission order until their run starts (see Orchestrator).
           keepExisting: item.status === "pending",
           ...(runOrdinal === undefined ? {} : { runOrdinal }),

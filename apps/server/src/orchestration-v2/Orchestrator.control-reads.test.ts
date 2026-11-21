@@ -253,6 +253,12 @@ it.effect.each(
       assert.equal(after.thread.providerInstanceId, target.instanceId);
       assert.deepEqual(after.runs, before.runs);
       assert.deepEqual(after.providerTurns, before.providerTurns);
+      if (!active && type === "thread.model-selection.set") {
+        assert.deepInclude(
+          after.turnItems.find((item) => item.type === "system_notice"),
+          { runId: null, modelSwitch: { from: modelSelection, to: target } },
+        );
+      }
     }
   }).pipe(
     Effect.provide(

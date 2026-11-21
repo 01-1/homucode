@@ -157,6 +157,7 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly title?: string;
   readonly modelSelection?: ModelSelection;
   readonly applyModelSelectionNow?: true;
+  readonly deferProviderSwitch?: true;
   readonly branch?: string | null;
   readonly worktreePath?: string | null;
   readonly regenerateTitle?: boolean;
@@ -774,6 +775,7 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
         threadId: input.threadId,
         modelSelection: input.modelSelection,
         ...(input.applyModelSelectionNow ? { applyNow: true } : {}),
+        ...(input.deferProviderSwitch ? { deferProviderSwitch: true } : {}),
       });
     }
     return result ?? { sequence: 0 };

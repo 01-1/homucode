@@ -118,8 +118,7 @@ export function threadSupportsProviderHandoff(projection: Projection | null | un
   return projection.providerThreads.some(
     (thread) =>
       thread.id === projection.thread.activeProviderThreadId &&
-      thread.appThreadId === projection.thread.id &&
-      thread.providerInstanceId === projection.thread.modelSelection.instanceId,
+      thread.appThreadId === projection.thread.id,
   );
 }
 

@@ -167,10 +167,7 @@ export const layer: Layer.Layer<
           checkpointId: input.checkpointId,
         });
       }
-      if (
-        providerThread.id !== context.thread.activeProviderThreadId ||
-        providerThread.providerInstanceId !== context.thread.modelSelection.instanceId
-      ) {
+      if (providerThread.id !== context.thread.activeProviderThreadId) {
         return yield* new CheckpointRollbackExecutionError({
           reason: "active-provider-changed",
           threadId: input.threadId,
@@ -304,12 +301,18 @@ export const layer: Layer.Layer<
 
       if (restoreFiles && !(yield* isolated)) return yield* sharedWorkspace();
 
-      const modelSelection = context.thread.modelSelection;
+      const existingSession = context.providerSession;
+      const modelSelection =
+        context.thread.modelSelection.instanceId === providerThread.providerInstanceId
+          ? context.thread.modelSelection
+          : {
+              instanceId: providerThread.providerInstanceId,
+              model: existingSession?.model ?? "default",
+            };
       const resolvedRuntimePolicy = yield* runtimePolicy.resolve({
         thread: context.thread,
         modelSelection,
       });
-      const existingSession = context.providerSession;
       const session = yield* sessions.open({
         threadId: input.threadId,
         providerSessionId: providerThread.providerSessionId,

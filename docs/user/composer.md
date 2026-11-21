@@ -106,7 +106,9 @@ On web and desktop, check **Apply instantly** in the model picker to apply each 
 running turn regardless of the environment's setting. To apply only the final selection, leave
 that checkbox off and enable **Apply model and effort when closing the picker** under
 **Settings → HomuCode → Agent behavior → Extra features**. With both picker options off, the environment setting
-continues to apply. Switching provider instances still waits until you send a message.
+continues to apply. On an idle thread, saved model changes appear in the chat right away. The next
+message uses the saved choice, including messages from another thread. Switching provider instances
+during a running turn still waits until you send a message.
 
 ## Queue messages offline on mobile
 

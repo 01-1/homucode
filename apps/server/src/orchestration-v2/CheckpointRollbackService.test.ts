@@ -5,6 +5,7 @@ import {
   CheckpointRef,
   EventId,
   MessageId,
+  type ModelSelection,
   NodeId,
   type OrchestrationV2DomainEvent,
   ProviderDriverKind,
@@ -34,7 +35,10 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import { withTurnStartReservation, withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import { ProviderWorkspaceMissingError } from "../provider/Errors.ts";
-import { resolveCodexRollbackTurnCount } from "./Adapters/CodexAdapterV2.ts";
+import {
+  CodexProviderCapabilitiesV2,
+  resolveCodexRollbackTurnCount,
+} from "./Adapters/CodexAdapterV2.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as CheckpointRollbackService from "./CheckpointRollbackService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
@@ -596,6 +600,21 @@ const seedRollbackHistory = Effect.gen(function* () {
     updatedAt: now,
   };
   yield* apply({ type: "provider-thread.updated", payload: providerThread });
+  yield* apply({
+    type: "provider-session.attached",
+    payload: {
+      id: providerSessionId,
+      driver,
+      providerInstanceId,
+      status: "ready",
+      cwd: process.cwd(),
+      model: modelSelection.model,
+      capabilities: CodexProviderCapabilitiesV2,
+      createdAt: now,
+      updatedAt: now,
+      lastError: null,
+    },
+  });
   for (const id of [scopeId, otherScopeId]) {
     yield* apply({
       type: "checkpoint-scope.created",
@@ -736,6 +755,7 @@ const seedRollbackHistory = Effect.gen(function* () {
   }
 
   const rollbackCounts: number[] = [];
+  const rollbackSelections: ModelSelection[] = [];
   const restored: CheckpointId[] = [];
   const deletedRefs: CheckpointId[] = [];
   const committed: OrchestrationV2DomainEvent[] = [];
@@ -771,14 +791,17 @@ const seedRollbackHistory = Effect.gen(function* () {
             ),
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
-          open: () =>
-            Effect.succeed({
-              rollbackThread: (input: ProviderAdapter.ProviderAdapterV2RollbackThreadInput) =>
-                Effect.gen(function* () {
-                  rollbackCounts.push(yield* resolveCodexRollbackTurnCount(input));
-                  return { providerThread: input.providerThread };
-                }),
-            } as never),
+          open: ({ modelSelection }) =>
+            Effect.sync(() => {
+              rollbackSelections.push(modelSelection);
+              return {
+                rollbackThread: (input: ProviderAdapter.ProviderAdapterV2RollbackThreadInput) =>
+                  Effect.gen(function* () {
+                    rollbackCounts.push(yield* resolveCodexRollbackTurnCount(input));
+                    return { providerThread: input.providerThread };
+                  }),
+              } as never;
+            }),
         }),
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({ resolve: () => Effect.succeed({} as never) }),
       ),
@@ -795,8 +818,19 @@ const seedRollbackHistory = Effect.gen(function* () {
       });
     }).pipe(Effect.provide(serviceLayer));
 
+  const setNextModel = (selection: ModelSelection) =>
+    Effect.gen(function* () {
+      const thread = yield* store.getThread(threadId);
+      yield* apply({
+        type: "thread.provider-switched",
+        payload: { ...thread, providerInstanceId: selection.instanceId, modelSelection: selection },
+      });
+    });
   return {
     store,
+    modelSelection,
+    setNextModel,
+    rollbackSelections,
     now,
     threadId,
     runId,
@@ -879,12 +913,25 @@ it.layer(ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMe
       () =>
         Effect.gen(function* () {
           const history = yield* seedRollbackHistory;
+          const nextSelection = {
+            instanceId: ProviderInstanceId.make("claudeAgent"),
+            model: "opus",
+          };
+          yield* history.setNextModel(nextSelection);
           yield* history.rollback(5);
           yield* history.rollback(2);
           yield* history.rollback(0);
           yield* history.rollback(0);
 
           assert.deepEqual(history.rollbackCounts, [1, 3, 3]);
+          assert.deepEqual(
+            history.rollbackSelections,
+            Array.from({ length: 4 }, () => history.modelSelection),
+          );
+          assert.deepEqual(
+            (yield* history.store.getThread(history.threadId)).modelSelection,
+            nextSelection,
+          );
           assert.sameMembers(history.deletedRefs, [1, 2, 3, 4, 5, 6].map(history.checkpointId));
           assert.sameMembers(
             history.committed

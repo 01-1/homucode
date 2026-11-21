@@ -1024,7 +1024,7 @@ it.live(
         const orchestrator = yield* Orchestrator.OrchestratorV2;
         const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
         const eventSink = yield* EventSink.EventSinkV2;
-        const dispatch = (step: string, modelSelection: ModelSelection) =>
+        const dispatch = (step: string, modelSelection?: ModelSelection) =>
           Effect.gen(function* () {
             const terminal = yield* orchestrator.streamDomainEvents.pipe(
               Stream.filter(
@@ -1036,14 +1036,18 @@ it.live(
             );
             yield* orchestrator.dispatch({
               type: "message.dispatch",
-              createdBy: "user",
-              creationSource: "web",
+              ...(modelSelection === undefined
+                ? {
+                    createdBy: "agent",
+                    creationSource: "mcp",
+                    senderThreadId: ThreadId.make("sending-thread"),
+                  }
+                : { createdBy: "user", creationSource: "web", modelSelection }),
               commandId: CommandId.make(`${name}:${step}`),
               threadId,
               messageId: MessageId.make(`${name}:${step}`),
               text: step,
               attachments: [],
-              modelSelection,
               dispatchMode: { type: "start_immediately" },
             });
             yield* worker.drain();
@@ -1129,7 +1133,13 @@ it.live(
             : [],
         );
 
-        const second = yield* dispatch("second", replacementSelection);
+        const changed = yield* orchestrator.getThreadProjection(threadId);
+        assert.lengthOf(changed.runs, 1);
+        assert.deepInclude(changed.visibleTurnItems.at(-1)?.item, {
+          type: "system_notice",
+          modelSwitch: { from: seedSelection, to: replacementSelection },
+        });
+        const second = yield* dispatch("second");
         return {
           projection: second,
           captured: yield* Ref.get(state),
@@ -1141,9 +1151,7 @@ it.live(
       const { projection, captured } = result;
       assert.lengthOf(projection.runs, 2);
       assert.equal(projection.runs[1]?.modelSelection.model, replacementSelection.model);
-      assert.deepEqual(modelSwitches(projection), [
-        { from: seedSelection, to: replacementSelection },
-      ]);
+      assert.deepEqual(modelSwitches(projection), []);
       assert.deepEqual(result.detachedSessionIds, [result.liveSessionId]);
       assert.equal(captured.closedSessionCount, 1);
       assert.deepEqual(
@@ -1171,6 +1179,7 @@ const accountSwitchModes = [
   "selection-command",
   "pooled",
   "separate-home",
+  "idle-pick-separate-home",
   "active-separate-home",
 ] as const;
 
@@ -1180,7 +1189,8 @@ it.live.each(accountSwitchModes)(
     Effect.gen(function* () {
       const name = `shared-home-${mode}`;
       const active = mode === "active" || mode === "active-separate-home";
-      const separateHome = mode === "separate-home" || mode === "active-separate-home";
+      const savedPick = mode === "idle-pick-separate-home";
+      const separateHome = savedPick || mode === "separate-home" || mode === "active-separate-home";
       const cwd = yield* checkpointWorkspace(name);
       const threadId = ThreadId.make(`thread:${name}`);
       const targetId = ProviderInstanceId.make("codex-shadow-account");
@@ -1255,7 +1265,11 @@ it.live.each(accountSwitchModes)(
           createdBy: "user",
           creationSource: "web",
         });
-        const dispatch = (step: string, modelSelection: ModelSelection, targetRunId?: RunId) =>
+        const dispatch = (
+          step: string,
+          modelSelection: ModelSelection | undefined,
+          targetRunId?: RunId,
+        ) =>
           Effect.gen(function* () {
             const terminal = yield* orchestrator.streamDomainEvents.pipe(
               Stream.filter((event) =>
@@ -1274,13 +1288,17 @@ it.live.each(accountSwitchModes)(
               messageId: MessageId.make(`${name}:${step}`),
               text: step,
               attachments: [],
-              modelSelection,
+              ...(modelSelection === undefined
+                ? {
+                    createdBy: "agent",
+                    creationSource: "mcp",
+                    senderThreadId: ThreadId.make("sending-thread"),
+                  }
+                : { createdBy: "user", creationSource: "web", modelSelection }),
               dispatchMode:
                 targetRunId === undefined
                   ? { type: "start_immediately" }
                   : { type: "restart_active", targetRunId },
-              createdBy: "user",
-              creationSource: "web",
             });
             yield* worker.drain();
             yield* Fiber.join(terminal);
@@ -1292,24 +1310,36 @@ it.live.each(accountSwitchModes)(
           (thread) => thread.id === first.thread.activeProviderThreadId,
         )!;
         const targetSelection = { instanceId: targetId, model: "complete" };
-        if (mode === "selection-command") {
+        if (mode === "selection-command" || savedPick) {
           yield* orchestrator.dispatch({
-            type: "provider.switch",
+            type: savedPick ? "thread.model-selection.set" : "provider.switch",
             commandId: CommandId.make(`${name}:switch`),
             threadId,
             modelSelection: targetSelection,
+            ...(savedPick ? { deferProviderSwitch: true } : {}),
           });
           yield* worker.drain();
+          if (savedPick) {
+            const changed = yield* orchestrator.getThreadProjection(threadId);
+            assert.deepEqual(changed.thread.modelSelection, targetSelection);
+            assert.equal(changed.thread.activeProviderThreadId, originalThread.id);
+            assert.isTrue(
+              changed.providerSessions.some(
+                (session) => session.id === originalThread.providerSessionId,
+              ),
+            );
+          }
         }
         const second = yield* dispatch(
           "second",
-          targetSelection,
+          savedPick ? undefined : targetSelection,
           active ? first.runs[0]!.id : undefined,
         );
         const targetThread = second.providerThreads.find(
           (thread) => thread.id === second.thread.activeProviderThreadId,
         )!;
         if (separateHome) {
+          assert.deepEqual(second.runs.at(-1)?.modelSelection, targetSelection);
           assert.notEqual(targetThread.id, originalThread.id);
           assert.lengthOf(second.contextHandoffs, 1);
           assert.deepEqual(

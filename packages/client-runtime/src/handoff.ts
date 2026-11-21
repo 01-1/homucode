@@ -107,7 +107,7 @@ export function resolveModelSwitchChange(
     providers.find((provider) => provider.instanceId === selection.instanceId)?.models;
   const fromEffort = resolveEffort(from, modelsOf(from));
   const toEffort = resolveEffort(to, modelsOf(to));
-  const modelChanged = from.model !== to.model;
+  const modelChanged = from.model !== to.model || from.instanceId !== to.instanceId;
   const effort =
     fromEffort && toEffort && fromEffort.value !== toEffort.value
       ? { from: fromEffort.label, to: toEffort.label }
