@@ -951,11 +951,37 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? undefined
       : clampManagedRuntimeMode(managedPolicy, compatibleRuntimeMode, compatibleRuntimeModes);
 
-  const providerSendBlockReason = getAntigravitySendBlockReason(
-    selectedProviderEntry?.snapshot,
-    selectedModel,
-    m,
-  );
+  const selectedModelForPicker = selectedModel;
+  const modelOptionsByInstance = new Map<ProviderInstanceId, ReadonlyArray<AppModelOption>>();
+  for (const entry of providerInstanceEntries) {
+    modelOptionsByInstance.set(
+      entry.instanceId,
+      getAppModelOptionsForInstance(
+        settings,
+        entry,
+        entry.instanceId === selectedInstanceId ? selectedModelForPicker : null,
+      ),
+    );
+  }
+
+  const selectedModelUnavailable = modelOptionsByInstance
+    .get(selectedInstanceId)
+    ?.some((option) => option.slug === selectedModel && option.isUnavailable);
+  const missingModelReason = gt("Choose a model");
+  const multipleModelUnavailable = multipleModelSelections?.some((selection) => {
+    const entry = providerInstanceEntries.find(
+      (entry) => entry.instanceId === selection.instanceId,
+    );
+    return (
+      entry &&
+      getAppModelOptionsForInstance(settings, entry, selection.model).some(
+        (option) => option.isUnavailable && option.slug === selection.model,
+      )
+    );
+  });
+  const providerSendBlockReason =
+    getAntigravitySendBlockReason(selectedProviderEntry?.snapshot, selectedModel, m) ??
+    (selectedModelUnavailable ? missingModelReason : null);
   const sendDisabledReason =
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? gt("Select at least one model.") : null) ??
@@ -963,7 +989,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? attachmentBlockReason
       : (attachmentBlockReason ??
         runtimeModeCeilingDenial ??
-        (multipleModelSelections === null ? providerSendBlockReason : null)));
+        (multipleModelSelections === null
+          ? providerSendBlockReason
+          : multipleModelUnavailable
+            ? missingModelReason
+            : null)));
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const selectedProviderSkills = selectedProviderStatus
@@ -986,19 +1016,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedModel,
     selectedModelOptionsForDispatch,
   );
-  const selectedModelForPicker = selectedModel;
-  const modelOptionsByInstance = new Map<ProviderInstanceId, ReadonlyArray<AppModelOption>>();
-  for (const entry of providerInstanceEntries) {
-    modelOptionsByInstance.set(
-      entry.instanceId,
-      getAppModelOptionsForInstance(
-        settings,
-        entry,
-        entry.instanceId === selectedInstanceId ? selectedModelForPicker : null,
-      ),
-    );
-  }
-
   const selectedModelForPickerWithCustomFallback = (() => {
     const currentOptions = modelOptionsByInstance.get(selectedInstanceId) ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
@@ -3353,8 +3370,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               )
             : null,
         providerAvailable:
-          multipleModelSelections !== null ||
-          (!noProviderAvailable && providerSendBlockReason === null),
+          multipleModelSelections !== null
+            ? !multipleModelUnavailable
+            : !noProviderAvailable && providerSendBlockReason === null,
         selectedProvider,
         selectedModel,
         selectedProviderModels,
@@ -3419,6 +3437,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       routeKind,
       noProviderAvailable,
       providerSendBlockReason,
+      multipleModelUnavailable,
       selectedPromptEffort,
       selectedProvider,
       selectedProviderModels,

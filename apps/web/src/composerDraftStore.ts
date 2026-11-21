@@ -1285,7 +1285,7 @@ export function deriveEffectiveComposerModelState(input: {
   const preserveThreadModel =
     input.selectedInstanceId !== null &&
     input.selectedInstanceId !== undefined &&
-    input.threadModelSelection?.instanceId === input.selectedInstanceId;
+    baseSelection?.instanceId === input.selectedInstanceId;
   const baseModel =
     (input.selectedInstanceId
       ? resolveAppModelSelectionForInstance(
