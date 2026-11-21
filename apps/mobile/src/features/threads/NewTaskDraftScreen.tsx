@@ -184,7 +184,8 @@ export function NewTaskDraftScreen(props: {
   const { projectScopes, selectedProject, selectedProjectKey, setProject } = flow;
   // selectedProject falls back to the environment's first project; remember only a chosen one.
   useRememberThreadProject(
-    selectedProject &&
+    !lockedToMadoHomu &&
+      selectedProject &&
       selectedProjectKey === scopedProjectKey(selectedProject.environmentId, selectedProject.id)
       ? selectedProject
       : null,

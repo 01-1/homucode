@@ -1,4 +1,9 @@
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { createElement } from "react";
+import {
+  scopedProjectKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import { type DesktopBridge, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -7,12 +12,16 @@ import {
   hydrateImagesFromPersisted,
   useComposerDraftStore,
 } from "../../composerDraftStore";
+import { render } from "../../../test/render";
+import { readLastUsedProjectKey, useHandleNewThread } from "../../hooks/useHandleNewThread";
+import { makeThreadFixture } from "../../test-fixtures";
 import * as imageCompression from "../../lib/imageCompression";
 import {
   questionAttachmentDraftId,
   trackOpenQuestionAttachmentDraft,
 } from "../../questionAttachments";
 import {
+  SnapShotCoordinator,
   beginSnapShotAnimationWhenReady,
   deliverSnapShot,
   dismissFailedSnapShot,
@@ -70,6 +79,36 @@ function setup(): Disposable {
     },
   };
 }
+
+it("remembers the Code project when MadoHomu changes projects", async () => {
+  using _env = setup();
+  const codeProjectId = ProjectId.make("code-project");
+  const showThread = (projectId: ProjectId) => {
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeThread: makeThreadFixture({ environmentId, projectId }),
+      activeDraftThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: false,
+      handleNewThread: vi.fn(),
+      routeDraftId: null,
+      routeThreadRef: null,
+    });
+    return createElement(SnapShotCoordinator);
+  };
+
+  {
+    await using _screen = await render(showThread(codeProjectId), { router: "/" });
+    expect(readLastUsedProjectKey()).toBe(
+      scopedProjectKey(scopeProjectRef(environmentId, codeProjectId)),
+    );
+  }
+
+  await using screen = await render(showThread(projectRef.projectId), { router: "/madohomu" });
+  await screen.rerender(showThread(ProjectId.make("another-madohomu-project")));
+  expect(readLastUsedProjectKey()).toBe(
+    scopedProjectKey(scopeProjectRef(environmentId, codeProjectId)),
+  );
+});
 
 describe("window capture failures", () => {
   it("does not resurrect a failed capture when its draft becomes ready later", async () => {

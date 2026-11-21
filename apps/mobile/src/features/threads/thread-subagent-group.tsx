@@ -220,31 +220,26 @@ export function ThreadSubagentGroup(props: {
                 disabled={target === null}
                 onPress={() => {
                   if (target === null) return;
-                  if (
-                    openInspector(
-                      { environmentId: props.environmentId, threadId: members[0]!.threadId },
-                      {
-                        type: "thread",
-                        environmentId: target.environmentId,
-                        threadId: target.threadId,
-                      },
-                    )
-                  )
-                    return;
                   const linked = {
                     environmentId: String(target.environmentId),
                     threadId: String(target.threadId),
                   };
-                  navigation.dispatch(
-                    StackActions.push("Thread", {
-                      ...linked,
-                      ...madohomuLinkFlag(
-                        rootStackState(navigation),
-                        linked,
-                        agent.childThreadId === null ? undefined : parentProjectId,
-                      ),
-                    }),
-                  );
+                  const params = {
+                    ...linked,
+                    ...madohomuLinkFlag(
+                      rootStackState(navigation),
+                      linked,
+                      agent.childThreadId === null ? undefined : parentProjectId,
+                    ),
+                  };
+                  if (
+                    openInspector(
+                      { environmentId: props.environmentId, threadId: members[0]!.threadId },
+                      { type: "thread", ...params },
+                    )
+                  )
+                    return;
+                  navigation.dispatch(StackActions.push("Thread", params));
                 }}
                 className="rounded-lg px-3 py-3 active:bg-subtle"
               >

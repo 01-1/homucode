@@ -34,7 +34,7 @@ type ActiveThreadParams = Partial<ThreadTarget> & MadoHomuThreadRouteParams;
 function activeThreadParams(state: StackState): ActiveThreadParams | undefined {
   const thread = state?.routes
     .slice(0, state.index + 1)
-    .findLast((route) => route.name === "Thread");
+    .findLast((route) => route.name === "Thread" || route.name === "ThreadInspectorFullscreen");
   return thread?.params as ActiveThreadParams | undefined;
 }
 

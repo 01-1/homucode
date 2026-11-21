@@ -14,6 +14,8 @@ import { SheetIntro } from "../../../components/ui/SheetIntro";
 import { useSelectedThreadGitActions } from "../../../state/use-selected-thread-git-actions";
 import { useSelectedThreadGitState } from "../../../state/use-selected-thread-git-state";
 import { useThreadSelection } from "../../../state/use-thread-selection";
+import { rootStackState } from "../../../lib/root-stack-reset";
+import { madohomuRouteFlag } from "../../madohomu/madohomuLinkFlag";
 import { SheetActionButton } from "./gitSheetComponents";
 
 type GitConfirmSheetProps = StaticScreenProps<{
@@ -67,9 +69,19 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
     [branchName, confirmAction, includesCommit, messages, terminology],
   );
 
+  const returnToThread = useCallback(() => {
+    navigation.dispatch(
+      StackActions.replace("Thread", {
+        environmentId,
+        threadId,
+        ...madohomuRouteFlag(rootStackState(navigation)),
+      }),
+    );
+  }, [environmentId, navigation, threadId]);
+
   const continuePendingAction = async () => {
     if (!canWriteSourceControl || !confirmAction) return;
-    navigation.dispatch(StackActions.replace("Thread", { environmentId, threadId }));
+    returnToThread();
     await gitActions.onRunSelectedThreadGitAction({
       action: confirmAction,
       ...(params.commitMessage ? { commitMessage: params.commitMessage } : {}),
@@ -79,7 +91,7 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
 
   const movePendingActionToFeatureBranch = useCallback(async () => {
     if (!canChangeThreadBranch || !confirmAction) return;
-    navigation.dispatch(StackActions.replace("Thread", { environmentId, threadId }));
+    returnToThread();
 
     if (includesCommit) {
       await gitActions.onRunSelectedThreadGitAction({
@@ -111,9 +123,7 @@ export function GitConfirmSheet(props: GitConfirmSheetProps) {
     gitState.selectedThreadBranches,
     includesCommit,
     params,
-    navigation,
-    environmentId,
-    threadId,
+    returnToThread,
   ]);
 
   return (

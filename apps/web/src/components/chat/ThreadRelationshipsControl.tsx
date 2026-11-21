@@ -1,3 +1,4 @@
+import { openThreadInMadoHomu } from "../../madohomu";
 import { useAtomValue } from "@effect/atom-react";
 import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
@@ -79,6 +80,7 @@ import {
 } from "../../providerInstances";
 import { threadEnvironment } from "../../state/threads";
 import { orchestrationEnvironment, threadTitlesRead } from "../../state/orchestration";
+import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useEnvironmentQuery } from "../../state/query";
 import { AgentElapsed } from "./AgentElapsed";
@@ -505,6 +507,10 @@ export function ThreadRelationshipsPanel(props: {
       : null;
   const parentProjection = useQuietThreadProjection(parentRef)?.projection;
   const navigate = useNavigate();
+  const router = useRouter();
+  const readActiveFamily = useAtomQueryRunner(orchestrationEnvironment.threadFamily, {
+    reportFailure: false,
+  });
   const mergeBack = useAtomCommand(threadEnvironment.mergeBack);
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
   const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn);
@@ -677,12 +683,29 @@ export function ThreadRelationshipsPanel(props: {
   }
 
   // Idle children can be omitted from the shell; opening one loads its own detail.
-  const openThread = (threadId: ThreadId) => {
+  const openThread = async (threadId: ThreadId) => {
     const routeRef = resolveThreadOpenRoute(
       scopeThreadRef(props.environmentId, threadId),
       graph.nodes.get(threadId)?.thread ?? null,
     );
     if (routeRef.threadId === ref.threadId) return;
+    const known = graph.nodes.get(routeRef.threadId)?.thread;
+    if (known?.archivedAt == null && openThreadInMadoHomu(router, routeRef, known?.projectId)) {
+      return;
+    }
+    const location = router.latestLocation;
+    if (location.pathname === "/madohomu" && !known) {
+      const family = await readActiveFamily({
+        environmentId: routeRef.environmentId,
+        input: { threadId: routeRef.threadId },
+      });
+      if (router.latestLocation !== location) return;
+      const active =
+        family._tag === "Success"
+          ? family.value.threads.find(({ id }) => id === routeRef.threadId)
+          : undefined;
+      if (active && openThreadInMadoHomu(router, routeRef, active.projectId)) return;
+    }
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(routeRef),
@@ -712,7 +735,7 @@ export function ThreadRelationshipsPanel(props: {
       });
       return;
     }
-    openThread(mergeTargetThreadId);
+    await openThread(mergeTargetThreadId);
   };
 
   const detach = async () => {
@@ -904,7 +927,7 @@ export function ThreadRelationshipsPanel(props: {
               size="sm"
               variant="ghost"
               part={workflowGroup ? "primary" : "row"}
-              onClick={() => openThread(threadId)}
+              onClick={() => void openThread(threadId)}
             />
           }
         >
@@ -923,7 +946,7 @@ export function ThreadRelationshipsPanel(props: {
           providers={providers}
           providerEntries={providerEntries}
           driver={providerDriver}
-          onOpenThread={(memberThreadId) => openThread(memberThreadId as ThreadId)}
+          onOpenThread={(memberThreadId) => void openThread(memberThreadId as ThreadId)}
           onStop={canStopWorkflow ? () => void stopWorkflow(agent.id) : undefined}
           stopping={stoppingId === agent.id}
           stopDisabled={stoppingId !== null}
@@ -944,7 +967,7 @@ export function ThreadRelationshipsPanel(props: {
                     variant="ghost"
                     part="primary"
                     aria-label={`${threadTitle} ${threadRelationshipStatusLabel(rowStatus, m)}`}
-                    onClick={() => openThread(threadId)}
+                    onClick={() => void openThread(threadId)}
                   />
                 }
               >

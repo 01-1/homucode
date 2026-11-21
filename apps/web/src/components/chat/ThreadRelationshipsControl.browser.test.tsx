@@ -1,6 +1,6 @@
 import "~/index.css";
 import * as DateTime from "effect/DateTime";
-import { EnvironmentId, NodeId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, NodeId, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
@@ -14,6 +14,15 @@ const state = vi.hoisted(() => ({
   relatedShells: [] as unknown[],
   threadTitles: {} as Record<string, string>,
   archivedThreads: [] as unknown[],
+  openThreadInMadoHomu: vi.fn<typeof import("../../madohomu").openThreadInMadoHomu>(),
+  readActiveFamily: vi.fn(),
+}));
+
+vi.mock(import("../../madohomu"), () => ({
+  openThreadInMadoHomu: state.openThreadInMadoHomu,
+}));
+vi.mock(import("../../state/use-atom-query-runner"), () => ({
+  useAtomQueryRunner: () => state.readActiveFamily,
 }));
 
 vi.mock(import("../../state/query"), async (original) => ({
@@ -67,6 +76,8 @@ const environmentId = EnvironmentId.make("environment");
 const threadId = ThreadId.make("fork");
 
 function setup() {
+  state.openThreadInMadoHomu.mockReset().mockReturnValue(null);
+  state.readActiveFamily.mockReset();
   state.commandSucceeds = false;
   state.relatedShells = [];
   state.threadTitles = { source: "Source" };
@@ -163,6 +174,41 @@ it.each([
     await expect.element(screen.getByRole("button", { name: "More thread actions" })).toBeEnabled();
   }
 });
+
+it.each([false, true])(
+  "routes a cold merge destination to the correct view (archived: %s)",
+  async (archived) => {
+    setup();
+    const projectId = ProjectId.make("focused-project");
+    state.commandSucceeds = true;
+    state.readActiveFamily.mockResolvedValue({
+      _tag: "Success",
+      value: { threads: archived ? [] : [{ id: "source", projectId }] },
+    });
+    state.openThreadInMadoHomu.mockImplementation((router, ref, knownProjectId) =>
+      knownProjectId === projectId
+        ? router.navigate({ to: "/madohomu", search: { threadId: ref.threadId } })
+        : null,
+    );
+    await using screen = await render(
+      <ThreadRelationshipsPanel
+        environmentId={environmentId}
+        threadId={threadId}
+        showLineage
+        showSideChats
+      />,
+      { router: "/madohomu" },
+    );
+
+    await screen.getByRole("button", { name: "Merge back to source conversation" }).click();
+    await vi.waitFor(() => {
+      expect(screen.router?.state.location.pathname).toBe(
+        archived ? "/environment/source" : "/madohomu",
+      );
+      if (!archived) expect(screen.router?.state.location.search).toEqual({ threadId: "source" });
+    });
+  },
+);
 
 it("opens an idle child from Lineage when its shell has not been loaded", async () => {
   setup();

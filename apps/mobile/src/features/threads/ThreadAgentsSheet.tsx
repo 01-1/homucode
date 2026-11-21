@@ -76,22 +76,14 @@ export function ThreadAgentsSheet({
 
   const openChildThread = (child: AgentsTarget, localParentProjectId?: ProjectId) => {
     void Haptics.selectionAsync();
-    if (
-      openInspector(target, {
-        type: "thread",
-        environmentId: child.environmentId,
-        threadId: child.threadId,
-      })
-    )
-      return;
+    const params = {
+      environmentId: child.environmentId,
+      threadId: child.threadId,
+      ...madohomuLinkFlag(rootStackState(navigation), child, localParentProjectId),
+    };
+    if (openInspector(target, { type: "thread", ...params })) return;
     // Replace this leaf sheet so the child enters the workspace stack expected by Home's Back button.
-    navigation.dispatch(
-      StackActions.replace("Thread", {
-        environmentId: child.environmentId,
-        threadId: child.threadId,
-        ...madohomuLinkFlag(rootStackState(navigation), child, localParentProjectId),
-      }),
-    );
+    navigation.dispatch(StackActions.replace("Thread", params));
   };
 
   const content = (

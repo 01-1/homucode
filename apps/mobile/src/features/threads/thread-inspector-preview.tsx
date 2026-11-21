@@ -16,6 +16,7 @@ import {
   ThreadInspectorNavigationContext,
   type ThreadInspectorTarget,
 } from "./thread-inspector-navigation";
+import type { MadoHomuThreadRouteParams } from "./thread-route-state";
 import { ThreadPreviewRoute } from "./thread-preview-route";
 
 /** A thread shown outside its route: in the inspector pane, or presented full screen with a close. */
@@ -68,7 +69,9 @@ export function ThreadInspectorPreview(props: {
   readonly onClose: () => void;
   readonly onOpen: (target: ThreadInspectorTarget) => void;
   readonly renderThread: (
-    props: StaticScreenProps<{ readonly environmentId: string; readonly threadId: string }> & {
+    props: StaticScreenProps<
+      { readonly environmentId: string; readonly threadId: string } & MadoHomuThreadRouteParams
+    > & {
       readonly inspectorPresentation: ThreadInspectorPresentation;
     },
   ) => ReactNode;
@@ -113,16 +116,20 @@ export function ThreadInspectorPreview(props: {
           />
         ) : (
           <View className="flex-1 bg-screen">
-            <ThreadPreviewRoute environmentId={target.environmentId} threadId={target.threadId}>
+            <ThreadPreviewRoute
+              environmentId={target.environmentId}
+              threadId={target.threadId}
+              {...(target.madohomu ? { madohomu: true } : {})}
+              {...(target.madohomuLinkProjectId
+                ? { madohomuLinkProjectId: target.madohomuLinkProjectId }
+                : {})}
+            >
               {(route) =>
                 props.renderThread({
                   route,
                   inspectorPresentation: {
                     onMaximize: () =>
-                      navigation.navigate("ThreadInspectorFullscreen", {
-                        environmentId: route.params.environmentId,
-                        threadId: route.params.threadId,
-                      }),
+                      navigation.navigate("ThreadInspectorFullscreen", route.params),
                   },
                 })
               }

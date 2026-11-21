@@ -127,6 +127,8 @@ import {
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
 import { ThreadHeader } from "./ThreadHeader";
+import { rootStackState } from "../../lib/root-stack-reset";
+import { madohomuLinkFlag } from "../madohomu/madohomuLinkFlag";
 import { MadoHomuThreadHeader } from "../madohomu/MadoHomuThreadHeader";
 import { resumeThread } from "./resume-thread";
 import {
@@ -397,7 +399,9 @@ function ThreadRouteContent(
     selectedThreadProject,
     selectedEnvironmentConnection,
   } = useThreadSelection();
-  useRememberThreadProject(selectedThreadProject);
+  const params = props.route.params ?? {};
+  const fromMadoHomu = isMadoHomuThreadRoute(params, selectedThread?.projectId);
+  useRememberThreadProject(fromMadoHomu ? null : selectedThreadProject);
   const canOperateThread = useEnvironmentScope(
     selectedThread?.environmentId ?? null,
     AuthOrchestrationOperateScope,
@@ -501,6 +505,11 @@ function ThreadRouteContent(
       return;
     }
     mergeBackBusyRef.current = true;
+    const target = {
+      environmentId: selectedThread.environmentId,
+      threadId: mergeBackTargetThreadId,
+    };
+    const routeFlag = madohomuLinkFlag(rootStackState(navigation), target);
     const result = await mergeBack({
       environmentId: selectedThread.environmentId,
       input: {
@@ -512,12 +521,12 @@ function ThreadRouteContent(
     });
     mergeBackBusyRef.current = false;
     if (result._tag !== "Success") return;
-    selectDetail({
-      name: "Thread",
-      params: { environmentId: selectedThread.environmentId, threadId: mergeBackTargetThreadId },
-    });
+    if (routeFlag.madohomu || routeFlag.madohomuLinkProjectId) {
+      navigation.dispatch(StackActions.replace("Thread", { ...target, ...routeFlag }));
+      return;
+    }
+    selectDetail({ name: "Thread", params: target });
   };
-  const params = props.route.params ?? {};
   const environmentIdRaw = firstRouteParam(params.environmentId);
   const environmentId = environmentIdRaw ? EnvironmentId.make(environmentIdRaw) : null;
   const threadId = firstRouteParam(params.threadId);
@@ -567,9 +576,7 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
-  const inMadoHomu =
-    isMadoHomuThreadRoute(params, selectedThread?.projectId) ||
-    selectedThreadCreation?.message.creation?.madohomu === true;
+  const inMadoHomu = fromMadoHomu || selectedThreadCreation?.message.creation?.madohomu === true;
   const headerSubtitle = [
     inMadoHomu ? null : (selectedThreadProject?.title ?? null),
     selectedEnvironmentConnection?.environmentLabel ?? null,
@@ -966,6 +973,7 @@ function ThreadRouteContent(
       StackActions.replace("Thread", {
         environmentId: String(selectedThread.environmentId),
         threadId: metadata.threadId,
+        ...(fromMadoHomu ? { madohomu: true } : {}),
       }),
     );
   };
@@ -1190,10 +1198,9 @@ function ThreadRouteContent(
 }
 
 export function FullscreenThreadRouteScreen(
-  props: StaticScreenProps<{
-    readonly environmentId: string;
-    readonly threadId: string;
-  }>,
+  props: StaticScreenProps<
+    { readonly environmentId: string; readonly threadId: string } & MadoHomuThreadRouteParams
+  >,
 ) {
   const navigation = useNavigation();
   return (
