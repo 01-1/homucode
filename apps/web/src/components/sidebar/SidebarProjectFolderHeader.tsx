@@ -71,7 +71,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   return (
     <li
       data-testid="sidebar-project-folder"
-      className="group/project-folder relative mt-2 list-none first:mt-0"
+      className="group/project-folder has-[[data-sidebar-action-for]:focus]:[--project-folder-count-visibility:hidden] relative mt-2 list-none first:mt-0"
     >
       <button
         type="button"
@@ -98,7 +98,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           </span>
         ) : null}
         {collapsed && hiddenThreads.length > 0 ? (
-          <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground group-hover/project-folder:invisible group-has-[[data-sidebar-action-for]:focus]/project-folder:invisible pointer-coarse:invisible">
+          <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground group-hover/project-folder:invisible [visibility:var(--project-folder-count-visibility,visible)] pointer-coarse:invisible">
             {hiddenThreads.length}
           </span>
         ) : null}

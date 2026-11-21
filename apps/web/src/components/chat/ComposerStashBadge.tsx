@@ -1,6 +1,6 @@
 import { useGT } from "gt-react";
 import { BookmarkIcon } from "lucide-react";
-import { memo } from "react";
+import { memo, useLayoutEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
@@ -13,6 +13,13 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   onToggleMenu: () => void;
 }) {
   const gt = useGT();
+  const rootRef = useRef<HTMLDivElement>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- flags the composer stack so the headline drops its padding without an ancestor :has()
+  useLayoutEffect(() => {
+    const stack = rootRef.current?.closest("[data-chat-composer-stack]");
+    stack?.toggleAttribute("data-shoulder-tab", true);
+    return () => stack?.removeAttribute("data-shoulder-tab");
+  });
   if (props.count === 0) return null;
   const pulsed = props.pulseKey > 0;
   const count = (
@@ -31,6 +38,7 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
 
   return (
     <ComposerBanner.Root
+      ref={rootRef}
       density="comfortable"
       width="content"
       data-composer-shoulder-tab

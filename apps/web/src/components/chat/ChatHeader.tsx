@@ -48,7 +48,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
-import { ThreadHeaderStatus } from "./ThreadStatusBar";
+import { headerStatusLine, ThreadHeaderStatus } from "./ThreadStatusBar";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -284,190 +284,195 @@ export const ChatHeader = memo(function ChatHeader({
     }
   };
   return (
-    <div
-      ref={breadcrumbContainerRef}
-      className={cn(
-        "group/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        // Clears the floating panel toggles, which are 32px wide below sm.
-        rightPanelOpen ? "pr-10" : trailingControls ? "pr-28 sm:pr-24" : "pr-24",
-      )}
-      onContextMenu={handleHeaderContextMenu}
-    >
-      <WorkspaceBreadcrumb
-        ariaLabel={gt("Thread breadcrumb")}
-        // While a status line shows beside it, the breadcrumb keeps only its own width so the line starts after the title.
-        className="flex-1 overflow-clip [overflow-clip-margin:2px] group-has-[[data-chat-header-status-line]]/chat-header:max-w-1/2 group-has-[[data-chat-header-status-line]]/chat-header:flex-none"
-      >
-        {activeProject && !hideProjectBreadcrumb ? (
-          <>
-            <WorkspaceBreadcrumbItem className="shrink">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={gt("New thread in {project}", { project: activeProjectName })}
-                      onClick={onNewThreadInProject}
-                      className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <ProjectFavicon project={activeProject} className="size-3.5" />
-                  <MiddleTruncate
-                    data-slot="workspace-breadcrumb-text"
-                    value={activeProjectName ?? ""}
-                    showTitle={false}
-                    variant="cap-aligned"
-                  />
-                </TooltipTrigger>
-                <TooltipPopup side="top">
-                  <T>
-                    New thread in <Var>{activeProjectName}</Var>
-                  </T>
-                </TooltipPopup>
-              </Tooltip>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator>
-              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
-            </WorkspaceBreadcrumbSeparator>
-          </>
-        ) : null}
-        {parentThreadLink ? (
-          <>
-            <WorkspaceBreadcrumbItem>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={gt("Open parent thread: {title}", {
-                        title: parentThreadLink.title,
-                      })}
-                      onClick={() => onOpenThread(parentThreadLink.threadId)}
-                      className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <WorkspaceBreadcrumbText
-                    aria-hidden
-                    className={collapseParentTitle ? "w-0" : undefined}
-                  >
-                    {parentThreadLink.title}
-                  </WorkspaceBreadcrumbText>
-                  {collapseParentTitle ? (
-                    <span aria-hidden data-parent-breadcrumb-ellipsis>
-                      ...
-                    </span>
-                  ) : null}
-                </TooltipTrigger>
-                <TooltipPopup side="top">{parentThreadLink.title}</TooltipPopup>
-              </Tooltip>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator>
-              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
-            </WorkspaceBreadcrumbSeparator>
-          </>
-        ) : null}
-        <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
-          {renamingTitle !== null ? (
-            <input
-              autoFocus
-              dir="auto"
-              aria-label={gt("Thread title")}
-              className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
-              defaultValue={renamingTitle}
-              onBlur={(event) => {
-                if (renameCommittedRef.current) return;
-                if (
-                  event.relatedTarget instanceof HTMLElement &&
-                  event.relatedTarget.closest("button")
-                ) {
-                  setRenaming(null);
-                  return;
-                }
-                commitRename(event.currentTarget.value);
-              }}
-              onFocus={(event) => event.currentTarget.select()}
-              onKeyDown={handleRenameKeyDown}
-            />
-          ) : isServerThread ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={gt("Thread actions for {title}", { title: activeThreadTitle })}
-                    aria-haspopup="menu"
-                    onClick={openMenuFromTitle}
-                    onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
-                    className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  />
-                }
-              >
-                <h2 className="min-w-0" dir={textDirection(activeThreadTitle)}>
-                  <WorkspaceBreadcrumbText>
-                    <ThreadTitleIdBadge titleId={activeThreadTitleId} />
-                    {activeThreadTitle}
-                  </WorkspaceBreadcrumbText>
-                </h2>
-                <ChevronDownIcon
-                  aria-hidden
-                  data-thread-title-chevron
-                  className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <h2
-                    aria-label={activeThreadTitle}
-                    className="min-w-0 flex-1"
-                    dir={textDirection(activeThreadTitle)}
-                  />
-                }
-              >
-                <WorkspaceBreadcrumbText>
-                  <ThreadTitleIdBadge titleId={activeThreadTitleId} />
-                  {activeThreadTitle}
-                </WorkspaceBreadcrumbText>
-              </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
-            </Tooltip>
+    <headerStatusLine.Host>
+      {(hasStatusLine) => (
+        <div
+          ref={breadcrumbContainerRef}
+          data-status-line={hasStatusLine || undefined}
+          className={cn(
+            "group/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+            // Clears the floating panel toggles, which are 32px wide below sm.
+            rightPanelOpen ? "pr-10" : trailingControls ? "pr-28 sm:pr-24" : "pr-24",
           )}
-          {renamingTitle === null && activeThreadLinkOrigin ? (
-            <Tooltip>
-              <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                <T>
-                  From <Var>{activeThreadLinkOrigin}</Var>
-                </T>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                <T>
-                  Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
-                  environment.
-                </T>
-              </TooltipPopup>
-            </Tooltip>
-          ) : null}
-        </WorkspaceBreadcrumbItem>
-      </WorkspaceBreadcrumb>
-      <ThreadHeaderStatus
-        statusLineKey={statusLineKey}
-        usage={
-          statusLineProviders && statusLineUsageLimitSources
-            ? {
-                cwd: statusLineCwd ?? null,
-                providers: statusLineProviders,
-                usageLimitSources: statusLineUsageLimitSources,
-              }
-            : undefined
-        }
-      />
-      {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
-      {trailingControls}
-    </div>
+          onContextMenu={handleHeaderContextMenu}
+        >
+          <WorkspaceBreadcrumb
+            ariaLabel={gt("Thread breadcrumb")}
+            // While a status line shows beside it, the breadcrumb keeps only its own width so the line starts after the title.
+            className="flex-1 overflow-clip [overflow-clip-margin:2px] group-data-status-line/chat-header:max-w-1/2 group-data-status-line/chat-header:flex-none"
+          >
+            {activeProject && !hideProjectBreadcrumb ? (
+              <>
+                <WorkspaceBreadcrumbItem className="shrink">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={gt("New thread in {project}", { project: activeProjectName })}
+                          onClick={onNewThreadInProject}
+                          className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        />
+                      }
+                    >
+                      <ProjectFavicon project={activeProject} className="size-3.5" />
+                      <MiddleTruncate
+                        data-slot="workspace-breadcrumb-text"
+                        value={activeProjectName ?? ""}
+                        showTitle={false}
+                        variant="cap-aligned"
+                      />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">
+                      <T>
+                        New thread in <Var>{activeProjectName}</Var>
+                      </T>
+                    </TooltipPopup>
+                  </Tooltip>
+                </WorkspaceBreadcrumbItem>
+                <WorkspaceBreadcrumbSeparator>
+                  <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+                </WorkspaceBreadcrumbSeparator>
+              </>
+            ) : null}
+            {parentThreadLink ? (
+              <>
+                <WorkspaceBreadcrumbItem>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={gt("Open parent thread: {title}", {
+                            title: parentThreadLink.title,
+                          })}
+                          onClick={() => onOpenThread(parentThreadLink.threadId)}
+                          className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        />
+                      }
+                    >
+                      <WorkspaceBreadcrumbText
+                        aria-hidden
+                        className={collapseParentTitle ? "w-0" : undefined}
+                      >
+                        {parentThreadLink.title}
+                      </WorkspaceBreadcrumbText>
+                      {collapseParentTitle ? (
+                        <span aria-hidden data-parent-breadcrumb-ellipsis>
+                          ...
+                        </span>
+                      ) : null}
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">{parentThreadLink.title}</TooltipPopup>
+                  </Tooltip>
+                </WorkspaceBreadcrumbItem>
+                <WorkspaceBreadcrumbSeparator>
+                  <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+                </WorkspaceBreadcrumbSeparator>
+              </>
+            ) : null}
+            <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
+              {renamingTitle !== null ? (
+                <input
+                  autoFocus
+                  dir="auto"
+                  aria-label={gt("Thread title")}
+                  className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
+                  defaultValue={renamingTitle}
+                  onBlur={(event) => {
+                    if (renameCommittedRef.current) return;
+                    if (
+                      event.relatedTarget instanceof HTMLElement &&
+                      event.relatedTarget.closest("button")
+                    ) {
+                      setRenaming(null);
+                      return;
+                    }
+                    commitRename(event.currentTarget.value);
+                  }}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onKeyDown={handleRenameKeyDown}
+                />
+              ) : isServerThread ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={gt("Thread actions for {title}", { title: activeThreadTitle })}
+                        aria-haspopup="menu"
+                        onClick={openMenuFromTitle}
+                        onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
+                        className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      />
+                    }
+                  >
+                    <h2 className="min-w-0" dir={textDirection(activeThreadTitle)}>
+                      <WorkspaceBreadcrumbText>
+                        <ThreadTitleIdBadge titleId={activeThreadTitleId} />
+                        {activeThreadTitle}
+                      </WorkspaceBreadcrumbText>
+                    </h2>
+                    <ChevronDownIcon
+                      aria-hidden
+                      data-thread-title-chevron
+                      className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
+                    />
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
+                </Tooltip>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <h2
+                        aria-label={activeThreadTitle}
+                        className="min-w-0 flex-1"
+                        dir={textDirection(activeThreadTitle)}
+                      />
+                    }
+                  >
+                    <WorkspaceBreadcrumbText>
+                      <ThreadTitleIdBadge titleId={activeThreadTitleId} />
+                      {activeThreadTitle}
+                    </WorkspaceBreadcrumbText>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
+                </Tooltip>
+              )}
+              {renamingTitle === null && activeThreadLinkOrigin ? (
+                <Tooltip>
+                  <TooltipTrigger render={<Badge variant="info" size="sm" />}>
+                    <T>
+                      From <Var>{activeThreadLinkOrigin}</Var>
+                    </T>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">
+                    <T>
+                      Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                      environment.
+                    </T>
+                  </TooltipPopup>
+                </Tooltip>
+              ) : null}
+            </WorkspaceBreadcrumbItem>
+          </WorkspaceBreadcrumb>
+          <ThreadHeaderStatus
+            statusLineKey={statusLineKey}
+            usage={
+              statusLineProviders && statusLineUsageLimitSources
+                ? {
+                    cwd: statusLineCwd ?? null,
+                    providers: statusLineProviders,
+                    usageLimitSources: statusLineUsageLimitSources,
+                  }
+                : undefined
+            }
+          />
+          {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+          {trailingControls}
+        </div>
+      )}
+    </headerStatusLine.Host>
   );
 });

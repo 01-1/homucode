@@ -93,6 +93,27 @@ interface ThreadDetailsPanelProps extends Pick<
   usage: ThreadDetailsUsageInput;
 }
 
+// Section bodies render nothing on their own, so only the DOM knows whether any has content. An
+// observer sets the flag instead of an ancestor `:has()` selector, which restyles the document.
+function trackDetailsContent(anchor: HTMLDivElement | null) {
+  const element = anchor?.parentElement;
+  if (!element) return;
+  const update = () => {
+    let any = false;
+    for (const child of element.children) {
+      if (child.tagName !== "SECTION") continue;
+      const filled = child.lastElementChild?.matches(":not(:empty)") ?? false;
+      child.toggleAttribute("data-has-content", filled);
+      any ||= filled;
+    }
+    element.toggleAttribute("data-has-content", any);
+  };
+  update();
+  const observer = new MutationObserver(update);
+  observer.observe(element, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const visible = useClientSettings(resolveThreadDetailsVisibility);
   const gt = useGT();
@@ -306,7 +327,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               ) : null}
 
               {/* Shown only when no section above has content, so an emptied card can be refilled. */}
-              <div className="p-2 group-has-[>section>:last-child:not(:empty)]/details-items:hidden">
+              <div
+                ref={trackDetailsContent}
+                className="p-2 group-data-has-content/details-items:hidden"
+              >
                 <ThreadDetailsControl
                   size="xs"
                   variant="ghost"

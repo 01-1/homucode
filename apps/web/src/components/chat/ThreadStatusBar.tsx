@@ -1,4 +1,5 @@
 import { useGT } from "gt-react";
+import { createPresenceFlag } from "./presenceFlag";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
   type AnsiSegment,
@@ -440,6 +441,8 @@ type HeaderStatusLineUsage = Omit<StatusLineUsageSource, "nowMs"> & {
   readonly cwd: string | null;
 };
 
+export const headerStatusLine = createPresenceFlag();
+
 export function ThreadHeaderStatus(props: {
   readonly statusLineKey: string | undefined;
   readonly usage?: HeaderStatusLineUsage | undefined;
@@ -474,6 +477,7 @@ function HeaderStatusLine(props: {
   readonly usage?: HeaderStatusLineUsage | undefined;
 }) {
   const gt = useGT();
+  headerStatusLine.usePresence();
   const { result } = props;
   const showAllModels = useClientSettings((settings) => settings.statusLineShowAllModels);
   const [hovered, setHovered] = useState(false);

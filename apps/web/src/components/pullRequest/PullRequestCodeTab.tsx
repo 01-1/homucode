@@ -1624,7 +1624,7 @@ function PullRequestCodeTab({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="hidden items-center gap-1 @lg:flex">
+        <div data-diff-layout-toolbar className="hidden items-center gap-1 @lg:flex">
           <Tooltip>
             <TooltipTrigger
               render={

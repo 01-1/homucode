@@ -3,6 +3,12 @@ import { useRender } from "@base-ui/react/use-render";
 import { ChevronDownIcon, XIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 
+import { attachedBanner } from "./ComposerSurface";
+import { createPresenceFlag } from "./presenceFlag";
+
+const rowIcon = createPresenceFlag();
+const rowActions = createPresenceFlag();
+
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
@@ -48,6 +54,7 @@ function Surface({
   variant?: ComposerBannerVariant;
   detached?: boolean;
 }) {
+  attachedBanner.usePresence(!detached);
   return (
     <div
       data-composer-banner-surface={detached ? "detached" : "attached"}
@@ -172,14 +179,41 @@ function Row({
     "data-composer-banner-row": "true",
     "data-composer-banner-layout": layout,
   };
-  return useRender({
-    defaultTagName: "div",
-    render,
-    props: mergeProps<"div">(rowProps, props),
-  });
+  return (
+    <rowIcon.Host>
+      {(hasIcon) => (
+        <rowActions.Host>
+          {(hasActions) => (
+            <RowElement
+              render={render}
+              props={mergeProps<"div">(
+                rowProps,
+                {
+                  "data-has-icon": hasIcon ? "" : undefined,
+                  "data-has-actions": hasActions ? "" : undefined,
+                } as ComponentProps<"div">,
+                props,
+              )}
+            />
+          )}
+        </rowActions.Host>
+      )}
+    </rowIcon.Host>
+  );
+}
+
+function RowElement({
+  render,
+  props,
+}: {
+  render: useRender.ComponentProps<"div">["render"];
+  props: ComponentProps<"div">;
+}) {
+  return useRender({ defaultTagName: "div", render, props: props as Record<string, unknown> });
 }
 
 function Icon({ className, ...props }: ComponentProps<"span">) {
+  rowIcon.usePresence();
   return (
     <span
       aria-hidden
@@ -201,8 +235,8 @@ function Content({ className, ...props }: ComponentProps<"span">) {
       className={cn(
         "col-start-2 row-start-1 flex min-w-0 items-center gap-1 *:data-[slot=composer-banner-separator]:mx-0",
         "@max-[560px]:group-data-[composer-banner-layout=approval]/banner-row:col-end-4",
-        "group-not-has-[>[data-slot=composer-banner-icon]]/banner-row:col-[1/3] group-not-has-[>[data-slot=composer-banner-icon]]/banner-row:ps-2 sm:group-not-has-[>[data-slot=composer-banner-icon]]/banner-row:ps-1.5",
-        "group-not-has-[>[data-slot=composer-banner-icon],>[data-slot=composer-banner-actions]]/banner-row:pe-2 sm:group-not-has-[>[data-slot=composer-banner-icon],>[data-slot=composer-banner-actions]]/banner-row:pe-1.5",
+        "group-not-data-has-icon/banner-row:col-[1/3] group-not-data-has-icon/banner-row:ps-2 sm:group-not-data-has-icon/banner-row:ps-1.5",
+        "group-not-data-has-icon/banner-row:group-not-data-has-actions/banner-row:pe-2 sm:group-not-data-has-icon/banner-row:group-not-data-has-actions/banner-row:pe-1.5",
         className,
       )}
       {...props}
@@ -223,6 +257,7 @@ function Separator() {
 }
 
 function Actions({ className, ...props }: ComponentProps<"span">) {
+  rowActions.usePresence();
   return (
     <span
       data-slot="composer-banner-actions"
