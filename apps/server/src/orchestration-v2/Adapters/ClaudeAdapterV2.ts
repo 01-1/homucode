@@ -5213,6 +5213,7 @@ interface ActiveClaudeTurnContext {
       readonly appContextBefore: ReadonlyMap<string, string> | undefined;
     }
   >;
+  resendUnreadSteers?: true;
   // Claude may settle a turn with a result that echoes only a steer's uuid.
   readonly steerUuids: Set<string>;
   // A completed result whose turn stays open while Claude still holds a steer; it settles the
@@ -5220,6 +5221,10 @@ interface ActiveClaudeTurnContext {
   heldResult: SDKResultMessage | undefined;
   // Claude can run another model than requested, such as when an organization disallows it.
   executedModel: string | undefined;
+}
+
+function canTrackClaudeSteers(query: ClaudeLiveQueryContext): boolean {
+  return query.promptEchoMode === "early" || query.promptEchoMode === "result_only";
 }
 
 interface ActiveClaudeProviderRetry {
@@ -9356,7 +9361,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           context: ActiveClaudeTurnContext,
           messageId: MessageId,
           status: "pending" | "completed" | "cancelled",
-          redeliver?: true,
+          flags?: { readonly redeliver?: true; readonly canSendNow?: true },
         ) =>
           emitProviderEvent({
             type: "steer.updated",
@@ -9365,7 +9370,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             runId: context.input.runId,
             messageId,
             status,
-            ...(redeliver === undefined ? {} : { redeliver }),
+            ...flags,
           });
 
         // A held result's usage joins the steered segments once another result settles the turn.
@@ -9481,11 +9486,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               input.status === "completed" ? "completed" : "cancelled",
               // Only a CLI proven to echo prompt uuids can show a steer went unread.
               input.status === "interrupted" &&
-                Option.isSome(serverSettings) &&
-                (yield* serverSettings.value.getSettings.pipe(Effect.orDie))
-                  .claudeSteersSurviveStop &&
-                (liveQuery.promptEchoMode === "early" || liveQuery.promptEchoMode === "result_only")
-                ? true
+                canTrackClaudeSteers(liveQuery) &&
+                (input.context.resendUnreadSteers === true ||
+                  (Option.isSome(serverSettings) &&
+                    (yield* serverSettings.value.getSettings.pipe(Effect.orDie))
+                      .claudeSteersSurviveStop))
+                ? { redeliver: true }
                 : undefined,
             );
           }
@@ -13866,6 +13872,22 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             const existing = yield* Ref.get(queryContext);
             const currentTurn = yield* Ref.get(activeTurn);
             const nativeThreadId = turnInput.providerThread.nativeThreadRef?.nativeId ?? null;
+            const sendSteer = turnInput.sendSteer;
+            if (sendSteer !== undefined) {
+              if (
+                currentTurn?.providerTurnId !== turnInput.providerTurnId ||
+                currentTurn.steersClosed ||
+                !Array.from(currentTurn.pendingSteers.values()).some(
+                  (steer) =>
+                    steer.messageId === sendSteer.messageId &&
+                    canTrackClaudeSteers(steer.liveQuery),
+                )
+              ) {
+                sendSteer.onSkipped();
+                return;
+              }
+              currentTurn.resendUnreadSteers = true;
+            }
             if (currentTurn === null && turnInput.requestRuntimeRestart === true) {
               if (nativeThreadId === null) return;
               if (existing === null || existing.nativeThreadId !== nativeThreadId) {
@@ -14147,7 +14169,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               next.add(turnInput.providerTurnId);
               return next;
             });
-            yield* emitSteerStatus(currentTurn, messageId, "pending");
+            yield* emitSteerStatus(
+              currentTurn,
+              messageId,
+              "pending",
+              canTrackClaudeSteers(existing) ? { canSendNow: true } : undefined,
+            );
             yield* Effect.uninterruptibleMask((restore) =>
               restore(existing.query.offer(userMessage, commitOffer)).pipe(
                 Effect.tap(() => Effect.sync(commitOffer)),

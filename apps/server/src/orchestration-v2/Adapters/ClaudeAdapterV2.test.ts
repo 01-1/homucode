@@ -5790,7 +5790,28 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       enabled: true,
       title: "does not redeliver a steer Claude read before Stop",
     },
-  ] as const)("$title", ({ readBy, echoes, enabled }) =>
+    {
+      readBy: "none",
+      echoes: true,
+      enabled: false,
+      force: true,
+      title: "Send now redelivers an unread steer with automatic recovery off",
+    },
+    {
+      readBy: "assistant",
+      echoes: true,
+      enabled: false,
+      force: true,
+      title: "Send now leaves the turn running if Claude already read the steer",
+    },
+    {
+      readBy: "none",
+      echoes: false,
+      enabled: false,
+      force: true,
+      title: "Send now leaves the turn running if Claude cannot confirm which steers it read",
+    },
+  ])("$title", ({ readBy, echoes, enabled, force }) =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarnessWithOptions({
         close: (sdkMessages) => Queue.shutdown(sdkMessages),
@@ -5863,6 +5884,21 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       });
       const steerUuid = harness.offeredMessages.at(-1)?.uuid;
       assert.isDefined(steerUuid);
+      if (force && readBy === "none" && echoes) {
+        yield* harness.runtime.steerTurn({
+          threadId: harness.threadId,
+          runId: firstInput.runId,
+          providerThread: harness.providerThread,
+          providerTurnId,
+          message: {
+            createdBy: "user",
+            creationSource: "web",
+            messageId: MessageId.make("another-unread-steer"),
+            text: "Keep this pending steer as well.",
+            attachments: [],
+          },
+        });
+      }
       if (readBy === "assistant") {
         yield* harness.offerAndWait(
           claudeSdkFrame({
@@ -5882,10 +5918,26 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         );
       }
       const eventsBefore = harness.events.length;
+      let skipped = false;
       yield* harness.runtime.interruptTurn({
         providerThread: harness.providerThread,
         providerTurnId,
+        ...(force
+          ? {
+              sendSteer: {
+                messageId: MessageId.make("unread-steer"),
+                onSkipped: () => {
+                  skipped = true;
+                },
+              },
+            }
+          : {}),
       });
+      if (force && (readBy === "assistant" || !echoes)) {
+        assert.isTrue(skipped);
+        assert.lengthOf(harness.events, eventsBefore);
+        return;
+      }
       assert.equal((yield* Queue.take(harness.terminalReceipts)).status, "interrupted");
 
       const redelivered = harness.events
@@ -5894,7 +5946,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         .map((event) => (event.type === "steer.updated" ? event.messageId : undefined));
       assert.deepStrictEqual(
         redelivered,
-        enabled && readBy === "none" && echoes ? [MessageId.make("unread-steer")] : [],
+        (force || enabled) && readBy === "none" && echoes
+          ? [
+              MessageId.make("unread-steer"),
+              ...(force ? [MessageId.make("another-unread-steer")] : []),
+            ]
+          : [],
       );
     }).pipe(
       Effect.scoped,

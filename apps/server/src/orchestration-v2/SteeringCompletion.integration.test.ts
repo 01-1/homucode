@@ -555,7 +555,11 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
   name: string,
   canRestart = false,
   canSteer = true,
-  interruptTurn: Effect.Effect<void> = Effect.void,
+  interruptTurn:
+    | Effect.Effect<void>
+    | ((
+        input: ProviderAdapter.ProviderAdapterV2InterruptInput,
+      ) => Effect.Effect<void>) = Effect.void,
   steeringAcceptsAttachments = true,
   nativeGoals?: boolean,
   onSteer: (
@@ -563,8 +567,9 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
   ) => Effect.Effect<void, ProviderAdapter.ProviderAdapterV2Error> = () => Effect.void,
   extraAdapters: ReadonlyArray<ProviderAdapter.ProviderAdapterV2["Service"]> = [],
   bareStopWaitEnabled = false,
+  driverKind = nativeGoals === undefined ? "codex" : "opencode",
 ) {
-  const driver = ProviderDriverKind.make(nativeGoals === undefined ? "codex" : "opencode");
+  const driver = ProviderDriverKind.make(driverKind);
   const cwd = yield* checkpointWorkspace(name);
   const events = yield* Queue.unbounded<ProviderAdapter.ProviderAdapterV2Event>();
   const started: ProviderAdapter.ProviderAdapterV2TurnInput[] = [];
@@ -660,16 +665,19 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
               steered.push(turn.message.text);
               steeredSelections.push(turn.modelSelection);
             }).pipe(Effect.andThen(onSteer(turn))),
-          interruptTurn: ({ providerTurnId }) =>
+          interruptTurn: (input) =>
             Effect.sync(() => {
-              interrupted.push(providerTurnId);
+              interrupted.push(input.providerTurnId);
             }).pipe(
-              Effect.andThen(interruptTurn),
+              Effect.andThen(
+                typeof interruptTurn === "function" ? interruptTurn(input) : interruptTurn,
+              ),
               Effect.andThen(
                 Effect.forEach(
                   started.filter(
                     (turn) =>
-                      ProviderTurnId.make(`provider-turn:${turn.attemptId}`) === providerTurnId,
+                      ProviderTurnId.make(`provider-turn:${turn.attemptId}`) ===
+                      input.providerTurnId,
                   ),
                   (turn) =>
                     turnUpdated(turn, "interrupted").pipe(
@@ -678,7 +686,7 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
                           type: "turn.terminal",
                           driver,
                           providerThreadId: turn.providerThread.id,
-                          providerTurnId,
+                          providerTurnId: input.providerTurnId,
                           runOrdinal: turn.runOrdinal,
                           status: "interrupted",
                           failure: null,
@@ -3168,21 +3176,32 @@ it.effect("queues a plain send behind the stopped queue and releases its hold", 
   }),
 );
 
-it.effect("sends a steer again after Stop drops it unread", () =>
+it.effect.each(["Stop", "Send now"] as const)("sends an unread steer again after %s", (action) =>
   Effect.gen(function* () {
     let dropSteer: Effect.Effect<void> = Effect.void;
+    const force = action === "Send now";
+    const messageId = MessageId.make("message:unread-steer");
     const { events, started, steered, layer, startFirstTurn } = yield* nextTurnSelectionHarness(
       "steer-redelivered-after-stop",
       false,
       true,
-      Effect.suspend(() => dropSteer),
+      (input) =>
+        Effect.suspend(() => {
+          assert.equal(input.sendSteer?.messageId, force ? messageId : undefined);
+          return dropSteer;
+        }),
+      true,
+      undefined,
+      undefined,
+      [],
+      false,
+      "claudeAgent",
     );
     yield* Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
       const threadId = yield* startFirstTurn;
       const first = started[0]!;
-      const messageId = MessageId.make("message:unread-steer");
       yield* orchestrator.dispatch({
         type: "message.dispatch",
         commandId: CommandId.make("steer"),
@@ -3204,9 +3223,24 @@ it.effect("sends a steer again after Stop drops it unread", () =>
           runId: first.runId,
           messageId,
           status,
-          ...(status === "cancelled" ? { redeliver: true as const } : {}),
+          ...(status === "cancelled"
+            ? { redeliver: true as const }
+            : { canSendNow: true as const }),
         });
+      const pending = yield* orchestrator.streamDomainEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.type === "turn-item.updated" &&
+            event.payload.type === "user_message" &&
+            event.payload.messageId === messageId &&
+            event.payload.status === "pending",
+        ),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.forkScoped,
+      );
       yield* steerUpdated("pending");
+      yield* Fiber.join(pending);
       dropSteer = steerUpdated("cancelled").pipe(Effect.asVoid);
       const stopped = yield* orchestrator.streamDomainEvents.pipe(
         Stream.filter(
@@ -3219,14 +3253,18 @@ it.effect("sends a steer again after Stop drops it unread", () =>
         Stream.runDrain,
         Effect.forkScoped,
       );
-      yield* orchestrator.dispatch({
-        type: "run.interrupt",
-        commandId: CommandId.make("stop"),
-        threadId,
-        runId: first.runId,
-        holdQueue: true,
-        leaveSubagentsRunning: true,
-      });
+      yield* orchestrator.dispatch(
+        force
+          ? { type: "steer.send-now", commandId: CommandId.make("force-send"), threadId, messageId }
+          : {
+              type: "run.interrupt",
+              commandId: CommandId.make("stop"),
+              threadId,
+              runId: first.runId,
+              holdQueue: true,
+              leaveSubagentsRunning: true,
+            },
+      );
       yield* worker.drain();
       yield* Fiber.join(stopped);
       yield* worker.drain();

@@ -140,6 +140,7 @@ export const ProviderAdapterV2Event = Schema.Union([
     runId: RunId,
     messageId: MessageId,
     status: Schema.Literals(["pending", "completed", "cancelled"]),
+    canSendNow: Schema.optional(Schema.Literal(true)),
     /** Stop dropped it before the agent confirmed reading it, so T3 sends it again. */
     redeliver: Schema.optional(Schema.Literal(true)),
   }),
@@ -597,6 +598,10 @@ export interface ProviderAdapterV2InterruptInput {
   readonly providerThread: OrchestrationV2ProviderThread;
   readonly providerTurnId: ProviderTurnId;
   readonly requestRuntimeRestart?: boolean;
+  readonly sendSteer?: {
+    readonly messageId: MessageId;
+    readonly onSkipped: () => void;
+  };
 }
 
 export interface ProviderAdapterV2RuntimeRequestResponseInput {

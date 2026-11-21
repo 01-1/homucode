@@ -40,6 +40,7 @@ import {
   moveThread,
   moveThreadToProject,
   promoteQueuedRun,
+  sendSteerNow,
   resumeThreadQueue,
   retryWorkspacePreparation,
   linkThreadPullRequest,
@@ -459,6 +460,12 @@ export function createThreadEnvironmentAtoms<R, E, IdentityError = never>(
     resumeThreadQueue: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:resume-queue",
       execute: resumeThreadQueue,
+      scheduler,
+      concurrency,
+    }),
+    sendSteerNow: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:send-steer-now",
+      execute: sendSteerNow,
       scheduler,
       concurrency,
     }),

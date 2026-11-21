@@ -317,7 +317,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                       ? [
                           {
                             id: "steer",
-                            title: gt("Send now"),
+                            title: gt("Steer now"),
                             attributes: { disabled: !controls.canSend },
                             image: "arrow.up",
                           },
@@ -389,7 +389,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                   // Outside the edit row and full row height, so a near miss never opens the editor.
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={gt("Send now, queued message {number}", {
+                    accessibilityLabel={gt("Steer now, queued message {number}", {
                       number: index + 1,
                     })}
                     disabled={!controls.canSend}
@@ -403,7 +403,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                         tintColorClassName="accent-primary-foreground"
                       />
                       <Text className="font-t3-medium text-sm text-primary-foreground">
-                        <T>Send now</T>
+                        <T>Steer now</T>
                       </Text>
                     </View>
                   </Pressable>

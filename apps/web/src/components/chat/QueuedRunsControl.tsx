@@ -384,7 +384,7 @@ export function QueuedRunsControl({
                           }}
                         >
                           <ArrowUpIcon />
-                          <T>Send now</T>
+                          <T>Steer now</T>
                         </Button>
                       </TooltipTrigger>
                       <TooltipPopup>

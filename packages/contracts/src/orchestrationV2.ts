@@ -1833,6 +1833,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     workflowScript: OrchestrationV2ConversationMessage.fields.workflowScript,
     freshContext: OrchestrationV2Run.fields.freshContext,
     inputIntent: OrchestrationV2UserMessageInputIntent,
+    canSendNow: Schema.optional(Schema.Literal(true)),
     text: Schema.String,
     /** Same as the text of message `messageId`. */
     textOmitted: DedupedBodyMarker,
@@ -2731,6 +2732,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     workflowScript: OrchestrationV2ConversationMessage.fields.workflowScript,
     freshContext: OrchestrationV2Run.fields.freshContext,
     inputIntent: OrchestrationV2UserMessageInputIntent,
+    canSendNow: Schema.optional(Schema.Literal(true)),
     text: Schema.String,
     context: Schema.optional(OrchestrationMessageContext),
     attachments: Schema.Array(ChatAttachment),
@@ -3624,6 +3626,12 @@ export const OrchestrationV2Command = Schema.Union([
     holdQueue: Schema.optional(Schema.Boolean),
     /** With holdQueue: the Stop ends only this thread, as on thread.stop. */
     leaveSubagentsRunning: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("steer.send-now"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    messageId: MessageId,
   }),
   Schema.Struct({
     type: Schema.Literal("queued-message.promote-to-steer"),

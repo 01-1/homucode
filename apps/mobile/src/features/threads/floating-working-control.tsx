@@ -280,7 +280,7 @@ export function FloatingWorkingControl(props: {
           accessibilityLabel={gt("{count, plural, other {Open queue, {count} messages}}", {
             count: props.queuedCount,
           })}
-          accessibilityHint={gt("Opens queued messages to send now, edit, or remove")}
+          accessibilityHint={gt("Opens queued messages to steer, edit, or remove")}
           onPress={props.onOpenQueue}
           onLayout={(event) => setQueueWidth(settleWidth(event.nativeEvent.layout.width))}
           style={{ maxWidth: Math.min(overlayWidth, windowWidth) * 0.45 }}

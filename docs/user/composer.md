@@ -300,8 +300,11 @@ shortcut described above.
 
 On web and desktop, queued messages appear at the end of the thread as dashed messages that have
 not been sent yet. On mobile they appear above the composer. Each shows its text and any attached
-images. **Send now** sends a message right away, into the running turn if there is one. You can
-also edit or remove it.
+images. **Steer now** sends a queued message into the running turn. When the thread is
+idle, it starts a turn with the queued message. You can also edit or remove it.
+
+When Claude reports which messages it reads, **Send now** appears below a waiting steer. Use it to
+interrupt the current work. HomuCode resends any steers Claude drops unread.
 
 If you stop the agent or the server restarts, queued messages keep their order and are held.
 Press **Resume** in an empty composer to continue. For stopped runs and usage limits,

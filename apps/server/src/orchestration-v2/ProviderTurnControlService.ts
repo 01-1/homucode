@@ -56,6 +56,7 @@ const isProviderTurnControlError = Schema.is(ProviderTurnControlError);
 
 export interface ProviderTurnControlServiceV2Shape {
   readonly interrupt: (input: {
+    readonly sendSteerMessageId?: MessageId;
     readonly subagent?: {
       readonly id: NodeId;
       readonly nativeTaskId: string;
@@ -322,11 +323,22 @@ export const layer: Layer.Layer<
             });
           }
           // Settled turns still reach adapters, which alone know whether background work remains.
+          let skipped = false;
           yield* session.value
             .interruptTurn({
               providerThread: loaded.providerThread,
               providerTurnId: loaded.providerTurn.id,
-              requestRuntimeRestart: true,
+              requestRuntimeRestart: input.sendSteerMessageId === undefined,
+              ...(input.sendSteerMessageId === undefined
+                ? {}
+                : {
+                    sendSteer: {
+                      messageId: input.sendSteerMessageId,
+                      onSkipped: () => {
+                        skipped = true;
+                      },
+                    },
+                  }),
             })
             .pipe(
               Effect.catchTags({
@@ -342,7 +354,7 @@ export const layer: Layer.Layer<
                   ),
               }),
             );
-          if (loaded.providerTurn.status === "running") {
+          if (!skipped && loaded.providerTurn.status === "running") {
             // Let native terminal ingestion finalize the attempt before the Stop follow-up repairs it.
             const { runAttemptId } = loaded.providerTurn;
             yield* awaitSettled(input.threadId, {

@@ -319,6 +319,7 @@ import {
   resolveWorkspaceRelativeFilePath,
 } from "../files/filePath";
 import { waitForThreadShell } from "./threadForkNavigation";
+import { canSendSteerNow } from "@t3tools/client-runtime/state/thread-workflows";
 import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
 import { useFileChipShare } from "./useFileChipShare";
@@ -411,6 +412,37 @@ export interface ThreadFeedProps {
 const USER_MESSAGE_COPY_MENU_ACTIONS = [
   { id: "copy-prompt-link", title: msg("Copy prompt link"), image: "link" },
 ];
+
+function SendSteerNowButton(props: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly messageId: MessageId;
+}) {
+  const gt = useGT();
+  const send = useAtomCommand(threadEnvironment.sendSteerNow, "send steer now");
+  const [sending, setSending] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint={gt("Interrupts the current work to deliver this steer")}
+      disabled={sending}
+      className="min-h-9 flex-row items-center gap-1.5 self-end rounded-full px-3 active:bg-subtle"
+      onPress={async () => {
+        setSending(true);
+        await send({
+          environmentId: props.environmentId,
+          input: { threadId: props.threadId, messageId: props.messageId },
+        });
+        setSending(false);
+      }}
+    >
+      <SymbolView name="arrow.up" size={13} tintColorClassName="accent-foreground-secondary" />
+      <Text className="font-t3-medium text-xs text-foreground-secondary">
+        <T>Send now</T>
+      </Text>
+    </Pressable>
+  );
+}
 
 function UserMessageCopyButton(props: {
   readonly text: string;
@@ -2326,25 +2358,34 @@ function renderFeedEntry(
     if (isUser && presentation.attribution === "automation") {
       const rowId = `automation:${message.id}`;
       return (
-        <ThreadAutomationMessageRow
-          environmentId={props.environmentId}
-          showMessageSenderLabels={props.showMessageSenderLabels}
-          text={presentation.text}
-          context={message.context}
-          scheduledTaskId={presentation.scheduledTaskId}
-          timestampLabel={timestampLabel}
-          expanded={props.expandedWorkRows[rowId] ?? false}
-          onToggle={() => props.onToggleWorkRow(rowId, entry.id)}
-          bubbleColor={userBubbleColor}
-          bubbleMaxWidth={props.duoColumns ? "85%" : props.userBubbleMaxWidth}
-          contentMaxWidth={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
-          iconSubtleColor={iconSubtleColor}
-          markdownStyles={markdownStyles.user}
-          reviewCommentColors={props.reviewCommentColors}
-          skills={props.skills}
-          linkHandlers={props.markdownLinkHandlers}
-          renderImage={props.renderMarkdownImage}
-        />
+        <>
+          <ThreadAutomationMessageRow
+            environmentId={props.environmentId}
+            showMessageSenderLabels={props.showMessageSenderLabels}
+            text={presentation.text}
+            context={message.context}
+            scheduledTaskId={presentation.scheduledTaskId}
+            timestampLabel={timestampLabel}
+            expanded={props.expandedWorkRows[rowId] ?? false}
+            onToggle={() => props.onToggleWorkRow(rowId, entry.id)}
+            bubbleColor={userBubbleColor}
+            bubbleMaxWidth={props.duoColumns ? "85%" : props.userBubbleMaxWidth}
+            contentMaxWidth={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
+            iconSubtleColor={iconSubtleColor}
+            markdownStyles={markdownStyles.user}
+            reviewCommentColors={props.reviewCommentColors}
+            skills={props.skills}
+            linkHandlers={props.markdownLinkHandlers}
+            renderImage={props.renderMarkdownImage}
+          />
+          {canSendSteerNow(message.projectedItem, props.threadId) ? (
+            <SendSteerNowButton
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+              messageId={message.id}
+            />
+          ) : null}
+        </>
       );
     }
     if (isUser) {
@@ -2592,6 +2633,13 @@ function renderFeedEntry(
                 </View>
               ) : null}
             </View>
+          ) : null}
+          {canSendSteerNow(message.projectedItem, props.threadId) ? (
+            <SendSteerNowButton
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+              messageId={message.id}
+            />
           ) : null}
           {bubbleBodyVisible ? (
             <View className="mt-1 flex-row items-center justify-end gap-1 pr-0.5">
