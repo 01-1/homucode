@@ -15,6 +15,7 @@ import {
   useEffect,
   useEffectEvent,
   useRef,
+  useId,
   useState,
 } from "react";
 import { Badge } from "../ui/badge";
@@ -33,6 +34,7 @@ import { takeOpenTarget, useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { ModelCooldownCountdown } from "./ModelCooldownCountdown";
 
 /** Holds the page still behind the open picker; its lifetime is the popup element's. */
 function lockBackgroundScroll(popup: HTMLElement | null) {
@@ -118,6 +120,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
   /** Shown after the model name inside the same trigger, such as the effort level. */
   triggerSuffix?: ReactNode;
+  modelCooldownUntil?: string | null | undefined;
   /** Names the suffix for the tooltip and screen readers. */
   triggerDetail?: string | null;
   /** Composer shortcuts this trigger answers besides the picker's own. */
@@ -179,8 +182,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       : props.model || gt("Choose model");
   const withUnavailable = (model: string, isUnavailable: boolean | undefined) =>
     isUnavailable ? gt("{model} (Unavailable)", { model }) : model;
+  const cooldownDescriptionId = useId();
+  const cooling = Boolean(props.modelCooldownUntil && props.selectedModels === undefined);
   const triggerLabel = selectedModel
-    ? withUnavailable(getDisplayModelName(selectedModel), selectedModel.isUnavailable)
+    ? withUnavailable(getDisplayModelName(selectedModel), selectedModel.isUnavailable && !cooling)
     : triggerTitle;
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
@@ -357,6 +362,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             ]
               .filter(Boolean)
               .join(", ")}
+            aria-describedby={cooling ? cooldownDescriptionId : undefined}
             size={size}
             data-chat-provider-model-picker="true"
             data-composer-shortcut={props.triggerShortcuts}
@@ -441,7 +447,15 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             </Tooltip>
           )}
           {props.triggerSuffix}
-          {selectedModel?.isUnavailable && !selectedEntries && props.triggerLabel === undefined ? (
+          {props.modelCooldownUntil && !selectedEntries ? (
+            <Badge variant="outline" size="sm">
+              <span id={cooldownDescriptionId}>
+                <ModelCooldownCountdown retryAt={props.modelCooldownUntil} />
+              </span>
+            </Badge>
+          ) : selectedModel?.isUnavailable &&
+            !selectedEntries &&
+            props.triggerLabel === undefined ? (
             <Badge variant="outline" size="sm">
               <T context="badge on a model that cannot be selected">Unavailable</T>
             </Badge>

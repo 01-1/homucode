@@ -190,6 +190,7 @@ export type ProjectionStoreV2Error = typeof ProjectionStoreV2Error.Type;
 
 export type ProjectionRecoveryKind =
   | "queued-runs"
+  | "model-cooldown-queue"
   | "runtime"
   | "restart-continuations"
   | "subagent-results"
@@ -5128,12 +5129,23 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           readonly exclude?: ReadonlyArray<string>;
         },
       ) {
+        const now =
+          kind === "model-cooldown-queue" ? DateTime.formatIso(yield* DateTime.now) : null;
         const candidates = (() => {
           switch (kind) {
             case "queued-runs":
+            case "model-cooldown-queue":
               return sql`
                 SELECT thread_id FROM orchestration_v2_projection_runs
                 WHERE status = 'queued'
+                  ${
+                    kind === "model-cooldown-queue"
+                      ? sql`
+                    AND json_extract(payload_json, '$.queueHeld') IS NOT 1
+                    AND julianday(json_extract(payload_json, '$.modelCooldownUntil')) <= julianday(${now})
+                  `
+                      : sql``
+                  }
                   AND NOT EXISTS (
                     SELECT 1 FROM orchestration_v2_projection_runs AS active
                     WHERE active.thread_id = orchestration_v2_projection_runs.thread_id
@@ -5322,7 +5334,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             AND thread_id IN (${candidates})
             ${projects?.include === undefined ? sql`` : sql`AND project_id IN (SELECT value FROM json_each(${encodeIdList(projects.include)}))`}
             ${projects?.exclude === undefined ? sql`` : sql`AND project_id NOT IN (SELECT value FROM json_each(${encodeIdList(projects.exclude)}))`}
-            ${kind === "queued-runs" ? sql`AND archived_at IS NULL` : sql``}
+            ${kind === "queued-runs" || kind === "model-cooldown-queue" ? sql`AND archived_at IS NULL` : sql``}
           ORDER BY updated_at ASC, thread_id ASC
         `;
         return rows.map((row) => ThreadId.make(row.thread_id));

@@ -58,7 +58,9 @@ import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { splitTransferredFiles } from "./workspaceFileDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
-import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { codexModelCooldownAt, USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
+import { useDeadlinePassed } from "../../hooks/useDeadline";
 import {
   memo,
   use,
@@ -420,6 +422,7 @@ export interface ChatComposerProps {
 
   lockedProvider: ProviderDriverKind | null;
   providerStatuses: ServerProvider[];
+  usageLimitSources?: UsageLimitSourceSnapshots;
   providerCatalogKnown: boolean;
   activeProjectDefaultModelSelection: ModelSelection | null | undefined;
   activeThreadModelSelection: ModelSelection | null | undefined;
@@ -967,6 +970,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const selectedModelUnavailable = modelOptionsByInstance
     .get(selectedInstanceId)
     ?.some((option) => option.slug === selectedModel && option.isUnavailable);
+  const selectedCooldown =
+    selectedProviderEntry?.driverKind === "codex"
+      ? codexModelCooldownAt(
+          props.usageLimitSources ?? [],
+          selectedProviderEntry.snapshot.auth.endpoint,
+          selectedModel,
+        )
+      : null;
+  const cooldownPassed = useDeadlinePassed(
+    selectedCooldown === null ? null : Date.parse(selectedCooldown),
+  );
+  const modelCooldownUntil = cooldownPassed ? null : selectedCooldown;
   const missingModelReason = gt("Choose a model");
   const multipleModelUnavailable = multipleModelSelections?.some((selection) => {
     const entry = providerInstanceEntries.find(
@@ -981,7 +996,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   });
   const providerSendBlockReason =
     getAntigravitySendBlockReason(selectedProviderEntry?.snapshot, selectedModel, m) ??
-    (selectedModelUnavailable ? missingModelReason : null);
+    (selectedModelUnavailable && modelCooldownUntil === null ? missingModelReason : null);
   const sendDisabledReason =
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? gt("Select at least one model.") : null) ??
@@ -2615,6 +2630,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       onApplyModelPickerInstantlyChange={onApplyModelPickerInstantlyChange}
       modelPickerIconClassName={composerProviderState.modelPickerIconClassName}
       getModelDisabledReason={getModelDisabledReason}
+      modelCooldownUntil={modelCooldownUntil}
     />
   );
   // An open question owns the space above the composer. Only a machine problem,

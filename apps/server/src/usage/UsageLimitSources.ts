@@ -1,5 +1,6 @@
 import {
   DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
+  type ModelSelection,
   UsageLimitSourceError,
   type UsageLimitSourceConsumeResetCreditInput,
   type ProviderConsumeResetCreditResult,
@@ -11,7 +12,7 @@ import {
   type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
-import { usageLimitSourceAtEndpoint } from "@t3tools/shared/usageLimits";
+import { codexModelCooldownAt, usageLimitSourceAtEndpoint } from "@t3tools/shared/usageLimits";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -24,6 +25,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as SecretResolverLayer from "../secrets/SecretResolver.ts";
 import { resolveSettingsSecrets } from "../secrets/settingsSecretValue.ts";
@@ -37,11 +39,25 @@ export class UsageLimitSources extends Context.Service<
     readonly current: Effect.Effect<ReadonlyArray<UsageLimitSourceSnapshot>>;
     readonly streamChanges: Stream.Stream<ReadonlyArray<UsageLimitSourceSnapshot>>;
     readonly refresh: Effect.Effect<void>;
+    readonly recheckCodexCooldown: (
+      endpoint: string,
+      model: string,
+    ) => Effect.Effect<string | null | undefined>;
     readonly consumeResetCredit: (
       input: UsageLimitSourceConsumeResetCreditInput,
     ) => Effect.Effect<ProviderConsumeResetCreditResult, UsageLimitSourceError>;
   }
 >()("t3/usage/UsageLimitSources") {}
+
+function cliproxyEndpoint(value: string) {
+  const url = URL.parse(value);
+  return url && /^https?:$/.test(url.protocol)
+    ? {
+        origin: url.origin,
+        endpoint: `${url.origin}${url.pathname.replace(/(\/management\.html)?\/*$/i, "")}`,
+      }
+    : {};
+}
 
 function sourceLabel(id: string, config: UsageLimitSourceConfig): string {
   if (config.label) return config.label;
@@ -117,18 +133,12 @@ export const make = Effect.gen(function* () {
     config: UsageLimitSourceConfig,
   ) {
     const checkedAt = DateTime.formatIso(yield* DateTime.now);
-    const url = URL.parse(config.url);
     const providerRoute = config.providerRoute ? URL.parse(config.providerRoute) : null;
     const base = {
       id,
       kind: config.kind,
       label: sourceLabel(id, config),
-      ...(url && /^https?:$/.test(url.protocol)
-        ? {
-            origin: url.origin,
-            endpoint: `${url.origin}${url.pathname.replace(/(\/management\.html)?\/*$/i, "")}`,
-          }
-        : {}),
+      ...cliproxyEndpoint(config.url),
       ...(providerRoute
         ? { providerRoute: providerRoute.origin + providerRoute.pathname.replace(/\/+$/, "") }
         : {}),
@@ -139,13 +149,18 @@ export const make = Effect.gen(function* () {
       return { ...base, accounts: [], error: missingManagementKey(config) };
     }
     const accounts = yield* api
-      .readAccounts({ url: config.url, managementKey })
+      .readSnapshot({ url: config.url, managementKey })
       .pipe(Effect.result);
     if (accounts._tag === "Failure") {
       yield* Effect.logDebug("usage limit source read failed", { id, cause: accounts.failure });
       return { ...base, accounts: [], error: accounts.failure.detail };
     }
-    return { ...base, accounts: accounts.success };
+    const { codexModelCooldowns, accounts: readings } = accounts.success;
+    return {
+      ...base,
+      accounts: readings,
+      ...(codexModelCooldowns === undefined ? {} : { codexModelCooldowns }),
+    };
   });
 
   const publish = Effect.fn("UsageLimitSources.publish")(function* (
@@ -173,6 +188,60 @@ export const make = Effect.gen(function* () {
     );
     yield* publish(keepLastGoodReadings(yield* Ref.get(stateRef), snapshots));
   }).pipe(refreshLock.withPermits(1), Effect.ignoreCause({ log: true }));
+
+  const recheckCodexCooldown = Effect.fn("UsageLimitSources.recheckCodexCooldown")(
+    function* (endpoint: string, model: string) {
+      const settings = yield* settingsService.getSettings;
+      const matches = Object.values(settings.usageLimitSources).filter(
+        (source) => source.enabled && cliproxyEndpoint(source.url).endpoint === endpoint,
+      );
+      const config = matches.length === 1 ? matches[0] : undefined;
+      if (config === undefined) return undefined;
+      const managementKey = yield* readManagementKey(config);
+      if (managementKey.length === 0) return undefined;
+      return yield* api.recheckCodexCooldown({ url: config.url, managementKey }, model);
+    },
+    Effect.timeout("5 seconds"),
+    Effect.orElseSucceed(() => undefined),
+  );
+
+  const refreshCodexCooldowns = Effect.fn("UsageLimitSources.refreshCodexCooldowns")(
+    function* () {
+      const settings = yield* settingsService.getSettings;
+      const previous = yield* Ref.get(stateRef);
+      const next = yield* Effect.forEach(
+        previous,
+        (source) =>
+          Effect.gen(function* () {
+            const config = settings.usageLimitSources[source.id];
+            if (!config?.enabled || source.codexModelCooldowns === undefined) return source;
+            const managementKey = yield* readManagementKey(config);
+            const cooldowns =
+              managementKey.length === 0
+                ? undefined
+                : yield* api
+                    .readCodexCooldowns({ url: config.url, managementKey })
+                    .pipe(Effect.orElseSucceed(() => source.codexModelCooldowns));
+            if (Equal.equals(cooldowns, source.codexModelCooldowns)) return source;
+            const { codexModelCooldowns: _previous, ...unchanged } = source;
+            return cooldowns === undefined
+              ? unchanged
+              : { ...unchanged, codexModelCooldowns: cooldowns };
+          }),
+        { concurrency: 4 },
+      );
+      if (next.some((source, index) => source !== previous[index])) yield* publish(next);
+    },
+    refreshLock.withPermits(1),
+    Effect.ignoreCause({ log: true }),
+  );
+
+  yield* Effect.forever(
+    Effect.sleep("15 seconds").pipe(
+      Effect.andThen(backgroundPolicy.shouldRunScopeWork({ type: "provider-status" })),
+      Effect.flatMap((shouldRun) => (shouldRun ? refreshCodexCooldowns() : Effect.void)),
+    ),
+  ).pipe(Effect.forkScoped);
 
   // Shares the refresh lock so a stale in-flight read cannot overwrite a redemption.
   const consumeResetCredit = Effect.fn("UsageLimitSources.consumeResetCredit")(function* (
@@ -236,6 +305,7 @@ export const make = Effect.gen(function* () {
     current: Ref.get(stateRef),
     consumeResetCredit,
     refresh,
+    recheckCodexCooldown,
     get streamChanges() {
       return Stream.unwrap(
         Effect.gen(function* () {
@@ -307,6 +377,46 @@ export const layerResetFallback = Layer.effect(
         const source = yield* atEndpoint;
         if (!source) return null;
         return hubPoolResetAt([source], driver, model, DateTime.toEpochMillis(yield* DateTime.now));
+      }),
+    };
+  }),
+);
+
+export class ModelCooldowns extends Context.Reference<{
+  readonly retryAt: (selection: ModelSelection, now: number) => Effect.Effect<string | null>;
+  readonly recheck: (selection: ModelSelection) => Effect.Effect<string | null | undefined>;
+}>("t3/usage/ModelCooldowns", {
+  defaultValue: () => ({
+    retryAt: () => Effect.succeed(null),
+    recheck: () => Effect.undefined,
+  }),
+}) {}
+
+export const layerModelCooldowns = Layer.effect(
+  ModelCooldowns,
+  Effect.gen(function* () {
+    const sources = yield* UsageLimitSources;
+    const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+    const endpointFor = Effect.fn("ModelCooldowns.endpointFor")(function* (
+      selection: ModelSelection,
+    ) {
+      const instance = yield* instances.getInstance(selection.instanceId);
+      if (instance === undefined || instance.driverKind !== "codex") return undefined;
+      return (yield* instance.snapshot.getSnapshot).auth.endpoint;
+    });
+    return {
+      retryAt: Effect.fn("ModelCooldowns.retryAt")(function* (selection, now) {
+        const retryAt = codexModelCooldownAt(
+          yield* sources.current,
+          yield* endpointFor(selection),
+          selection.model,
+        );
+        return retryAt !== null && Date.parse(retryAt) > now ? retryAt : null;
+      }),
+      recheck: Effect.fn("ModelCooldowns.recheck")(function* (selection) {
+        const endpoint = yield* endpointFor(selection);
+        if (endpoint === undefined) return undefined;
+        return yield* sources.recheckCodexCooldown(endpoint, selection.model);
       }),
     };
   }),

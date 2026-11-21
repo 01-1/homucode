@@ -3802,6 +3802,7 @@ export default function ChatView(props: ChatViewProps) {
                             {!composerMounted ? null : (
                               <ChatComposer
                                 canOperateThread={canOperateThread}
+                                usageLimitSources={usageLimitSources}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}
                                 supportsMultipleModels={

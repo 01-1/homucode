@@ -151,5 +151,10 @@ export const layer = Layer.effectDiscard(
     const sweep = yield* makeSweep;
     const scheduler = yield* Scheduler.Scheduler;
     yield* scheduler.register("usage-limit-recovery", sweep());
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    yield* scheduler.register(
+      "model-cooldown-queue",
+      orchestrator.resumeModelCooldownQueue.pipe(Effect.asVoid),
+    );
   }),
 );

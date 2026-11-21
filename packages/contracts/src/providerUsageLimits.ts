@@ -94,6 +94,9 @@ export const UsageLimitSourceSnapshot = Schema.Struct({
   providerRoute: Schema.optional(TrimmedNonEmptyString),
   checkedAt: IsoDateTime,
   accounts: ForwardCompatibleArray(UsageLimitSourceAccount),
+  codexModelCooldowns: Schema.optional(
+    ForwardCompatibleArray(Schema.Struct({ model: TrimmedNonEmptyString, retryAt: IsoDateTime })),
+  ),
   error: Schema.optional(TrimmedNonEmptyString),
 });
 export type UsageLimitSourceSnapshot = typeof UsageLimitSourceSnapshot.Type;

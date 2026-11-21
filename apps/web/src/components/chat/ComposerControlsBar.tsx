@@ -88,6 +88,7 @@ export function ComposerControlsBar(props: {
   onApplyModelPickerInstantlyChange: (checked: boolean) => void;
   modelPickerIconClassName: string | undefined;
   getModelDisabledReason: ChatComposerProps["getModelDisabledReason"];
+  modelCooldownUntil?: string | null;
 }) {
   const {
     environmentId,
@@ -224,6 +225,7 @@ export function ComposerControlsBar(props: {
         composerControlsCollapsed ? "min-w-13 shrink text-xs!" : "min-w-13",
       )}
       triggerSuffix={effort.suffix}
+      modelCooldownUntil={props.modelCooldownUntil}
       triggerDetail={effort.detail}
       triggerShortcuts={
         pickerOwnsModeShortcut ? "composer.effort composer.mode" : "composer.effort"

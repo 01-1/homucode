@@ -41,6 +41,7 @@ it.effect("idle sweeps skip SQL until the next wake time or a relevant event", (
           Layer.mock(ThreadManagement.ThreadManagementService)({}),
           Layer.mock(Orchestrator.OrchestratorV2)({
             streamDomainEvents: Stream.fromQueue(events),
+            resumeModelCooldownQueue: Effect.succeed(0),
           }),
           Layer.mock(ServerSettings.ServerSettingsService)({
             getSettings: Effect.succeed({
